@@ -49,6 +49,7 @@ function App() {
               }
             >
               <Route index element={<Dashboard />} />
+              <Route path="reports" element={<Dashboard />} />
               <Route path="employees/:id" element={<EmployeeDetails />} />
               <Route 
                 path="users" 

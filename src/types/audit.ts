@@ -17,6 +17,6 @@ export interface AuditLog {
   action: string;
   description: string;
   entityId: string;
-  entityType: 'employee' | 'user' | 'record' | 'report';
+  entityType: 'employee' | 'user' | 'record' | 'report' | 'document' | 'file201';
   metadata?: AuditMetadata;
 }

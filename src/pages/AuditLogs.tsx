@@ -6,13 +6,23 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import { AuditLog, AuditActionType } from '../types/audit';
-import api from '../services/api';
+import api, { getServerBaseUrl } from '../services/api';
+import PDFViewer from '../components/documents/PDFViewer';
+import { getAuthState } from '../utils/mockAuth';
 import { exportAuditLogsToFile } from '../utils/exportUtils';
 import './AuditLogs.css';
 
 const ITEMS_PER_PAGE = 15;
 
 function AuditLogs() {
+  const currentUser = getAuthState();
+  const userRole = currentUser?.role || 'viewer';
+  const canDownloadOrPrint = userRole === 'superadmin' || userRole === 'developer' || userRole === 'admin';
+
+  const [selectedDocument, setSelectedDocument] = useState<any>(null);
+  const [pdfData, setPdfData] = useState<string | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<AuditActionType | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -222,10 +232,54 @@ function AuditLogs() {
           ? `Imported Employees (${employees.length}):`
           : `Deleted Employees (${employees.length}):`;
 
+        const isUpload = (log.actionType === 'upload' || log.actionType === 'create') && log.entityType === 'document' && log.entityId;
+
         return (
           <div className="audit-logs__description-wrapper">
-            <div className="audit-logs__description">
-              {log.description}
+            <div className="audit-logs__description" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span>{log.description}</span>
+              {isUpload && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const doc = await api.document.getById(log.entityId);
+                      setSelectedDocument(doc);
+                      setPdfData(`${getServerBaseUrl()}/api/documents/${log.entityId}/file`);
+                      setIsViewerOpen(true);
+                    } catch (err) {
+                      alert('Failed to load file. It might have been deleted or moved.');
+                    }
+                  }}
+                  className="audit-logs__file-link-btn"
+                  title="Open uploaded file"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginLeft: '8px',
+                    padding: '2px 8px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    color: 'var(--color-primary)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-primary)';
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    e.currentTarget.style.color = 'var(--color-primary)';
+                  }}
+                >
+                  📄 View File
+                </button>
+              )}
             </div>
             {isExpandable && (
               <>
@@ -608,6 +662,18 @@ function AuditLogs() {
           </div>
         </div>
       </Modal>
+
+      <PDFViewer
+        isOpen={isViewerOpen}
+        onClose={() => {
+          setIsViewerOpen(false);
+          setSelectedDocument(null);
+          setPdfData(null);
+        }}
+        document={selectedDocument}
+        pdfData={pdfData}
+        canDownloadOrPrint={canDownloadOrPrint}
+      />
     </div>
   );
 }

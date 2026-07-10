@@ -21,6 +21,7 @@ model User {
   role           String   // superadmin, admin, staff
   permissions    Json?    // Store CRUD permissions as JSON for staff users
   lastLogin      DateTime? // Track last login time
+  activeSessionId String?  // For single device login verification
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -50,6 +51,8 @@ model Employee {
   appointmentStatus   String
   appointmentFrom     DateTime?
   appointmentTo       DateTime?
+  expirationDate      DateTime? // Date of expiration of employment/appointment
+  aoNumber            String?   // Administrative Order number
   status              String    // active/inactive
   position            String
   dateOfEmployment    DateTime?

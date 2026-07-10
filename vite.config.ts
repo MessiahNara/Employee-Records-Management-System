@@ -15,18 +15,18 @@ export default defineConfig(() => {
     },
     base: './',
     server: {
-      host: true,
+      host: false,
       port: devPort,
       strictPort: true,
       https: true,
       proxy: {
         '/api': {
-          target: 'https://192.168.2.187:5000',
+          target: 'https://localhost:5000',
           changeOrigin: true,
           secure: false,
         },
         '/uploads': {
-          target: 'https://192.168.2.187:5000',
+          target: 'https://localhost:5000',
           changeOrigin: true,
           secure: false,
         },

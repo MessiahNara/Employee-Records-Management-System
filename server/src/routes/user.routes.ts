@@ -385,10 +385,15 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // Update lastLogin timestamp
+    const activeSessionId = require('crypto').randomUUID();
+
+    // Update lastLogin timestamp and activeSessionId
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
-      data: { lastLogin: new Date() },
+      data: { 
+        lastLogin: new Date(),
+        activeSessionId
+      },
       select: {
         id: true,
         username: true,
@@ -398,6 +403,7 @@ router.post('/login', async (req: Request, res: Response) => {
         role: true,
         permissions: true,
         lastLogin: true,
+        activeSessionId: true,
         createdAt: true,
       },
     });

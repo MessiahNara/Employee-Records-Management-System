@@ -58,7 +58,7 @@ router.get('/entity/:entityId', async (req: Request, res: Response) => {
 // Get all audit logs with optional filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { action, entity, userId, limit = '50' } = req.query;
+    const { action, entity, userId, limit = '10000' } = req.query;
 
     const where: any = {};
     if (action) where.action = action as string;

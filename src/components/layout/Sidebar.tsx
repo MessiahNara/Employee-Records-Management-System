@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getAuthState } from '../../utils/mockAuth';
-import { MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder, MdFactCheck } from 'react-icons/md';
+import { MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder, MdFactCheck, MdInsertChart } from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
 
@@ -51,6 +51,7 @@ function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
       items: [
         { path: '/', label: 'Dashboard', icon: MdDashboard, iconColor: '#3b82f6' },
         { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['superadmin', 'admin', 'developer'] },
+        { path: '/reports', label: 'Generated Reports', icon: MdInsertChart, iconColor: '#10b981' },
         { path: '/audit-logs', label: 'Audit Logs', icon: MdDescription, iconColor: '#f59e0b' },
         { path: '/approvals', label: 'Request & Approvals', icon: MdFactCheck, iconColor: '#10b981', requiredRoles: ['superadmin', 'developer'], badge: pendingCount },
         { path: '/settings', label: 'Settings', icon: MdSettings, iconColor: '#6b7280' },

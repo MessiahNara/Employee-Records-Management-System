@@ -10,7 +10,7 @@ app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-insecure-localhost');
 
 // Global server URL (set during startup)
-let GLOBAL_SERVER_URL = 'https://192.168.2.187:5000';
+let GLOBAL_SERVER_URL = 'https://localhost:5000';
 
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
@@ -58,7 +58,7 @@ function readClientConfig() {
 
 // Poll the local server health endpoint until it responds, then invoke callback.
 function waitForServer(callback) {
-  const healthUrl = 'https://192.168.2.187:5000/api/health';
+  const healthUrl = 'https://localhost:5000/api/health';
   const maxAttempts = 120; // 60 seconds (500 ms × 120) - increased for database initialization
   let attempts = 0;
   let done = false;
@@ -189,12 +189,11 @@ function isTrustedOrigin(requestingUrl) {
     }
 
     const url = new URL(requestingUrl);
-    const localIP = getLocalIP();
     return (
       url.protocol === 'file:' ||
       (
         url.protocol === 'https:' &&
-        (url.hostname === localIP || url.hostname === '192.168.2.187') &&
+        (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
         url.port === '5174'
       )
     );
@@ -279,10 +278,9 @@ function createWindow() {
   // Load the app
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
     // Development mode - load from Vite dev server
-    const localIP = getLocalIP();
-    const devUrl = `https://${localIP}:5174`;
-    // In dev mode, server runs on the local IP on port 5000 with HTTPS
-    GLOBAL_SERVER_URL = `https://${localIP}:5000`;
+    const devUrl = `https://localhost:5174`;
+    // In dev mode, server runs on localhost on port 5000 with HTTPS
+    GLOBAL_SERVER_URL = `https://localhost:5000`;
     console.log('[ui] Loading from Vite dev server at', devUrl);
     console.log('[server-url] Set to', GLOBAL_SERVER_URL);
     mainWindow.loadURL(devUrl);

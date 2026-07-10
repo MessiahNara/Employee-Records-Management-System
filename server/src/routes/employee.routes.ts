@@ -28,6 +28,8 @@ const normalizeImportedEmployee = (payload: any) => ({
   appointmentStatus: String(payload.appointmentStatus || '').trim(),
   appointmentFrom: toNullableDate(payload.appointmentFrom),
   appointmentTo: toNullableDate(payload.appointmentTo),
+  expirationDate: toNullableDate(payload.expirationDate),
+  aoNumber: payload.aoNumber ? String(payload.aoNumber).trim() || null : null,
   status: String(payload.status || 'Active').trim() || 'Active',
   position: String(payload.position || payload.positionFunction || '').trim(),
   dateOfEmployment: toNullableDate(payload.dateOfEmployment),
@@ -113,9 +115,21 @@ router.get('/', async (req: Request, res: Response) => {
               mode: 'insensitive',
             };
             break;
+          case 'id':
+            where.id = {
+              contains: searchTerm,
+              mode: 'insensitive',
+            };
+            break;
           default:
-            // Global search across all name fields
+            // Global search across all fields
             where.OR = [
+              {
+                id: {
+                  contains: searchTerm,
+                  mode: 'insensitive',
+                },
+              },
               {
                 firstName: {
                   contains: searchTerm,
@@ -253,6 +267,8 @@ router.post('/', async (req: Request, res: Response) => {
       appointmentStatus,
       appointmentFrom,
       appointmentTo,
+      expirationDate,
+      aoNumber,
       status,
       position,
       dateOfEmployment,
@@ -292,6 +308,8 @@ router.post('/', async (req: Request, res: Response) => {
         appointmentStatus,
         appointmentFrom: appointmentFrom ? new Date(appointmentFrom) : null,
         appointmentTo: appointmentTo ? new Date(appointmentTo) : null,
+        expirationDate: expirationDate ? new Date(expirationDate) : null,
+        aoNumber: aoNumber || null,
         status,
         position,
         dateOfEmployment: dateOfEmployment ? new Date(dateOfEmployment) : null,
@@ -389,6 +407,8 @@ router.post('/sync-import', requireSuperadminApproval, async (req: Request, res:
           appointmentStatus: emp.appointmentStatus,
           appointmentFrom: emp.appointmentFrom,
           appointmentTo: emp.appointmentTo,
+          expirationDate: emp.expirationDate,
+          aoNumber: emp.aoNumber,
           status: emp.status,
           position: emp.position,
           dateOfEmployment: emp.dateOfEmployment,
@@ -423,6 +443,8 @@ router.post('/sync-import', requireSuperadminApproval, async (req: Request, res:
               appointmentStatus: emp.appointmentStatus,
               appointmentFrom: emp.appointmentFrom,
               appointmentTo: emp.appointmentTo,
+              expirationDate: emp.expirationDate,
+              aoNumber: emp.aoNumber,
               status: emp.status,
               position: emp.position,
               dateOfEmployment: emp.dateOfEmployment,
@@ -489,6 +511,9 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     if ('appointmentTo' in updateData) {
       updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
     }
+    if ('expirationDate' in updateData) {
+      updateData.expirationDate = updateData.expirationDate ? new Date(updateData.expirationDate) : null;
+    }
     if ('dateOfSeparation' in updateData) {
       updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
     }
@@ -530,7 +555,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
     const allowedFields = [
       'id', 'lastName', 'firstName', 'middleName', 'dateOfBirth', 'gender',
       'officeName', 'appointmentStatus', 'status', 'position',
-      'appointmentFrom', 'appointmentTo', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
+      'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
       'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate',
       'fileboxLocation', 'file201Status'
     ];
@@ -554,11 +579,17 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
     if ('appointmentTo' in updateData) {
       updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
     }
+    if ('expirationDate' in updateData) {
+      updateData.expirationDate = updateData.expirationDate ? new Date(updateData.expirationDate) : null;
+    }
     if ('dateOfSeparation' in updateData) {
       updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
     }
     if ('detailedDate' in updateData) {
       updateData.detailedDate = updateData.detailedDate ? new Date(updateData.detailedDate) : null;
+    }
+    if ('isDetailed' in updateData) {
+      updateData.isDetailed = updateData.isDetailed === true || updateData.isDetailed === 'true';
     }
 
     // Check if there are any fields to update
@@ -607,16 +638,28 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
             lastName: updateData.lastName !== undefined ? updateData.lastName : oldEmployee.lastName,
             firstName: updateData.firstName !== undefined ? updateData.firstName : oldEmployee.firstName,
             middleName: updateData.middleName !== undefined ? updateData.middleName : oldEmployee.middleName,
+            dateOfBirth: updateData.dateOfBirth !== undefined ? updateData.dateOfBirth : oldEmployee.dateOfBirth,
             gender: updateData.gender !== undefined ? updateData.gender : oldEmployee.gender,
             officeName: updateData.officeName !== undefined ? updateData.officeName : oldEmployee.officeName,
             appointmentStatus: updateData.appointmentStatus !== undefined ? updateData.appointmentStatus : oldEmployee.appointmentStatus,
             appointmentFrom: updateData.appointmentFrom !== undefined ? updateData.appointmentFrom : oldEmployee.appointmentFrom,
             appointmentTo: updateData.appointmentTo !== undefined ? updateData.appointmentTo : oldEmployee.appointmentTo,
+            expirationDate: updateData.expirationDate !== undefined ? updateData.expirationDate : oldEmployee.expirationDate,
+            aoNumber: updateData.aoNumber !== undefined ? updateData.aoNumber : oldEmployee.aoNumber,
             status: updateData.status !== undefined ? updateData.status : oldEmployee.status,
             position: updateData.position !== undefined ? updateData.position : oldEmployee.position,
             dateOfEmployment: updateData.dateOfEmployment !== undefined ? updateData.dateOfEmployment : oldEmployee.dateOfEmployment,
             dateOfSeparation: updateData.dateOfSeparation !== undefined ? updateData.dateOfSeparation : oldEmployee.dateOfSeparation,
             reasonOfSeparation: updateData.reasonOfSeparation !== undefined ? updateData.reasonOfSeparation : oldEmployee.reasonOfSeparation,
+            isDetailed: updateData.isDetailed !== undefined ? updateData.isDetailed : oldEmployee.isDetailed,
+            motherUnit: updateData.motherUnit !== undefined ? updateData.motherUnit : oldEmployee.motherUnit,
+            detailedTo: updateData.detailedTo !== undefined ? updateData.detailedTo : oldEmployee.detailedTo,
+            detailedDivision: updateData.detailedDivision !== undefined ? updateData.detailedDivision : oldEmployee.detailedDivision,
+            detailedFunction: updateData.detailedFunction !== undefined ? updateData.detailedFunction : oldEmployee.detailedFunction,
+            detailedDate: updateData.detailedDate !== undefined ? updateData.detailedDate : oldEmployee.detailedDate,
+            fileboxLocation: updateData.fileboxLocation !== undefined ? updateData.fileboxLocation : oldEmployee.fileboxLocation,
+            file201Status: updateData.file201Status !== undefined ? updateData.file201Status : oldEmployee.file201Status,
+            profilePicture: oldEmployee.profilePicture,
             createdAt: oldEmployee.createdAt,
             updatedAt: new Date(),
           },

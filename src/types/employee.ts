@@ -13,6 +13,8 @@ export interface Employee {
   appointmentStatus: AppointmentStatus;
   appointmentFrom?: string;
   appointmentTo?: string;
+  expirationDate?: string;
+  aoNumber?: string;
   status: EmployeeStatus;
   positionFunction: string;
   dateOfEmployment: string;
@@ -42,6 +44,8 @@ export interface EmployeeFormData {
   appointmentStatus: AppointmentStatus | '';
   appointmentFrom: string;
   appointmentTo: string;
+  expirationDate: string;
+  aoNumber: string;
   status: EmployeeStatus;
   positionFunction: string;
   dateOfEmployment: string;

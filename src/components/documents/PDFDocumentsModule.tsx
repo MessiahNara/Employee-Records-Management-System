@@ -40,6 +40,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   // Get current user role
   const currentUser = getAuthState();
   const userRole = currentUser?.role || 'viewer';
+  const canDownloadOrPrint = userRole === 'superadmin' || userRole === 'developer' || userRole === 'admin';
   
   // Check permissions based on role and custom permissions
   const getUserPermissions = () => {
@@ -256,6 +257,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           onClose={handleCloseViewer}
           document={selectedDocument}
           pdfData={pdfData}
+          canDownloadOrPrint={canDownloadOrPrint}
         />
 
       </div>

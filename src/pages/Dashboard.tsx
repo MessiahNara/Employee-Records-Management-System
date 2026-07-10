@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Table, { Column } from '../components/ui/Table';
 import SearchBar from '../components/ui/SearchBar';
 import Badge from '../components/ui/Badge';
@@ -21,7 +21,8 @@ import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { formatDateDDMMYYYY, convertToDateInputFormat } from '../utils/dateUtils';
 import { MdEdit, MdDelete, MdFileUpload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock } from 'react-icons/md';
-import api from '../services/api';
+import api, { getServerBaseUrl } from '../services/api';
+import PDFViewer from '../components/documents/PDFViewer';
 import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
 import './Dashboard.css';
 
@@ -31,7 +32,7 @@ function Dashboard() {
   const navigate = useNavigate();
   const { showToast, showWelcomeToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFilterType, setSearchFilterType] = useState<'all' | 'first_name' | 'middle_name' | 'last_name'>('all');
+  const [searchFilterType, setSearchFilterType] = useState<'all' | 'first_name' | 'middle_name' | 'last_name' | 'id'>('all');
   const [statusFilter, setStatusFilter] = useState<EmployeeStatus | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -45,6 +46,7 @@ function Dashboard() {
   const [isBulkDownloadModalOpen, setIsBulkDownloadModalOpen] = useState(false);
   const [isBulkDownloadLoading, setIsBulkDownloadLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [aoFile, setAoFile] = useState<File | null>(null);
   const [pendingUpdatePayload, setPendingUpdatePayload] = useState<{ employeeId: string; changedFields: any } | null>(null);
   const [pendingImportEmployees, setPendingImportEmployees] = useState<ImportedEmployee[] | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
@@ -53,6 +55,18 @@ function Dashboard() {
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // For KPI cards - always shows all data
   const [isLoading, setIsLoading] = useState(false);
   const [showAllEmployees, setShowAllEmployees] = useState(false);
+  
+  // Generated Reports UI states
+  const location = useLocation();
+  const viewMode = location.pathname.startsWith('/reports') ? 'reports' : 'employees';
+  const [reportSearchName, setReportSearchName] = useState('');
+  const [reportSearchOffice, setReportSearchOffice] = useState('all');
+  const [reportSearchYear, setReportSearchYear] = useState('');
+  const [reportDetailedFilter, setReportDetailedFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [reportAoNumber, setReportAoNumber] = useState('');
+  const [reportBirthMonth, setReportBirthMonth] = useState('');
+  const [reportActiveTab, setReportActiveTab] = useState<'active' | 'inactive' | 'birthdays'>('active');
+
   const [formData, setFormData] = useState<EmployeeFormData>({
     id: '',
     lastName: '',
@@ -64,6 +78,8 @@ function Dashboard() {
     appointmentStatus: '',
     appointmentFrom: '',
     appointmentTo: '',
+    expirationDate: '',
+    aoNumber: '',
     status: 'Active',
     positionFunction: '',
     dateOfEmployment: '',
@@ -83,6 +99,10 @@ function Dashboard() {
   // Get current user permissions
   const currentUser = getAuthState();
   const userRole = currentUser?.role || '';
+  const canDownloadOrPrint = userRole === 'superadmin' || userRole === 'developer' || userRole === 'admin';
+  const [selectedReportDocument, setSelectedReportDocument] = useState<any>(null);
+  const [reportPdfData, setReportPdfData] = useState<string | null>(null);
+  const [isReportViewerOpen, setIsReportViewerOpen] = useState(false);
 
   // Dynamic dropdown options loaded from system settings
   const [dropdownOptions, setDropdownOptions] = useState<{
@@ -228,6 +248,67 @@ function Dashboard() {
 
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
 
+  // Reports filtering logic
+  const filteredReportEmployees = useMemo(() => {
+    return allEmployees.filter(emp => {
+      // 1. Filter by Name (person)
+      if (reportSearchName.trim()) {
+        const name = `${emp.firstName} ${emp.middleName || ''} ${emp.lastName}`.toLowerCase();
+        if (!name.includes(reportSearchName.toLowerCase().trim())) return false;
+      }
+      // 2. Filter by Office/Hospital
+      if (reportSearchOffice && reportSearchOffice !== 'all') {
+        if (emp.officeHospitalName !== reportSearchOffice) return false;
+      }
+      // 3. Filter by Year (Date Hired / Date of Employment year)
+      if (reportSearchYear.trim()) {
+        if (!emp.dateOfEmployment) return false;
+        const hiredYear = new Date(emp.dateOfEmployment).getFullYear().toString();
+        if (hiredYear !== reportSearchYear.trim()) return false;
+      }
+      // 4. Filter by Detailed Order
+      if (reportDetailedFilter !== 'all') {
+        const isDetailed = emp.isDetailed === true;
+        if (reportDetailedFilter === 'yes' && !isDetailed) return false;
+        if (reportDetailedFilter === 'no' && isDetailed) return false;
+      }
+      // 5. Filter by AO Number
+      if (reportAoNumber.trim()) {
+        if (!emp.aoNumber || !emp.aoNumber.toLowerCase().includes(reportAoNumber.toLowerCase().trim())) return false;
+      }
+      return true;
+    });
+  }, [allEmployees, reportSearchName, reportSearchOffice, reportSearchYear, reportDetailedFilter, reportAoNumber]);
+
+  const uniqueOfficesInDatabase = useMemo(() => {
+    const offices = allEmployees.map(emp => emp.officeHospitalName || (emp as any).officeName).filter(Boolean);
+    return [...new Set(offices)].sort();
+  }, [allEmployees]);
+
+  const activeReportEmployees = useMemo(() => {
+    return filteredReportEmployees.filter(emp => emp.status === 'Active');
+  }, [filteredReportEmployees]);
+
+  const inactiveReportEmployees = useMemo(() => {
+    return filteredReportEmployees.filter(emp => emp.status === 'Inactive');
+  }, [filteredReportEmployees]);
+
+  // Birthday Month Report logic
+  const birthdayEmployees = useMemo(() => {
+    if (!reportBirthMonth) return [];
+    return allEmployees
+      .filter(emp => {
+        if (!emp.dateOfBirth) return false;
+        const birthMonthNum = new Date(emp.dateOfBirth).getMonth() + 1;
+        return birthMonthNum.toString().padStart(2, '0') === reportBirthMonth;
+      })
+      .sort((a, b) => {
+        const dayA = new Date(a.dateOfBirth!).getDate();
+        const dayB = new Date(b.dateOfBirth!).getDate();
+        return dayA - dayB;
+      });
+  }, [allEmployees, reportBirthMonth]);
+
   // Get badge variant based on status
   const getStatusVariant = (status: EmployeeStatus) => {
     return status === 'Active' ? 'success' : 'danger';
@@ -253,6 +334,39 @@ function Dashboard() {
       newSelected.add(employeeId);
     }
     setSelectedEmployeeIds(newSelected);
+  };
+
+  const renderAoNumberColumn = (employee: Employee) => {
+    if (!employee.aoNumber) return '—';
+    const docs = (employee as any).documents || [];
+    const aoDoc = docs.find((d: any) => d.category === 'Administrative Order');
+    
+    if (aoDoc) {
+      return (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedReportDocument(aoDoc);
+            setReportPdfData(`${getServerBaseUrl()}/api/documents/${aoDoc.id}/file`);
+            setIsReportViewerOpen(true);
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--color-primary)',
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            fontWeight: 600,
+            padding: 0,
+            textAlign: 'left',
+          }}
+          title="Open Administrative Order PDF"
+        >
+          {employee.aoNumber}
+        </button>
+      );
+    }
+    return employee.aoNumber;
   };
 
   const isAllSelected = filteredEmployees.length > 0 && selectedEmployeeIds.size === filteredEmployees.length;
@@ -298,6 +412,15 @@ function Dashboard() {
             aria-label={`Select ${employee.lastName}, ${employee.firstName}`}
           />
         </div>
+      ),
+    },
+    {
+      key: 'id',
+      header: 'Employee ID',
+      render: (employee) => (
+        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+          {employee.id}
+        </span>
       ),
     },
     {
@@ -419,6 +542,8 @@ function Dashboard() {
       appointmentStatus: '',
       appointmentFrom: '',
       appointmentTo: '',
+      expirationDate: '',
+      aoNumber: '',
       status: 'Active',
       positionFunction: '',
       dateOfEmployment: '',
@@ -453,6 +578,8 @@ function Dashboard() {
       appointmentStatus: employee.appointmentStatus,
       appointmentFrom: convertToDateInputFormat(employee.appointmentFrom),
       appointmentTo: convertToDateInputFormat(employee.appointmentTo),
+      expirationDate: convertToDateInputFormat(employee.expirationDate),
+      aoNumber: (employee as any).aoNumber || '',
       status: employee.status,
       positionFunction: employee.positionFunction,
       dateOfEmployment: convertToDateInputFormat(employee.dateOfEmployment),
@@ -477,6 +604,7 @@ function Dashboard() {
     setIsUpdateEmployeeModalOpen(false);
     setSelectedEmployee(null);
     setOriginalEmployeeData(null);
+    setAoFile(null);
   }, []);
 
   const handleCloseBulkDownloadModal = useCallback(() => {
@@ -547,6 +675,8 @@ function Dashboard() {
         appointmentStatus: formData.appointmentStatus,
         appointmentFrom: formData.appointmentFrom || undefined,
         appointmentTo: formData.appointmentTo || undefined,
+        expirationDate: formData.expirationDate || undefined,
+        aoNumber: formData.aoNumber || undefined,
         status: formData.status,
         position: formData.positionFunction,
         dateOfEmployment: formData.dateOfEmployment,
@@ -597,6 +727,8 @@ function Dashboard() {
         appointmentStatus: 'appointmentStatus',
         appointmentFrom: 'appointmentFrom',
         appointmentTo: 'appointmentTo',
+        expirationDate: 'expirationDate',
+        aoNumber: 'aoNumber',
         status: 'status',
         positionFunction: 'position',
         dateOfEmployment: 'dateOfEmployment',
@@ -626,8 +758,33 @@ function Dashboard() {
         }
       });
 
-      // Check if any fields were changed
+      // Check if any fields were changed or if an AO file was uploaded
       if (Object.keys(changedFields).length === 0) {
+        if (aoFile) {
+          try {
+            const empName = `${selectedEmployee.lastName}, ${selectedEmployee.firstName}`;
+            await api.document.upload(
+              aoFile,
+              {
+                employeeId: selectedEmployee.id,
+                employeeName: empName,
+                category: 'Administrative Order',
+                fileName: aoFile.name,
+                fileSize: Math.round(aoFile.size / 1024),
+                mimeType: aoFile.type || 'application/pdf',
+              },
+              currentUser?.id,
+              `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
+            );
+            showToast(`✅ AO PDF file "${aoFile.name}" uploaded successfully.`, 'success');
+            handleCloseUpdateEmployeeModal();
+            fetchEmployees();
+            fetchAllEmployeesForKPI();
+          } catch (uploadErr: any) {
+            showToast(`Failed to upload AO PDF file: ${uploadErr.message}`, 'error');
+          }
+          return;
+        }
         showToast('No changes detected. Please modify at least one field to update.', 'info');
         return;
       }
@@ -637,9 +794,27 @@ function Dashboard() {
       // All roles — submit to approval queue, no direct execution
       try {
         const empName = `${selectedEmployee.lastName}, ${selectedEmployee.firstName}`;
+        
+        // If there is an AO file, upload it first
+        if (aoFile) {
+          await api.document.upload(
+            aoFile,
+            {
+              employeeId: selectedEmployee.id,
+              employeeName: empName,
+              category: 'Administrative Order',
+              fileName: aoFile.name,
+              fileSize: Math.round(aoFile.size / 1024),
+              mimeType: aoFile.type || 'application/pdf',
+            },
+            currentUser?.id,
+            `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
+          );
+        }
+
         await api.approvals.submit({
           requestedBy: currentUser?.id || '',
-          requestedByName: `${currentUser?.lastName}, ${currentUser?.firstName}`,
+          requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
           action: 'update_employee',
           entityType: 'employee',
           entityId: selectedEmployee.id,
@@ -668,9 +843,14 @@ function Dashboard() {
     }
 
     try {
+      const flatPayload: any = {};
+      for (const [k, v] of Object.entries(pendingUpdatePayload.changedFields)) {
+        flatPayload[k] = (v && typeof v === 'object' && 'to' in (v as any)) ? (v as any).to : v;
+      }
+
       await api.employee.partialUpdate(
         pendingUpdatePayload.employeeId,
-        pendingUpdatePayload.changedFields,
+        flatPayload,
         currentUser?.id,
         `${currentUser?.lastName}, ${currentUser?.firstName}`,
         authorizingUser?.approvalToken
@@ -1039,9 +1219,13 @@ function Dashboard() {
     <div className="dashboard">
       <div className="dashboard__header">
         <div>
-          <h1 className="dashboard__title">Employee Management</h1>
+          <h1 className="dashboard__title">
+            {viewMode === 'reports' ? 'Generated Reports' : 'Employee Management'}
+          </h1>
           <p className="dashboard__subtitle">
-            Manage and track all employee records in the system ({allEmployees.length} employees)
+            {viewMode === 'reports' 
+              ? 'View statistical reports and birthday summaries of employees'
+              : `Manage and track all employee records in the system (${allEmployees.length} employees)`}
           </p>
         </div>
         <div className="dashboard__header-actions">
@@ -1065,297 +1249,641 @@ function Dashboard() {
       </div>
 
       {/* KPI Summary Cards */}
-      <div className="dashboard__kpi-grid">
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <MdPeople className="dashboard__kpi-icon" style={{ color: '#3b82f6' }} />
-              <span className="dashboard__kpi-label">Total Employees</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">{allEmployees.length}</div>
-            </div>
-          </div>
-        </Card>
-
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <MdCheckCircle className="dashboard__kpi-icon" style={{ color: '#22c55e' }} />
-              <span className="dashboard__kpi-label">Active Employees</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">
-                {allEmployees.filter(emp => emp.status === 'Active').length}
+      {viewMode !== 'reports' && (
+        <div className="dashboard__kpi-grid">
+          <Card hoverable>
+            <div className="dashboard__kpi-card">
+              <div className="dashboard__kpi-header">
+                <MdPeople className="dashboard__kpi-icon" style={{ color: '#3b82f6' }} />
+                <span className="dashboard__kpi-label">Total Employees</span>
+              </div>
+              <div className="dashboard__kpi-body">
+                <div className="dashboard__kpi-value">{allEmployees.length}</div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <MdPause className="dashboard__kpi-icon" style={{ color: '#f59e0b' }} />
-              <span className="dashboard__kpi-label">Inactive Employees</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">
-                {allEmployees.filter(emp => emp.status === 'Inactive').length}
+          <Card hoverable>
+            <div className="dashboard__kpi-card">
+              <div className="dashboard__kpi-header">
+                <MdCheckCircle className="dashboard__kpi-icon" style={{ color: '#22c55e' }} />
+                <span className="dashboard__kpi-label">Active Employees</span>
+              </div>
+              <div className="dashboard__kpi-body">
+                <div className="dashboard__kpi-value">
+                  {allEmployees.filter(emp => emp.status === 'Active').length}
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <MdDescription className="dashboard__kpi-icon" style={{ color: '#8b5cf6' }} />
-              <span className="dashboard__kpi-label">Total Documents</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">
-                {allEmployees.reduce((sum, emp) => sum + ((emp as any).documents?.length || 0), 0)}
+          <Card hoverable>
+            <div className="dashboard__kpi-card">
+              <div className="dashboard__kpi-header">
+                <MdPause className="dashboard__kpi-icon" style={{ color: '#f59e0b' }} />
+                <span className="dashboard__kpi-label">Inactive Employees</span>
+              </div>
+              <div className="dashboard__kpi-body">
+                <div className="dashboard__kpi-value">
+                  {allEmployees.filter(emp => emp.status === 'Inactive').length}
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <MdStorage className="dashboard__kpi-icon" style={{ color: '#ec4899' }} />
-              <span className="dashboard__kpi-label">Storage Used</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">
-                {(allEmployees.reduce((sum, emp) => {
-                  const docs = (emp as any).documents || [];
-                  return sum + docs.reduce((docSum: number, doc: any) => docSum + (doc.fileSize || 0), 0);
-                }, 0) / (1024 * 1024)).toFixed(1)} MB
+          <Card hoverable>
+            <div className="dashboard__kpi-card">
+              <div className="dashboard__kpi-header">
+                <MdDescription className="dashboard__kpi-icon" style={{ color: '#8b5cf6' }} />
+                <span className="dashboard__kpi-label">Total Documents</span>
+              </div>
+              <div className="dashboard__kpi-body">
+                <div className="dashboard__kpi-value">
+                  {allEmployees.reduce((sum, emp) => sum + ((emp as any).documents?.length || 0), 0)}
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
 
-      <PermissionBanner />
-
-      <Card>
-        {/* Bulk Actions Bar */}
-        {canDelete && selectedEmployeeIds.size > 0 && (
-          <div className="dashboard__bulk-actions">
-            <div className="dashboard__bulk-info">
-              <span className="dashboard__bulk-count">{selectedEmployeeIds.size} selected</span>
-              <button
-                className="dashboard__bulk-clear"
-                onClick={() => setSelectedEmployeeIds(new Set())}
-              >
-                Clear selection
-              </button>
-            </div>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={handleOpenBulkDeleteModal}
-            >
-              <MdDelete style={{ marginRight: '0.25rem' }} /> Delete Selected ({selectedEmployeeIds.size})
-            </Button>
-          </div>
-        )}
-
-        <div className="dashboard__filters">
-          <div className="dashboard__search-container">
-            <SearchBar
-              placeholder={`Search by ${searchFilterType === 'all' ? 'name' : searchFilterType.replace('_', ' ')}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onClear={handleClearSearch}
-              fullWidth
-            />
-            
-            <div className="dashboard__search-filters">
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="searchFilter"
-                  value="all"
-                  checked={searchFilterType === 'all'}
-                  onChange={(e) => setSearchFilterType(e.target.value as any)}
-                  className="dashboard__radio-input"
-                />
-                <span className="dashboard__radio-text">All Fields</span>
-              </label>
-              
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="searchFilter"
-                  value="last_name"
-                  checked={searchFilterType === 'last_name'}
-                  onChange={(e) => setSearchFilterType(e.target.value as any)}
-                  className="dashboard__radio-input"
-                />
-                <span className="dashboard__radio-text">Last Name</span>
-              </label>
-
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="searchFilter"
-                  value="first_name"
-                  checked={searchFilterType === 'first_name'}
-                  onChange={(e) => setSearchFilterType(e.target.value as any)}
-                  className="dashboard__radio-input"
-                />
-                <span className="dashboard__radio-text">First Name</span>
-              </label>
-              
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="searchFilter"
-                  value="middle_name"
-                  checked={searchFilterType === 'middle_name'}
-                  onChange={(e) => setSearchFilterType(e.target.value as any)}
-                  className="dashboard__radio-input"
-                />
-                <span className="dashboard__radio-text">Middle Name</span>
-              </label>
-              
-              
-              <div className="dashboard__status-filter">
-                <label htmlFor="status-filter" className="dashboard__filter-label">
-                  Status:
-                </label>
-                <select
-                  id="status-filter"
-                  className="dashboard__filter-select"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as EmployeeStatus | 'all');
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="all">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+          <Card hoverable>
+            <div className="dashboard__kpi-card">
+              <div className="dashboard__kpi-header">
+                <MdStorage className="dashboard__kpi-icon" style={{ color: '#ec4899' }} />
+                <span className="dashboard__kpi-label">Storage Used</span>
               </div>
-
-              <div className="dashboard__toggle-container">
-                <label className="dashboard__toggle-label">
-                  <input
-                    type="checkbox"
-                    checked={showAllEmployees}
-                    onChange={(e) => setShowAllEmployees(e.target.checked)}
-                    className="dashboard__toggle-input"
-                  />
-                  <span className="dashboard__toggle-text">Show All Employees</span>
-                </label>
+              <div className="dashboard__kpi-body">
+                <div className="dashboard__kpi-value">
+                  {(allEmployees.reduce((sum, emp) => {
+                    const docs = (emp as any).documents || [];
+                    return sum + docs.reduce((docSum: number, doc: any) => docSum + (doc.fileSize || 0), 0);
+                  }, 0) / (1024 * 1024)).toFixed(1)} MB
+                </div>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
+      )}
 
-        {/* Empty State - No Search */}
-        {!searchQuery.trim() && !showAllEmployees && !isLoading && (
-          <div className="dashboard__empty-state">
-            <MdPeople className="dashboard__empty-icon" />
-            <h3 className="dashboard__empty-title">Search employees to display results</h3>
-            <p className="dashboard__empty-text">
-              Use the search bar above to find employees by name, or toggle "Show All Employees" to view the complete list
-            </p>
-          </div>
-        )}
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="dashboard__loading-state">
-            <div className="dashboard__spinner"></div>
-            <p className="dashboard__loading-text">Searching employees...</p>
-          </div>
-        )}
-
-        {/* No Results State */}
-        {!isLoading && (searchQuery.trim() || showAllEmployees) && filteredEmployees.length === 0 && (
-          <div className="dashboard__empty-state">
-            <MdPeople className="dashboard__empty-icon" />
-            <h3 className="dashboard__empty-title">No employees found</h3>
-            <p className="dashboard__empty-text">
-              Try adjusting your search criteria or filters
-            </p>
-          </div>
-        )}
-
-        {/* Results Table */}
-        {!isLoading && (searchQuery.trim() || showAllEmployees) && filteredEmployees.length > 0 && (
-          <>
-            <div className="dashboard__table-scroll">
-              <Table
-                columns={columns}
-                data={paginatedEmployees}
-                keyExtractor={(employee) => employee.id}
-                onRowClick={handleRowClick}
-                emptyMessage="No employees found"
+      {viewMode === 'reports' ? (
+        <div className="reports-view">
+          {/* Card containing Filters */}
+          <Card>
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text-primary)' }}>
+              Report Filters & Search
+            </h3>
+            {/* Top Search bar */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label className="dashboard__filter-label" style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem', display: 'block' }}>Search Person</label>
+              <input
+                type="text"
+                className="dashboard__form-input"
+                placeholder="Search employees by name..."
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '1rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+                }}
+                value={reportSearchName}
+                onChange={(e) => setReportSearchName(e.target.value)}
               />
             </div>
 
-            <div className="dashboard__pagination">
-              <div className="dashboard__page-size">
-                <span className="dashboard__page-size-label">Rows per page:</span>
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <button
-                    key={size}
-                    className={`dashboard__page-size-btn${itemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                    onClick={() => handleItemsPerPageChange(size)}
-                  >
-                    {size}
-                  </button>
-                ))}
+            <div className="reports-view__filters-grid">
+              <div className="dashboard__filter-group">
+                <label className="dashboard__filter-label">Office / Hospital</label>
+                <select
+                  className="dashboard__filter-select"
+                  value={reportSearchOffice}
+                  onChange={(e) => setReportSearchOffice(e.target.value)}
+                >
+                  <option value="all">All Offices / Hospitals</option>
+                  {uniqueOfficesInDatabase.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
               </div>
-              {totalPages > 1 && (
-                <div className="dashboard__pagination-controls">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(1)}
-                    disabled={currentPage === 1}
-                  >
-                    First
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <div className="dashboard__pagination-info">
-                    Page {currentPage} of {totalPages}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(totalPages)}
-                    disabled={currentPage === totalPages}
-                  >
-                    Last
-                  </Button>
+
+              <div className="dashboard__filter-group">
+                <label className="dashboard__filter-label">Year Hired</label>
+                <input
+                  type="text"
+                  className="dashboard__form-input"
+                  placeholder="e.g., 2024"
+                  value={reportSearchYear}
+                  onChange={(e) => setReportSearchYear(e.target.value)}
+                />
+              </div>
+
+              <div className="dashboard__filter-group">
+                <label className="dashboard__filter-label">Detailed Status</label>
+                <select
+                  className="dashboard__filter-select"
+                  value={reportDetailedFilter}
+                  onChange={(e) => setReportDetailedFilter(e.target.value as any)}
+                >
+                  <option value="all">All Employees</option>
+                  <option value="yes">Detailed Only</option>
+                  <option value="no">Not Detailed</option>
+                </select>
+              </div>
+
+              <div className="dashboard__filter-group">
+                <label className="dashboard__filter-label">AO Number</label>
+                <input
+                  type="text"
+                  className="dashboard__form-input"
+                  placeholder="Search by AO Number..."
+                  value={reportAoNumber}
+                  onChange={(e) => setReportAoNumber(e.target.value)}
+                />
+              </div>
+
+              <div className="dashboard__filter-group">
+                <label className="dashboard__filter-label">Birthday Month</label>
+                <select
+                  className="dashboard__filter-select"
+                  value={reportBirthMonth}
+                  onChange={(e) => {
+                    setReportBirthMonth(e.target.value);
+                    if (e.target.value) {
+                      setReportActiveTab('birthdays');
+                    } else if (reportActiveTab === 'birthdays') {
+                      setReportActiveTab('active');
+                    }
+                  }}
+                >
+                  <option value="">Select Birthday Month</option>
+                  <option value="01">January</option>
+                  <option value="02">February</option>
+                  <option value="03">March</option>
+                  <option value="04">April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                  <option value="07">July</option>
+                  <option value="08">August</option>
+                  <option value="09">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setReportSearchName('');
+                  setReportSearchOffice('all');
+                  setReportSearchYear('');
+                  setReportDetailedFilter('all');
+                  setReportAoNumber('');
+                  setReportBirthMonth('');
+                  setReportActiveTab('active');
+                }}
+              >
+                Reset Filters
+              </Button>
+            </div>
+          </Card>
+
+          {/* Metric Cards */}
+          <div className="reports-view__metrics-grid">
+            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-success)' }}>
+              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>
+                ✔
+              </div>
+              <div className="reports-view__metric-info">
+                <span className="reports-view__metric-value">{activeReportEmployees.length}</span>
+                <span className="reports-view__metric-label">Active Employees Match</span>
+              </div>
+            </div>
+
+            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
+              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
+                ✖
+              </div>
+              <div className="reports-view__metric-info">
+                <span className="reports-view__metric-value">{inactiveReportEmployees.length}</span>
+                <span className="reports-view__metric-label">Inactive Employees Match</span>
+              </div>
+            </div>
+
+            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-primary)' }}>
+              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-primary)' }}>
+                🎂
+              </div>
+              <div className="reports-view__metric-info">
+                <span className="reports-view__metric-value">{birthdayEmployees.length}</span>
+                <span className="reports-view__metric-label">Birthdays this Month</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs for detailed listings */}
+          <Card>
+            <div className="reports-view__tabs">
+              <button
+                className={`reports-view__tab-btn${reportActiveTab === 'active' ? ' reports-view__tab-btn--active' : ''}`}
+                onClick={() => setReportActiveTab('active')}
+              >
+                🟢 Active Employees ({activeReportEmployees.length})
+              </button>
+              <button
+                className={`reports-view__tab-btn${reportActiveTab === 'inactive' ? ' reports-view__tab-btn--active' : ''}`}
+                onClick={() => setReportActiveTab('inactive')}
+              >
+                🔴 Inactive Employees ({inactiveReportEmployees.length})
+              </button>
+              {reportBirthMonth && (
+                <button
+                  className={`reports-view__tab-btn${reportActiveTab === 'birthdays' ? ' reports-view__tab-btn--active' : ''}`}
+                  onClick={() => setReportActiveTab('birthdays')}
+                >
+                  🎂 Birthday Report ({birthdayEmployees.length})
+                </button>
+              )}
+            </div>
+
+            <div className="reports-view__table-container">
+              {reportActiveTab === 'active' && (
+                <div className="dashboard__table-scroll">
+                  <Table
+                    columns={[
+                      {
+                        key: 'id',
+                        header: 'Employee ID',
+                        render: (employee) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{employee.id}</span>
+                      },
+                      {
+                        key: 'name',
+                        header: 'Full Name',
+                        render: (employee) => `${employee.lastName}, ${employee.firstName} ${employee.middleName || ''}`
+                      },
+                      {
+                        key: 'positionFunction',
+                        header: 'Position',
+                        render: (employee) => employee.positionFunction
+                      },
+                      {
+                        key: 'officeHospitalName',
+                        header: 'Office / Hospital',
+                        render: (employee) => employee.officeHospitalName
+                      },
+                      {
+                        key: 'dateOfEmployment',
+                        header: 'Date Hired',
+                        render: (employee) => formatDateDDMMYYYY(employee.dateOfEmployment)
+                      },
+                      {
+                        key: 'aoNumber',
+                        header: 'AO Number',
+                        render: renderAoNumberColumn
+                      }
+                    ]}
+                    data={activeReportEmployees}
+                    keyExtractor={(employee) => employee.id}
+                    onRowClick={handleRowClick}
+                    emptyMessage="No active employees matching filters found"
+                  />
+                </div>
+              )}
+
+              {reportActiveTab === 'inactive' && (
+                <div className="dashboard__table-scroll">
+                  <Table
+                    columns={[
+                      {
+                        key: 'id',
+                        header: 'Employee ID',
+                        render: (employee) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{employee.id}</span>
+                      },
+                      {
+                        key: 'name',
+                        header: 'Full Name',
+                        render: (employee) => `${employee.lastName}, ${employee.firstName} ${employee.middleName || ''}`
+                      },
+                      {
+                        key: 'positionFunction',
+                        header: 'Position',
+                        render: (employee) => employee.positionFunction
+                      },
+                      {
+                        key: 'officeHospitalName',
+                        header: 'Office / Hospital',
+                        render: (employee) => employee.officeHospitalName
+                      },
+                      {
+                        key: 'dateOfSeparation',
+                        header: 'Separation Date',
+                        render: (employee) => formatDateDDMMYYYY(employee.dateOfSeparation)
+                      },
+                      {
+                        key: 'reasonForSeparation',
+                        header: 'Reason for Separation',
+                        render: (employee) => employee.reasonForSeparation || '—'
+                      },
+                      {
+                        key: 'aoNumber',
+                        header: 'AO Number',
+                        render: renderAoNumberColumn
+                      }
+                    ]}
+                    data={inactiveReportEmployees}
+                    keyExtractor={(employee) => employee.id}
+                    onRowClick={handleRowClick}
+                    emptyMessage="No inactive employees matching filters found"
+                  />
+                </div>
+              )}
+
+              {reportActiveTab === 'birthdays' && (
+                <div className="dashboard__table-scroll">
+                  <Table
+                    columns={[
+                      {
+                        key: 'day',
+                        header: 'Day of Birth',
+                        render: (employee) => {
+                          if (!employee.dateOfBirth) return '—';
+                          const d = new Date(employee.dateOfBirth);
+                          const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                          return `${months[d.getMonth()]} ${d.getDate()}`;
+                        }
+                      },
+                      {
+                        key: 'id',
+                        header: 'Employee ID',
+                        render: (employee) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{employee.id}</span>
+                      },
+                      {
+                        key: 'name',
+                        header: 'Full Name',
+                        render: (employee) => `${employee.lastName}, ${employee.firstName} ${employee.middleName || ''}`
+                      },
+                      {
+                        key: 'officeHospitalName',
+                        header: 'Office / Hospital',
+                        render: (employee) => employee.officeHospitalName
+                      },
+                      {
+                        key: 'status',
+                        header: 'Status',
+                        render: (employee) => (
+                          <Badge variant={getStatusVariant(employee.status)} size="sm">
+                            {employee.status}
+                          </Badge>
+                        )
+                      }
+                    ]}
+                    data={birthdayEmployees}
+                    keyExtractor={(employee) => employee.id}
+                    onRowClick={handleRowClick}
+                    emptyMessage="Select a birthday month to display the report"
+                  />
                 </div>
               )}
             </div>
-          </>
-        )}
-      </Card>
+          </Card>
+        </div>
+      ) : (
+        <>
+          <PermissionBanner />
+
+          <Card>
+            {/* Bulk Actions Bar */}
+            {canDelete && selectedEmployeeIds.size > 0 && (
+              <div className="dashboard__bulk-actions">
+                <div className="dashboard__bulk-info">
+                  <span className="dashboard__bulk-count">{selectedEmployeeIds.size} selected</span>
+                  <button
+                    className="dashboard__bulk-clear"
+                    onClick={() => setSelectedEmployeeIds(new Set())}
+                  >
+                    Clear selection
+                  </button>
+                </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={handleOpenBulkDeleteModal}
+                >
+                  <MdDelete style={{ marginRight: '0.25rem' }} /> Delete Selected ({selectedEmployeeIds.size})
+                </Button>
+              </div>
+            )}
+
+            <div className="dashboard__filters">
+              <div className="dashboard__search-container">
+                <SearchBar
+                  placeholder={`Search by ${searchFilterType === 'all' ? 'name' : searchFilterType.replace('_', ' ')}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onClear={handleClearSearch}
+                  fullWidth
+                />
+                
+                <div className="dashboard__search-filters">
+                  <label className="dashboard__radio-label">
+                    <input
+                      type="radio"
+                      name="searchFilter"
+                      value="all"
+                      checked={searchFilterType === 'all'}
+                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      className="dashboard__radio-input"
+                    />
+                    <span className="dashboard__radio-text">All Fields</span>
+                  </label>
+                  
+                  <label className="dashboard__radio-label">
+                    <input
+                      type="radio"
+                      name="searchFilter"
+                      value="last_name"
+                      checked={searchFilterType === 'last_name'}
+                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      className="dashboard__radio-input"
+                    />
+                    <span className="dashboard__radio-text">Last Name</span>
+                  </label>
+
+                  <label className="dashboard__radio-label">
+                    <input
+                      type="radio"
+                      name="searchFilter"
+                      value="first_name"
+                      checked={searchFilterType === 'first_name'}
+                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      className="dashboard__radio-input"
+                    />
+                    <span className="dashboard__radio-text">First Name</span>
+                  </label>
+                  
+                  <label className="dashboard__radio-label">
+                    <input
+                      type="radio"
+                      name="searchFilter"
+                      value="middle_name"
+                      checked={searchFilterType === 'middle_name'}
+                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      className="dashboard__radio-input"
+                    />
+                    <span className="dashboard__radio-text">Middle Name</span>
+                  </label>
+
+                  <label className="dashboard__radio-label">
+                    <input
+                      type="radio"
+                      name="searchFilter"
+                      value="id"
+                      checked={searchFilterType === 'id'}
+                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      className="dashboard__radio-input"
+                    />
+                    <span className="dashboard__radio-text">Employee ID</span>
+                  </label>
+                  
+                  
+                  <div className="dashboard__status-filter">
+                    <label htmlFor="status-filter" className="dashboard__filter-label">
+                      Status:
+                    </label>
+                    <select
+                      id="status-filter"
+                      className="dashboard__filter-select"
+                      value={statusFilter}
+                      onChange={(e) => {
+                        setStatusFilter(e.target.value as EmployeeStatus | 'all');
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <option value="all">All Status</option>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+
+                  <div className="dashboard__toggle-container">
+                    <label className="dashboard__toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={showAllEmployees}
+                        onChange={(e) => setShowAllEmployees(e.target.checked)}
+                        className="dashboard__toggle-input"
+                      />
+                      <span className="dashboard__toggle-text">Show All Employees</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Empty State - No Search */}
+            {!searchQuery.trim() && !showAllEmployees && !isLoading && (
+              <div className="dashboard__empty-state">
+                <MdPeople className="dashboard__empty-icon" />
+                <h3 className="dashboard__empty-title">Search employees to display results</h3>
+                <p className="dashboard__empty-text">
+                  Use the search bar above to find employees by name, or toggle "Show All Employees" to view the complete list
+                </p>
+              </div>
+            )}
+
+            {/* Loading State */}
+            {isLoading && (
+              <div className="dashboard__loading-state">
+                <div className="dashboard__spinner"></div>
+                <p className="dashboard__loading-text">Searching employees...</p>
+              </div>
+            )}
+
+            {/* No Results State */}
+            {!isLoading && (searchQuery.trim() || showAllEmployees) && filteredEmployees.length === 0 && (
+              <div className="dashboard__empty-state">
+                <MdPeople className="dashboard__empty-icon" />
+                <h3 className="dashboard__empty-title">No employees found</h3>
+                <p className="dashboard__empty-text">
+                  Try adjusting your search criteria or filters
+                </p>
+              </div>
+            )}
+
+            {/* Results Table */}
+            {!isLoading && (searchQuery.trim() || showAllEmployees) && filteredEmployees.length > 0 && (
+              <>
+                <div className="dashboard__table-scroll">
+                  <Table
+                    columns={columns}
+                    data={paginatedEmployees}
+                    keyExtractor={(employee) => employee.id}
+                    onRowClick={handleRowClick}
+                    emptyMessage="No employees found"
+                  />
+                </div>
+
+                <div className="dashboard__pagination">
+                  <div className="dashboard__page-size">
+                    <span className="dashboard__page-size-label">Rows per page:</span>
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <button
+                        key={size}
+                        className={`dashboard__page-size-btn${itemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                        onClick={() => handleItemsPerPageChange(size)}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                  {totalPages > 1 && (
+                    <div className="dashboard__pagination-controls">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePageChange(1)}
+                        disabled={currentPage === 1}
+                      >
+                        First
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="dashboard__pagination-info">
+                        Page {currentPage} of {totalPages}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Last
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </Card>
+        </>
+      )}
 
       {/* Add Employee Modal */}
       <Modal
@@ -1487,6 +2015,26 @@ function Dashboard() {
               ))}
             </select>
             {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
+          </div>
+
+          <div className="dashboard__form-row">
+            <Input
+              id="expiration-date"
+              label="Expiration Date"
+              type="date"
+              placeholder="Select expiration date (optional)"
+              value={formData.expirationDate}
+              onChange={(e) => handleFormChange('expirationDate', e.target.value)}
+              fullWidth
+            />
+            <Input
+              id="ao-number"
+              label="AO Number"
+              placeholder="Enter Administrative Order number (optional)"
+              value={formData.aoNumber}
+              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
+              fullWidth
+            />
           </div>
 
           {/* Detailed section — shown for all appointment statuses */}
@@ -1902,6 +2450,56 @@ function Dashboard() {
             {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
           </div>
 
+          <div className="dashboard__form-row">
+            <Input
+              id="update-expiration-date"
+              label="Expiration Date"
+              type="date"
+              placeholder="Select expiration date (optional)"
+              value={formData.expirationDate}
+              onChange={(e) => handleFormChange('expirationDate', e.target.value)}
+              fullWidth
+            />
+            <Input
+              id="update-ao-number"
+              label="AO Number"
+              placeholder="Enter Administrative Order number (optional)"
+              value={formData.aoNumber}
+              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
+              fullWidth
+            />
+          </div>
+
+          <div className="dashboard__form-field">
+            <label htmlFor="update-ao-file" className="dashboard__form-label">
+              Upload AO PDF File (Optional)
+            </label>
+            <input
+              id="update-ao-file"
+              className="dashboard__form-input"
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => setAoFile(e.target.files?.[0] || null)}
+              style={{
+                padding: '0.5rem',
+                border: '1px dashed var(--border-color)',
+                borderRadius: 'var(--border-radius)',
+                backgroundColor: 'var(--bg-secondary)',
+                width: '100%'
+              }}
+            />
+            {aoFile && (
+              <p style={{ 
+                fontSize: '0.8125rem', 
+                marginTop: '0.375rem', 
+                color: 'var(--color-success)',
+                fontWeight: 500 
+              }}>
+                ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+              </p>
+            )}
+          </div>
+
           {/* Detailed section — only shown when Permanent is selected */}
           {/* Detailed section — shown for all appointment statuses */}
           <div className="dashboard__form-field">
@@ -2185,6 +2783,18 @@ function Dashboard() {
         employees={allEmployees}
         onDownload={handleBulkDownload}
         isLoading={isBulkDownloadLoading}
+      />
+
+      <PDFViewer
+        isOpen={isReportViewerOpen}
+        onClose={() => {
+          setIsReportViewerOpen(false);
+          setSelectedReportDocument(null);
+          setReportPdfData(null);
+        }}
+        document={selectedReportDocument}
+        pdfData={reportPdfData}
+        canDownloadOrPrint={canDownloadOrPrint}
       />
     </div>
   );

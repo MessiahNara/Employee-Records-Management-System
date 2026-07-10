@@ -130,6 +130,50 @@ async function ensureServerUrl(): Promise<void> {
   }
 }
 
+function getSessionIdHeader(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const authUserStr = localStorage.getItem('authUser') || sessionStorage.getItem('authUser');
+    if (authUserStr) {
+      const authUser = JSON.parse(authUserStr);
+      const headers: Record<string, string> = {};
+      if (authUser?.activeSessionId) {
+        headers['X-Session-Id'] = authUser.activeSessionId;
+        headers['X-Logged-In-User-Id'] = authUser.id;
+      }
+      if (authUser?.id) {
+        headers['X-User-Id'] = authUser.id;
+      }
+      return headers;
+    }
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+async function handleResponseError(response: Response): Promise<never> {
+  const status = response.status;
+  let errorData: any = {};
+  try {
+    errorData = await response.json();
+  } catch {
+    errorData = { error: 'Request failed' };
+  }
+
+  if (status === 401 && (errorData.code === 'CONCURRENT_LOGIN' || errorData.error === 'Session expired')) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('authUser');
+      sessionStorage.removeItem('authUser');
+      window.location.reload();
+    }
+    throw new Error('Your session has expired because you logged in on another device.');
+  }
+
+  const errorMessage = errorData.error || errorData.message || `HTTP ${status}`;
+  throw new Error(errorMessage);
+}
+
 // Generic API request handler with timeout
 async function apiRequest<T>(
   endpoint: string,
@@ -145,6 +189,7 @@ async function apiRequest<T>(
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...getSessionIdHeader(),
       ...options.headers,
     },
   };
@@ -167,9 +212,7 @@ async function apiRequest<T>(
     ]);
     
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
-      const errorMessage = error.error || error.message || `HTTP ${response.status}`;
-      throw new Error(errorMessage);
+      await handleResponseError(response);
     }
 
     return await response.json();
@@ -207,10 +250,13 @@ async function apiUpload<T>(
   const API_BASE_URL = getApiBaseUrl();
   const url = `${API_BASE_URL}${endpoint}`;
   try {
-    const response = await fetch(url, { method: 'POST', headers, body: formData });
+    const finalHeaders = {
+      ...getSessionIdHeader(),
+      ...headers,
+    };
+    const response = await fetch(url, { method: 'POST', headers: finalHeaders, body: formData });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(error.error || error.message || `HTTP ${response.status}`);
+      await handleResponseError(response);
     }
     return await response.json();
   } catch (error: any) {

@@ -12,6 +12,7 @@ import auditRoutes from './routes/audit.routes';
 import systemSettingsRoutes from './routes/systemSettings.routes';
 import file201Routes from './routes/file201.routes';
 import approvalRoutes from './routes/approval.routes';
+import { validateSession } from './middleware/session';
 
 dotenv.config();
 
@@ -55,6 +56,9 @@ if (remoteUploadsUrl) {
   });
 }
 
+// Session verification middleware for concurrent logins
+app.use(validateSession);
+
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/employees', employeeRoutes);
@@ -90,8 +94,8 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   };
 
   https.createServer(httpsOptions, app).listen(Number(PORT), HOST, () => {
-    console.log(`🚀 Server is running on https://192.168.2.187:${PORT}`);
-    console.log(`📊 API endpoints available at https://192.168.2.187:${PORT}/api`);
+    console.log(`🚀 Server is running on https://localhost:${PORT}`);
+    console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
     console.log(`🔒 Using HTTPS with self-signed certificate`);
   });
 } else {

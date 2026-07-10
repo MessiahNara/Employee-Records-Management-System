@@ -62,6 +62,7 @@ function Login() {
         role: userData.role,
         permissions: userData.permissions,
         profilePicture: userData.profilePicture,
+        activeSessionId: userData.activeSessionId,
       };
 
       localStorage.removeItem('authUser');

@@ -11,7 +11,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "electron:dev": "npm run free-ports && concurrently \"vite --host 0.0.0.0 --port 5174\" \"npm run dev --prefix server\" \"wait-on tcp:5174 https://192.168.2.187:5000/api/health && electron .\"",
+    "electron:dev": "npm run free-ports && concurrently \"vite --port 5174\" \"npm run dev --prefix server\" \"wait-on tcp:5174 https://localhost:5000/api/health && electron .\"",
     "build:server": "esbuild server/src/index.ts --bundle --platform=node --target=node18 --outfile=server-bundle/server.bundle.cjs --external:@prisma/client --format=cjs",
     "electron:build": "npm run build && npm run build:server && electron-builder",
     "electron:build:server": "node scripts/build-server.cjs",
@@ -129,5 +129,9 @@
       ],
       "icon": "public/icon.png"
     }
+  },
+  "allowScripts": {
+    "electron@28.3.3": true,
+    "esbuild@0.21.5": true
   }
 }

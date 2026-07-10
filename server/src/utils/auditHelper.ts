@@ -169,6 +169,7 @@ export async function createAuditLog(
       entity: data.entity,
       entityId: data.entityId,
       details: description, // Store human-readable description here
+      metadata: data.details ? data.details : undefined,
     },
   });
 }

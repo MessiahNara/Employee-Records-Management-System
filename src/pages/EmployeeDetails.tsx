@@ -344,6 +344,14 @@ function EmployeeDetails() {
                   : 'N/A'}
               </p>
             </div>
+            <div className="employee-details__field">
+              <label className="employee-details__label">Expiration Date</label>
+              <p className="employee-details__value">{formatDateDDMMYYYY(employee.expirationDate) || 'N/A'}</p>
+            </div>
+            <div className="employee-details__field">
+              <label className="employee-details__label">AO Number</label>
+              <p className="employee-details__value">{employee.aoNumber || 'N/A'}</p>
+            </div>
           </div>
 
           {/* Detailed / Re-Assignment sub-section */}

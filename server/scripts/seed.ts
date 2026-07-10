@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -16,6 +16,23 @@ async function main() {
   // Create or refresh default users with deterministic credentials
   const users = await Promise.all([
     prisma.user.upsert({
+      where: { username: 'admin123' },
+      update: {
+        firstName: 'Admin',
+        lastName: '123',
+        password: adminHash,
+        role: 'superadmin',
+      },
+      create: {
+        id: randomUUID(),
+        username: 'admin123',
+        firstName: 'Admin',
+        lastName: '123',
+        password: adminHash,
+        role: 'superadmin',
+      },
+    }),
+    prisma.user.upsert({
       where: { username: 'superadmin' },
       update: {
         firstName: 'Super',
@@ -24,7 +41,7 @@ async function main() {
         role: 'superadmin',
       },
       create: {
-        id: uuidv4(),
+        id: randomUUID(),
         username: 'superadmin',
         firstName: 'Super',
         lastName: 'Admin',
@@ -41,7 +58,7 @@ async function main() {
         role: 'admin',
       },
       create: {
-        id: uuidv4(),
+        id: randomUUID(),
         username: 'admin',
         firstName: 'Admin',
         lastName: 'User',
@@ -58,7 +75,7 @@ async function main() {
         role: 'staff',
       },
       create: {
-        id: uuidv4(),
+        id: randomUUID(),
         username: 'staff',
         firstName: 'Staff',
         lastName: 'Member',
@@ -74,7 +91,7 @@ async function main() {
   const employees = await Promise.all([
     prisma.employee.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         lastName: 'Doe',
         firstName: 'John',
         middleName: 'Smith',
@@ -90,7 +107,7 @@ async function main() {
     }),
     prisma.employee.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         lastName: 'Smith',
         firstName: 'Jane',
         middleName: 'Marie',
@@ -106,7 +123,7 @@ async function main() {
     }),
     prisma.employee.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         lastName: 'Johnson',
         firstName: 'Robert',
         gender: 'Male',
@@ -121,7 +138,7 @@ async function main() {
     }),
     prisma.employee.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         lastName: 'Williams',
         firstName: 'Emily',
         middleName: 'Rose',
@@ -145,7 +162,7 @@ async function main() {
   const documents = await Promise.all([
     prisma.document.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         employeeId: employees[0].id,
         category: 'Personal Documents',
         fileName: 'john_doe_resume.pdf',
@@ -156,7 +173,7 @@ async function main() {
     }),
     prisma.document.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         employeeId: employees[0].id,
         category: 'Certifications',
         fileName: 'john_doe_certificate.pdf',
@@ -167,7 +184,7 @@ async function main() {
     }),
     prisma.document.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         employeeId: employees[1].id,
         category: 'Medical Records',
         fileName: 'jane_smith_license.pdf',
@@ -184,7 +201,7 @@ async function main() {
   const auditLogs = await Promise.all([
     prisma.auditLog.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         userId: users[0].id,
         action: 'create',
         entity: 'employee',
@@ -194,7 +211,7 @@ async function main() {
     }),
     prisma.auditLog.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         userId: users[0].id,
         action: 'create',
         entity: 'employee',
@@ -204,7 +221,7 @@ async function main() {
     }),
     prisma.auditLog.create({
       data: {
-        id: uuidv4(),
+        id: randomUUID(),
         userId: users[1].id,
         action: 'update',
         entity: 'employee',
