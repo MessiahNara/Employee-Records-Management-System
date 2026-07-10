@@ -1,0 +1,129 @@
+.camera-scanner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.camera-scanner__help {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.camera-scanner__notice {
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius);
+  background-color: #fff7ed;
+  color: #9a3412;
+  font-size: var(--font-size-sm);
+}
+
+.camera-scanner__device-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.camera-scanner__device-select {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  min-height: 40px;
+  padding: 0 var(--spacing-sm);
+}
+
+.camera-scanner__viewport {
+  position: relative;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+  background-color: #0b1120;
+  overflow: hidden;
+  min-height: 280px;
+}
+
+.camera-scanner__video {
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+.camera-scanner__fallback {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  color: #e2e8f0;
+}
+
+.camera-scanner__fallback-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.camera-scanner__fallback-text {
+  max-width: 320px;
+  font-size: var(--font-size-sm);
+  color: #cbd5e1;
+}
+
+.camera-scanner__target {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(65%, 320px);
+  aspect-ratio: 1.8 / 1;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(16, 185, 129, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.45);
+  pointer-events: none;
+}
+
+.camera-scanner__status {
+  position: absolute;
+  inset: auto 12px 12px 12px;
+  border-radius: var(--border-radius);
+  background-color: rgba(15, 23, 42, 0.84);
+  color: #f8fafc;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.camera-scanner__error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+.camera-scanner__file-input {
+  display: none;
+}
+
+.camera-scanner__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+@media (max-width: 768px) {
+  .camera-scanner__viewport,
+  .camera-scanner__video {
+    min-height: 220px;
+  }
+
+  .camera-scanner__target {
+    width: 82%;
+  }
+}

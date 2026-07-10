@@ -1,0 +1,427 @@
+.employee-details {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.employee-details__header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.employee-details__back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.employee-details__title-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+  width: 100%;
+  padding: var(--spacing-lg);
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+}
+
+.employee-details__title-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  min-width: 0;
+}
+
+.employee-details__avatar {
+  position: relative;
+  width: 270px;
+  height: 340px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background-color: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+}
+
+.employee-details__avatar--editable {
+  cursor: pointer;
+}
+
+.employee-details__avatar--editable:hover .employee-details__avatar-overlay {
+  opacity: 1;
+}
+
+.employee-details__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.employee-details__avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background-color: var(--bg-tertiary, var(--bg-secondary));
+}
+
+.employee-details__avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 0.5rem;
+}
+
+.employee-details__avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.employee-details__avatar-wrapper:hover .employee-details__avatar-overlay {
+  opacity: 1;
+}
+
+.employee-details__avatar-overlay-btn {
+  background: transparent;
+  border: 1.5px solid #fff;
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  width: 100%;
+  max-width: 130px;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.employee-details__avatar-overlay-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.employee-details__avatar-overlay-btn--danger {
+  border-color: #fc8181;
+  color: #fc8181;
+}
+
+.employee-details__avatar-overlay-btn--danger:hover {
+  background: rgba(252, 129, 129, 0.2);
+}
+
+.employee-details__title-info {
+  min-width: 0;
+}
+
+.employee-details__barcode-section {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.employee-details__title {
+  font-size: 2.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.employee-details__subtitle {
+  font-size: 1.35rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.employee-details__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.employee-details__section-title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.employee-details__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-lg);
+}
+
+.employee-details__grid--4col {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.employee-details__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.employee-details__field--full {
+  grid-column: 1 / -1;
+}
+
+.employee-details__label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.employee-details__value {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  font-weight: 500;
+  margin: 0;
+}
+
+.employee-details__not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+  gap: var(--spacing-lg);
+}
+
+.employee-details__not-found h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.employee-details__not-found p {
+  font-size: var(--font-size-lg);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .employee-details__title-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .employee-details__title-info {
+    min-width: 100%;
+  }
+
+  .employee-details__barcode-section {
+    padding: var(--spacing-md);
+  }
+
+  .employee-details__title {
+    font-size: var(--font-size-2xl);
+  }
+
+  .employee-details__subtitle {
+    font-size: var(--font-size-base);
+  }
+
+  .employee-details__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-details__grid--4col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .employee-details__field--full {
+    grid-column: 1;
+  }
+}
+
+/* ── Detailed / Re-Assignment sub-section ───────────────────────────────────── */
+
+.employee-details__detailed-section {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-color);
+}
+
+.employee-details__detailed-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-lg);
+}
+
+.employee-details__detailed-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.employee-details__detailed-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.employee-details__detailed-value {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  font-weight: 500;
+  margin: 0;
+}
+
+.employee-details__detailed-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px var(--spacing-sm);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.employee-details__detailed-badge--yes {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.employee-details__detailed-badge--no {
+  background-color: rgba(160, 174, 192, 0.15);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .employee-details__detailed-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Title meta fields (201 File Location, 201 File Status) ────────────────── */
+
+.employee-details__meta-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--spacing-sm);
+}
+
+.employee-details__meta-field {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 1.05rem;
+}
+
+.employee-details__meta-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.employee-details__meta-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.employee-details__meta-empty {
+  color: var(--text-secondary);
+}
+
+/* ── 201 File Status clickable badge ────────────────────────────────────────── */
+
+.employee-details__status-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px var(--spacing-sm);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.employee-details__status-btn:hover {
+  opacity: 0.8;
+  transform: scale(1.03);
+}
+
+.employee-details__status-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.employee-details__status-btn--available {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.employee-details__status-btn--borrowed {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--color-warning, #b45309);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.employee-details__status-btn--overdue {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.employee-details__status-btn--incomplete {
+  background-color: rgba(245, 158, 11, 0.25);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.employee-details__status-btn--damaged {
+  background-color: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* end of file */
+
+/* ── Borrow/Return 201 File button ──────────────────────────────────────────── */
+.employee-details__borrow-btn {
+  margin-top: var(--spacing-sm);
+  padding: 10px 24px;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 600;
+  background-color: var(--color-primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.employee-details__borrow-btn:hover {
+  opacity: 0.85;
+}

@@ -1,0 +1,72 @@
+{
+  "appId": "com.hrmdo.emis.server",
+  "productName": "Employee Records Management System - Server",
+  "directories": {
+    "output": "dist-electron/server"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "asarUnpack": [
+    "dist/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "server-bundle/server.bundle.cjs",
+      "to": "server.bundle.cjs"
+    },
+    {
+      "from": "server/node_modules/.prisma",
+      "to": "node_modules/.prisma"
+    },
+    {
+      "from": "server/node_modules/@prisma/client",
+      "to": "node_modules/@prisma/client"
+    },
+    {
+      "from": "server/.env",
+      "to": ".env"
+    },
+    {
+      "from": "server/certs",
+      "to": "certs"
+    },
+    {
+      "from": "service/service-runner.cjs",
+      "to": "service/service-runner.cjs"
+    },
+    {
+      "from": "service/install-service.cjs",
+      "to": "service/install-service.cjs"
+    },
+    {
+      "from": "service/nssm.exe",
+      "to": "service/nssm.exe"
+    }
+  ],
+  "nsis": {
+    "oneClick": false,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": true,
+    "installerSidebar": null,
+    "uninstallerSidebar": null,
+    "createDesktopShortcut": false,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Employee Records Management System - Server",
+    "deleteAppDataOnUninstall": false,
+    "include": "installer/service-hooks.nsh",
+    "installerLanguages": ["en_US"],
+    "language": "1033",
+    "multiLanguageInstaller": false,
+    "packElevateHelper": true,
+    "allowElevation": true
+  },
+  "win": {
+    "target": ["nsis"],
+    "icon": "public/icon.ico",
+    "signingHashAlgorithms": null,
+    "sign": null,
+    "requestedExecutionLevel": "requireAdministrator"
+  }
+}

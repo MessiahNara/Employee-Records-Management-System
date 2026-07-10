@@ -1,0 +1,895 @@
+import { Router, Request, Response } from 'express';
+import prisma from '../lib/prisma';
+import { createAuditLog, getEmployeeName } from '../utils/auditHelper';
+import { requireSuperadminApproval } from '../middleware/superadminApproval';
+import { uploadProfilePicture } from '../middleware/upload';
+import fs from 'fs';
+import path from 'path';
+
+const router = Router();
+
+const toNullableDate = (value: any): Date | null => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeImportedEmployee = (payload: any) => ({
+  id: String(payload.id || '').trim(),
+  lastName: String(payload.lastName || '').trim(),
+  firstName: String(payload.firstName || '').trim(),
+  middleName: payload.middleName ? String(payload.middleName).trim() : null,
+  dateOfBirth: toNullableDate(payload.dateOfBirth),
+  gender: String(payload.gender || '').trim(),
+  officeName: String(payload.officeName || payload.officeHospitalName || '').trim(),
+  appointmentStatus: String(payload.appointmentStatus || '').trim(),
+  appointmentFrom: toNullableDate(payload.appointmentFrom),
+  appointmentTo: toNullableDate(payload.appointmentTo),
+  status: String(payload.status || 'Active').trim() || 'Active',
+  position: String(payload.position || payload.positionFunction || '').trim(),
+  dateOfEmployment: toNullableDate(payload.dateOfEmployment),
+  dateOfSeparation: toNullableDate(payload.dateOfSeparation),
+  reasonOfSeparation:
+    payload.reasonOfSeparation !== undefined
+      ? String(payload.reasonOfSeparation || '').trim() || null
+      : String(payload.reasonForSeparation || '').trim() || null,
+  isDetailed: payload.isDetailed === true || payload.isDetailed === 'true' ? true : false,
+  motherUnit: payload.motherUnit ? String(payload.motherUnit).trim() || null : null,
+  detailedTo: payload.detailedTo ? String(payload.detailedTo).trim() || null : null,
+  detailedDivision: payload.detailedDivision ? String(payload.detailedDivision).trim() || null : null,
+  detailedFunction: payload.detailedFunction ? String(payload.detailedFunction).trim() || null : null,
+  detailedDate: toNullableDate(payload.detailedDate),
+});
+
+// Helper function to delete physical files
+const deletePhysicalFiles = async (employeeId: string): Promise<number> => {
+  try {
+    // Get all documents for this employee
+    const documents = await prisma.document.findMany({
+      where: { employeeId },
+    });
+
+    let deletedCount = 0;
+
+    // Delete each physical file
+    for (const doc of documents) {
+      try {
+        // The filePath is stored as absolute path in the database
+        if (fs.existsSync(doc.filePath)) {
+          fs.unlinkSync(doc.filePath);
+          deletedCount++;
+          console.log(`Deleted file: ${doc.filePath}`);
+        } else {
+          console.warn(`File not found: ${doc.filePath}`);
+        }
+      } catch (fileError) {
+        console.error(`Error deleting file ${doc.filePath}:`, fileError);
+        // Continue with other files even if one fails
+      }
+    }
+
+    return deletedCount;
+  } catch (error) {
+    console.error('Error in deletePhysicalFiles:', error);
+    return 0;
+  }
+};
+
+// Get all employees with optional filters
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const { status, appointmentStatus, search, filter_type } = req.query;
+
+    const where: any = {};
+    if (status) where.status = status as string;
+    if (appointmentStatus) where.appointmentStatus = appointmentStatus as string;
+
+    // Add search functionality
+    if (search && typeof search === 'string') {
+      const searchTerm = search.trim();
+      
+      if (searchTerm) {
+        const filterType = filter_type as string;
+        
+        switch (filterType) {
+          case 'first_name':
+            where.firstName = {
+              contains: searchTerm,
+              mode: 'insensitive',
+            };
+            break;
+          case 'middle_name':
+            where.middleName = {
+              contains: searchTerm,
+              mode: 'insensitive',
+            };
+            break;
+          case 'last_name':
+            where.lastName = {
+              contains: searchTerm,
+              mode: 'insensitive',
+            };
+            break;
+          default:
+            // Global search across all name fields
+            where.OR = [
+              {
+                firstName: {
+                  contains: searchTerm,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                middleName: {
+                  contains: searchTerm,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                lastName: {
+                  contains: searchTerm,
+                  mode: 'insensitive',
+                },
+              },
+            ];
+            break;
+        }
+      }
+    }
+
+    const employees = await prisma.employee.findMany({
+      where,
+      include: {
+        documents: true,
+      },
+      orderBy: [
+        { lastName: 'asc' },
+        { firstName: 'asc' },
+      ],
+    });
+
+    res.json(employees);
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    res.status(500).json({ error: 'Failed to fetch employees' });
+  }
+});
+
+// Get employee by ID
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const employee = await prisma.employee.findUnique({
+      where: { id },
+      include: {
+        documents: true,
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Derive the correct file201Status from borrow logs
+    // Collect all unique non-Complete conditions across all return logs
+    // until a Complete return resets them
+    const allLogs = await (prisma as any).file201BorrowLog.findMany({
+      where: { employeeId: id },
+      orderBy: { dateBorrowed: 'desc' },
+    });
+
+    let derivedFile201Status = employee.file201Status || 'Available';
+    let activeConditions: Set<string> = new Set();
+
+    if (allLogs && allLogs.length > 0) {
+      const latestLog = allLogs[0];
+
+      if (!latestLog.dateReturned) {
+        // File is currently borrowed
+        derivedFile201Status = 'Borrowed';
+        activeConditions = new Set();
+      } else {
+        // File is returned — scan all return logs from newest to oldest
+        // Stop accumulating when we hit a Complete return (it resets the state)
+        for (const log of allLogs) {
+          if (!log.dateReturned) continue; // skip active borrows
+          const condition = log.fileCondition || 'Complete';
+          if (condition === 'Complete') {
+            // A Complete return clears all previous conditions
+            break;
+          }
+          activeConditions.add(condition);
+        }
+
+        if (activeConditions.size === 0) {
+          derivedFile201Status = 'Available';
+        } else if (activeConditions.size === 1) {
+          derivedFile201Status = [...activeConditions][0];
+        } else {
+          // Multiple conditions — join them e.g. "Incomplete,Damaged"
+          derivedFile201Status = [...activeConditions].join(',');
+        }
+      }
+    }
+
+    // Get audit logs separately (no longer a relation)
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        entity: 'employee',
+        entityId: id,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 10,
+    });
+
+    res.json({
+      ...employee,
+      file201Status: derivedFile201Status,
+      auditLogs,
+    });
+  } catch (error) {
+    console.error('Error fetching employee:', error);
+    res.status(500).json({ error: 'Failed to fetch employee' });
+  }
+});
+
+// Create employee
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const {
+      id,
+      lastName,
+      firstName,
+      middleName,
+      dateOfBirth,
+      gender,
+      officeName,
+      appointmentStatus,
+      appointmentFrom,
+      appointmentTo,
+      status,
+      position,
+      dateOfEmployment,
+      isDetailed,
+      motherUnit,
+      detailedTo,
+      detailedDivision,
+      detailedFunction,
+      detailedDate,
+      fileboxLocation,
+    } = req.body;
+
+    // Validation
+    if (!id || !lastName || !firstName || !gender || !officeName || 
+        !appointmentStatus || !status || !position) {
+      return res.status(400).json({ error: 'Missing required fields (including ID)' });
+    }
+
+    // Check if ID already exists
+    const existingEmployee = await prisma.employee.findUnique({
+      where: { id },
+    });
+
+    if (existingEmployee) {
+      return res.status(409).json({ error: 'Employee ID already exists' });
+    }
+
+    const employee = await (prisma.employee as any).create({
+      data: {
+        id,
+        lastName,
+        firstName,
+        middleName,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        gender,
+        officeName,
+        appointmentStatus,
+        appointmentFrom: appointmentFrom ? new Date(appointmentFrom) : null,
+        appointmentTo: appointmentTo ? new Date(appointmentTo) : null,
+        status,
+        position,
+        dateOfEmployment: dateOfEmployment ? new Date(dateOfEmployment) : null,
+        isDetailed: isDetailed === true || isDetailed === 'true' ? true : false,
+        motherUnit: motherUnit || null,
+        detailedTo: detailedTo || null,
+        detailedDivision: detailedDivision || null,
+        detailedFunction: detailedFunction || null,
+        detailedDate: detailedDate ? new Date(detailedDate) : null,
+        fileboxLocation: fileboxLocation || null,
+      },
+    });
+
+    // Get user info from headers
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+
+    // Only create audit log if userId is provided (not during bulk import)
+    if (userId !== 'system') {
+      await createAuditLog(prisma, {
+        userId,
+        userName,
+        action: 'create',
+        entity: 'employee',
+        entityId: employee.id,
+        entityName: getEmployeeName(employee),
+      });
+    }
+
+    res.status(201).json(employee);
+  } catch (error) {
+    console.error('Error creating employee:', error);
+    res.status(500).json({ error: 'Failed to create employee' });
+  }
+});
+
+// Import: upsert imported records and add new ones without removing existing records
+router.post('/sync-import', requireSuperadminApproval, async (req: Request, res: Response) => {
+  try {
+    const payloadEmployees = req.body?.employees;
+
+    if (!Array.isArray(payloadEmployees) || payloadEmployees.length === 0) {
+      return res.status(400).json({ error: 'employees array is required' });
+    }
+
+    const normalizedEmployees = payloadEmployees.map(normalizeImportedEmployee);
+
+    for (let index = 0; index < normalizedEmployees.length; index++) {
+      const emp = normalizedEmployees[index];
+      const missingFields: string[] = [];
+
+      if (!emp.id) missingFields.push('id');
+      if (!emp.lastName) missingFields.push('lastName');
+      if (!emp.firstName) missingFields.push('firstName');
+      // gender is optional — no validation
+      if (!emp.officeName) missingFields.push('officeName');
+      if (!emp.appointmentStatus) missingFields.push('appointmentStatus');
+      if (!emp.status) missingFields.push('status');
+
+      if (missingFields.length > 0) {
+        return res.status(400).json({
+          error: `Invalid import payload at row ${index + 1} for employee ID: ${emp.id || 'missing'}; missing: ${missingFields.join(', ')}`,
+        });
+      }
+    }
+
+    const incomingIds = normalizedEmployees.map((emp) => emp.id);
+    const duplicateIds = incomingIds.filter((id, index) => incomingIds.indexOf(id) !== index);
+    if (duplicateIds.length > 0) {
+      return res.status(400).json({ error: `Duplicate employee IDs in import file: ${[...new Set(duplicateIds)].join(', ')}` });
+    }
+
+    const existingEmployees = await prisma.employee.findMany({
+      select: {
+        id: true,
+      },
+    });
+
+    const existingIds = new Set(existingEmployees.map((emp) => emp.id));
+
+    const toCreate = normalizedEmployees.filter((emp) => !existingIds.has(emp.id));
+    const toUpdate = normalizedEmployees.filter((emp) => existingIds.has(emp.id));
+
+    // Bulk insert new employees in one query
+    if (toCreate.length > 0) {
+      await prisma.employee.createMany({
+        data: toCreate.map((emp) => ({
+          id: emp.id,
+          lastName: emp.lastName,
+          firstName: emp.firstName,
+          middleName: emp.middleName,
+          dateOfBirth: emp.dateOfBirth,
+          gender: emp.gender,
+          officeName: emp.officeName,
+          appointmentStatus: emp.appointmentStatus,
+          appointmentFrom: emp.appointmentFrom,
+          appointmentTo: emp.appointmentTo,
+          status: emp.status,
+          position: emp.position,
+          dateOfEmployment: emp.dateOfEmployment,
+          dateOfSeparation: emp.dateOfSeparation,
+          reasonOfSeparation: emp.reasonOfSeparation,
+          isDetailed: emp.isDetailed,
+          motherUnit: emp.motherUnit,
+          detailedTo: emp.detailedTo,
+          detailedDivision: emp.detailedDivision,
+          detailedFunction: emp.detailedFunction,
+          detailedDate: emp.detailedDate,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Update existing employees in batches of 100
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+      const batch = toUpdate.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map((emp) =>
+          prisma.employee.update({
+            where: { id: emp.id },
+            data: {
+              lastName: emp.lastName,
+              firstName: emp.firstName,
+              middleName: emp.middleName,
+              dateOfBirth: emp.dateOfBirth,
+              gender: emp.gender,
+              officeName: emp.officeName,
+              appointmentStatus: emp.appointmentStatus,
+              appointmentFrom: emp.appointmentFrom,
+              appointmentTo: emp.appointmentTo,
+              status: emp.status,
+              position: emp.position,
+              dateOfEmployment: emp.dateOfEmployment,
+              dateOfSeparation: emp.dateOfSeparation,
+              reasonOfSeparation: emp.reasonOfSeparation,
+              isDetailed: emp.isDetailed,
+              motherUnit: emp.motherUnit,
+              detailedTo: emp.detailedTo,
+              detailedDivision: emp.detailedDivision,
+              detailedFunction: emp.detailedFunction,
+              detailedDate: emp.detailedDate,
+            },
+          })
+        )
+      );
+    }
+
+    const insertedCount = toCreate.length;
+    const updatedCount = toUpdate.length;
+
+    const userId = (req.headers['x-user-id'] as string) || 'system';
+    const userName = (req.headers['x-user-name'] as string) || 'System';
+    const authorizingUserName = (req.headers['x-authorizing-user-name'] as string) || userName;
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'import',
+        entity: 'employee',
+        entityId: 'bulk',
+        details: `${userName} imported ${normalizedEmployees.length} employee record${normalizedEmployees.length > 1 ? 's' : ''}`,
+        metadata: {
+          importedCount: normalizedEmployees.length,
+          authorizingUserName,
+        },
+      },
+    });
+
+    return res.json({
+      message: 'Import completed successfully',
+      upsertedCount: insertedCount + updatedCount,
+      insertedCount,
+      updatedCount,
+    });
+  } catch (error) {
+    console.error('Error syncing import employees:', error);
+    return res.status(500).json({ error: 'Failed to sync imported employees' });
+  }
+});
+
+// Update employee (Full update - PUT)
+router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Convert date strings to Date objects and treat blank values as null
+    if ('dateOfEmployment' in updateData) {
+      updateData.dateOfEmployment = updateData.dateOfEmployment ? new Date(updateData.dateOfEmployment) : null;
+    }
+    if ('appointmentFrom' in updateData) {
+      updateData.appointmentFrom = updateData.appointmentFrom ? new Date(updateData.appointmentFrom) : null;
+    }
+    if ('appointmentTo' in updateData) {
+      updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
+    }
+    if ('dateOfSeparation' in updateData) {
+      updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
+    }
+
+    const employee = await prisma.employee.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Get user info from headers
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+
+    // Create audit log with human-readable description
+    await createAuditLog(prisma, {
+      userId,
+      userName,
+      action: 'update',
+      entity: 'employee',
+      entityId: employee.id,
+      entityName: getEmployeeName(employee),
+      details: { changedFields: Object.keys(updateData), values: updateData },
+    });
+
+    res.json(employee);
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    res.status(500).json({ error: 'Failed to update employee' });
+  }
+});
+
+// Partial update employee (PATCH)
+router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData: any = {};
+
+    // Only include fields that are present in the request
+    const allowedFields = [
+      'id', 'lastName', 'firstName', 'middleName', 'dateOfBirth', 'gender',
+      'officeName', 'appointmentStatus', 'status', 'position',
+      'appointmentFrom', 'appointmentTo', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
+      'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate',
+      'fileboxLocation', 'file201Status'
+    ];
+
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    // Convert date strings to Date objects and treat blank values as null
+    if ('dateOfBirth' in updateData) {
+      updateData.dateOfBirth = updateData.dateOfBirth ? new Date(updateData.dateOfBirth) : null;
+    }
+    if ('dateOfEmployment' in updateData) {
+      updateData.dateOfEmployment = updateData.dateOfEmployment ? new Date(updateData.dateOfEmployment) : null;
+    }
+    if ('appointmentFrom' in updateData) {
+      updateData.appointmentFrom = updateData.appointmentFrom ? new Date(updateData.appointmentFrom) : null;
+    }
+    if ('appointmentTo' in updateData) {
+      updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
+    }
+    if ('dateOfSeparation' in updateData) {
+      updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
+    }
+    if ('detailedDate' in updateData) {
+      updateData.detailedDate = updateData.detailedDate ? new Date(updateData.detailedDate) : null;
+    }
+
+    // Check if there are any fields to update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    // If updating ID, check if new ID already exists
+    if (updateData.id && updateData.id !== id) {
+      const existingEmployee = await prisma.employee.findUnique({
+        where: { id: updateData.id },
+      });
+
+      if (existingEmployee) {
+        return res.status(409).json({ error: 'Employee ID already exists' });
+      }
+    }
+
+    // Get user info from headers
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+
+    let employee;
+
+    // If ID is being updated, we need to handle it specially
+    if (updateData.id && updateData.id !== id) {
+      // Create new employee with new ID and delete old one (within transaction)
+      employee = await prisma.$transaction(async (tx) => {
+        // Get old employee data
+        const oldEmployee = await tx.employee.findUnique({ 
+          where: { id },
+          include: { documents: true }
+        });
+        
+        if (!oldEmployee) {
+          throw new Error('Employee not found');
+        }
+
+        // Delete old employee first to avoid any constraint issues
+        await tx.employee.delete({ where: { id } });
+
+        // Create new employee with new ID
+        const newEmployee = await tx.employee.create({
+          data: {
+            id: updateData.id,
+            lastName: updateData.lastName !== undefined ? updateData.lastName : oldEmployee.lastName,
+            firstName: updateData.firstName !== undefined ? updateData.firstName : oldEmployee.firstName,
+            middleName: updateData.middleName !== undefined ? updateData.middleName : oldEmployee.middleName,
+            gender: updateData.gender !== undefined ? updateData.gender : oldEmployee.gender,
+            officeName: updateData.officeName !== undefined ? updateData.officeName : oldEmployee.officeName,
+            appointmentStatus: updateData.appointmentStatus !== undefined ? updateData.appointmentStatus : oldEmployee.appointmentStatus,
+            appointmentFrom: updateData.appointmentFrom !== undefined ? updateData.appointmentFrom : oldEmployee.appointmentFrom,
+            appointmentTo: updateData.appointmentTo !== undefined ? updateData.appointmentTo : oldEmployee.appointmentTo,
+            status: updateData.status !== undefined ? updateData.status : oldEmployee.status,
+            position: updateData.position !== undefined ? updateData.position : oldEmployee.position,
+            dateOfEmployment: updateData.dateOfEmployment !== undefined ? updateData.dateOfEmployment : oldEmployee.dateOfEmployment,
+            dateOfSeparation: updateData.dateOfSeparation !== undefined ? updateData.dateOfSeparation : oldEmployee.dateOfSeparation,
+            reasonOfSeparation: updateData.reasonOfSeparation !== undefined ? updateData.reasonOfSeparation : oldEmployee.reasonOfSeparation,
+            createdAt: oldEmployee.createdAt,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Update all documents to point to new employee ID
+        await tx.document.updateMany({
+          where: { employeeId: id },
+          data: { employeeId: updateData.id },
+        });
+
+        // Update audit logs to point to new employee ID
+        await tx.auditLog.updateMany({
+          where: { 
+            entity: 'employee',
+            entityId: id 
+          },
+          data: { entityId: updateData.id },
+        });
+
+        return newEmployee;
+      });
+    } else {
+      // Normal update without ID change
+      employee = await prisma.employee.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    // Create audit log with human-readable description
+    await createAuditLog(prisma, {
+      userId,
+      userName,
+      action: 'update',
+      entity: 'employee',
+      entityId: employee.id,
+      entityName: getEmployeeName(employee),
+      details: { changedFields: Object.keys(updateData), values: updateData },
+    });
+
+    res.json(employee);
+  } catch (error: any) {
+    console.error('Error updating employee:', error);
+    res.status(500).json({ error: error.message || 'Failed to update employee' });
+  }
+});
+
+// Delete employee
+router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get employee data before deleting (for audit log)
+    const employee = await prisma.employee.findUnique({
+      where: { id },
+      include: {
+        documents: true,
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Get user info from headers
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+    const authorizingUserName = req.headers['x-authorizing-user-name'] as string;
+
+    // Delete physical files BEFORE deleting from database
+    const deletedFilesCount = await deletePhysicalFiles(id);
+    console.log(`Deleted ${deletedFilesCount} physical file(s) for employee ${id}`);
+
+    // Create audit log BEFORE deleting (so employee still exists)
+    await createAuditLog(prisma, {
+      userId,
+      userName,
+      action: 'delete',
+      entity: 'employee',
+      entityId: id,
+      entityName: getEmployeeName(employee),
+      details: {
+        authorizingUserName: authorizingUserName || userName,
+      },
+    });
+
+    // Now delete the employee (CASCADE will delete document records)
+    await prisma.employee.delete({
+      where: { id },
+    });
+
+    res.json({ 
+      message: 'Employee deleted successfully',
+      deletedDocuments: employee.documents.length,
+      deletedFiles: deletedFilesCount,
+    });
+  } catch (error) {
+    console.error('Error deleting employee:', error);
+    res.status(500).json({ error: 'Failed to delete employee' });
+  }
+});
+
+// Bulk delete employees
+router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res: Response) => {
+  try {
+    const { ids, employeeNames } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty employee IDs array' });
+    }
+
+    // Get user info from headers
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+    const authorizingUserName = req.headers['x-authorizing-user-name'] as string;
+
+    // Delete physical files for all employees BEFORE deleting from database
+    let totalDeletedFiles = 0;
+    for (const employeeId of ids) {
+      const deletedCount = await deletePhysicalFiles(employeeId);
+      totalDeletedFiles += deletedCount;
+    }
+    console.log(`Bulk delete: Deleted ${totalDeletedFiles} physical file(s) for ${ids.length} employee(s)`);
+
+    // Create bulk delete audit log with metadata
+    const count = ids.length;
+    const authorizerInfo = authorizingUserName ? ` (Authorized by: ${authorizingUserName})` : '';
+    const description = `${userName} deleted ${count} employee${count > 1 ? 's' : ''}${authorizerInfo}`;
+
+    const auditData: any = {
+      userId,
+      action: 'delete',
+      entity: 'employee',
+      entityId: 'bulk', // Use 'bulk' as entityId for bulk operations
+      details: description,
+    };
+
+    // Only add metadata if employeeNames is provided
+    if (employeeNames && employeeNames.length > 0) {
+      auditData.metadata = {
+        employees: employeeNames.map((emp: any) => ({
+          first_name: emp.firstName,
+          last_name: emp.lastName,
+        })),
+        authorizingUserName: authorizingUserName || userName,
+      };
+    }
+
+    await prisma.auditLog.create({
+      data: auditData,
+    });
+
+    // Delete all employees with the given IDs (CASCADE will delete document records)
+    const result = await prisma.employee.deleteMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+    });
+
+    res.json({ 
+      message: `Successfully deleted ${result.count} employee(s)`,
+      deletedCount: result.count,
+      deletedFiles: totalDeletedFiles,
+    });
+  } catch (error) {
+    console.error('Error bulk deleting employees:', error);
+    res.status(500).json({ error: 'Failed to bulk delete employees' });
+  }
+});
+
+// Get employee statistics
+router.get('/stats/summary', async (req: Request, res: Response) => {
+  try {
+    const [total, active, inactive, byAppointment] = await Promise.all([
+      prisma.employee.count(),
+      prisma.employee.count({ where: { status: 'Active' } }),
+      prisma.employee.count({ where: { status: 'Inactive' } }),
+      prisma.employee.groupBy({
+        by: ['appointmentStatus'],
+        _count: true,
+      }),
+    ]);
+
+    res.json({
+      total,
+      active,
+      inactive,
+      byAppointment,
+    });
+  } catch (error) {
+    console.error('Error fetching statistics:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
+// ── Employee Profile Picture ──────────────────────────────────────────────────
+
+function getProfilePicturesDir(): string {
+  return process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'profile-pictures')
+    : path.join(__dirname, '../../uploads/profile-pictures');
+}
+
+// Upload employee profile picture
+router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const employee = await prisma.employee.findUnique({
+      where: { id },
+      select: { profilePicture: true },
+    });
+
+    if (!employee) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Delete old profile picture if exists
+    if (employee.profilePicture) {
+      const oldPath = path.join(getProfilePicturesDir(), path.basename(employee.profilePicture));
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    const profilePictureUrl = `/uploads/profile-pictures/${req.file.filename}`;
+
+    const updated = await prisma.employee.update({
+      where: { id },
+      data: { profilePicture: profilePictureUrl },
+    });
+
+    res.json({ profilePicture: updated.profilePicture });
+  } catch (error: any) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message || 'Failed to upload profile picture' });
+  }
+});
+
+// Remove employee profile picture
+router.delete('/:id/profile-picture', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const employee = await prisma.employee.findUnique({
+      where: { id },
+      select: { profilePicture: true },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    if (employee.profilePicture) {
+      const filePath = path.join(getProfilePicturesDir(), path.basename(employee.profilePicture));
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    await prisma.employee.update({
+      where: { id },
+      data: { profilePicture: null },
+    });
+
+    res.json({ message: 'Profile picture removed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove profile picture' });
+  }
+});
+
+export default router;

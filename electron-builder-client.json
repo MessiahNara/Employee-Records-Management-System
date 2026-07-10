@@ -1,0 +1,38 @@
+{
+  "appId": "com.hrmdo.emis.client",
+  "productName": "Employee Records Management System - Client",
+  "directories": {
+    "output": "dist-electron/client"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "asarUnpack": [
+    "dist/**/*"
+  ],
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerSidebar": null,
+    "uninstallerSidebar": null,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Employee Records Management System",
+    "deleteAppDataOnUninstall": false,
+    "include": null,
+    "installerLanguages": ["en_US"],
+    "language": "1033",
+    "multiLanguageInstaller": false,
+    "packElevateHelper": true,
+    "allowElevation": true
+  },
+  "win": {
+    "target": ["nsis"],
+    "icon": "public/icon.ico",
+    "signingHashAlgorithms": null,
+    "sign": null,
+    "requestedExecutionLevel": "asInvoker"
+  }
+}

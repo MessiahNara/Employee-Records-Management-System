@@ -1,0 +1,209 @@
+.audit-trail {
+  width: 100%;
+}
+
+.audit-trail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.audit-trail__title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.audit-trail__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.audit-trail__filter-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.audit-trail__filter-select {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.audit-trail__filter-select:hover {
+  border-color: var(--color-gray-400);
+}
+
+.audit-trail__filter-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.audit-trail__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.audit-trail__item {
+  display: flex;
+  gap: var(--spacing-md);
+  position: relative;
+}
+
+.audit-trail__connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.audit-trail__icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  font-size: var(--font-size-lg);
+  z-index: 1;
+}
+
+.audit-trail__line {
+  width: 2px;
+  flex: 1;
+  background-color: var(--border-color);
+  margin-top: var(--spacing-xs);
+  min-height: 20px;
+}
+
+.audit-trail__content {
+  flex: 1;
+  padding: var(--spacing-md);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  transition: all var(--transition-fast);
+}
+
+.audit-trail__content:hover {
+  border-color: var(--color-gray-400);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.audit-trail__content-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.audit-trail__action-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.audit-trail__action-title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.audit-trail__timestamp {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.audit-trail__date {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.audit-trail__time {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.audit-trail__description {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: var(--spacing-sm) 0;
+  line-height: 1.5;
+}
+
+.audit-trail__user {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+}
+
+.audit-trail__user-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.audit-trail__user-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.audit-trail__empty,
+.audit-trail__no-results {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+}
+
+@media (max-width: 768px) {
+  .audit-trail__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+  }
+
+  .audit-trail__filter {
+    width: 100%;
+  }
+
+  .audit-trail__filter-select {
+    flex: 1;
+  }
+
+  .audit-trail__content-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .audit-trail__timestamp {
+    align-items: flex-start;
+  }
+
+  .audit-trail__icon {
+    width: 32px;
+    height: 32px;
+    font-size: var(--font-size-base);
+  }
+}

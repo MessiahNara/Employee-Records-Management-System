@@ -1,0 +1,481 @@
+.users {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.users__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.users__title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.users__subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.users__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.users__content > .card {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.users .table-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.users .table {
+  width: 100%;
+}
+
+/* Filters */
+.users__filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.users__filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.users__filter-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.users__filter-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.users__filter-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.users__filter-select option {
+  background-color: #ffffff;
+  color: #1a1a1a;
+  padding: 0.5rem;
+}
+
+/* Dark mode support for filter dropdown options */
+@media (prefers-color-scheme: dark) {
+  .users__filter-select option {
+    background-color: #2a2a2a;
+    color: #ffffff;
+  }
+}
+
+/* Table Cells */
+.users__name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.users__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.users__avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.users__name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.users__permissions-cell {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.users__no-access {
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+}
+
+/* Roles Section */
+.users__section {
+  padding: 0.5rem 0;
+}
+
+.users__section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.users__section-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0 0 1.5rem 0;
+  padding: 0.75rem;
+  background-color: var(--hover-bg);
+  border-radius: 8px;
+  border-left: 3px solid var(--primary-color);
+}
+
+.users__roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.users__role-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background-color: var(--card-bg);
+  transition: all 0.2s ease;
+}
+
+.users__role-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.users__role-card--disabled {
+  opacity: 0.6;
+  position: relative;
+}
+
+.users__role-card--disabled:hover {
+  box-shadow: none;
+  border-color: var(--border-color);
+}
+
+.users__role-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.users__role-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.users__role-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.users__role-permissions {
+  margin-top: 1rem;
+}
+
+.users__role-note {
+  margin-top: 1rem;
+}
+
+.users__role-note-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0.5rem 0 0 0;
+  font-style: italic;
+}
+
+.users__permissions-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.users__permissions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.users__role-restriction {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: var(--error-bg, #fee);
+  color: var(--error-text, #c00);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* Modal */
+.users__modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.users__modal-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.users__modal-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.users__password-field {
+  position: relative;
+}
+
+.users__password-toggle {
+  position: absolute;
+  right: var(--spacing-md);
+  top: 38px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  padding: var(--spacing-xs);
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.users__password-toggle:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.users__password-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.users__modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.users__modal-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.users__modal-select {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.users__modal-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+}
+
+.users__modal-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--bg-secondary);
+}
+
+.users__modal-select option {
+  background-color: #ffffff;
+  color: #1a1a1a;
+  padding: 0.5rem;
+}
+
+.users__modal-select option:disabled {
+  color: #999999;
+  opacity: 0.6;
+}
+
+/* Dark mode support for dropdown options */
+@media (prefers-color-scheme: dark) {
+  .users__modal-select option {
+    background-color: #2a2a2a;
+    color: #ffffff;
+  }
+  
+  .users__modal-select option:disabled {
+    color: #666666;
+  }
+}
+
+.users__modal-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0;
+  padding: 0.5rem;
+  background-color: var(--hover-bg);
+  border-radius: 6px;
+}
+
+.users__modal-permissions-section {
+  padding: 1rem;
+  background-color: var(--hover-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.users__modal-permissions-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.users__modal-permissions-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem 0;
+}
+
+.users__permissions-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.users__permission-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.users__permission-checkbox:hover {
+  border-color: var(--primary-color);
+  background-color: var(--hover-bg);
+}
+
+.users__permission-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.users__permission-checkbox span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.users__modal-info {
+  padding: 1rem;
+  background-color: var(--hover-bg);
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.users__modal-info p {
+  margin: 0.5rem 0;
+  color: var(--text-secondary);
+}
+
+.users__modal-info strong {
+  color: var(--text-primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .users {
+    padding: 0;
+  }
+
+  .users__header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .users__filters {
+    flex-direction: column;
+  }
+
+  .users__roles-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .users__modal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .users__permissions-checkboxes {
+    grid-template-columns: 1fr;
+  }
+}

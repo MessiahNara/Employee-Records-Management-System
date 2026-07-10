@@ -1,0 +1,56 @@
+{
+  "appId": "com.hrmdo.emis",
+  "productName": "Employee Records Management System (Full)",
+  "directories": {
+    "output": "dist-electron/full"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "asarUnpack": [
+    "dist/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "server-bundle/server.bundle.cjs",
+      "to": "server.bundle.cjs"
+    },
+    {
+      "from": "server/node_modules/.prisma",
+      "to": "node_modules/.prisma"
+    },
+    {
+      "from": "server/node_modules/@prisma/client",
+      "to": "node_modules/@prisma/client"
+    },
+    {
+      "from": "server/.env",
+      "to": ".env"
+    }
+  ],
+  "nsis": {
+    "oneClick": false,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": true,
+    "installerSidebar": null,
+    "uninstallerSidebar": null,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Employee Records Management System",
+    "deleteAppDataOnUninstall": false,
+    "include": null,
+    "installerLanguages": ["en_US"],
+    "language": "1033",
+    "multiLanguageInstaller": false,
+    "packElevateHelper": true,
+    "allowElevation": true
+  },
+  "win": {
+    "target": ["nsis"],
+    "icon": "public/icon.ico",
+    "signingHashAlgorithms": null,
+    "sign": null,
+    "requestedExecutionLevel": "requireAdministrator"
+  }
+}

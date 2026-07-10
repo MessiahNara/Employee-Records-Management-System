@@ -1,0 +1,197 @@
+.employee-selection-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Search Bar */
+.employee-selection-modal__search {
+  width: 100%;
+}
+
+/* Date Filter Section */
+.employee-selection-modal__date-filter {
+  padding: 1rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-bottom: 0.5rem;
+}
+
+.employee-selection-modal__section-label {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.employee-selection-modal__date-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.employee-selection-modal__date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.employee-selection-modal__date-field label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.employee-selection-modal__date-error {
+  padding: 0.75rem;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--border-radius);
+  color: #dc2626;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+.employee-selection-modal__date-info {
+  padding: 0.75rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--border-radius);
+  color: var(--color-primary);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* Select All */
+.employee-selection-modal__select-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+}
+
+.employee-selection-modal__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.employee-selection-modal__checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.employee-selection-modal__selected-count {
+  font-weight: 600;
+  color: var(--color-primary);
+  font-size: 0.875rem;
+}
+
+/* Employee List */
+.employee-selection-modal__list {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  overflow-y: auto;
+  max-height: 400px;
+  background-color: var(--bg-primary);
+}
+
+.employee-selection-modal__empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.employee-selection-modal__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.employee-selection-modal__item:last-child {
+  border-bottom: none;
+}
+
+.employee-selection-modal__item:hover {
+  background-color: var(--bg-secondary);
+}
+
+.employee-selection-modal__item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.employee-selection-modal__item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.employee-selection-modal__item-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.employee-selection-modal__item-id {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+/* Scrollbar Styling */
+.employee-selection-modal__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.employee-selection-modal__list::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.employee-selection-modal__list::-webkit-scrollbar-thumb {
+  background: var(--color-gray-400);
+  border-radius: 4px;
+}
+
+.employee-selection-modal__list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-500);
+}
+
+/* Dark Mode Support */
+[data-theme='dark'] .employee-selection-modal__date-filter {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .employee-selection-modal__date-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-selection-modal__list {
+    max-height: 350px;
+  }
+}

@@ -1,0 +1,299 @@
+.approvals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.approvals__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.approvals__title {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs);
+}
+
+.approvals__subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.approvals__pending-badge {
+  display: inline-flex;
+  align-items: center;
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning, #b45309);
+  font-weight: 700;
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.approvals__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.approvals__filter-tabs {
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.approvals__filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: none;
+  border: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.approvals__filter-tab:hover {
+  background-color: var(--bg-secondary);
+}
+
+.approvals__filter-tab--active {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+.approvals__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  color: var(--text-secondary);
+  gap: var(--spacing-md);
+}
+
+.approvals__empty-icon {
+  font-size: 3rem;
+  color: var(--color-success);
+  opacity: 0.5;
+}
+
+.approvals__unauthorized {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.approvals__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.approvals__card {
+  border-left: 4px solid var(--border-color) !important;
+}
+
+.approvals__card--pending {
+  border-left-color: var(--color-warning, #f59e0b) !important;
+}
+
+.approvals__card--approved {
+  border-left-color: var(--color-success, #10b981) !important;
+}
+
+.approvals__card--rejected {
+  border-left-color: var(--color-danger, #ef4444) !important;
+}
+
+.approvals__card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.approvals__card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.approvals__action-label {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.approvals__entity-name {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.approvals__card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.approvals__timestamp {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.approvals__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.approvals__info-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+.approvals__info-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.approvals__info-value {
+  color: var(--text-primary);
+}
+
+.approvals__card-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+  margin-top: var(--spacing-sm);
+}
+
+.approvals__approve-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.approvals__approve-summary {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  font-size: var(--font-size-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approvals__approve-summary p {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.approvals__approve-note {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.approvals__approve-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+}
+
+.approvals__self-tag {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning, #b45309);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.approvals__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.approvals__field-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.approvals__field-input {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.approvals__field-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 99 102 241) / 0.15);
+}
+
+.approvals__condition-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.approvals__condition-badge {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.approvals__condition-badge--returned {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--color-success, #065f46);
+}
+
+.approvals__condition-badge--borrowed {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning, #b45309);
+}
+
+.approvals__condition-badge--incomplete {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning, #b45309);
+}
+
+.approvals__condition-badge--damaged {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}

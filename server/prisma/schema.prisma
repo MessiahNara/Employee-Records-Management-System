@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id
+  username       String   @unique
+  password       String
+  firstName      String   @default("")
+  lastName       String   @default("")
+  profilePicture String?  // Profile picture file path (optional)
+  role           String   // superadmin, admin, staff
+  permissions    Json?    // Store CRUD permissions as JSON for staff users
+  lastLogin      DateTime? // Track last login time
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("users")
+}
+
+model SystemSetting {
+  id                  String   @id @default(uuid())
+  idleTimeout         Int?     // Auto logout timeout in minutes (null = disabled)
+  appointmentStatuses Json?    // Custom appointment status options
+  officeNames         Json?    // Custom office/hospital name options
+  positions           Json?    // Custom position/function options
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model Employee {
+  id                  String    @id
+  lastName            String
+  firstName           String
+  middleName          String?
+  dateOfBirth         DateTime?
+  gender              String
+  officeName          String
+  appointmentStatus   String
+  appointmentFrom     DateTime?
+  appointmentTo       DateTime?
+  status              String    // active/inactive
+  position            String
+  dateOfEmployment    DateTime?
+  dateOfSeparation    DateTime?
+  reasonOfSeparation  String?
+  isDetailed          Boolean   @default(false)
+  motherUnit          String?   // original office when detailed
+  detailedTo          String?   // office the employee is detailed to (re-assignment office)
+  detailedDivision    String?   // division in the re-assignment office
+  detailedFunction    String?   // function/designation in the re-assignment office
+  detailedDate        DateTime? // date of re-assignment
+  fileboxLocation     String?   // physical filebox location of the 201 file
+  file201Status       String?   @default("Available") // Available | Borrowed | Overdue | Lost
+  profilePicture      String?   // Profile picture file path (optional)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  documents    Document[]
+  borrowLogs   File201BorrowLog[]
+
+  @@map("employees")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  employeeId  String
+  category    String
+  fileName    String
+  filePath    String   @db.Text
+  fileSize    Int      @default(0)
+  mimeType    String   @default("application/pdf")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String   // create, update, delete, status_change, import
+  entity     String   // employee, document, user
+  entityId   String
+  details    String?  // Store human-readable description here
+  metadata   Json?    // Store additional data (e.g., bulk import details)
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model File201BorrowLog {
+  id                  String    @id @default(uuid())
+  employeeId          String
+  action              String    // borrow | return
+  borrowerName        String
+  borrowerPosition    String?
+  borrowerOffice      String?
+  purpose             String?
+  expectedReturnDate  DateTime?
+  dateBorrowed        DateTime  @default(now())
+  dateReturned        DateTime?
+  fileCondition       String?   // Complete | Incomplete | Damaged
+  remarks             String?
+  releasedBy          String?   // records officer who released
+  returnedByName      String?   // name of person who returned the file
+  receivedBy          String?   // records officer who accepted return
+  createdAt           DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("file201_borrow_logs")
+}
+
+model ApprovalRequest {
+  id            String   @id @default(uuid())
+  requestedBy   String   // userId of the requester
+  requestedByName String  // display name
+  action        String   // update_employee | delete_employee | delete_document | bulk_delete
+  entityType    String   // employee | document
+  entityId      String   // ID of the entity
+  entityName    String?  // Human-readable name
+  payload       Json     // The full request payload to execute when approved
+  status        String   @default("pending") // pending | approved | rejected
+  approvedBy    String?  // userId of approver
+  approvedByName String?
+  rejectedReason String?
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+
+  @@map("approval_requests")
+}

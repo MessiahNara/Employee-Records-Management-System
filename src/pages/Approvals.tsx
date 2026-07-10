@@ -1,0 +1,455 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import ApproveRequestModal from '../components/ApproveRequestModal';
+import RejectRequestModal from '../components/RejectRequestModal';
+import { getAuthState } from '../utils/mockAuth';
+import { useToast } from '../contexts/ToastContext';
+import api from '../services/api';
+import { MdCheckCircle, MdCancel, MdRefresh, MdPending } from 'react-icons/md';
+import './Approvals.css';
+
+const ACTION_LABELS: Record<string, string> = {
+  update_employee: 'Update Employee',
+  delete_employee: 'Delete Employee',
+  bulk_delete_employee: 'Bulk Delete Employees',
+  delete_document: 'Delete Document',
+  bulk_delete_document: 'Bulk Delete Documents',
+  sync_import: 'Sync Import',
+  update_user: 'Update User',
+  delete_user: 'Delete User',
+  borrow_201: 'Borrow 201 File',
+};
+
+function Approvals() {
+  const { showToast } = useToast();
+  const currentUser = getAuthState();
+  const isSuperAdminOrDeveloper = currentUser?.role === 'superadmin' || currentUser?.role === 'developer';
+
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  // Map of employeeId -> derived file201Status for borrow_201 approved requests
+  const [fileConditions, setFileConditions] = useState<Record<string, string>>({});
+
+  // Approve modal
+  const [approveTarget, setApproveTarget] = useState<any>(null);
+  const approveUsernameRef = useRef<HTMLInputElement>(null);
+
+  // Focus username field once when approve modal opens
+  useEffect(() => {
+    if (approveTarget) {
+      setTimeout(() => approveUsernameRef.current?.focus(), 50);
+    }
+  }, [!!approveTarget]);
+
+  // Reject modal
+  const [rejectTarget, setRejectTarget] = useState<any>(null);
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = filter === 'pending'
+        ? await api.approvals.getPending()
+        : await api.approvals.getAll();
+      setRequests(data);
+
+      // Fetch file conditions for approved borrow_201 requests
+      const approvedBorrows = data.filter(
+        (r: any) => r.action === 'borrow_201' && r.status === 'approved' && r.payload?.employeeId
+      );
+      if (approvedBorrows.length > 0) {
+        const uniqueEmployeeIds = [...new Set(approvedBorrows.map((r: any) => r.payload.employeeId))] as string[];
+        const conditionMap: Record<string, string> = {};
+        await Promise.all(
+          uniqueEmployeeIds.map(async (empId: string) => {
+            try {
+              const emp = await api.employee.getById(empId);
+              conditionMap[empId] = emp.file201Status || 'Available';
+            } catch {
+              conditionMap[empId] = 'Available';
+            }
+          })
+        );
+        setFileConditions(conditionMap);
+      }
+    } catch {
+      showToast('Failed to fetch approval requests', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  const formatRequestedInfo = (req: any): string => {
+    const payload = req.payload || {};
+    switch (req.action) {
+      case 'update_employee':
+      case 'update_user': {
+        const FIELD_LABELS: Record<string, string> = {
+          lastName: 'Last Name',
+          firstName: 'First Name',
+          middleName: 'Middle Name',
+          dateOfBirth: 'Date of Birth',
+          gender: 'Gender',
+          officeName: 'Office / Hospital',
+          appointmentStatus: 'Appointment Status',
+          appointmentFrom: 'Appointment From',
+          appointmentTo: 'Appointment To',
+          status: 'Status',
+          position: 'Position',
+          dateOfEmployment: 'Date of Employment',
+          dateOfSeparation: 'Date of Separation',
+          reasonOfSeparation: 'Reason for Separation',
+          isDetailed: 'Detailed',
+          motherUnit: 'Mother Unit',
+          detailedTo: 'Detailed To',
+          detailedDivision: 'Detailed Division',
+          detailedFunction: 'Detailed Function',
+          detailedDate: 'Detailed Date',
+          fileboxLocation: 'Filebox Location',
+          file201Status: '201 File Status',
+          username: 'Username',
+          email: 'Email',
+          role: 'Role',
+          permissions: 'Permissions',
+          password: 'Password',
+        };
+
+        // update_user wraps fields under changedFields; update_employee stores them directly
+        const fields_map = req.action === 'update_user'
+          ? (payload.changedFields || {})
+          : payload;
+
+        const fields = Object.keys(fields_map).filter(k => k !== 'userId');
+        if (fields.length === 0) return 'No changes detected';
+
+        return fields.map(k => {
+          const label = FIELD_LABELS[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+          const val = fields_map[k];
+          // { from, to } structure
+          if (val && typeof val === 'object' && 'from' in val && 'to' in val) {
+            const from = val.from ?? '—';
+            const to = val.to ?? '—';
+            if (typeof from === 'object' || typeof to === 'object') return `${label}: (permissions updated)`;
+            return `${label}: (From) ${from} → (To) ${to}`;
+          }
+          // Legacy flat value (backward compat for existing records)
+          if (typeof val === 'object' && val !== null) return `${label}: (permissions updated)`;
+          return `${label}: ${val ?? '—'}`;
+        }).join(' | ');
+      }
+      case 'delete_employee':
+      case 'delete_user':
+        return `Delete: ${payload.employeeName || payload.userName || req.entityName}`;
+      case 'bulk_delete_employee': {
+        const names = (payload.employeeNames || []).map((e: any) => `${e.lastName}, ${e.firstName}`).join('; ');
+        return `Delete ${payload.ids?.length || 0} employees${names ? ': ' + names : ''}`;
+      }
+      case 'delete_document':
+        return `Delete document: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}`;
+      case 'bulk_delete_document': {
+        const docNames = (payload.documentNames || []).map((d: any) => d.fileName).join('; ');
+        return `Delete ${payload.ids?.length || 0} documents${docNames ? ': ' + docNames : ''}`;
+      }
+      case 'borrow_201':
+        return `Borrow 201 of ${payload.employeeName}${payload.borrowerName ? ' — Borrowed By: ' + payload.borrowerName : ''}${payload.purpose ? ' | Purpose: ' + payload.purpose : ''}`;
+      default:
+        return req.entityName || req.entityId;
+    }
+  };
+
+  const handleApprove = async (username: string, password: string) => {
+    const result = await api.approvals.approve(approveTarget.id, { username, password });
+    await executeApprovedAction(result);
+    showToast(`✅ Request approved and executed successfully.`, 'success');
+    setApproveTarget(null);
+    fetchRequests();
+  };
+
+  const executeApprovedAction = async (result: any) => {
+    const { action, entityId, payload, approvalToken, requestedBy, requestedByName, approverName } = result;
+
+    switch (action) {
+      case 'update_employee': {
+        // Extract only the 'to' values from { from, to } structure
+        const flatPayload: any = {};
+        for (const [k, v] of Object.entries(payload)) {
+          flatPayload[k] = (v && typeof v === 'object' && 'to' in (v as any)) ? (v as any).to : v;
+        }
+        await api.employee.partialUpdate(entityId, flatPayload, requestedBy, requestedByName, approvalToken);
+        break;
+      }
+      case 'delete_employee':
+        await api.employee.delete(entityId, requestedBy, requestedByName, undefined, approverName, approvalToken);
+        break;
+      case 'bulk_delete_employee':
+        await api.employee.bulkDelete(
+          payload.ids,
+          requestedBy,
+          requestedByName,
+          payload.employeeNames,
+          undefined,
+          approverName,
+          approvalToken
+        );
+        break;
+      case 'delete_document':
+        await api.document.delete(entityId, requestedBy, requestedByName, undefined, approverName, approvalToken);
+        break;
+      case 'bulk_delete_document':
+        await api.document.bulkDelete(
+          payload.ids,
+          requestedBy,
+          requestedByName,
+          payload.documentNames,
+          undefined,
+          approverName,
+          approvalToken
+        );
+        break;
+      case 'update_user': {
+        // Extract only the 'to' values from { from, to } structure
+        const flatUserFields: any = {};
+        for (const [k, v] of Object.entries(payload.changedFields || {})) {
+          flatUserFields[k] = (v && typeof v === 'object' && 'to' in (v as any)) ? (v as any).to : v;
+        }
+        await api.user.partialUpdate(payload.userId, flatUserFields, requestedBy, approvalToken);
+        break;
+      }
+      case 'delete_user':
+        await api.user.delete(payload.id, approvalToken);
+        break;
+      case 'borrow_201':
+        await api.file201.borrow(payload.employeeId, {
+          borrowerName: payload.borrowerName,
+          borrowerPosition: payload.borrowerPosition || undefined,
+          borrowerOffice: payload.borrowerOffice || undefined,
+          purpose: payload.purpose || undefined,
+          releasedBy: payload.releasedBy,
+        });
+        break;
+      default:
+        console.warn('Unknown action to execute:', action);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    await api.approvals.reject(rejectTarget.id, reason);
+    showToast('Request rejected.', 'info');
+    fetchRequests();
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.approvals.remove(id);
+      fetchRequests();
+    } catch {
+      showToast('Failed to delete request', 'error');
+    }
+  };
+
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
+
+  if (!isSuperAdminOrDeveloper) {
+    return (
+      <div className="approvals">
+        <Card>
+          <div className="approvals__unauthorized">
+            <p>You don't have permission to view this page.</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="approvals">
+      {/* Header */}
+      <div className="approvals__header">
+        <div>
+          <h1 className="approvals__title">Request &amp; Approvals</h1>
+          <p className="approvals__subtitle">
+            Review and approve pending requests from other users
+            {pendingCount > 0 && filter === 'pending' && (
+              <span className="approvals__pending-badge">{pendingCount} pending</span>
+            )}
+          </p>
+        </div>
+        <div className="approvals__header-actions">
+          <div className="approvals__filter-tabs">
+            <button
+              className={`approvals__filter-tab ${filter === 'pending' ? 'approvals__filter-tab--active' : ''}`}
+              onClick={() => setFilter('pending')}
+            >
+              <MdPending /> Pending
+            </button>
+            <button
+              className={`approvals__filter-tab ${filter === 'all' ? 'approvals__filter-tab--active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              All
+            </button>
+          </div>
+          <Button variant="ghost" size="sm" onClick={fetchRequests}>
+            <MdRefresh /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <Card><p style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</p></Card>
+      ) : requests.length === 0 ? (
+        <Card>
+          <div className="approvals__empty">
+            <MdCheckCircle className="approvals__empty-icon" />
+            <p>No {filter === 'pending' ? 'pending' : ''} approval requests.</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="approvals__list">
+          {requests.map((req) => (
+            <Card key={req.id} className={`approvals__card approvals__card--${req.status}`}>
+              <div className="approvals__card-header">
+                <div className="approvals__card-title">
+                  <span className="approvals__action-label">{ACTION_LABELS[req.action] || req.action}</span>
+                </div>
+                <div className="approvals__card-meta">
+                  <Badge
+                    variant={req.status === 'approved' ? 'success' : req.status === 'rejected' ? 'danger' : 'warning'}
+                    size="sm"
+                  >
+                    {req.status.toUpperCase()}
+                  </Badge>
+                  <span className="approvals__timestamp">
+                    {new Date(req.createdAt).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="approvals__card-body">
+                <div className="approvals__info-row">
+                  <span className="approvals__info-label">Request By:</span>
+                  <span className="approvals__info-value">
+                    {req.requestedByName}
+                    {req.requestedBy === currentUser?.id && (
+                      <span className="approvals__self-tag"> (you — cannot self-approve)</span>
+                    )}
+                  </span>
+                </div>
+                <div className="approvals__info-row">
+                  <span className="approvals__info-label">
+                    {req.action === 'update_employee' || req.action === 'update_user' ? 'Updated:' : 'Requested:'}
+                  </span>
+                  <span className="approvals__info-value">{formatRequestedInfo(req)}</span>
+                </div>
+                {(req.status === 'approved') && req.approvedByName && (
+                  <div className="approvals__info-row">
+                    <span className="approvals__info-label">Approved by:</span>
+                    <span className="approvals__info-value">{req.approvedByName}</span>
+                  </div>
+                )}
+                {/* File condition badges for approved borrow_201 requests */}
+                {req.action === 'borrow_201' && req.status === 'approved' && req.payload?.employeeId && (
+                  <div className="approvals__info-row">
+                    <span className="approvals__info-label">File Status:</span>
+                    <span className="approvals__info-value">
+                      <span className="approvals__condition-badges">
+                        {(() => {
+                          const status = fileConditions[req.payload.employeeId] || 'Available';
+                          const conditions = status.split(',').map((s: string) => s.trim()).filter(Boolean);
+                          const nonComplete = conditions.filter((c: string) => c !== 'Available' && c !== 'Borrowed');
+
+                          if (status === 'Borrowed') {
+                            return <span className="approvals__condition-badge approvals__condition-badge--borrowed">BORROWED</span>;
+                          }
+                          return (
+                            <>
+                              <span className="approvals__condition-badge approvals__condition-badge--returned">RETURNED</span>
+                              {nonComplete.map((cond: string) => (
+                                <span key={cond} className={`approvals__condition-badge approvals__condition-badge--${cond.toLowerCase()}`}>
+                                  {cond.toUpperCase()}
+                                </span>
+                              ))}
+                            </>
+                          );
+                        })()}
+                      </span>
+                    </span>
+                  </div>
+                )}
+                {req.status === 'rejected' && (
+                  <div className="approvals__info-row">
+                    <span className="approvals__info-label">Rejected by:</span>
+                    <span className="approvals__info-value">{req.approvedByName || '—'}</span>
+                  </div>
+                )}
+                {req.rejectedReason && (
+                  <div className="approvals__info-row">
+                    <span className="approvals__info-label">Reason:</span>
+                    <span className="approvals__info-value">{req.rejectedReason}</span>
+                  </div>
+                )}
+              </div>
+
+              {req.status === 'pending' && (
+                <div className="approvals__card-actions">
+                  <Button
+                    variant="success"
+                    size="sm"
+                    onClick={() => {
+                      if (req.requestedBy === currentUser?.id) {
+                        showToast('You cannot approve your own request. Another Super Admin or Developer must approve it.', 'warning');
+                        return;
+                      }
+                      setApproveTarget(req);
+                    }}
+                  >
+                    <MdCheckCircle /> Approve
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => { setRejectTarget(req); }}
+                  >
+                    <MdCancel /> Reject
+                  </Button>
+                </div>
+              )}
+
+              {req.status !== 'pending' && currentUser?.role === 'developer' && (
+                <div className="approvals__card-actions">
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(req.id)}>
+                    Delete
+                  </Button>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Approve Modal — isolated component to prevent focus loss on re-render */}
+      <ApproveRequestModal
+        isOpen={!!approveTarget}
+        target={approveTarget}
+        onClose={() => setApproveTarget(null)}
+        onApprove={handleApprove}
+      />
+
+      {/* Reject Modal — isolated component to prevent focus loss on re-render */}
+      <RejectRequestModal
+        isOpen={!!rejectTarget}
+        target={rejectTarget}
+        actionLabels={ACTION_LABELS}
+        onClose={() => setRejectTarget(null)}
+        onReject={handleReject}
+      />
+    </div>
+  );
+}
+
+export default Approvals;

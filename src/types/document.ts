@@ -1,0 +1,89 @@
+export type DocumentCategory =
+  | 'Personal Information'
+  | 'Personnel Action / Appointment'
+  | 'Position / Job Description'
+  | 'Training'
+  | 'Performance / Awards & Recognition'
+  | 'Employee Discipline'
+  | 'Administrative Order';
+
+export interface EmployeeDocument {
+  id: string;
+  fileName: string;
+  category: DocumentCategory;
+  uploadedAt: string;
+  uploadedBy: string;
+  fileSize: number; // in KB
+}
+
+export interface DocumentFolder {
+  category: DocumentCategory;
+  icon: string;
+  description: string;
+}
+
+export interface PDFDocumentStorage {
+  id: string;
+  employeeId: string;
+  document: EmployeeDocument;
+  pdfData: string; // base64 encoded PDF content
+}
+
+export interface PDFDocumentsStore {
+  documents: PDFDocumentStorage[];
+  version: string; // For future migrations
+}
+
+export interface PDFDocument {
+  id: string;
+  employeeId: string;
+  fileName: string;
+  category: DocumentCategory;
+  uploadedAt: string;
+  uploadedBy: string;
+  fileSize: number;
+  fileData: string; // base64 encoded PDF content
+}
+
+export interface FileValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+export const DOCUMENT_FOLDERS: DocumentFolder[] = [
+  {
+    category: 'Personal Information',
+    icon: '👤',
+    description: 'Birth certificates, IDs, personal records'
+  },
+  {
+    category: 'Personnel Action / Appointment',
+    icon: '📋',
+    description: 'Appointment letters, promotions, transfers'
+  },
+  {
+    category: 'Position / Job Description',
+    icon: '💼',
+    description: 'Job descriptions, position papers'
+  },
+  {
+    category: 'Training',
+    icon: '📚',
+    description: 'Training certificates, seminars, workshops'
+  },
+  {
+    category: 'Performance / Awards & Recognition',
+    icon: '🏆',
+    description: 'Performance reviews, awards, recognitions'
+  },
+  {
+    category: 'Employee Discipline',
+    icon: '⚖️',
+    description: 'Disciplinary actions, warnings, resolutions'
+  },
+  {
+    category: 'Administrative Order',
+    icon: '📜',
+    description: 'Administrative orders, directives, memorandums'
+  }
+];

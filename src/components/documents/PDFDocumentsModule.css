@@ -1,0 +1,85 @@
+.pdf-documents-module {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pdf-documents-module__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.pdf-documents-module__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.pdf-documents-module__error {
+  padding: 1rem;
+  background-color: var(--error-bg, #fee);
+  color: var(--error-text, #c00);
+  border-radius: 8px;
+  border: 1px solid var(--error-border, #fcc);
+  font-size: 0.875rem;
+}
+
+/* Bulk Actions Bar */
+.pdf-documents-module__bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md, 0.75rem) var(--spacing-lg, 1rem);
+  background-color: rgba(59, 130, 246, 0.05);
+  border: 1px solid var(--color-primary, #3b82f6);
+  border-radius: var(--border-radius, 8px);
+  margin-bottom: var(--spacing-lg, 1rem);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pdf-documents-module__bulk-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 0.75rem);
+}
+
+.pdf-documents-module__bulk-count {
+  font-size: var(--font-size-base, 1rem);
+  font-weight: 600;
+  color: var(--color-primary, #3b82f6);
+}
+
+.pdf-documents-module__bulk-clear {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #6b7280);
+  font-size: var(--font-size-sm, 0.875rem);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.pdf-documents-module__bulk-clear:hover {
+  color: var(--text-primary, #111827);
+}
+
+.pdf-documents-module__bulk-clear:focus {
+  outline: 2px solid var(--color-primary, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}

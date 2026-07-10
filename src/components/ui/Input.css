@@ -1,0 +1,84 @@
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.input-wrapper--full-width {
+  width: 100%;
+}
+
+.input__label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.input {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  transition: all var(--transition-fast);
+  width: 100%;
+  min-height: 40px; /* Ensure reasonable touch target */
+}
+
+/* Hide native browser password toggle (eye icon) */
+.input[type="password"]::-ms-reveal,
+.input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.input[type="password"]::-webkit-credentials-auto-fill-button,
+.input[type="password"]::-webkit-contacts-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+/* Mobile touch targets - minimum 44x44px */
+@media (max-width: 767px) {
+  .input {
+    min-height: 44px;
+    padding: var(--spacing-md);
+    font-size: var(--font-size-base);
+  }
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--color-gray-400);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input:disabled {
+  background-color: var(--bg-tertiary);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.input--error {
+  border-color: var(--color-danger);
+}
+
+.input--error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.input__error {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+.input__helper {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
