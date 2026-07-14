@@ -259,9 +259,13 @@
 }
 
 .dashboard__table-scroll {
-  overflow-y: auto;
+  overflow: auto;
   max-height: calc(100vh - 370px);
   min-height: 200px;
+}
+
+.dashboard__table-scroll .table-container {
+  overflow: visible;
 }
 
 .dashboard__pagination {
@@ -801,23 +805,78 @@
 
 .reports-view__filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacing-sm);
   width: 100%;
+}
+
+.reports-view__filters-inline-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-sm);
+  grid-column: 1 / -1;
+}
+
+.reports-view__filter-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.reports-view__filter-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.reports-view__filter-row--compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.reports-view__header-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.reports-view__sort-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.reports-view__sort-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  min-height: 1.05rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .reports-view__metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-md);
   margin-top: var(--spacing-sm);
 }
 
 .reports-view__metric-card {
   display: flex;
   align-items: center;
-  gap: var(--spacing-lg);
-  padding: var(--spacing-lg);
+  gap: var(--spacing-md);
+  padding: 0.9rem 1rem;
   background: var(--bg-primary);
   border-radius: var(--border-radius-lg);
   border: 1px solid var(--border-color);
@@ -870,9 +929,9 @@
 
 .reports-view__tab-btn {
   padding: 0.625rem 1.25rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
+  background: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
   color: var(--text-secondary);
   font-size: var(--font-size-base);
   font-weight: 600;
@@ -884,19 +943,57 @@
 }
 
 .reports-view__tab-btn:hover {
-  color: var(--color-primary);
-  background-color: rgba(59, 130, 246, 0.04);
-  border-radius: var(--border-radius) var(--border-radius) 0 0;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
 }
 
 .reports-view__tab-btn--active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .reports-view__table-container {
-  margin-top: var(--spacing-md);
+  margin-top: var(--spacing-sm);
   width: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(100vh - 370px);
+  min-height: 200px;
+}
+
+.reports-view__table-container .table {
+  min-width: 900px;
+}
+
+/* Inside reports, the inner scroll wrapper must not clip sort buttons */
+.reports-view__table-container .dashboard__table-scroll {
+  overflow: visible;
+  max-height: none;
+}
+
+/* Allow sort button dropdowns to overflow the table container */
+.reports-view__table-container .table-container {
+  overflow: visible;
+}
+
+.reports-view__table-container .table__head {
+  z-index: 20;
+  position: sticky;
+  top: 0;
+}
+
+.reports-view__summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.16);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .reports-view__birthday-month-select {
@@ -907,7 +1004,190 @@
   margin-bottom: var(--spacing-lg);
 }
 
+/* Sort button on report table headers */
+.reports-view__sort-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+  opacity: 0.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+.reports-view__sort-btn:hover {
+  opacity: 1;
+  background-color: rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.reports-view__sort-btn--active {
+  opacity: 1;
+  color: var(--color-primary);
+  background-color: rgba(59, 130, 246, 0.08);
+  font-weight: 700;
+}
+
+/* Sort remove (×) button */
+.reports-view__sort-remove-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 1px 3px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+  opacity: 0.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  font-weight: 700;
+}
+
+.reports-view__sort-remove-btn:hover {
+  opacity: 1;
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* Export actions group */
+.reports-view__export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+}
+
+
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Columns Toggle Dropdown Popover */
+.reports-view__columns-control {
+  position: relative;
+  display: inline-block;
+}
+
+.reports-view__columns-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 260px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.reports-view__columns-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+.reports-view__columns-link {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.reports-view__columns-link:hover {
+  text-decoration: underline;
+  color: var(--color-primary-dark);
+}
+
+.reports-view__columns-divider {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.reports-view__columns-dropdown-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reports-view__columns-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--border-radius-sm, 4px);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background-color var(--transition-fast);
+}
+
+.reports-view__columns-item:hover {
+  background-color: var(--bg-secondary);
+}
+
+.reports-view__columns-checkbox {
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+
+.reports-view__columns-label {
+  user-select: none;
+  font-weight: 500;
+}
+
+/* Styled Form Sections for Add/Update Employee Modals */
+.dashboard__form-section {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.dashboard__form-section-header {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.15);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }

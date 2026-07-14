@@ -11,7 +11,7 @@ import File201HistoryModal from '../components/File201HistoryModal';
 import '../components/File201Modal.css';
 import '../components/File201HistoryModal.css';
 import { Employee } from '../types/employee';
-import { formatDateDDMMYYYY, formatDateLong } from '../utils/dateUtils';
+import { formatDateDDMMYYYY, formatDateLong, formatDateMDY } from '../utils/dateUtils';
 import api from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
 import './EmployeeDetails.css';
@@ -340,55 +340,84 @@ function EmployeeDetails() {
               <label className="employee-details__label">Appointment Effectivity</label>
               <p className="employee-details__value">
                 {employee.appointmentFrom && employee.appointmentTo
-                  ? `${formatDateDDMMYYYY(employee.appointmentFrom)} TO ${formatDateDDMMYYYY(employee.appointmentTo)}`
+                  ? `${formatDateMDY(employee.appointmentFrom)} TO ${formatDateMDY(employee.appointmentTo)}`
                   : 'N/A'}
               </p>
             </div>
             <div className="employee-details__field">
-              <label className="employee-details__label">Expiration Date</label>
-              <p className="employee-details__value">{formatDateDDMMYYYY(employee.expirationDate) || 'N/A'}</p>
+              <label className="employee-details__label">Administrative Order</label>
+              <p className="employee-details__value">
+                {employee.aoNumber || employee.aoYear ? (
+                  <>
+                    {employee.aoNumber ? `AO ${employee.aoNumber}` : '—'}
+                    {employee.aoYear ? `, S. ${employee.aoYear}` : ''}
+                  </>
+                ) : (
+                  'N/A'
+                )}
+              </p>
             </div>
             <div className="employee-details__field">
-              <label className="employee-details__label">AO Number</label>
-              <p className="employee-details__value">{employee.aoNumber || 'N/A'}</p>
+              <label className="employee-details__label">Type of AO</label>
+              <p className="employee-details__value">{employee.aoType || 'N/A'}</p>
             </div>
           </div>
 
-          {/* Detailed / Re-Assignment sub-section */}
-          <div className="employee-details__detailed-section">
-            <div className="employee-details__detailed-grid">
-              {/* First cell: label + badge */}
-              <div className="employee-details__detailed-field">
-                <label className="employee-details__detailed-label">Detailed to Another Office?</label>
-                <p className="employee-details__detailed-value">
-                  <span className={`employee-details__detailed-badge ${employee.isDetailed ? 'employee-details__detailed-badge--yes' : 'employee-details__detailed-badge--no'}`}>
-                    {employee.isDetailed ? 'YES' : 'NO'}
-                  </span>
-                </p>
+          {/* Detailed Section (AO Type = Detailed) */}
+          {(employee as any).aoType === 'Detailed' && (
+            <div className="employee-details__detailed-section">
+              <div className="employee-details__detailed-grid">
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Detailed/Transferred Office</label>
+                  <p className="employee-details__detailed-value">{employee.detailedTo || '—'}</p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Division</label>
+                  <p className="employee-details__detailed-value">{employee.detailedDivision || '—'}</p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Duration From</label>
+                  <p className="employee-details__detailed-value">
+                    {employee.appointmentFrom ? formatDateMDY(employee.appointmentFrom) : '—'}
+                  </p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Duration To</label>
+                  <p className="employee-details__detailed-value">
+                    {employee.appointmentTo ? formatDateMDY(employee.appointmentTo) : '—'}
+                  </p>
+                </div>
               </div>
-
-              {employee.isDetailed ? (
-                <>
-                  <div className="employee-details__detailed-field">
-                    <label className="employee-details__detailed-label">Re-Assignment Office</label>
-                    <p className="employee-details__detailed-value">{employee.detailedTo || '—'}</p>
-                  </div>
-                  <div className="employee-details__detailed-field">
-                    <label className="employee-details__detailed-label">Division</label>
-                    <p className="employee-details__detailed-value">{employee.detailedDivision || '—'}</p>
-                  </div>
-                  <div className="employee-details__detailed-field">
-                    <label className="employee-details__detailed-label">Function / Designation</label>
-                    <p className="employee-details__detailed-value">{employee.detailedFunction || '—'}</p>
-                  </div>
-                  <div className="employee-details__detailed-field">
-                    <label className="employee-details__detailed-label">Date of Re-Assignment</label>
-                    <p className="employee-details__detailed-value">{formatDateLong(employee.detailedDate) || '—'}</p>
-                  </div>
-                </>
-              ) : null}
             </div>
-          </div>
+          )}
+
+          {/* Designated Section (AO Type = Designated) */}
+          {(employee as any).aoType === 'Designated' && (
+            <div className="employee-details__detailed-section">
+              <div className="employee-details__detailed-grid">
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Designated Office</label>
+                  <p className="employee-details__detailed-value">{(employee as any).detailedTo || '—'}</p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Designated Position Function</label>
+                  <p className="employee-details__detailed-value">{(employee as any).designatedPositionFunction || '—'}</p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Duration From</label>
+                  <p className="employee-details__detailed-value">
+                    {(employee as any).designatedOrderFrom ? formatDateMDY((employee as any).designatedOrderFrom) : '—'}
+                  </p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Duration To</label>
+                  <p className="employee-details__detailed-value">
+                    {(employee as any).designatedOrderTo ? formatDateMDY((employee as any).designatedOrderTo) : '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Separation Information (only if Inactive) */}

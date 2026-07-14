@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Table, { Column } from '../components/ui/Table';
 import SearchBar from '../components/ui/SearchBar';
@@ -7,6 +8,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+import SearchableDropdown from '../components/ui/SearchableDropdown';
 import PermissionBanner from '../components/PermissionBanner';
 import ImportModal from '../components/ImportModal';
 import ExportButton from '../components/ExportButton';
@@ -19,7 +21,7 @@ import { ImportedEmployee } from '../types/importExport';
 import { generateImportTemplate } from '../utils/exportUtils';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
-import { formatDateDDMMYYYY, convertToDateInputFormat } from '../utils/dateUtils';
+import { formatDateDDMMYYYY, convertToDateInputFormat, formatDateMDY } from '../utils/dateUtils';
 import { MdEdit, MdDelete, MdFileUpload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock } from 'react-icons/md';
 import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
@@ -27,6 +29,61 @@ import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
 import './Dashboard.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+type ReportSortDirection = 'asc' | 'desc';
+
+interface ReportSortConfig {
+  key: string;
+  direction: ReportSortDirection;
+}
+
+interface ReportRow {
+  id: string;
+  employeeId: string;
+  name: string;
+  position: string;
+  motherUnit: string;
+  aoType: 'Detailed' | 'Designated' | '';
+  assignedUnit: string;
+  detailedOffice: string;
+  designatedPositionFunction: string;
+  durationFrom: string;
+  durationTo: string;
+  dateOfBirth: string;
+  aoNumber: string;
+  seriesNumber: string;
+  birthMonthValue: string;
+  aoOrderMonth: string;
+  status: EmployeeStatus;
+  rawEmployee: Employee;
+  docId: string; // ID of the linked Administrative Order document (empty for audit-only rows)
+}
+
+const COLUMN_LABELS: Record<string, string> = {
+  employeeId: 'Employment ID',
+  name: 'Name of Employee',
+  position: 'Position',
+  motherUnit: 'Mother Unit',
+  detailedOffice: 'Detailed/Transferred Office/Hospital',
+  designatedPositionFunction: 'Designated Position/Function',
+  durationFrom: 'Duration From',
+  durationTo: 'Duration To',
+  dateOfBirth: 'Date of Birth',
+  administrativeOrder: 'Administrative Order No.',
+};
+
+const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
+  employeeId: true,
+  name: true,
+  position: true,
+  motherUnit: true,
+  detailedOffice: true,
+  designatedPositionFunction: true,
+  durationFrom: true,
+  durationTo: true,
+  dateOfBirth: true,
+  administrativeOrder: true,
+};
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -55,17 +112,67 @@ function Dashboard() {
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // For KPI cards - always shows all data
   const [isLoading, setIsLoading] = useState(false);
   const [showAllEmployees, setShowAllEmployees] = useState(false);
-  
+
   // Generated Reports UI states
   const location = useLocation();
   const viewMode = location.pathname.startsWith('/reports') ? 'reports' : 'employees';
+  const [reportAoStatus, setReportAoStatus] = useState<'Detailed' | 'Designated' | 'All Employees'>('All Employees');
   const [reportSearchName, setReportSearchName] = useState('');
-  const [reportSearchOffice, setReportSearchOffice] = useState('all');
-  const [reportSearchYear, setReportSearchYear] = useState('');
-  const [reportDetailedFilter, setReportDetailedFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [reportMotherUnit, setReportMotherUnit] = useState('all');
+  const [reportDetailedOffice, setReportDetailedOffice] = useState('all');
+  const [reportDesignatedPosition, setReportDesignatedPosition] = useState('all');
   const [reportAoNumber, setReportAoNumber] = useState('');
-  const [reportBirthMonth, setReportBirthMonth] = useState('');
-  const [reportActiveTab, setReportActiveTab] = useState<'active' | 'inactive' | 'birthdays'>('active');
+  const [reportAoYear, setReportAoYear] = useState('');
+  const [reportActiveTab, setReportActiveTab] = useState<'active' | 'inactive' | 'expiring' | 'expired'>('active');
+  const [reportAoOrderMonthFrom, setReportAoOrderMonthFrom] = useState('');
+  const [reportAoOrderMonthTo, setReportAoOrderMonthTo] = useState('');
+  const [reportSortPriority, setReportSortPriority] = useState<ReportSortConfig[]>([]);
+  const [employeeAuditLogs, setEmployeeAuditLogs] = useState<any[]>([]);
+  const [selectedReportRowIds, setSelectedReportRowIds] = useState<Set<string>>(new Set());
+  const [isDeleteReportConfirmOpen, setIsDeleteReportConfirmOpen] = useState(false);
+  const [pendingDeleteReportIds, setPendingDeleteReportIds] = useState<string[]>([]);
+  const [isDeletingReport, setIsDeletingReport] = useState(false);
+
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('report_visible_columns');
+      return saved ? JSON.parse(saved) : DEFAULT_VISIBLE_COLUMNS;
+    } catch {
+      return DEFAULT_VISIBLE_COLUMNS;
+    }
+  });
+  const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsColumnDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const [reportCurrentPage, setReportCurrentPage] = useState(1);
+  const [reportItemsPerPage, setReportItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    setReportCurrentPage(1);
+  }, [
+    reportAoStatus,
+    reportSearchName,
+    reportMotherUnit,
+    reportDetailedOffice,
+    reportDesignatedPosition,
+    reportAoNumber,
+    reportAoYear,
+    reportAoOrderMonthFrom,
+    reportAoOrderMonthTo,
+    reportActiveTab,
+  ]);
 
   const [formData, setFormData] = useState<EmployeeFormData>({
     id: '',
@@ -78,19 +185,20 @@ function Dashboard() {
     appointmentStatus: '',
     appointmentFrom: '',
     appointmentTo: '',
-    expirationDate: '',
     aoNumber: '',
+    aoYear: '',
+    aoType: '',
     status: 'Active',
     positionFunction: '',
     dateOfEmployment: '',
     dateOfSeparation: '',
     reasonForSeparation: '',
-    isDetailed: false,
     motherUnit: '',
     detailedTo: '',
     detailedDivision: '',
-    detailedFunction: '',
-    detailedDate: '',
+    designatedPositionFunction: '',
+    designatedOrderFrom: '',
+    designatedOrderTo: '',
     fileboxLocation: '',
     file201Status: '',
   });
@@ -118,9 +226,9 @@ function Dashboard() {
         officeNames: s.officeNames ?? [],
         positions: s.positions ?? [],
       });
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
-  
+
   // For superadmin and admin, they have all permissions
   // For superadmin, they have all permissions
   // For admin and staff, use their individual permissions from the database
@@ -128,12 +236,12 @@ function Dashboard() {
     if (userRole === 'superadmin' || userRole === 'developer') {
       return { create: true, read: true, update: true, delete: true };
     }
-    
+
     // For admin and staff, get permissions from the logged-in user's data
     if ((userRole === 'admin' || userRole === 'staff') && currentUser?.permissions) {
       return currentUser.permissions;
     }
-    
+
     // Default: read-only
     return { create: false, read: true, update: false, delete: false };
   };
@@ -150,7 +258,7 @@ function Dashboard() {
     if (justLoggedIn === 'true' && currentUser) {
       // Clear the flag
       sessionStorage.removeItem('justLoggedIn');
-      
+
       // Show welcome toast
       showWelcomeToast(currentUser.firstName, currentUser.lastName);
     }
@@ -164,6 +272,7 @@ function Dashboard() {
   // Fetch all employees for KPI cards on initial load
   useEffect(() => {
     fetchAllEmployeesForKPI();
+    fetchEmployeeAuditLogs();
   }, []);
 
   // Fetch all employees for KPI cards (no filters)
@@ -193,22 +302,31 @@ function Dashboard() {
     }
   }, [searchQuery, searchFilterType, statusFilter, showAllEmployees]);
 
+  const fetchEmployeeAuditLogs = async () => {
+    try {
+      const logs = await api.audit.getAll({ entity: 'employee', action: 'update', limit: 10000 });
+      setEmployeeAuditLogs(Array.isArray(logs) ? logs : []);
+    } catch (error) {
+      console.error('Error fetching employee audit logs:', error);
+    }
+  };
+
   const fetchEmployees = async () => {
     try {
       setIsLoading(true);
       const filters: any = {};
-      
+
       // Add status filter
       if (statusFilter !== 'all') {
         filters.status = statusFilter;
       }
-      
+
       // Add search filter
       if (searchQuery.trim()) {
         filters.search = searchQuery.trim();
         filters.filter_type = searchFilterType;
       }
-      
+
       const data = await api.employee.getAll(filters);
       setEmployees(data);
     } catch (error) {
@@ -228,13 +346,13 @@ function Dashboard() {
         // Additional frontend filtering for position and office
         const matchesPosition = employee.positionFunction.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesOffice = employee.officeHospitalName.toLowerCase().includes(searchQuery.toLowerCase());
-        
+
         // If searching globally, also check position and office
         if (searchFilterType === 'all' && (matchesPosition || matchesOffice)) {
           return true;
         }
       }
-      
+
       return true;
     });
   }, [searchQuery, searchFilterType, employees]);
@@ -248,66 +366,830 @@ function Dashboard() {
 
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
 
-  // Reports filtering logic
-  const filteredReportEmployees = useMemo(() => {
-    return allEmployees.filter(emp => {
-      // 1. Filter by Name (person)
-      if (reportSearchName.trim()) {
-        const name = `${emp.firstName} ${emp.middleName || ''} ${emp.lastName}`.toLowerCase();
-        if (!name.includes(reportSearchName.toLowerCase().trim())) return false;
-      }
-      // 2. Filter by Office/Hospital
-      if (reportSearchOffice && reportSearchOffice !== 'all') {
-        if (emp.officeHospitalName !== reportSearchOffice) return false;
-      }
-      // 3. Filter by Year (Date Hired / Date of Employment year)
-      if (reportSearchYear.trim()) {
-        if (!emp.dateOfEmployment) return false;
-        const hiredYear = new Date(emp.dateOfEmployment).getFullYear().toString();
-        if (hiredYear !== reportSearchYear.trim()) return false;
-      }
-      // 4. Filter by Detailed Order
-      if (reportDetailedFilter !== 'all') {
-        const isDetailed = emp.isDetailed === true;
-        if (reportDetailedFilter === 'yes' && !isDetailed) return false;
-        if (reportDetailedFilter === 'no' && isDetailed) return false;
-      }
-      // 5. Filter by AO Number
-      if (reportAoNumber.trim()) {
-        if (!emp.aoNumber || !emp.aoNumber.toLowerCase().includes(reportAoNumber.toLowerCase().trim())) return false;
-      }
-      return true;
-    });
-  }, [allEmployees, reportSearchName, reportSearchOffice, reportSearchYear, reportDetailedFilter, reportAoNumber]);
+  const reportRows = useMemo<ReportRow[]>(() => {
+    // Determine AO type from the DB-persisted aoType field first,
+    // then fall back to isDetailed flag, then check designated fields.
+    const inferAoType = (data: any): ReportRow['aoType'] => {
+      const rawAoType = String(data.aoType || '').trim().toLowerCase();
+      if (rawAoType === 'detailed') return 'Detailed';
+      if (rawAoType === 'designated') return 'Designated';
+      // Legacy: isDetailed boolean stored before aoType column existed
+      if (data.isDetailed === true) return 'Detailed';
+      // Legacy: designated fields present without aoType
+      if (
+        String(data.designatedPositionFunction || '').trim() ||
+        String(data.designatedOrderFrom || '').trim() ||
+        String(data.designatedOrderTo || '').trim()
+      ) return 'Designated';
+      return '';
+    };
 
-  const uniqueOfficesInDatabase = useMemo(() => {
-    const offices = allEmployees.map(emp => emp.officeHospitalName || (emp as any).officeName).filter(Boolean);
+    const buildRow = (source: any, suffix: string, docId = ''): ReportRow => {
+      const birthDate = source.dateOfBirth ? new Date(source.dateOfBirth) : null;
+      const birthMonthValue = birthDate ? String(birthDate.getMonth() + 1).padStart(2, '0') : '';
+      const aoType = inferAoType(source);
+
+      // Detailed: duration = appointmentFrom / appointmentTo
+      // Designated: duration = designatedOrderFrom / designatedOrderTo
+      const durationFrom = aoType === 'Detailed'
+        ? String(source.appointmentFrom || '').trim()
+        : String(source.designatedOrderFrom || '').trim();
+      const durationTo = aoType === 'Detailed'
+        ? String(source.appointmentTo || '').trim()
+        : String(source.designatedOrderTo || '').trim();
+
+      const aoOrderMonth = durationFrom
+        ? String(new Date(durationFrom).getMonth() + 1).padStart(2, '0')
+        : '';
+
+      const dateOfBirth = birthDate ? formatDateDDMMYYYY(source.dateOfBirth) : '-';
+
+      // Mother unit = Office/Hospital Name (employment information) — the primary source
+      const motherUnit = source.officeHospitalName || source.officeName || source.motherUnit || '';
+
+      // position / positionFunction — the API maps position → positionFunction, but
+      // audit log oldValues store the raw DB column name "position"
+      const position = source.positionFunction || source.position || '';
+
+      return {
+        id: `${source.id}-${suffix}`,
+        employeeId: source.id,
+        name: `${source.lastName}, ${source.firstName} ${source.middleName || ''}`.trim(),
+        position,
+        motherUnit,
+        aoType,
+        assignedUnit: motherUnit || '-',
+        detailedOffice: String(source.detailedTo || '').trim(),
+        designatedPositionFunction: String(source.designatedPositionFunction || '').trim(),
+        durationFrom,
+        durationTo,
+        dateOfBirth,
+        aoNumber: String(source.aoNumber || '').trim(),
+        seriesNumber: String(source.aoYear || source.seriesNumber || ''),
+        birthMonthValue,
+        aoOrderMonth,
+        status: source.status,
+        rawEmployee: source,
+        docId,
+      };
+    };
+
+    // Current records — one row per Administrative Order document on the employee.
+    // This way each AO document is its own entry in the report table.
+    const currentRows: ReportRow[] = [];
+    allEmployees.forEach((emp) => {
+      const docs = (emp as any).documents || [];
+      const aoDocs = docs.filter((d: any) => d.category === 'Administrative Order');
+      if (aoDocs.length === 0) return;
+
+      aoDocs.forEach((doc: any) => {
+        // Each document carries its own aoNumber / aoYear embedded in the filename
+        // (format: "NAME_AO. {aoNum}, S. {aoYear}.pdf"), but the most reliable
+        // source is the employee's current fields for the LATEST document.
+        // We pass the employee as-is; the AO number shown will be the one stored
+        // on the employee record. Each row gets a unique docId so deletion is precise.
+        const row = buildRow(emp, `doc-${doc.id}`, doc.id);
+        // Only include if there's an AO number and a valid AO type
+        if (row.aoNumber || row.aoType) {
+          currentRows.push(row);
+        }
+      });
+    });
+
+    // Group logs by employee ID to chronologically reconstruct their state backwards
+    const logsByEmployee: Record<string, typeof employeeAuditLogs> = {};
+    employeeAuditLogs.forEach((log) => {
+      const empId = String(log.entityId || '');
+      if (!logsByEmployee[empId]) {
+        logsByEmployee[empId] = [];
+      }
+      logsByEmployee[empId].push(log);
+    });
+
+    const auditRows: ReportRow[] = [];
+
+    Object.entries(logsByEmployee).forEach(([empId, logs]) => {
+      const emp = allEmployees.find((item) => item.id === empId);
+      if (!emp) return;
+
+      // Exclude employee historical records if they no longer have an active Administrative Order document
+      const docs = (emp as any).documents || [];
+      const hasAoDoc = docs.some((d: any) => d.category === 'Administrative Order');
+      if (!hasAoDoc) return;
+
+      // Sort logs by createdAt descending (newest first)
+      const sortedLogs = [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Start state is the current employee state
+      let currentState = { ...emp };
+
+      sortedLogs.forEach((log) => {
+        const changed: string[] = Array.isArray(log.metadata?.changedFields)
+          ? log.metadata?.changedFields
+          : [];
+
+        const aoFields = [
+          'aoNumber', 'aoType', 'detailedTo', 'appointmentFrom', 'appointmentTo',
+          'designatedPositionFunction', 'designatedOrderFrom', 'designatedOrderTo',
+          'aoYear', 'seriesNumber'
+        ];
+
+        const isAoLog = changed.some((f) => aoFields.includes(f)) && log.metadata?.oldValues;
+
+        // Apply oldValues to currentState to get the state BEFORE this log
+        const oldValues = log.metadata?.oldValues || {};
+        const previousState = { ...currentState, ...oldValues };
+
+        if (isAoLog) {
+          const row = buildRow(previousState, `audit-${log.id}`);
+
+          const prevAoNumber = String(previousState.aoNumber || '').trim();
+          const currAoNumber = String(emp.aoNumber || '').trim();
+
+          // Skip if the previous state had no AO number
+          if (!prevAoNumber) {
+            currentState = previousState;
+            return;
+          }
+
+          // Skip if the previous AO number is identical to the current one
+          // (update touched AO fields but didn't actually change the AO assignment)
+          if (prevAoNumber === currAoNumber) {
+            currentState = previousState;
+            return;
+          }
+
+          // Skip if the previous AO number matches any current document on this employee
+          // (meaning it's already represented as a currentRow)
+          const empDocs = (emp as any).documents || [];
+          const alreadyCurrentDoc = empDocs.some((d: any) => {
+            // The current document AO number is stored on the employee record
+            // so if the doc belongs to this employee and the aoNumber matches, skip
+            return d.category === 'Administrative Order' && prevAoNumber === currAoNumber;
+          });
+          if (alreadyCurrentDoc) {
+            currentState = previousState;
+            return;
+          }
+
+          // Skip if identical to the current employee state in every AO-relevant way
+          if (
+            prevAoNumber === currAoNumber &&
+            row.aoType === inferAoType(emp) &&
+            row.detailedOffice === String((emp as any).detailedTo || '').trim() &&
+            row.designatedPositionFunction === String((emp as any).designatedPositionFunction || '').trim()
+          ) {
+            currentState = previousState;
+            return;
+          }
+
+          auditRows.push({ ...row, status: emp.status });
+        }
+
+        // Update currentState pointer to move backwards in time
+        currentState = previousState;
+      });
+    });
+
+    // Deduplicate:
+    // - currentRows are already unique by docId — keep all of them
+    // - Two different employees sharing the same AO number is valid — always keep both
+    // - For auditRows, only drop a row if an identical entry already exists for the
+    //   same employee (same employeeId + aoNumber + seriesNumber + aoType + offices)
+    const seenAuditKeys = new Set<string>();
+    const dedupedAuditRows: ReportRow[] = [];
+
+    for (const row of auditRows) {
+      const key = `${row.employeeId}|${row.aoNumber}|${row.seriesNumber}|${row.aoType}|${row.detailedOffice}|${row.designatedPositionFunction}`;
+      if (!seenAuditKeys.has(key)) {
+        seenAuditKeys.add(key);
+        dedupedAuditRows.push(row);
+      }
+    }
+
+    return [...currentRows, ...dedupedAuditRows];
+  }, [allEmployees, employeeAuditLogs]);
+
+  const uniqueDetailedOfficesInDatabase = useMemo(() => {
+    const offices = allEmployees.map(emp => emp.detailedTo).filter(Boolean);
     return [...new Set(offices)].sort();
   }, [allEmployees]);
 
-  const activeReportEmployees = useMemo(() => {
-    return filteredReportEmployees.filter(emp => emp.status === 'Active');
-  }, [filteredReportEmployees]);
+  const uniqueDesignatedPositionsInDatabase = useMemo(() => {
+    const positions = allEmployees.map(emp => (emp as any).designatedPositionFunction).filter(Boolean);
+    return [...new Set(positions)].sort();
+  }, [allEmployees]);
 
-  const inactiveReportEmployees = useMemo(() => {
-    return filteredReportEmployees.filter(emp => emp.status === 'Inactive');
-  }, [filteredReportEmployees]);
+  const uniqueMotherUnitsInDatabase = useMemo(() => {
+    const motherUnits = allEmployees.map(emp => emp.motherUnit || emp.officeHospitalName).filter(Boolean);
+    return [...new Set(motherUnits)].sort();
+  }, [allEmployees]);
 
-  // Birthday Month Report logic
-  const birthdayEmployees = useMemo(() => {
-    if (!reportBirthMonth) return [];
-    return allEmployees
-      .filter(emp => {
-        if (!emp.dateOfBirth) return false;
-        const birthMonthNum = new Date(emp.dateOfBirth).getMonth() + 1;
-        return birthMonthNum.toString().padStart(2, '0') === reportBirthMonth;
-      })
-      .sort((a, b) => {
-        const dayA = new Date(a.dateOfBirth!).getDate();
-        const dayB = new Date(b.dateOfBirth!).getDate();
-        return dayA - dayB;
+  const filteredReportRows = useMemo(() => {
+    return reportRows.filter((row) => {
+      if (reportAoStatus === 'Detailed' && row.aoType !== 'Detailed') return false;
+      if (reportAoStatus === 'Designated' && row.aoType !== 'Designated') return false;
+
+      if (reportSearchName.trim()) {
+        const query = reportSearchName.toLowerCase().trim();
+        if (!row.name.toLowerCase().includes(query)) return false;
+      }
+
+      if (reportMotherUnit !== 'all' && row.motherUnit.toLowerCase() !== reportMotherUnit.toLowerCase()) return false;
+
+      if (reportDetailedOffice !== 'all') {
+        if (row.aoType === 'Detailed' && row.detailedOffice.toLowerCase() !== reportDetailedOffice.toLowerCase()) return false;
+      }
+
+      if (reportDesignatedPosition !== 'all') {
+        if (row.aoType === 'Designated' && row.designatedPositionFunction.toLowerCase() !== reportDesignatedPosition.toLowerCase()) return false;
+      }
+
+      if (reportAoNumber.trim()) {
+        if (!row.aoNumber.toLowerCase().includes(reportAoNumber.toLowerCase().trim())) return false;
+      }
+
+      if (reportAoYear.trim()) {
+        if (!row.seriesNumber.toLowerCase().includes(reportAoYear.toLowerCase().trim())) return false;
+      }
+
+      if (reportAoOrderMonthFrom || reportAoOrderMonthTo) {
+        const from = reportAoOrderMonthFrom ? parseInt(reportAoOrderMonthFrom, 10) : 1;
+        const to = reportAoOrderMonthTo ? parseInt(reportAoOrderMonthTo, 10) : 12;
+        if (!row.aoOrderMonth) return false;
+        const monthValue = parseInt(row.aoOrderMonth, 10);
+        if (from <= to) {
+          if (monthValue < from || monthValue > to) return false;
+        } else if (monthValue < from && monthValue > to) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [reportRows, reportAoStatus, reportSearchName, reportMotherUnit, reportDetailedOffice, reportDesignatedPosition, reportAoNumber, reportAoYear, reportAoOrderMonthFrom, reportAoOrderMonthTo]);
+
+  const getReportSortValue = (row: ReportRow, field: string) => {
+    switch (field) {
+      case 'employeeId':
+        return row.employeeId || '';
+      case 'name':
+        return row.name || '';
+      case 'position':
+        return row.position || '';
+      case 'motherUnit':
+        return row.motherUnit || '';
+      case 'assignedUnit':
+        return row.assignedUnit || '';
+      case 'detailedOffice':
+        return row.detailedOffice || '';
+      case 'designatedPositionFunction':
+        return row.designatedPositionFunction || '';
+      case 'durationFrom':
+        return row.durationFrom || '';
+      case 'durationTo':
+        return row.durationTo || '';
+      case 'dateOfBirth':
+        return row.dateOfBirth || '';
+      case 'aoNumber':
+        return `${row.aoNumber ? `AO ${row.aoNumber}` : ''}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim();
+      default:
+        return '';
+    }
+  };
+
+  const sortedReportRows = useMemo(() => {
+    if (reportSortPriority.length === 0) return filteredReportRows;
+
+    return [...filteredReportRows].sort((a, b) => {
+      for (const sort of reportSortPriority) {
+        const valueA = getReportSortValue(a, sort.key);
+        const valueB = getReportSortValue(b, sort.key);
+        const comparison = String(valueA || '').localeCompare(String(valueB || ''), undefined, { sensitivity: 'base' });
+        if (comparison !== 0) {
+          return sort.direction === 'asc' ? comparison : -comparison;
+        }
+      }
+      return 0;
+    });
+  }, [filteredReportRows, reportSortPriority]);
+
+  const isNearExpiration = (durationTo: string) => {
+    if (!durationTo) return false;
+    const expDate = new Date(durationTo);
+    if (isNaN(expDate.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thirtyDaysLater = new Date(today);
+    thirtyDaysLater.setDate(today.getDate() + 30);
+    expDate.setHours(0, 0, 0, 0);
+    return expDate >= today && expDate <= thirtyDaysLater;
+  };
+
+  const isExpired = (durationTo: string) => {
+    if (!durationTo) return false;
+    const expDate = new Date(durationTo);
+    if (isNaN(expDate.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expDate.setHours(0, 0, 0, 0);
+    return expDate < today;
+  };
+
+  const reportsForActiveTab = useMemo(() => {
+    if (reportActiveTab === 'active') {
+      return sortedReportRows.filter((row) => row.status === 'Active');
+    } else if (reportActiveTab === 'inactive') {
+      return sortedReportRows.filter((row) => row.status === 'Inactive');
+    } else if (reportActiveTab === 'expiring') {
+      return sortedReportRows.filter((row) => isNearExpiration(row.durationTo));
+    } else {
+      return sortedReportRows.filter((row) => isExpired(row.durationTo));
+    }
+  }, [sortedReportRows, reportActiveTab]);
+
+  const reportTotalPages = Math.ceil(reportsForActiveTab.length / reportItemsPerPage);
+
+  const paginatedReports = useMemo(() => {
+    const startIndex = (reportCurrentPage - 1) * reportItemsPerPage;
+    return reportsForActiveTab.slice(startIndex, startIndex + reportItemsPerPage);
+  }, [reportsForActiveTab, reportCurrentPage, reportItemsPerPage]);
+
+  const handleReportSort = (field: string) => {
+    const validSortFields = new Set([
+      'employeeId',
+      'name',
+      'position',
+      'motherUnit',
+      'assignedUnit',
+      'detailedOffice',
+      'designatedPositionFunction',
+      'durationFrom',
+      'durationTo',
+      'dateOfBirth',
+      'aoNumber',
+    ]);
+
+    if (!validSortFields.has(field)) {
+      return;
+    }
+
+    setReportSortPriority((prev) => {
+      const existing = prev.findIndex((item) => item.key === field);
+      if (existing >= 0) {
+        if (prev[existing].direction === 'asc') {
+          // Second click: toggle to desc
+          const updated = [...prev];
+          updated[existing] = { ...updated[existing], direction: 'desc' };
+          return updated;
+        } else {
+          // Third click: remove this sort (numbers re-index automatically)
+          return prev.filter((_, i) => i !== existing);
+        }
+      }
+
+      // First click: add as ascending
+      return [...prev, { key: field, direction: 'asc' }];
+    });
+  };
+
+  const handleRemoveSort = (field: string) => {
+    setReportSortPriority((prev) => prev.filter((item) => item.key !== field));
+  };
+
+  const renderSortableHeader = (label: string, field: string) => {
+    const priorityIndex = reportSortPriority.findIndex((item) => item.key === field) + 1;
+    const active = reportSortPriority.some((item) => item.key === field);
+    const currentDirection = reportSortPriority.find((item) => item.key === field)?.direction;
+
+    return (
+      <div className="reports-view__header-cell">
+        <span>{label}</span>
+        <div className="reports-view__sort-controls">
+          <button
+            type="button"
+            className={`reports-view__sort-btn${active ? ' reports-view__sort-btn--active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); handleReportSort(field); }}
+            title={active ? (currentDirection === 'asc' ? `Sort ${label} descending` : `Remove ${label} sort`) : `Sort by ${label}`}
+          >
+            {priorityIndex > 0 ? <span className="reports-view__sort-priority">{priorityIndex}</span> : null}
+            {active ? (currentDirection === 'asc' ? '▲' : '▼') : '⇅'}
+          </button>
+          {active && (
+            <button
+              type="button"
+              className="reports-view__sort-remove-btn"
+              onClick={(e) => { e.stopPropagation(); handleRemoveSort(field); }}
+              title={`Remove ${label} sort`}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAdministrativeOrder = (row: ReportRow) => {
+    const label = `${row.aoNumber ? `AO ${row.aoNumber}` : '-'}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim();
+    const docs = (row.rawEmployee as any).documents || [];
+    // Use the specific document linked to this row via docId; fall back to any AO doc for audit rows
+    const aoDoc = row.docId
+      ? docs.find((d: any) => d.id === row.docId)
+      : docs.find((d: any) => d.category === 'Administrative Order');
+
+    if (aoDoc) {
+      return (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedReportDocument(aoDoc);
+            setReportPdfData(`${getServerBaseUrl()}/api/documents/${aoDoc.id}/file`);
+            setIsReportViewerOpen(true);
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--color-primary)',
+            textDecoration: 'underline',
+            cursor: 'pointer',
+            fontWeight: 600,
+            padding: 0,
+            textAlign: 'left',
+          }}
+          title="Open Administrative Order PDF"
+        >
+          {label}
+        </button>
+      );
+    }
+
+    return label || '-';
+  };
+
+  const currentAvailableKeys = useMemo<string[]>(() => {
+    if (reportAoStatus === 'Detailed') {
+      return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'durationFrom', 'durationTo', 'administrativeOrder'];
+    } else if (reportAoStatus === 'Designated') {
+      return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'durationFrom', 'durationTo', 'administrativeOrder'];
+    } else {
+      return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'durationFrom', 'durationTo', 'dateOfBirth', 'administrativeOrder'];
+    }
+  }, [reportAoStatus]);
+
+  const handleSelectAllColumns = () => {
+    setVisibleColumns(prev => {
+      const next = { ...prev };
+      currentAvailableKeys.forEach(key => {
+        next[key] = true;
       });
-  }, [allEmployees, reportBirthMonth]);
+      localStorage.setItem('report_visible_columns', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleClearAllColumns = () => {
+    setVisibleColumns(prev => {
+      const next = { ...prev };
+      currentAvailableKeys.forEach(key => {
+        next[key] = false;
+      });
+      localStorage.setItem('report_visible_columns', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const reportColumns = useMemo<Column<ReportRow>[]>(() => {
+    const selectionColumn: Column<ReportRow> = {
+      key: 'selection',
+      header: (
+        <input
+          type="checkbox"
+          checked={
+            reportsForActiveTab.length > 0 &&
+            reportsForActiveTab.every((row) => selectedReportRowIds.has(row.id))
+          }
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setSelectedReportRowIds((prev) => {
+              const next = new Set(prev);
+              reportsForActiveTab.forEach((row) => {
+                if (checked) {
+                  next.add(row.id);
+                } else {
+                  next.delete(row.id);
+                }
+              });
+              return next;
+            });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'pointer' }}
+        />
+      ),
+      render: (row: ReportRow) => (
+        <input
+          type="checkbox"
+          checked={selectedReportRowIds.has(row.id)}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setSelectedReportRowIds((prev) => {
+              const next = new Set(prev);
+              if (checked) {
+                next.add(row.id);
+              } else {
+                next.delete(row.id);
+              }
+              return next;
+            });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'pointer' }}
+        />
+      ),
+      width: '50px',
+    };
+
+    let baseColumns: Column<ReportRow>[] = [];
+
+    // All Employees: Employment ID, Name, Position, Mother Unit, Detailed/Transferred, Designated Position/Function, Duration From/To, Date of Birth, AO
+    if (reportAoStatus === 'All Employees') {
+      baseColumns = [
+        {
+          key: 'employeeId',
+          header: renderSortableHeader('Employment ID', 'employeeId'),
+          render: (row) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.employeeId}</span>,
+        },
+        {
+          key: 'name',
+          header: renderSortableHeader('Name of Employee', 'name'),
+          render: (row) => row.name,
+        },
+        {
+          key: 'position',
+          header: renderSortableHeader('Position', 'position'),
+          render: (row) => row.position || '-',
+        },
+        {
+          key: 'motherUnit',
+          header: renderSortableHeader('Mother Unit', 'motherUnit'),
+          render: (row) => row.motherUnit || '-',
+        },
+        {
+          key: 'detailedOffice',
+          header: renderSortableHeader('Detailed/Designated Office/Hospital', 'detailedOffice'),
+          render: (row) => row.detailedOffice || '',
+        },
+        {
+          key: 'designatedPositionFunction',
+          header: renderSortableHeader('Designated Position/Function', 'designatedPositionFunction'),
+          render: (row) => row.designatedPositionFunction || '',
+        },
+        {
+          key: 'durationFrom',
+          header: renderSortableHeader('Duration From', 'durationFrom'),
+          render: (row) => row.durationFrom ? formatDateMDY(row.durationFrom) : '—',
+        },
+        {
+          key: 'durationTo',
+          header: renderSortableHeader('Duration To', 'durationTo'),
+          render: (row) => row.durationTo ? formatDateMDY(row.durationTo) : '—',
+        },
+        {
+          key: 'dateOfBirth',
+          header: renderSortableHeader('Date of Birth', 'dateOfBirth'),
+          render: (row) => row.dateOfBirth || '-',
+        },
+        {
+          key: 'administrativeOrder',
+          header: renderSortableHeader('Administrative Order No.', 'aoNumber'),
+          render: (row) => renderAdministrativeOrder(row),
+        },
+      ];
+    } else if (reportAoStatus === 'Detailed') {
+      // Detailed: Name, Position, Mother Unit, Detailed/Transferred Office/Hospital, Duration From/To, AO
+      baseColumns = [
+        {
+          key: 'employeeId',
+          header: renderSortableHeader('Employment ID', 'employeeId'),
+          render: (row) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.employeeId}</span>,
+        },
+        {
+          key: 'name',
+          header: renderSortableHeader('Name of Employee', 'name'),
+          render: (row) => row.name,
+        },
+        {
+          key: 'position',
+          header: renderSortableHeader('Position', 'position'),
+          render: (row) => row.position || '-',
+        },
+        {
+          key: 'motherUnit',
+          header: renderSortableHeader('Mother Unit', 'motherUnit'),
+          render: (row) => row.motherUnit || '-',
+        },
+        {
+          key: 'detailedOffice',
+          header: renderSortableHeader('Detailed/Transferred Office/Hospital', 'detailedOffice'),
+          render: (row) => row.detailedOffice || '',
+        },
+        {
+          key: 'durationFrom',
+          header: renderSortableHeader('Duration From', 'durationFrom'),
+          render: (row) => row.durationFrom ? formatDateMDY(row.durationFrom) : '—',
+        },
+        {
+          key: 'durationTo',
+          header: renderSortableHeader('Duration To', 'durationTo'),
+          render: (row) => row.durationTo ? formatDateMDY(row.durationTo) : '—',
+        },
+        {
+          key: 'administrativeOrder',
+          header: renderSortableHeader('Administrative Order No.', 'aoNumber'),
+          render: (row) => renderAdministrativeOrder(row),
+        },
+      ];
+    } else {
+      // Designated: Employment ID, Name of Employee, Position, Mother Unit, Designated Position/Function, Duration From/To, AO
+      baseColumns = [
+        {
+          key: 'employeeId',
+          header: renderSortableHeader('Employment ID', 'employeeId'),
+          render: (row) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.employeeId}</span>,
+        },
+        {
+          key: 'name',
+          header: renderSortableHeader('Name of Employee', 'name'),
+          render: (row) => row.name,
+        },
+        {
+          key: 'position',
+          header: renderSortableHeader('Position', 'position'),
+          render: (row) => row.position || '-',
+        },
+        {
+          key: 'motherUnit',
+          header: renderSortableHeader('Mother Unit', 'motherUnit'),
+          render: (row) => row.motherUnit || '-',
+        },
+        {
+          key: 'detailedOffice',
+          header: renderSortableHeader('Designated Office', 'detailedOffice'),
+          render: (row) => row.detailedOffice || '',
+        },
+        {
+          key: 'designatedPositionFunction',
+          header: renderSortableHeader('Designated Position/Function', 'designatedPositionFunction'),
+          render: (row) => row.designatedPositionFunction || '',
+        },
+        {
+          key: 'durationFrom',
+          header: renderSortableHeader('Duration From', 'durationFrom'),
+          render: (row) => row.durationFrom ? formatDateMDY(row.durationFrom) : '—',
+        },
+        {
+          key: 'durationTo',
+          header: renderSortableHeader('Duration To', 'durationTo'),
+          render: (row) => {
+            if (!row.durationTo) return '—';
+            const formattedDate = formatDateMDY(row.durationTo);
+            const formattedToday = formatDateMDY(new Date());
+            const isDeadlineToday = formattedDate !== '—' && formattedDate === formattedToday;
+
+            if (isDeadlineToday) {
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <span>{formattedDate}</span>
+                  <span style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: 'var(--color-danger)',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    padding: '0.125rem 0.375rem',
+                    borderRadius: '4px',
+                    whiteSpace: 'nowrap',
+                    border: '1px solid rgba(239, 68, 68, 0.2)'
+                  }}>
+                    ⚠️ Today
+                  </span>
+                </div>
+              );
+            }
+            return formattedDate;
+          },
+        },
+        {
+          key: 'administrativeOrder',
+          header: renderSortableHeader('Administrative Order No.', 'aoNumber'),
+          render: (row) => renderAdministrativeOrder(row),
+        },
+      ];
+    }
+
+    const filteredBaseColumns = baseColumns.filter(
+      (column) => visibleColumns[column.key] !== false
+    );
+    return [selectionColumn, ...filteredBaseColumns];
+  }, [reportAoStatus, reportSortPriority, reportsForActiveTab, selectedReportRowIds, visibleColumns]);
+
+  const exportReportData = (format: 'xlsx' | 'csv') => {
+    // Export only the rows visible in the currently active tab
+    const tabRows =
+      reportActiveTab === 'active'
+        ? sortedReportRows.filter((row) => row.status === 'Active')
+        : reportActiveTab === 'inactive'
+          ? sortedReportRows.filter((row) => row.status === 'Inactive')
+          : reportActiveTab === 'expiring'
+            ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
+            : sortedReportRows.filter((row) => isExpired(row.durationTo));
+
+    const exportRows = tabRows.map((row, idx) => {
+      const exportObj: Record<string, string> = { '#': String(idx + 1) };
+
+      const allPossibleFields: { key: string; label: string; value: string }[] = [
+        { key: 'employeeId', label: 'Employment ID', value: row.employeeId },
+        { key: 'name', label: 'Name of Employee', value: row.name },
+        { key: 'position', label: 'Position', value: row.position || '' },
+        { key: 'motherUnit', label: 'Mother Unit', value: row.motherUnit || '' },
+        { key: 'detailedOffice', label: reportAoStatus === 'Detailed' ? 'Detailed/Transferred Office/Hospital' : reportAoStatus === 'Designated' ? 'Designated Office' : 'Detailed/Designated Office/Hospital', value: row.detailedOffice || '' },
+        { key: 'designatedPositionFunction', label: 'Designated Position/Function', value: row.designatedPositionFunction || '' },
+        { key: 'durationFrom', label: 'Duration From', value: row.durationFrom ? formatDateMDY(row.durationFrom) : '' },
+        { key: 'durationTo', label: 'Duration To', value: row.durationTo ? formatDateMDY(row.durationTo) : '' },
+        { key: 'dateOfBirth', label: 'Date of Birth', value: row.dateOfBirth || '' },
+        { key: 'administrativeOrder', label: 'Administrative Order No.', value: `${row.aoNumber ? `AO ${row.aoNumber}` : ''}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim() },
+      ];
+
+      allPossibleFields.forEach(field => {
+        // Respect current UI view: only export columns currently visible in the table
+        if (currentAvailableKeys.includes(field.key) && visibleColumns[field.key] !== false) {
+          exportObj[field.label] = field.value;
+        }
+      });
+
+      return exportObj;
+    });
+
+    const sheetName = reportAoStatus === 'Designated' ? 'Designated Reports' : reportAoStatus === 'Detailed' ? 'Detailed Reports' : 'All Employees';
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    const fileName = `AO-Report-${reportAoStatus.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}`;
+    if (format === 'xlsx') {
+      XLSX.writeFile(workbook, `${fileName}.xlsx`);
+    } else {
+      const csv = XLSX.utils.sheet_to_csv(worksheet);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fileName}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleDeleteReportEntries = (ids: string[]) => {
+    setPendingDeleteReportIds(ids);
+    setIsDeleteReportConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteReportEntries = async () => {
+    if (pendingDeleteReportIds.length === 0) return;
+    try {
+      setIsDeletingReport(true);
+
+      // Build human-readable entry names for the approval request
+      const entryNames = pendingDeleteReportIds.map((rawId) => {
+        const row = sortedReportRows.find((r) => r.id === rawId);
+        return row
+          ? `${row.name} — AO ${row.aoNumber || 'N/A'}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`
+          : rawId;
+      });
+
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'delete_report_entry',
+        entityType: 'report_entry',
+        entityId: pendingDeleteReportIds.length === 1 ? pendingDeleteReportIds[0] : 'bulk',
+        entityName: pendingDeleteReportIds.length === 1 ? entryNames[0] : `${pendingDeleteReportIds.length} report entries`,
+        payload: { ids: pendingDeleteReportIds, entryNames },
+      });
+
+      showToast('✅ Delete request submitted. Go to Approvals to review and execute.', 'info');
+      setIsDeleteReportConfirmOpen(false);
+      setPendingDeleteReportIds([]);
+      setSelectedReportRowIds(new Set());
+    } catch (err: any) {
+      showToast(`Failed to submit delete request: ${err.message}`, 'error');
+    } finally {
+      setIsDeletingReport(false);
+    }
+  };
 
   // Get badge variant based on status
   const getStatusVariant = (status: EmployeeStatus) => {
@@ -340,7 +1222,7 @@ function Dashboard() {
     if (!employee.aoNumber) return '—';
     const docs = (employee as any).documents || [];
     const aoDoc = docs.find((d: any) => d.category === 'Administrative Order');
-    
+
     if (aoDoc) {
       return (
         <button
@@ -397,7 +1279,7 @@ function Dashboard() {
       ),
       width: '5%',
       render: (employee) => (
-        <div 
+        <div
           className="dashboard__checkbox-cell"
           onClick={(e) => {
             e.stopPropagation();
@@ -407,7 +1289,7 @@ function Dashboard() {
           <input
             type="checkbox"
             checked={selectedEmployeeIds.has(employee.id)}
-            onChange={() => {}}
+            onChange={() => { }}
             className="dashboard__checkbox"
             aria-label={`Select ${employee.lastName}, ${employee.firstName}`}
           />
@@ -542,27 +1424,30 @@ function Dashboard() {
       appointmentStatus: '',
       appointmentFrom: '',
       appointmentTo: '',
-      expirationDate: '',
       aoNumber: '',
+      aoYear: '',
+      aoType: '',
       status: 'Active',
       positionFunction: '',
       dateOfEmployment: '',
       dateOfSeparation: '',
       reasonForSeparation: '',
-      isDetailed: false,
       motherUnit: '',
       detailedTo: '',
       detailedDivision: '',
-      detailedFunction: '',
-      detailedDate: '',
+      designatedPositionFunction: '',
+      designatedOrderFrom: '',
+      designatedOrderTo: '',
       fileboxLocation: '',
       file201Status: '',
     });
+    setAoFile(null);
     setFormErrors({});
   };
 
   const handleCloseAddEmployeeModal = useCallback(() => {
     setIsAddEmployeeModalOpen(false);
+    setAoFile(null);
   }, []);
 
   const handleOpenUpdateEmployeeModal = (employee: Employee) => {
@@ -578,19 +1463,20 @@ function Dashboard() {
       appointmentStatus: employee.appointmentStatus,
       appointmentFrom: convertToDateInputFormat(employee.appointmentFrom),
       appointmentTo: convertToDateInputFormat(employee.appointmentTo),
-      expirationDate: convertToDateInputFormat(employee.expirationDate),
       aoNumber: (employee as any).aoNumber || '',
+      aoYear: (employee as any).aoYear || '',
+      aoType: ((employee as any).aoType || '') as any,
       status: employee.status,
       positionFunction: employee.positionFunction,
       dateOfEmployment: convertToDateInputFormat(employee.dateOfEmployment),
       dateOfSeparation: convertToDateInputFormat(employee.dateOfSeparation),
       reasonForSeparation: employee.reasonForSeparation || '',
-      isDetailed: employee.isDetailed ?? false,
       motherUnit: (employee as any).motherUnit || '',
       detailedTo: (employee as any).detailedTo || '',
       detailedDivision: (employee as any).detailedDivision || '',
-      detailedFunction: (employee as any).detailedFunction || '',
-      detailedDate: convertToDateInputFormat((employee as any).detailedDate),
+      designatedPositionFunction: (employee as any).designatedPositionFunction || '',
+      designatedOrderFrom: convertToDateInputFormat((employee as any).designatedOrderFrom),
+      designatedOrderTo: convertToDateInputFormat((employee as any).designatedOrderTo),
       fileboxLocation: (employee as any).fileboxLocation || '',
       file201Status: (employee as any).file201Status || '',
     };
@@ -629,7 +1515,7 @@ function Dashboard() {
       if (formData.firstName.trim() === '') errors.firstName = 'First name cannot be empty';
       if (formData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
       if (formData.positionFunction.trim() === '') errors.positionFunction = 'Position/Function cannot be empty';
-      
+
       // Validate status-dependent fields
       if (formData.status === 'Inactive') {
         if (!formData.dateOfSeparation) errors.dateOfSeparation = 'Date of separation is required for inactive employees';
@@ -654,6 +1540,23 @@ function Dashboard() {
       }
     }
 
+    // Auto-populate Mother Unit from primary Office/Hospital Name for Detailed AOs
+    if (formData.aoType === 'Detailed') {
+      formData.motherUnit = formData.officeHospitalName;
+    }
+
+    // AO conditional validation: if aoNumber is set, aoYear is required and aoFile is required when updating/creating AO
+    if (formData.aoNumber && formData.aoNumber.trim() !== '') {
+      if (!formData.aoYear) {
+        errors.aoYear = 'Series (Year) is required when AO number is provided';
+      }
+
+      const isAoNumberChanged = !isUpdate || (formData.aoNumber !== originalEmployeeData?.aoNumber);
+      if (isAoNumberChanged && !aoFile) {
+        errors.aoNumber = 'An Administrative Order file upload is required';
+      }
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -675,19 +1578,20 @@ function Dashboard() {
         appointmentStatus: formData.appointmentStatus,
         appointmentFrom: formData.appointmentFrom || undefined,
         appointmentTo: formData.appointmentTo || undefined,
-        expirationDate: formData.expirationDate || undefined,
         aoNumber: formData.aoNumber || undefined,
+        aoYear: formData.aoYear || undefined,
+        aoType: formData.aoType || undefined,
         status: formData.status,
         position: formData.positionFunction,
         dateOfEmployment: formData.dateOfEmployment,
         dateOfSeparation: formData.dateOfSeparation || undefined,
         reasonOfSeparation: formData.reasonForSeparation || undefined,
-        isDetailed: formData.isDetailed,
-        motherUnit: formData.isDetailed ? formData.motherUnit || undefined : undefined,
-        detailedTo: formData.isDetailed ? formData.detailedTo || undefined : undefined,
-        detailedDivision: formData.isDetailed ? formData.detailedDivision || undefined : undefined,
-        detailedFunction: formData.isDetailed ? formData.detailedFunction || undefined : undefined,
-        detailedDate: formData.isDetailed ? formData.detailedDate || undefined : undefined,
+        motherUnit: formData.aoType === 'Detailed' ? formData.motherUnit || undefined : undefined,
+        detailedTo: (formData.aoType === 'Detailed' || formData.aoType === 'Designated') ? formData.detailedTo || undefined : undefined,
+        detailedDivision: formData.aoType === 'Detailed' ? formData.detailedDivision || undefined : undefined,
+        designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
+        designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
+        designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
         fileboxLocation: formData.fileboxLocation || undefined,
       };
 
@@ -697,7 +1601,31 @@ function Dashboard() {
         currentUser?.id,
         `${currentUser?.lastName}, ${currentUser?.firstName}`
       );
-      
+
+      // If there is an AO file, upload it
+      if (aoFile) {
+        const empName = `${formData.lastName}, ${formData.firstName}`;
+        try {
+          await api.document.upload(
+            aoFile,
+            {
+              employeeId: formData.id,
+              employeeName: empName,
+              category: 'Administrative Order',
+              fileName: aoFile.name,
+              fileSize: Math.round(aoFile.size / 1024),
+              mimeType: aoFile.type || 'application/pdf',
+              aoNumber: formData.aoNumber,
+              aoYear: formData.aoYear,
+            },
+            currentUser?.id,
+            `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
+          );
+        } catch (uploadError) {
+          console.error('Error uploading AO file on employee creation:', uploadError);
+        }
+      }
+
       showToast('Employee added successfully!', 'success');
       handleCloseAddEmployeeModal();
       fetchEmployees();
@@ -727,19 +1655,20 @@ function Dashboard() {
         appointmentStatus: 'appointmentStatus',
         appointmentFrom: 'appointmentFrom',
         appointmentTo: 'appointmentTo',
-        expirationDate: 'expirationDate',
         aoNumber: 'aoNumber',
+        aoYear: 'aoYear',
+        aoType: 'aoType',
         status: 'status',
         positionFunction: 'position',
         dateOfEmployment: 'dateOfEmployment',
         dateOfSeparation: 'dateOfSeparation',
         reasonForSeparation: 'reasonOfSeparation',
-        isDetailed: 'isDetailed',
         motherUnit: 'motherUnit',
         detailedTo: 'detailedTo',
         detailedDivision: 'detailedDivision',
-        detailedFunction: 'detailedFunction',
-        detailedDate: 'detailedDate',
+        designatedPositionFunction: 'designatedPositionFunction',
+        designatedOrderFrom: 'designatedOrderFrom',
+        designatedOrderTo: 'designatedOrderTo',
         fileboxLocation: 'fileboxLocation',
         file201Status: 'file201Status',
       };
@@ -748,7 +1677,7 @@ function Dashboard() {
       (Object.keys(formData) as Array<keyof EmployeeFormData>).forEach((key) => {
         const currentValue = formData[key];
         const originalValue = originalEmployeeData[key];
-        
+
         // Check if value has changed
         if (currentValue !== originalValue) {
           const backendField = fieldMapping[key];
@@ -772,6 +1701,8 @@ function Dashboard() {
                 fileName: aoFile.name,
                 fileSize: Math.round(aoFile.size / 1024),
                 mimeType: aoFile.type || 'application/pdf',
+                aoNumber: formData.aoNumber,
+                aoYear: formData.aoYear,
               },
               currentUser?.id,
               `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
@@ -794,7 +1725,7 @@ function Dashboard() {
       // All roles — submit to approval queue, no direct execution
       try {
         const empName = `${selectedEmployee.lastName}, ${selectedEmployee.firstName}`;
-        
+
         // If there is an AO file, upload it first
         if (aoFile) {
           await api.document.upload(
@@ -806,6 +1737,8 @@ function Dashboard() {
               fileName: aoFile.name,
               fileSize: Math.round(aoFile.size / 1024),
               mimeType: aoFile.type || 'application/pdf',
+              aoNumber: formData.aoNumber,
+              aoYear: formData.aoYear,
             },
             currentUser?.id,
             `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
@@ -908,7 +1841,7 @@ function Dashboard() {
         `${authorizingUser.lastName}, ${authorizingUser.firstName}`,
         authorizingUser?.approvalToken
       );
-      
+
       showToast(`Employee deleted successfully! Authorized by: ${authorizingUser.lastName}, ${authorizingUser.firstName}`, 'success');
       handleCloseDeleteConfirmModal();
       fetchEmployees();
@@ -971,9 +1904,9 @@ function Dashboard() {
         `${authorizingUser.lastName}, ${authorizingUser.firstName}`,
         authorizingUser?.approvalToken
       );
-      
+
       showToast(`Successfully deleted ${idsArray.length} employee(s)! Authorized by: ${authorizingUser.lastName}, ${authorizingUser.firstName}`, 'success');
-      
+
       // Clear selection and refresh
       setSelectedEmployeeIds(new Set());
       handleCloseBulkDeleteModal();
@@ -992,13 +1925,13 @@ function Dashboard() {
   const handleBulkDownload = async (employeeIds: string[], type: 'barcode' | 'qrcode') => {
     try {
       setIsBulkDownloadLoading(true);
-      
+
       // Get selected employees
       const selectedEmployees = allEmployees.filter(emp => employeeIds.includes(emp.id));
-      
+
       // Generate and download ZIP
       await bulkDownloadCodes(selectedEmployees, type);
-      
+
       showToast(`Successfully downloaded ${type === 'barcode' ? 'barcode(s)' : 'QR code(s)'}!`, 'success');
       setIsBulkDownloadModalOpen(false);
     } catch (error: any) {
@@ -1053,7 +1986,7 @@ function Dashboard() {
             }
             // Don't pass userId and userName to prevent individual audit logs during import
           );
-          
+
           // Track successful imports for audit log
           successfulEmployees.push({
             firstName: emp.firstName,
@@ -1094,12 +2027,12 @@ function Dashboard() {
         showToast(`Successfully imported ${successfulEmployees.length} employee(s)!`, 'success');
       } else {
         let message = `Import completed: ${successfulEmployees.length} succeeded, ${failCount} failed.`;
-        
+
         // Add duplicate information if any
         if (skippedDuplicates.length > 0) {
           message += `\n\nSkipped duplicates (${skippedDuplicates.length}): ${skippedDuplicates.slice(0, 2).join(', ')}${skippedDuplicates.length > 2 ? ` and ${skippedDuplicates.length - 2} more` : ''}`;
         }
-        
+
         // Add other errors if any
         const otherErrors = errors.filter(e => !e.includes('Duplicate'));
         if (otherErrors.length > 0) {
@@ -1107,7 +2040,7 @@ function Dashboard() {
           const moreErrors = otherErrors.length > 2 ? ` and ${otherErrors.length - 2} more` : '';
           message += `\n\nOther errors: ${errorMsg}${moreErrors}`;
         }
-        
+
         showToast(message, 'warning');
       }
 
@@ -1195,8 +2128,8 @@ function Dashboard() {
   // Check if user has read permission
   if (!canRead) {
     return (
-      <div style={{ 
-        padding: '2rem', 
+      <div style={{
+        padding: '2rem',
         textAlign: 'center',
         display: 'flex',
         flexDirection: 'column',
@@ -1208,7 +2141,7 @@ function Dashboard() {
         <MdLock style={{ fontSize: '4rem', color: 'var(--color-danger)' }} />
         <h2 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Access Denied</h2>
         <p style={{ color: 'var(--text-secondary)', maxWidth: '500px' }}>
-          You do not have permission to view employee records. 
+          You do not have permission to view employee records.
           Please contact your administrator if you believe this is an error.
         </p>
       </div>
@@ -1223,29 +2156,31 @@ function Dashboard() {
             {viewMode === 'reports' ? 'Generated Reports' : 'Employee Management'}
           </h1>
           <p className="dashboard__subtitle">
-            {viewMode === 'reports' 
+            {viewMode === 'reports'
               ? 'View statistical reports and birthday summaries of employees'
               : `Manage and track all employee records in the system (${allEmployees.length} employees)`}
           </p>
         </div>
-        <div className="dashboard__header-actions">
-          <DownloadTemplateButton onDownload={handleDownloadTemplate} variant="secondary" size="sm" />
-          {canCreate && (
-            <Button variant="secondary" size="sm" onClick={() => setIsImportModalOpen(true)}>
-              <MdFileUpload /> Import
+        {viewMode !== 'reports' && (
+          <div className="dashboard__header-actions">
+            <DownloadTemplateButton onDownload={handleDownloadTemplate} variant="secondary" size="sm" />
+            {canCreate && (
+              <Button variant="secondary" size="sm" onClick={() => setIsImportModalOpen(true)}>
+                <MdFileUpload /> Import
+              </Button>
+            )}
+            <ExportButton employees={allEmployees} variant="secondary" size="sm" />
+            <BackupButton employees={allEmployees} variant="secondary" size="sm" />
+            <Button variant="secondary" size="sm" onClick={() => setIsBulkDownloadModalOpen(true)}>
+              <MdQrCode /> Codes
             </Button>
-          )}
-          <ExportButton employees={allEmployees} variant="secondary" size="sm" />
-          <BackupButton employees={allEmployees} variant="secondary" size="sm" />
-          <Button variant="secondary" size="sm" onClick={() => setIsBulkDownloadModalOpen(true)}>
-            <MdQrCode /> Codes
-          </Button>
-          {canCreate && (
-            <Button variant="primary" size="sm" onClick={handleOpenAddEmployeeModal}>
-              + Add Employee
-            </Button>
-          )}
-        </div>
+            {canCreate && (
+              <Button variant="primary" size="sm" onClick={handleOpenAddEmployeeModal}>
+                + Add Employee
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* KPI Summary Cards */}
@@ -1326,71 +2261,50 @@ function Dashboard() {
 
       {viewMode === 'reports' ? (
         <div className="reports-view">
-          {/* Card containing Filters */}
           <Card>
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text-primary)' }}>
-              Report Filters & Search
-            </h3>
-            {/* Top Search bar */}
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label className="dashboard__filter-label" style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem', display: 'block' }}>Search Person</label>
-              <input
-                type="text"
-                className="dashboard__form-input"
-                placeholder="Search employees by name..."
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  fontSize: '1rem',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)',
-                  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
-                }}
-                value={reportSearchName}
-                onChange={(e) => setReportSearchName(e.target.value)}
-              />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                Search and Filter
+              </h3>
+              <span className="reports-view__summary-pill">Total AO Reports: {sortedReportRows.length}</span>
             </div>
 
             <div className="reports-view__filters-grid">
-              <div className="dashboard__filter-group">
-                <label className="dashboard__filter-label">Office / Hospital</label>
-                <select
-                  className="dashboard__filter-select"
-                  value={reportSearchOffice}
-                  onChange={(e) => setReportSearchOffice(e.target.value)}
-                >
-                  <option value="all">All Offices / Hospitals</option>
-                  {uniqueOfficesInDatabase.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="dashboard__filter-group">
-                <label className="dashboard__filter-label">Year Hired</label>
+              <div className="reports-view__filter-card">
+                <label className="dashboard__filter-label">Search Person</label>
                 <input
                   type="text"
                   className="dashboard__form-input"
-                  placeholder="e.g., 2024"
-                  value={reportSearchYear}
-                  onChange={(e) => setReportSearchYear(e.target.value)}
+                  placeholder="Search by name..."
+                  value={reportSearchName}
+                  onChange={(e) => setReportSearchName(e.target.value)}
                 />
               </div>
 
-              <div className="dashboard__filter-group">
-                <label className="dashboard__filter-label">Detailed Status</label>
+              <div className="reports-view__filter-card">
+                <label className="dashboard__filter-label">AO Status</label>
                 <select
                   className="dashboard__filter-select"
-                  value={reportDetailedFilter}
-                  onChange={(e) => setReportDetailedFilter(e.target.value as any)}
+                  value={reportAoStatus}
+                  onChange={(e) => setReportAoStatus(e.target.value as 'Detailed' | 'Designated' | 'All Employees')}
                 >
-                  <option value="all">All Employees</option>
-                  <option value="yes">Detailed Only</option>
-                  <option value="no">Not Detailed</option>
+                  <option value="All Employees">All Employees</option>
+                  <option value="Detailed">Detailed</option>
+                  <option value="Designated">Designated</option>
                 </select>
               </div>
 
-              <div className="dashboard__filter-group">
+              <div className="reports-view__filter-card">
+                <label className="dashboard__filter-label">Mother Unit</label>
+                <SearchableDropdown
+                  options={uniqueMotherUnitsInDatabase}
+                  value={reportMotherUnit === 'all' ? '' : reportMotherUnit}
+                  onChange={(val) => setReportMotherUnit(val === '' ? 'all' : val)}
+                  placeholder="All Mother Units"
+                />
+              </div>
+
+              <div className="reports-view__filter-card">
                 <label className="dashboard__filter-label">AO Number</label>
                 <input
                   type="text"
@@ -1401,21 +2315,53 @@ function Dashboard() {
                 />
               </div>
 
-              <div className="dashboard__filter-group">
-                <label className="dashboard__filter-label">Birthday Month</label>
+              <div className="reports-view__filter-card">
+                <label className="dashboard__filter-label">Series Year</label>
+                <input
+                  type="text"
+                  className="dashboard__form-input"
+                  placeholder="Search by Series Year..."
+                  value={reportAoYear}
+                  onChange={(e) => setReportAoYear(e.target.value)}
+                />
+              </div>
+
+
+
+            </div>
+
+            <div className="reports-view__filter-row reports-view__filter-row--compact" style={{ marginTop: '0.75rem' }}>
+              <div className="reports-view__filter-card">
+                <label className="dashboard__filter-label">Administrative Orders Issued Month From</label>
                 <select
                   className="dashboard__filter-select"
-                  value={reportBirthMonth}
-                  onChange={(e) => {
-                    setReportBirthMonth(e.target.value);
-                    if (e.target.value) {
-                      setReportActiveTab('birthdays');
-                    } else if (reportActiveTab === 'birthdays') {
-                      setReportActiveTab('active');
-                    }
-                  }}
+                  value={reportAoOrderMonthFrom}
+                  onChange={(e) => setReportAoOrderMonthFrom(e.target.value)}
                 >
-                  <option value="">Select Birthday Month</option>
+                  <option value="">All Months</option>
+                  <option value="01">January</option>
+                  <option value="02">February</option>
+                  <option value="03">March</option>
+                  <option value="04">April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                  <option value="07">July</option>
+                  <option value="08">August</option>
+                  <option value="09">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+
+              <div className="reports-view__filter-card">
+                <label className="dashboard__filter-label">Administrative Orders Issued Month To</label>
+                <select
+                  className="dashboard__filter-select"
+                  value={reportAoOrderMonthTo}
+                  onChange={(e) => setReportAoOrderMonthTo(e.target.value)}
+                >
+                  <option value="">All Months</option>
                   <option value="01">January</option>
                   <option value="02">February</option>
                   <option value="03">March</option>
@@ -1431,18 +2377,22 @@ function Dashboard() {
                 </select>
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => {
                   setReportSearchName('');
-                  setReportSearchOffice('all');
-                  setReportSearchYear('');
-                  setReportDetailedFilter('all');
+                  setReportMotherUnit('all');
+                  setReportDetailedOffice('all');
+                  setReportDesignatedPosition('all');
                   setReportAoNumber('');
-                  setReportBirthMonth('');
+                  setReportAoYear('');
+                  setReportAoOrderMonthFrom('');
+                  setReportAoOrderMonthTo('');
+                  setReportAoStatus('All Employees');
+                  setReportSortPriority([]);
                   setReportActiveTab('active');
                 }}
               >
@@ -1458,8 +2408,8 @@ function Dashboard() {
                 ✔
               </div>
               <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">{activeReportEmployees.length}</span>
-                <span className="reports-view__metric-label">Active Employees Match</span>
+                <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size}</span>
+                <span className="reports-view__metric-label">Active Employees</span>
               </div>
             </div>
 
@@ -1468,18 +2418,32 @@ function Dashboard() {
                 ✖
               </div>
               <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">{inactiveReportEmployees.length}</span>
-                <span className="reports-view__metric-label">Inactive Employees Match</span>
+                <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size}</span>
+                <span className="reports-view__metric-label">Inactive Employees</span>
               </div>
             </div>
 
-            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-primary)' }}>
-              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-primary)' }}>
-                🎂
+            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-warning)' }}>
+              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)' }}>
+                ⚠️
               </div>
               <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">{birthdayEmployees.length}</span>
-                <span className="reports-view__metric-label">Birthdays this Month</span>
+                <span className="reports-view__metric-value">
+                  {filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length}
+                </span>
+                <span className="reports-view__metric-label">Near Expiration (30 Days)</span>
+              </div>
+            </div>
+
+            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
+              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
+                🚫
+              </div>
+              <div className="reports-view__metric-info">
+                <span className="reports-view__metric-value">
+                  {filteredReportRows.filter((row) => isExpired(row.durationTo)).length}
+                </span>
+                <span className="reports-view__metric-label">Reached Deadline (Expired)</span>
               </div>
             </div>
           </div>
@@ -1491,160 +2455,173 @@ function Dashboard() {
                 className={`reports-view__tab-btn${reportActiveTab === 'active' ? ' reports-view__tab-btn--active' : ''}`}
                 onClick={() => setReportActiveTab('active')}
               >
-                🟢 Active Employees ({activeReportEmployees.length})
+                🟢 Active Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size})
               </button>
               <button
                 className={`reports-view__tab-btn${reportActiveTab === 'inactive' ? ' reports-view__tab-btn--active' : ''}`}
                 onClick={() => setReportActiveTab('inactive')}
               >
-                🔴 Inactive Employees ({inactiveReportEmployees.length})
+                🔴 Inactive Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size})
               </button>
-              {reportBirthMonth && (
-                <button
-                  className={`reports-view__tab-btn${reportActiveTab === 'birthdays' ? ' reports-view__tab-btn--active' : ''}`}
-                  onClick={() => setReportActiveTab('birthdays')}
+              <button
+                className={`reports-view__tab-btn${reportActiveTab === 'expiring' ? ' reports-view__tab-btn--active' : ''}`}
+                onClick={() => setReportActiveTab('expiring')}
+              >
+                ⚠️ Near Expiration ({filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length})
+              </button>
+              <button
+                className={`reports-view__tab-btn${reportActiveTab === 'expired' ? ' reports-view__tab-btn--active' : ''}`}
+                onClick={() => setReportActiveTab('expired')}
+              >
+                🚫 Reached Deadline ({filteredReportRows.filter((row) => isExpired(row.durationTo)).length})
+              </button>
+            </div>
+
+            <div className="reports-view__export-actions">
+              {selectedReportRowIds.size > 0 && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDeleteReportEntries(Array.from(selectedReportRowIds))}
+                  style={{ marginRight: 'auto' }}
                 >
-                  🎂 Birthday Report ({birthdayEmployees.length})
-                </button>
+                  🗑️ Delete Selected ({selectedReportRowIds.size})
+                </Button>
               )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => exportReportData('xlsx')}
+                disabled={sortedReportRows.length === 0}
+              >
+                📊 Export XLSX
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => exportReportData('csv')}
+                disabled={sortedReportRows.length === 0}
+              >
+                📄 Export CSV
+              </Button>
+              <div ref={dropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
+                >
+                  ⚙️ Columns
+                </Button>
+                {isColumnDropdownOpen && (
+                  <div className="reports-view__columns-dropdown">
+                    <div className="reports-view__columns-dropdown-header">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllColumns}
+                        className="reports-view__columns-link"
+                      >
+                        Select All
+                      </button>
+                      <span className="reports-view__columns-divider">|</span>
+                      <button
+                        type="button"
+                        onClick={handleClearAllColumns}
+                        className="reports-view__columns-link"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="reports-view__columns-dropdown-list">
+                      {currentAvailableKeys.map((key) => (
+                        <label key={key} className="reports-view__columns-item">
+                          <input
+                            type="checkbox"
+                            className="reports-view__columns-checkbox"
+                            checked={visibleColumns[key] !== false}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setVisibleColumns((prev) => {
+                                const next = { ...prev, [key]: checked };
+                                localStorage.setItem('report_visible_columns', JSON.stringify(next));
+                                return next;
+                              });
+                            }}
+                          />
+                          <span className="reports-view__columns-label">{COLUMN_LABELS[key] || key}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="reports-view__table-container">
-              {reportActiveTab === 'active' && (
-                <div className="dashboard__table-scroll">
-                  <Table
-                    columns={[
-                      {
-                        key: 'id',
-                        header: 'Employee ID',
-                        render: (employee) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{employee.id}</span>
-                      },
-                      {
-                        key: 'name',
-                        header: 'Full Name',
-                        render: (employee) => `${employee.lastName}, ${employee.firstName} ${employee.middleName || ''}`
-                      },
-                      {
-                        key: 'positionFunction',
-                        header: 'Position',
-                        render: (employee) => employee.positionFunction
-                      },
-                      {
-                        key: 'officeHospitalName',
-                        header: 'Office / Hospital',
-                        render: (employee) => employee.officeHospitalName
-                      },
-                      {
-                        key: 'dateOfEmployment',
-                        header: 'Date Hired',
-                        render: (employee) => formatDateDDMMYYYY(employee.dateOfEmployment)
-                      },
-                      {
-                        key: 'aoNumber',
-                        header: 'AO Number',
-                        render: renderAoNumberColumn
-                      }
-                    ]}
-                    data={activeReportEmployees}
-                    keyExtractor={(employee) => employee.id}
-                    onRowClick={handleRowClick}
-                    emptyMessage="No active employees matching filters found"
-                  />
-                </div>
-              )}
-
-              {reportActiveTab === 'inactive' && (
-                <div className="dashboard__table-scroll">
-                  <Table
-                    columns={[
-                      {
-                        key: 'id',
-                        header: 'Employee ID',
-                        render: (employee) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{employee.id}</span>
-                      },
-                      {
-                        key: 'name',
-                        header: 'Full Name',
-                        render: (employee) => `${employee.lastName}, ${employee.firstName} ${employee.middleName || ''}`
-                      },
-                      {
-                        key: 'positionFunction',
-                        header: 'Position',
-                        render: (employee) => employee.positionFunction
-                      },
-                      {
-                        key: 'officeHospitalName',
-                        header: 'Office / Hospital',
-                        render: (employee) => employee.officeHospitalName
-                      },
-                      {
-                        key: 'dateOfSeparation',
-                        header: 'Separation Date',
-                        render: (employee) => formatDateDDMMYYYY(employee.dateOfSeparation)
-                      },
-                      {
-                        key: 'reasonForSeparation',
-                        header: 'Reason for Separation',
-                        render: (employee) => employee.reasonForSeparation || '—'
-                      },
-                      {
-                        key: 'aoNumber',
-                        header: 'AO Number',
-                        render: renderAoNumberColumn
-                      }
-                    ]}
-                    data={inactiveReportEmployees}
-                    keyExtractor={(employee) => employee.id}
-                    onRowClick={handleRowClick}
-                    emptyMessage="No inactive employees matching filters found"
-                  />
-                </div>
-              )}
-
-              {reportActiveTab === 'birthdays' && (
-                <div className="dashboard__table-scroll">
-                  <Table
-                    columns={[
-                      {
-                        key: 'day',
-                        header: 'Day of Birth',
-                        render: (employee) => {
-                          if (!employee.dateOfBirth) return '—';
-                          const d = new Date(employee.dateOfBirth);
-                          const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                          return `${months[d.getMonth()]} ${d.getDate()}`;
-                        }
-                      },
-                      {
-                        key: 'id',
-                        header: 'Employee ID',
-                        render: (employee) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{employee.id}</span>
-                      },
-                      {
-                        key: 'name',
-                        header: 'Full Name',
-                        render: (employee) => `${employee.lastName}, ${employee.firstName} ${employee.middleName || ''}`
-                      },
-                      {
-                        key: 'officeHospitalName',
-                        header: 'Office / Hospital',
-                        render: (employee) => employee.officeHospitalName
-                      },
-                      {
-                        key: 'status',
-                        header: 'Status',
-                        render: (employee) => (
-                          <Badge variant={getStatusVariant(employee.status)} size="sm">
-                            {employee.status}
-                          </Badge>
-                        )
-                      }
-                    ]}
-                    data={birthdayEmployees}
-                    keyExtractor={(employee) => employee.id}
-                    onRowClick={handleRowClick}
-                    emptyMessage="Select a birthday month to display the report"
-                  />
+              <div className="dashboard__table-scroll" style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+                <Table
+                  columns={reportColumns}
+                  data={paginatedReports}
+                  keyExtractor={(row) => row.id}
+                  onRowClick={() => undefined}
+                  emptyMessage="No AO reports matching filters found"
+                />
+              </div>
+              {reportsForActiveTab.length > 0 && (
+                <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
+                  <div className="dashboard__page-size">
+                    <span className="dashboard__page-size-label">Rows per page:</span>
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <button
+                        key={size}
+                        className={`dashboard__page-size-btn${reportItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                        onClick={() => {
+                          setReportItemsPerPage(size);
+                          setReportCurrentPage(1);
+                        }}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                  {reportTotalPages > 1 && (
+                    <div className="dashboard__pagination-controls">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setReportCurrentPage(1)}
+                        disabled={reportCurrentPage === 1}
+                      >
+                        First
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setReportCurrentPage(reportCurrentPage - 1)}
+                        disabled={reportCurrentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="dashboard__pagination-info">
+                        Page {reportCurrentPage} of {reportTotalPages}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setReportCurrentPage(reportCurrentPage + 1)}
+                        disabled={reportCurrentPage === reportTotalPages}
+                      >
+                        Next
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setReportCurrentPage(reportTotalPages)}
+                        disabled={reportCurrentPage === reportTotalPages}
+                      >
+                        Last
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1686,7 +2663,7 @@ function Dashboard() {
                   onClear={handleClearSearch}
                   fullWidth
                 />
-                
+
                 <div className="dashboard__search-filters">
                   <label className="dashboard__radio-label">
                     <input
@@ -1699,7 +2676,7 @@ function Dashboard() {
                     />
                     <span className="dashboard__radio-text">All Fields</span>
                   </label>
-                  
+
                   <label className="dashboard__radio-label">
                     <input
                       type="radio"
@@ -1723,7 +2700,7 @@ function Dashboard() {
                     />
                     <span className="dashboard__radio-text">First Name</span>
                   </label>
-                  
+
                   <label className="dashboard__radio-label">
                     <input
                       type="radio"
@@ -1747,8 +2724,8 @@ function Dashboard() {
                     />
                     <span className="dashboard__radio-text">Employee ID</span>
                   </label>
-                  
-                  
+
+
                   <div className="dashboard__status-filter">
                     <label htmlFor="status-filter" className="dashboard__filter-label">
                       Status:
@@ -2000,187 +2977,6 @@ function Dashboard() {
           </div>
 
           <div className="dashboard__form-field">
-            <label htmlFor="appointmentStatus" className="dashboard__form-label">
-              Appointment Status <span className="dashboard__required">*</span>
-            </label>
-            <select
-              id="appointmentStatus"
-              className="dashboard__form-select"
-              value={formData.appointmentStatus}
-              onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
-            >
-              <option value="">Select appointment status</option>
-              {dropdownOptions.appointmentStatuses.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
-          </div>
-
-          <div className="dashboard__form-row">
-            <Input
-              id="expiration-date"
-              label="Expiration Date"
-              type="date"
-              placeholder="Select expiration date (optional)"
-              value={formData.expirationDate}
-              onChange={(e) => handleFormChange('expirationDate', e.target.value)}
-              fullWidth
-            />
-            <Input
-              id="ao-number"
-              label="AO Number"
-              placeholder="Enter Administrative Order number (optional)"
-              value={formData.aoNumber}
-              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
-              fullWidth
-            />
-          </div>
-
-          {/* Detailed section — shown for all appointment statuses */}
-          <div className="dashboard__form-field">
-            <label className="dashboard__form-label">Detailed to Another Office?</label>
-            <div className="dashboard__radio-group">
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="isDetailed"
-                  value="no"
-                  checked={!formData.isDetailed}
-                  onChange={() => setFormData(prev => ({ ...prev, isDetailed: false, motherUnit: '', detailedTo: '', detailedDivision: '', detailedFunction: '', detailedDate: '' }))}
-                />
-                <span>No</span>
-              </label>
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="isDetailed"
-                  value="yes"
-                  checked={formData.isDetailed}
-                  onChange={() => setFormData(prev => ({ ...prev, isDetailed: true }))}
-                />
-                <span>Yes</span>
-              </label>
-            </div>
-          </div>
-
-          {formData.isDetailed && (
-            <>
-              <div className="dashboard__form-field">
-                <label htmlFor="motherUnit" className="dashboard__form-label">
-                  Mother Unit
-                </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="motherUnit"
-                    className="dashboard__form-select"
-                    value={formData.motherUnit}
-                    onChange={(e) => handleFormChange('motherUnit', e.target.value)}
-                  >
-                    <option value="">Select mother unit</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="motherUnit"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter mother unit"
-                    value={formData.motherUnit}
-                    onChange={(e) => handleFormChange('motherUnit', e.target.value)}
-                  />
-                )}
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="detailedTo" className="dashboard__form-label">
-                  Re-Assignment Office
-                </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="detailedTo"
-                    className="dashboard__form-select"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  >
-                    <option value="">Select re-assignment office</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="detailedTo"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter re-assignment office"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  />
-                )}
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="detailedDivision" className="dashboard__form-label">
-                  Division
-                </label>
-                <input
-                  id="detailedDivision"
-                  className="dashboard__form-input"
-                  type="text"
-                  placeholder="Enter division"
-                  value={formData.detailedDivision}
-                  onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
-                />
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="detailedFunction" className="dashboard__form-label">
-                  Function / Designation
-                </label>
-                <input
-                  id="detailedFunction"
-                  className="dashboard__form-input"
-                  type="text"
-                  placeholder="Enter function or designation"
-                  value={formData.detailedFunction}
-                  onChange={(e) => handleFormChange('detailedFunction', e.target.value)}
-                />
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="detailedDate" className="dashboard__form-label">
-                  Date of Re-Assignment
-                </label>
-                <input
-                  id="detailedDate"
-                  className="dashboard__form-input"
-                  type="date"
-                  value={formData.detailedDate}
-                  onChange={(e) => handleFormChange('detailedDate', e.target.value)}
-                />
-              </div>
-            </>
-          )}
-
-          <div className="dashboard__form-field">
-            <label htmlFor="status" className="dashboard__form-label">
-              Status <span className="dashboard__required">*</span>
-            </label>
-            <select
-              id="status"
-              className="dashboard__form-select"
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-
-          <div className="dashboard__form-field">
             <label htmlFor="position-function" className="dashboard__form-label">
               Position / Function <span className="dashboard__required">*</span>
             </label>
@@ -2209,6 +3005,21 @@ function Dashboard() {
             {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
           </div>
 
+          <div className="dashboard__form-field">
+            <label htmlFor="status" className="dashboard__form-label">
+              Status <span className="dashboard__required">*</span>
+            </label>
+            <select
+              id="status"
+              className="dashboard__form-select"
+              value={formData.status}
+              onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
           <Input
             id="date-of-employment"
             label="Date of Employment"
@@ -2218,37 +3029,6 @@ function Dashboard() {
             error={formErrors.dateOfEmployment}
             fullWidth
           />
-
-          <Input
-            id="filebox-location"
-            label="201 File Location"
-            type="text"
-            placeholder="Enter 201 file location"
-            value={formData.fileboxLocation}
-            onChange={(e) => handleFormChange('fileboxLocation', e.target.value)}
-            fullWidth
-          />
-
-          <div className="dashboard__form-row">
-            <Input
-              id="appointment-from"
-              label="Appointment From"
-              type="date"
-              value={formData.appointmentFrom}
-              onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
-              error={formErrors.appointmentFrom}
-              fullWidth
-            />
-            <Input
-              id="appointment-to"
-              label="Appointment To"
-              type="date"
-              value={formData.appointmentTo}
-              onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
-              error={formErrors.appointmentTo}
-              fullWidth
-            />
-          </div>
 
           {formData.status === 'Inactive' && (
             <>
@@ -2280,8 +3060,291 @@ function Dashboard() {
               </div>
             </>
           )}
+
+          <div className="dashboard__form-field">
+            <label htmlFor="appointmentStatus" className="dashboard__form-label">
+              Appointment Status <span className="dashboard__required">*</span>
+            </label>
+            <select
+              id="appointmentStatus"
+              className="dashboard__form-select"
+              value={formData.appointmentStatus}
+              onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
+            >
+              <option value="">Select appointment status</option>
+              {dropdownOptions.appointmentStatuses.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
+          </div>
+
+          {/* Durational appointment statuses conditional date inputs */}
+          {formData.appointmentStatus && (
+            (() => {
+              const s = formData.appointmentStatus.toLowerCase().trim();
+              return (
+                s === 'consultant' ||
+                s === 'contract of service' ||
+                s === 'contractual' ||
+                s === 'casual' ||
+                s === 'job order'
+              );
+            })()
+          ) && (
+              <div className="dashboard__form-row">
+                <Input
+                  id="appointment-from"
+                  label="Appointment From"
+                  type="date"
+                  value={formData.appointmentFrom}
+                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                  error={formErrors.appointmentFrom}
+                  fullWidth
+                />
+                <Input
+                  id="appointment-to"
+                  label="Appointment To"
+                  type="date"
+                  value={formData.appointmentTo}
+                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                  error={formErrors.appointmentTo}
+                  fullWidth
+                />
+              </div>
+            )}
+
+          <div className="dashboard__form-field">
+            <label htmlFor="ao-type" className="dashboard__form-label">
+              AO Status
+            </label>
+            <select
+              id="ao-type"
+              className="dashboard__form-select"
+              value={formData.aoType}
+              onChange={(e) => handleFormChange('aoType', e.target.value as any)}
+            >
+              <option value="">Select AO Type</option>
+              <option value="Detailed">Detailed</option>
+              <option value="Designated">Designated</option>
+            </select>
+          </div>
+
+          <div className="dashboard__form-row">
+            <Input
+              id="ao-number"
+              label="AO Number"
+              placeholder="Enter Administrative Order number"
+              value={formData.aoNumber}
+              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
+              fullWidth
+            />
+            <div className="dashboard__form-field">
+              <label htmlFor="ao-year" className="dashboard__form-label">
+                Series
+              </label>
+              <select
+                id="ao-year"
+                className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
+                value={formData.aoYear}
+                onChange={(e) => handleFormChange('aoYear', e.target.value)}
+              >
+                <option value="">Select series year</option>
+                {Array.from({ length: 21 }, (_, i) => 2015 + i).map((year) => (
+                  <option key={year} value={year.toString()}>{year}</option>
+                ))}
+              </select>
+              {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
+            </div>
+          </div>
+
+          <div className="dashboard__form-field">
+            <label htmlFor="ao-file" className="dashboard__form-label">
+              Upload AO PDF File {formData.aoNumber.trim() ? '(Required)' : '(Optional)'}
+            </label>
+            <input
+              id="ao-file"
+              className="dashboard__form-input"
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => setAoFile(e.target.files?.[0] || null)}
+              style={{
+                padding: '0.5rem',
+                border: '1px dashed var(--border-color)',
+                borderRadius: 'var(--border-radius)',
+                backgroundColor: 'var(--bg-secondary)',
+                width: '100%'
+              }}
+            />
+            {aoFile && (
+              <p style={{
+                fontSize: '0.8125rem',
+                marginTop: '0.375rem',
+                color: 'var(--color-success)',
+                fontWeight: 500
+              }}>
+                ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+              </p>
+            )}
+            {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
+          </div>
+
+          {formData.aoType === 'Detailed' && (
+            <>
+              <div className="dashboard__form-field">
+                <label htmlFor="detailedTo" className="dashboard__form-label">
+                  Detailed/Transferred Office
+                </label>
+                {dropdownOptions.officeNames.length > 0 ? (
+                  <select
+                    id="detailedTo"
+                    className="dashboard__form-select"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  >
+                    <option value="">Select office</option>
+                    {dropdownOptions.officeNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="detailedTo"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter office"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="dashboard__form-field">
+                <label htmlFor="detailedDivision" className="dashboard__form-label">
+                  Division
+                </label>
+                <input
+                  id="detailedDivision"
+                  className="dashboard__form-input"
+                  type="text"
+                  placeholder="Enter division"
+                  value={formData.detailedDivision}
+                  onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
+                />
+              </div>
+
+              <div className="dashboard__form-row">
+                <Input
+                  id="appointment-from-add"
+                  label="Duration of Detailed Order (From)"
+                  type="date"
+                  value={formData.appointmentFrom}
+                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                  fullWidth
+                />
+                <Input
+                  id="appointment-to-add"
+                  label="Duration of Detailed Order (To)"
+                  type="date"
+                  value={formData.appointmentTo}
+                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                  fullWidth
+                />
+              </div>
+            </>
+          )}
+
+          {formData.aoType === 'Designated' && (
+            <>
+              <div className="dashboard__form-field">
+                <label htmlFor="designatedOffice" className="dashboard__form-label">
+                  Designated Office
+                </label>
+                {dropdownOptions.officeNames.length > 0 ? (
+                  <select
+                    id="designatedOffice"
+                    className="dashboard__form-select"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  >
+                    <option value="">Select office</option>
+                    {dropdownOptions.officeNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="designatedOffice"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter designated office"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="dashboard__form-field">
+                <label htmlFor="designatedPositionFunction" className="dashboard__form-label">
+                  Designated Position Function
+                </label>
+                {dropdownOptions.positions.length > 0 ? (
+                  <select
+                    id="designatedPositionFunction"
+                    className="dashboard__form-select"
+                    value={formData.designatedPositionFunction}
+                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
+                  >
+                    <option value="">Select position</option>
+                    {dropdownOptions.positions.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="designatedPositionFunction"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter position function"
+                    value={formData.designatedPositionFunction}
+                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="dashboard__form-row">
+                <Input
+                  id="designated-order-from"
+                  label="Designated Order (From)"
+                  type="date"
+                  value={formData.designatedOrderFrom}
+                  onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
+                  fullWidth
+                />
+                <Input
+                  id="designated-order-to"
+                  label="Designated Order (To)"
+                  type="date"
+                  value={formData.designatedOrderTo}
+                  onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
+                  fullWidth
+                />
+              </div>
+            </>
+          )}
+
+          <Input
+            id="filebox-location"
+            label="201 File Location"
+            type="text"
+            placeholder="Enter 201 file location"
+            value={formData.fileboxLocation}
+            onChange={(e) => handleFormChange('fileboxLocation', e.target.value)}
+            fullWidth
+          />
         </div>
       </Modal>
+
 
       {/* Update Employee Modal */}
       <Modal
@@ -2301,10 +3364,10 @@ function Dashboard() {
         }
       >
         <div className="dashboard__employee-form">
-          <p style={{ 
-            marginBottom: '1.5rem', 
-            padding: '0.75rem', 
-            backgroundColor: 'var(--bg-secondary)', 
+          <p style={{
+            marginBottom: '1.5rem',
+            padding: '0.75rem',
+            backgroundColor: 'var(--bg-secondary)',
             borderRadius: 'var(--border-radius)',
             fontSize: '0.875rem',
             color: 'var(--text-secondary)'
@@ -2316,9 +3379,9 @@ function Dashboard() {
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
               Current Employee ID
             </label>
-            <div style={{ 
-              padding: '0.75rem', 
-              backgroundColor: 'var(--bg-secondary)', 
+            <div style={{
+              padding: '0.75rem',
+              backgroundColor: 'var(--bg-secondary)',
               borderRadius: 'var(--border-radius)',
               fontSize: '0.875rem',
               color: 'var(--text-secondary)',
@@ -2335,7 +3398,7 @@ function Dashboard() {
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
               ⚠️ Changing the Employee ID will update all references including documents and audit logs. Use with caution.
             </p>
-            
+
             <Input
               id="edit-employee-id"
               label="New Employee ID"
@@ -2433,218 +3496,6 @@ function Dashboard() {
           </div>
 
           <div className="dashboard__form-field">
-            <label htmlFor="update-appointmentStatus" className="dashboard__form-label">
-              Appointment Status
-            </label>
-            <select
-              id="update-appointmentStatus"
-              className="dashboard__form-select"
-              value={formData.appointmentStatus}
-              onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
-            >
-              <option value="">Select appointment status</option>
-              {dropdownOptions.appointmentStatuses.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
-          </div>
-
-          <div className="dashboard__form-row">
-            <Input
-              id="update-expiration-date"
-              label="Expiration Date"
-              type="date"
-              placeholder="Select expiration date (optional)"
-              value={formData.expirationDate}
-              onChange={(e) => handleFormChange('expirationDate', e.target.value)}
-              fullWidth
-            />
-            <Input
-              id="update-ao-number"
-              label="AO Number"
-              placeholder="Enter Administrative Order number (optional)"
-              value={formData.aoNumber}
-              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
-              fullWidth
-            />
-          </div>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="update-ao-file" className="dashboard__form-label">
-              Upload AO PDF File (Optional)
-            </label>
-            <input
-              id="update-ao-file"
-              className="dashboard__form-input"
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={(e) => setAoFile(e.target.files?.[0] || null)}
-              style={{
-                padding: '0.5rem',
-                border: '1px dashed var(--border-color)',
-                borderRadius: 'var(--border-radius)',
-                backgroundColor: 'var(--bg-secondary)',
-                width: '100%'
-              }}
-            />
-            {aoFile && (
-              <p style={{ 
-                fontSize: '0.8125rem', 
-                marginTop: '0.375rem', 
-                color: 'var(--color-success)',
-                fontWeight: 500 
-              }}>
-                ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-              </p>
-            )}
-          </div>
-
-          {/* Detailed section — only shown when Permanent is selected */}
-          {/* Detailed section — shown for all appointment statuses */}
-          <div className="dashboard__form-field">
-            <label className="dashboard__form-label">Detailed to Another Office?</label>
-            <div className="dashboard__radio-group">
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="isDetailedUpdate"
-                  value="no"
-                  checked={!formData.isDetailed}
-                  onChange={() => setFormData(prev => ({ ...prev, isDetailed: false, motherUnit: '', detailedTo: '', detailedDivision: '', detailedFunction: '', detailedDate: '' }))}
-                />
-                <span>No</span>
-              </label>
-              <label className="dashboard__radio-label">
-                <input
-                  type="radio"
-                  name="isDetailedUpdate"
-                  value="yes"
-                  checked={formData.isDetailed}
-                  onChange={() => setFormData(prev => ({ ...prev, isDetailed: true }))}
-                />
-                <span>Yes</span>
-              </label>
-            </div>
-          </div>
-
-          {formData.isDetailed && (
-            <>
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-motherUnit" className="dashboard__form-label">
-                  Mother Unit
-                </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="edit-motherUnit"
-                    className="dashboard__form-select"
-                    value={formData.motherUnit}
-                    onChange={(e) => handleFormChange('motherUnit', e.target.value)}
-                  >
-                    <option value="">Select mother unit</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="edit-motherUnit"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter mother unit"
-                    value={formData.motherUnit}
-                    onChange={(e) => handleFormChange('motherUnit', e.target.value)}
-                  />
-                )}
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-detailedTo" className="dashboard__form-label">
-                  Re-Assignment Office
-                </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="edit-detailedTo"
-                    className="dashboard__form-select"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  >
-                    <option value="">Select re-assignment office</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="edit-detailedTo"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter re-assignment office"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  />
-                )}
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-detailedDivision" className="dashboard__form-label">
-                  Division
-                </label>
-                <input
-                  id="edit-detailedDivision"
-                  className="dashboard__form-input"
-                  type="text"
-                  placeholder="Enter division"
-                  value={formData.detailedDivision}
-                  onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
-                />
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-detailedFunction" className="dashboard__form-label">
-                  Function / Designation
-                </label>
-                <input
-                  id="edit-detailedFunction"
-                  className="dashboard__form-input"
-                  type="text"
-                  placeholder="Enter function or designation"
-                  value={formData.detailedFunction}
-                  onChange={(e) => handleFormChange('detailedFunction', e.target.value)}
-                />
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-detailedDate" className="dashboard__form-label">
-                  Date of Re-Assignment
-                </label>
-                <input
-                  id="edit-detailedDate"
-                  className="dashboard__form-input"
-                  type="date"
-                  value={formData.detailedDate}
-                  onChange={(e) => handleFormChange('detailedDate', e.target.value)}
-                />
-              </div>
-            </>
-          )}
-
-          <div className="dashboard__form-field">
-            <label htmlFor="update-status" className="dashboard__form-label">
-              Status
-            </label>
-            <select
-              id="update-status"
-              className="dashboard__form-select"
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-
-          <div className="dashboard__form-field">
             <label htmlFor="edit-position-function" className="dashboard__form-label">
               Position / Function
             </label>
@@ -2673,6 +3524,21 @@ function Dashboard() {
             {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
           </div>
 
+          <div className="dashboard__form-field">
+            <label htmlFor="update-status" className="dashboard__form-label">
+              Status
+            </label>
+            <select
+              id="update-status"
+              className="dashboard__form-select"
+              value={formData.status}
+              onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
           <Input
             id="edit-date-of-employment"
             label="Date of Employment"
@@ -2682,47 +3548,6 @@ function Dashboard() {
             error={formErrors.dateOfEmployment}
             fullWidth
           />
-
-          <Input
-            id="edit-filebox-location"
-            label="201 File Location"
-            type="text"
-            placeholder="Enter 201 file location"
-            value={formData.fileboxLocation}
-            onChange={(e) => handleFormChange('fileboxLocation', e.target.value)}
-            fullWidth
-          />
-
-          <Input
-            id="edit-file201-status"
-            label="201 File Status"
-            type="text"
-            placeholder="Enter 201 file status"
-            value={formData.file201Status}
-            onChange={(e) => handleFormChange('file201Status', e.target.value)}
-            fullWidth
-          />
-
-          <div className="dashboard__form-row">
-            <Input
-              id="edit-appointment-from"
-              label="Appointment From"
-              type="date"
-              value={formData.appointmentFrom}
-              onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
-              error={formErrors.appointmentFrom}
-              fullWidth
-            />
-            <Input
-              id="edit-appointment-to"
-              label="Appointment To"
-              type="date"
-              value={formData.appointmentTo}
-              onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
-              error={formErrors.appointmentTo}
-              fullWidth
-            />
-          </div>
 
           {formData.status === 'Inactive' && (
             <>
@@ -2754,8 +3579,301 @@ function Dashboard() {
               </div>
             </>
           )}
+
+          <div className="dashboard__form-field">
+            <label htmlFor="update-appointmentStatus" className="dashboard__form-label">
+              Appointment Status
+            </label>
+            <select
+              id="update-appointmentStatus"
+              className="dashboard__form-select"
+              value={formData.appointmentStatus}
+              onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
+            >
+              <option value="">Select appointment status</option>
+              {dropdownOptions.appointmentStatuses.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
+          </div>
+
+          {/* Durational appointment statuses conditional date inputs */}
+          {formData.appointmentStatus && (
+            (() => {
+              const s = formData.appointmentStatus.toLowerCase().trim();
+              return (
+                s === 'consultant' ||
+                s === 'contract of service' ||
+                s === 'contractual' ||
+                s === 'casual' ||
+                s === 'job order'
+              );
+            })()
+          ) && (
+              <div className="dashboard__form-row">
+                <Input
+                  id="edit-appointment-from"
+                  label="Appointment From"
+                  type="date"
+                  value={formData.appointmentFrom}
+                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                  error={formErrors.appointmentFrom}
+                  fullWidth
+                />
+                <Input
+                  id="edit-appointment-to"
+                  label="Appointment To"
+                  type="date"
+                  value={formData.appointmentTo}
+                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                  error={formErrors.appointmentTo}
+                  fullWidth
+                />
+              </div>
+            )}
+
+          <div className="dashboard__form-field">
+            <label htmlFor="update-ao-type" className="dashboard__form-label">
+              Type of AO
+            </label>
+            <select
+              id="update-ao-type"
+              className="dashboard__form-select"
+              value={formData.aoType}
+              onChange={(e) => handleFormChange('aoType', e.target.value as any)}
+            >
+              <option value="">Select AO Type</option>
+              <option value="Detailed">Detailed</option>
+              <option value="Designated">Designated</option>
+            </select>
+          </div>
+
+          <div className="dashboard__form-row">
+            <Input
+              id="update-ao-number"
+              label="AO Number"
+              placeholder="Enter Administrative Order number"
+              value={formData.aoNumber}
+              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
+              fullWidth
+            />
+            <div className="dashboard__form-field">
+              <label htmlFor="update-ao-year" className="dashboard__form-label">
+                Series
+              </label>
+              <select
+                id="update-ao-year"
+                className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
+                value={formData.aoYear}
+                onChange={(e) => handleFormChange('aoYear', e.target.value)}
+              >
+                <option value="">Select series year</option>
+                {Array.from({ length: 21 }, (_, i) => 2015 + i).map((year) => (
+                  <option key={year} value={year.toString()}>{year}</option>
+                ))}
+              </select>
+              {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
+            </div>
+          </div>
+
+          <div className="dashboard__form-field">
+            <label htmlFor="update-ao-file" className="dashboard__form-label">
+              Upload AO PDF File {formData.aoNumber.trim() && formData.aoNumber !== originalEmployeeData?.aoNumber ? '(Required)' : '(Optional)'}
+            </label>
+            <input
+              id="update-ao-file"
+              className="dashboard__form-input"
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={(e) => setAoFile(e.target.files?.[0] || null)}
+              style={{
+                padding: '0.5rem',
+                border: '1px dashed var(--border-color)',
+                borderRadius: 'var(--border-radius)',
+                backgroundColor: 'var(--bg-secondary)',
+                width: '100%'
+              }}
+            />
+            {aoFile && (
+              <p style={{
+                fontSize: '0.8125rem',
+                marginTop: '0.375rem',
+                color: 'var(--color-success)',
+                fontWeight: 500
+              }}>
+                ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+              </p>
+            )}
+            {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
+          </div>
+
+          {formData.aoType === 'Detailed' && (
+            <>
+              <div className="dashboard__form-field">
+                <label htmlFor="edit-detailedTo" className="dashboard__form-label">
+                  Detailed/Transferred Office
+                </label>
+                {dropdownOptions.officeNames.length > 0 ? (
+                  <select
+                    id="edit-detailedTo"
+                    className="dashboard__form-select"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  >
+                    <option value="">Select office</option>
+                    {dropdownOptions.officeNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="edit-detailedTo"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter office"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="dashboard__form-field">
+                <label htmlFor="edit-detailedDivision" className="dashboard__form-label">
+                  Division
+                </label>
+                <input
+                  id="edit-detailedDivision"
+                  className="dashboard__form-input"
+                  type="text"
+                  placeholder="Enter division"
+                  value={formData.detailedDivision}
+                  onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
+                />
+              </div>
+
+              <div className="dashboard__form-row">
+                <Input
+                  id="edit-appointment-from-detailed"
+                  label="Duration of Detailed Order (From)"
+                  type="date"
+                  value={formData.appointmentFrom}
+                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                  fullWidth
+                />
+                <Input
+                  id="edit-appointment-to-detailed"
+                  label="Duration of Detailed Order (To)"
+                  type="date"
+                  value={formData.appointmentTo}
+                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                  fullWidth
+                />
+              </div>
+            </>
+          )}
+
+          {formData.aoType === 'Designated' && (
+            <>
+              <div className="dashboard__form-field">
+                <label htmlFor="edit-designatedOffice" className="dashboard__form-label">
+                  Designated Office
+                </label>
+                {dropdownOptions.officeNames.length > 0 ? (
+                  <select
+                    id="edit-designatedOffice"
+                    className="dashboard__form-select"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  >
+                    <option value="">Select office</option>
+                    {dropdownOptions.officeNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="edit-designatedOffice"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter designated office"
+                    value={formData.detailedTo}
+                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="dashboard__form-field">
+                <label htmlFor="edit-designatedPositionFunction" className="dashboard__form-label">
+                  Designated Position Function
+                </label>
+                {dropdownOptions.positions.length > 0 ? (
+                  <select
+                    id="edit-designatedPositionFunction"
+                    className="dashboard__form-select"
+                    value={formData.designatedPositionFunction}
+                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
+                  >
+                    <option value="">Select position</option>
+                    {dropdownOptions.positions.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="edit-designatedPositionFunction"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter position function"
+                    value={formData.designatedPositionFunction}
+                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="dashboard__form-row">
+                <Input
+                  id="edit-designated-order-from"
+                  label="Designated Order (From)"
+                  type="date"
+                  value={formData.designatedOrderFrom}
+                  onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
+                  fullWidth
+                />
+                <Input
+                  id="edit-designated-order-to"
+                  label="Designated Order (To)"
+                  type="date"
+                  value={formData.designatedOrderTo}
+                  onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
+                  fullWidth
+                />
+              </div>
+            </>
+          )}
+
+          <Input
+            id="edit-file201-status"
+            label="201 File Status"
+            type="text"
+            placeholder="Enter 201 file status"
+            value={formData.file201Status}
+            onChange={(e) => handleFormChange('file201Status', e.target.value)}
+            fullWidth
+          />
+
+          <Input
+            id="edit-filebox-location"
+            label="201 File Location"
+            type="text"
+            placeholder="Enter 201 file location"
+            value={formData.fileboxLocation}
+            onChange={(e) => handleFormChange('fileboxLocation', e.target.value)}
+            fullWidth
+          />
         </div>
       </Modal>
+
 
       <ImportModal
         isOpen={isImportModalOpen}
@@ -2796,6 +3914,50 @@ function Dashboard() {
         pdfData={reportPdfData}
         canDownloadOrPrint={canDownloadOrPrint}
       />
+
+      {/* Delete Report Entries Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteReportConfirmOpen}
+        onClose={() => {
+          if (!isDeletingReport) {
+            setIsDeleteReportConfirmOpen(false);
+            setPendingDeleteReportIds([]);
+          }
+        }}
+        title="Request Deletion - Generated Reports"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsDeleteReportConfirmOpen(false);
+                setPendingDeleteReportIds([]);
+              }}
+              disabled={isDeletingReport}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleConfirmDeleteReportEntries}
+              loading={isDeletingReport}
+              disabled={isDeletingReport}
+            >
+              Submit for Approval
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ padding: '0.5rem 0' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem', lineHeight: '1.5' }}>
+            You are requesting deletion of <strong>{pendingDeleteReportIds.length}</strong> report entry/entries.
+          </p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginTop: '0.75rem' }}>
+            This request will be sent to a Super Admin for approval. Once approved, the selected entries and their corresponding Administrative Order documents will be permanently removed.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

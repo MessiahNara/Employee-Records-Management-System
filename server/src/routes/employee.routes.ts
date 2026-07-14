@@ -269,6 +269,8 @@ router.post('/', async (req: Request, res: Response) => {
       appointmentTo,
       expirationDate,
       aoNumber,
+      aoYear,
+      aoType,
       status,
       position,
       dateOfEmployment,
@@ -278,6 +280,9 @@ router.post('/', async (req: Request, res: Response) => {
       detailedDivision,
       detailedFunction,
       detailedDate,
+      designatedPositionFunction,
+      designatedOrderFrom,
+      designatedOrderTo,
       fileboxLocation,
     } = req.body;
 
@@ -296,7 +301,7 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(409).json({ error: 'Employee ID already exists' });
     }
 
-    const employee = await (prisma.employee as any).create({
+    const employee = await prisma.employee.create({
       data: {
         id,
         lastName,
@@ -310,6 +315,8 @@ router.post('/', async (req: Request, res: Response) => {
         appointmentTo: appointmentTo ? new Date(appointmentTo) : null,
         expirationDate: expirationDate ? new Date(expirationDate) : null,
         aoNumber: aoNumber || null,
+        aoYear: aoYear || null,
+        aoType: aoType || null,
         status,
         position,
         dateOfEmployment: dateOfEmployment ? new Date(dateOfEmployment) : null,
@@ -319,6 +326,9 @@ router.post('/', async (req: Request, res: Response) => {
         detailedDivision: detailedDivision || null,
         detailedFunction: detailedFunction || null,
         detailedDate: detailedDate ? new Date(detailedDate) : null,
+        designatedPositionFunction: designatedPositionFunction || null,
+        designatedOrderFrom: designatedOrderFrom ? new Date(designatedOrderFrom) : null,
+        designatedOrderTo: designatedOrderTo ? new Date(designatedOrderTo) : null,
         fileboxLocation: fileboxLocation || null,
       },
     });
@@ -517,6 +527,22 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     if ('dateOfSeparation' in updateData) {
       updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
     }
+    if ('designatedOrderFrom' in updateData) {
+      updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
+    }
+    if ('designatedOrderTo' in updateData) {
+      updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
+    }
+
+    // Fetch old values before overwriting so audit history can be reconstructed
+    const oldEmployee = await prisma.employee.findUnique({ where: { id } });
+    if (!oldEmployee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    const oldValues: any = {};
+    for (const field of Object.keys(oldEmployee)) {
+      oldValues[field] = (oldEmployee as any)[field] ?? null;
+    }
 
     const employee = await prisma.employee.update({
       where: { id },
@@ -527,7 +553,7 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     const userId = req.headers['x-user-id'] as string || 'system';
     const userName = req.headers['x-user-name'] as string || 'System';
 
-    // Create audit log with human-readable description
+    // Create audit log with both old and new values
     await createAuditLog(prisma, {
       userId,
       userName,
@@ -535,7 +561,7 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
       entity: 'employee',
       entityId: employee.id,
       entityName: getEmployeeName(employee),
-      details: { changedFields: Object.keys(updateData), values: updateData },
+      details: { changedFields: Object.keys(updateData), values: updateData, oldValues },
     });
 
     res.json(employee);
@@ -555,8 +581,9 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
     const allowedFields = [
       'id', 'lastName', 'firstName', 'middleName', 'dateOfBirth', 'gender',
       'officeName', 'appointmentStatus', 'status', 'position',
-      'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
+      'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'aoYear', 'aoType', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
       'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate',
+      'designatedPositionFunction', 'designatedOrderFrom', 'designatedOrderTo',
       'fileboxLocation', 'file201Status'
     ];
 
@@ -587,6 +614,12 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
     }
     if ('detailedDate' in updateData) {
       updateData.detailedDate = updateData.detailedDate ? new Date(updateData.detailedDate) : null;
+    }
+    if ('designatedOrderFrom' in updateData) {
+      updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
+    }
+    if ('designatedOrderTo' in updateData) {
+      updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
     }
     if ('isDetailed' in updateData) {
       updateData.isDetailed = updateData.isDetailed === true || updateData.isDetailed === 'true';
@@ -646,17 +679,22 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
             appointmentTo: updateData.appointmentTo !== undefined ? updateData.appointmentTo : oldEmployee.appointmentTo,
             expirationDate: updateData.expirationDate !== undefined ? updateData.expirationDate : oldEmployee.expirationDate,
             aoNumber: updateData.aoNumber !== undefined ? updateData.aoNumber : oldEmployee.aoNumber,
+            aoYear: updateData.aoYear !== undefined ? updateData.aoYear : (oldEmployee as any).aoYear,
             status: updateData.status !== undefined ? updateData.status : oldEmployee.status,
             position: updateData.position !== undefined ? updateData.position : oldEmployee.position,
             dateOfEmployment: updateData.dateOfEmployment !== undefined ? updateData.dateOfEmployment : oldEmployee.dateOfEmployment,
             dateOfSeparation: updateData.dateOfSeparation !== undefined ? updateData.dateOfSeparation : oldEmployee.dateOfSeparation,
             reasonOfSeparation: updateData.reasonOfSeparation !== undefined ? updateData.reasonOfSeparation : oldEmployee.reasonOfSeparation,
             isDetailed: updateData.isDetailed !== undefined ? updateData.isDetailed : oldEmployee.isDetailed,
+            aoType: updateData.aoType !== undefined ? updateData.aoType : (oldEmployee as any).aoType,
             motherUnit: updateData.motherUnit !== undefined ? updateData.motherUnit : oldEmployee.motherUnit,
             detailedTo: updateData.detailedTo !== undefined ? updateData.detailedTo : oldEmployee.detailedTo,
             detailedDivision: updateData.detailedDivision !== undefined ? updateData.detailedDivision : oldEmployee.detailedDivision,
             detailedFunction: updateData.detailedFunction !== undefined ? updateData.detailedFunction : oldEmployee.detailedFunction,
             detailedDate: updateData.detailedDate !== undefined ? updateData.detailedDate : oldEmployee.detailedDate,
+            designatedPositionFunction: updateData.designatedPositionFunction !== undefined ? updateData.designatedPositionFunction : (oldEmployee as any).designatedPositionFunction,
+            designatedOrderFrom: updateData.designatedOrderFrom !== undefined ? updateData.designatedOrderFrom : (oldEmployee as any).designatedOrderFrom,
+            designatedOrderTo: updateData.designatedOrderTo !== undefined ? updateData.designatedOrderTo : (oldEmployee as any).designatedOrderTo,
             fileboxLocation: updateData.fileboxLocation !== undefined ? updateData.fileboxLocation : oldEmployee.fileboxLocation,
             file201Status: updateData.file201Status !== undefined ? updateData.file201Status : oldEmployee.file201Status,
             profilePicture: oldEmployee.profilePicture,
@@ -683,14 +721,39 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
         return newEmployee;
       });
     } else {
-      // Normal update without ID change
+      // Normal update without ID change — fetch old values first for audit history
+      const oldEmployee = await prisma.employee.findUnique({ where: { id } });
+      if (!oldEmployee) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+
+      // Build oldValues snapshot for all fields
+      const oldValues: any = {};
+      for (const field of Object.keys(oldEmployee)) {
+        oldValues[field] = (oldEmployee as any)[field] ?? null;
+      }
+
       employee = await prisma.employee.update({
         where: { id },
         data: updateData,
       });
+
+      // Create audit log with both old and new values so history can be reconstructed
+      await createAuditLog(prisma, {
+        userId,
+        userName,
+        action: 'update',
+        entity: 'employee',
+        entityId: employee.id,
+        entityName: getEmployeeName(employee),
+        details: { changedFields: Object.keys(updateData), values: updateData, oldValues },
+      });
+
+      res.json(employee);
+      return;
     }
 
-    // Create audit log with human-readable description
+    // Create audit log for ID-change path (oldValues not easily available, omit)
     await createAuditLog(prisma, {
       userId,
       userName,
@@ -932,6 +995,153 @@ router.delete('/:id/profile-picture', async (req: Request, res: Response) => {
     res.json({ message: 'Profile picture removed successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove profile picture' });
+  }
+});
+
+// POST /api/employees/delete-report-entries
+router.post('/delete-report-entries', async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty IDs array' });
+    }
+
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+
+    let currentDeletedCount = 0;
+    let historicalDeletedCount = 0;
+
+    for (const rawId of ids) {
+      // Format: "{employeeId}-doc-{docId}"  (current row linked to a specific document)
+      if (rawId.includes('-doc-')) {
+        const docIdIndex = rawId.lastIndexOf('-doc-');
+        const employeeId = rawId.substring(0, docIdIndex);
+        const docId = rawId.substring(docIdIndex + 5); // skip '-doc-'
+
+        // Delete only the specific AO document
+        const doc = await prisma.document.findUnique({ where: { id: docId } });
+        if (doc) {
+          try {
+            if (fs.existsSync(doc.filePath)) {
+              fs.unlinkSync(doc.filePath);
+            }
+          } catch (fileErr) {
+            console.error(`Error deleting physical file during report entry deletion:`, fileErr);
+          }
+          await prisma.document.delete({ where: { id: docId } });
+        }
+
+        // Check how many AO docs remain for this employee
+        const remainingAoDocs = await prisma.document.findMany({
+          where: { employeeId, category: 'Administrative Order' },
+        });
+
+        // Only clear AO fields when there are no AO documents left
+        if (remainingAoDocs.length === 0) {
+          const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+          if (employee) {
+            await prisma.employee.update({
+              where: { id: employeeId },
+              data: {
+                aoNumber: null,
+                aoYear: null,
+                aoType: null,
+                detailedTo: null,
+                detailedDivision: null,
+                detailedFunction: null,
+                detailedDate: null,
+                designatedPositionFunction: null,
+                designatedOrderFrom: null,
+                designatedOrderTo: null,
+                isDetailed: false,
+              }
+            });
+          }
+        }
+
+        await createAuditLog(prisma, {
+          userId,
+          userName,
+          action: 'delete_report_entry',
+          entity: 'employee',
+          entityId: employeeId,
+          entityName: employeeId,
+          details: { message: `Deleted report entry linked to document ${docId}` }
+        });
+
+        currentDeletedCount++;
+
+      } else if (rawId.includes('-audit-')) {
+        // Legacy format: "{employeeId}-audit-{logId}"
+        const parts = rawId.split('-audit-');
+        const employeeId = parts[0];
+        const logId = parts[1];
+
+        const auditLog = await prisma.auditLog.findUnique({ where: { id: logId } });
+        if (auditLog) {
+          await prisma.auditLog.delete({ where: { id: logId } });
+
+          await createAuditLog(prisma, {
+            userId,
+            userName,
+            action: 'delete_report_entry',
+            entity: 'audit_log',
+            entityId: logId,
+            entityName: 'Historical AO Log',
+            details: { message: `Deleted historical report entry for employee ID ${employeeId}` }
+          });
+
+          historicalDeletedCount++;
+        }
+
+      } else if (rawId.endsWith('-current')) {
+        // Legacy format kept for backward compatibility
+        const employeeId = rawId.replace(/-current$/, '');
+        const employee = await prisma.employee.findUnique({
+          where: { id: employeeId },
+          include: { documents: true }
+        });
+
+        if (employee) {
+          const aoDocs = employee.documents.filter(d => d.category === 'Administrative Order');
+          for (const doc of aoDocs) {
+            try {
+              if (fs.existsSync(doc.filePath)) fs.unlinkSync(doc.filePath);
+            } catch (fileErr) {
+              console.error(`Error deleting physical file:`, fileErr);
+            }
+            await prisma.document.delete({ where: { id: doc.id } });
+          }
+
+          await prisma.employee.update({
+            where: { id: employeeId },
+            data: {
+              aoNumber: null, aoYear: null, aoType: null,
+              detailedTo: null, detailedDivision: null, detailedFunction: null,
+              detailedDate: null, designatedPositionFunction: null,
+              designatedOrderFrom: null, designatedOrderTo: null, isDetailed: false,
+            }
+          });
+
+          await createAuditLog(prisma, {
+            userId, userName,
+            action: 'delete_report_entry',
+            entity: 'employee',
+            entityId: employeeId,
+            entityName: `${employee.lastName}, ${employee.firstName}`,
+            details: { message: `Deleted current report entry` }
+          });
+
+          currentDeletedCount++;
+        }
+      }
+    }
+
+    res.json({ success: true, currentDeleted: currentDeletedCount, historicalDeleted: historicalDeletedCount });
+  } catch (error: any) {
+    console.error('Error deleting report entries:', error);
+    res.status(500).json({ error: 'Failed to delete report entries', details: error.message });
   }
 });
 

@@ -284,8 +284,7 @@ function createWindow() {
     console.log('[ui] Loading from Vite dev server at', devUrl);
     console.log('[server-url] Set to', GLOBAL_SERVER_URL);
     mainWindow.loadURL(devUrl);
-    // Open DevTools in development
-    mainWindow.webContents.openDevTools();
+    // DevTools can be opened manually via Ctrl+Shift+I if needed
   }
   // Production mode: loadFrontend() is called after the server is ready (see waitForServer)
 

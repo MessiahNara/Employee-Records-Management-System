@@ -10,3 +10,4 @@ export { default as SearchBar } from './SearchBar';
 export { default as Skeleton } from './Skeleton';
 export { default as Table } from './Table';
 export type { Column } from './Table';
+export { default as SearchableDropdown } from './SearchableDropdown';

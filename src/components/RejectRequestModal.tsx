@@ -13,12 +13,18 @@ interface RejectRequestModalProps {
 function RejectRequestModal({ isOpen, target, actionLabels, onClose, onReject }: RejectRequestModalProps) {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  const reasonMissing = !rejectReason.trim();
 
   const handleReject = async () => {
+    setTouched(true);
+    if (reasonMissing) return;
     setRejectLoading(true);
     try {
-      await onReject(rejectReason || 'Rejected by administrator');
+      await onReject(rejectReason.trim());
       setRejectReason('');
+      setTouched(false);
       onClose();
     } catch (error) {
       console.error('Reject failed:', error);
@@ -29,6 +35,7 @@ function RejectRequestModal({ isOpen, target, actionLabels, onClose, onReject }:
 
   const handleClose = () => {
     setRejectReason('');
+    setTouched(false);
     onClose();
   };
 
@@ -43,7 +50,7 @@ function RejectRequestModal({ isOpen, target, actionLabels, onClose, onReject }:
           <Button variant="ghost" onClick={handleClose} disabled={rejectLoading}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={handleReject} loading={rejectLoading}>
+          <Button variant="danger" onClick={handleReject} loading={rejectLoading} disabled={rejectLoading}>
             Reject
           </Button>
         </div>
@@ -65,14 +72,14 @@ function RejectRequestModal({ isOpen, target, actionLabels, onClose, onReject }:
                 marginBottom: '0.35rem',
               }}
             >
-              Reason (optional)
+              Reason <span style={{ color: 'var(--color-danger)' }}>*</span>
             </label>
             <textarea
               style={{
                 width: '100%',
                 padding: '8px 12px',
                 background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
+                border: `1px solid ${touched && reasonMissing ? 'var(--color-danger)' : 'var(--border-color)'}`,
                 borderRadius: 'var(--border-radius)',
                 color: 'var(--text-primary)',
                 fontFamily: 'inherit',
@@ -83,9 +90,14 @@ function RejectRequestModal({ isOpen, target, actionLabels, onClose, onReject }:
               rows={3}
               placeholder="Enter reason for rejection..."
               value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
+              onChange={(e) => { setRejectReason(e.target.value); setTouched(true); }}
               autoFocus
             />
+            {touched && reasonMissing && (
+              <p style={{ color: 'var(--color-danger)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                Reason is required to reject this request.
+              </p>
+            )}
           </div>
         </div>
       )}

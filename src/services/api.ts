@@ -1,3 +1,5 @@
+import { getAuthState } from '../utils/mockAuth';
+
 // API Base URL
 const envApiUrl = (import.meta as any).env.VITE_API_URL as string | undefined;
 
@@ -419,23 +421,48 @@ export const employeeApi = {
     const employees = await apiRequest<any[]>(`/employees${query ? `?${query}` : ''}`);
     
     // Map backend fields to frontend fields
-    return employees.map(emp => ({
-      ...emp,
-      officeHospitalName: emp.officeName,
-      positionFunction: emp.position,
-      reasonForSeparation: emp.reasonOfSeparation,
-      profilePicture: getAbsoluteUrl(emp.profilePicture),
-    }));
+    return employees.map(emp => {
+      const rawAoType = String(emp.aoType || '').trim().toLowerCase();
+      const aoType = rawAoType === 'detailed'
+        ? 'Detailed'
+        : rawAoType === 'designated'
+        ? 'Designated'
+        : emp.isDetailed === true
+        ? 'Detailed'
+        : emp.designatedPositionFunction || emp.designatedOrderFrom || emp.designatedOrderTo
+        ? 'Designated'
+        : '';
+
+      return {
+        ...emp,
+        officeHospitalName: emp.officeName,
+        positionFunction: emp.position,
+        reasonForSeparation: emp.reasonOfSeparation,
+        profilePicture: getAbsoluteUrl(emp.profilePicture),
+        aoType,
+      };
+    });
   },
   getById: async (id: string) => {
     const employee = await apiRequest<any>(`/employees/${id}`);
-    // Map backend fields to frontend fields
+    // Map backend fields to frontend fields (same logic as getAll)
+    const rawAoType = String(employee.aoType || '').trim().toLowerCase();
+    const aoType = rawAoType === 'detailed'
+      ? 'Detailed'
+      : rawAoType === 'designated'
+      ? 'Designated'
+      : employee.isDetailed === true
+      ? 'Detailed'
+      : employee.designatedPositionFunction || employee.designatedOrderFrom || employee.designatedOrderTo
+      ? 'Designated'
+      : '';
     return {
       ...employee,
       officeHospitalName: employee.officeName,
       positionFunction: employee.position,
       reasonForSeparation: employee.reasonOfSeparation,
       profilePicture: getAbsoluteUrl(employee.profilePicture),
+      aoType,
     };
   },
   create: (data: any, userId?: string, userName?: string) => {
@@ -522,6 +549,18 @@ export const employeeApi = {
     });
   },
   getStats: () => apiRequest<any>('/employees/stats/summary'),
+  deleteReportEntries: (ids: string[]) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const currentUser = getAuthState();
+    if (currentUser?.id) headers['X-User-Id'] = currentUser.id;
+    if (currentUser?.lastName) headers['X-User-Name'] = `${currentUser.lastName}, ${currentUser.firstName}`;
+    
+    return apiRequest<any>('/employees/delete-report-entries', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ids }),
+    });
+  },
   uploadProfilePicture: async (employeeId: string, file: File): Promise<{ profilePicture: string }> => {
     const formData = new FormData();
     formData.append('profilePicture', file);
@@ -563,7 +602,7 @@ export const documentApi = {
       body: JSON.stringify(data),
     });
   },
-  upload: (file: File, data: { employeeId: string; employeeName: string; category: string; fileName: string; fileSize: number; mimeType: string }, userId?: string, userName?: string) => {
+  upload: (file: File, data: { employeeId: string; employeeName: string; category: string; fileName: string; fileSize: number; mimeType: string; aoNumber?: string; aoYear?: string }, userId?: string, userName?: string) => {
     const formData = new FormData();
     // Fields must come before the file so multer can read them in destination/filename callbacks
     formData.append('employeeId', data.employeeId);
@@ -572,6 +611,8 @@ export const documentApi = {
     formData.append('fileName', data.fileName);
     formData.append('fileSize', String(data.fileSize));
     formData.append('mimeType', data.mimeType);
+    if (data.aoNumber) formData.append('aoNumber', data.aoNumber);
+    if (data.aoYear) formData.append('aoYear', data.aoYear);
     formData.append('file', file);
 
     const headers: Record<string, string> = {};

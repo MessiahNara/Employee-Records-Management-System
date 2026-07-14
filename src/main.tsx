@@ -17,3 +17,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ThemeProvider>
   </React.StrictMode>
 );
+
+// Remove the splash screen after React has rendered
+const splash = document.getElementById('app-splash');
+if (splash) {
+  splash.style.opacity = '0';
+  setTimeout(() => splash.remove(), 300);
+}

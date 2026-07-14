@@ -53,17 +53,22 @@ model Employee {
   appointmentTo       DateTime?
   expirationDate      DateTime? // Date of expiration of employment/appointment
   aoNumber            String?   // Administrative Order number
+  aoYear              String?   // Series / year of the AO
   status              String    // active/inactive
   position            String
   dateOfEmployment    DateTime?
   dateOfSeparation    DateTime?
   reasonOfSeparation  String?
   isDetailed          Boolean   @default(false)
+  aoType              String?   // Detailed | Designated (overrides isDetailed flag)
   motherUnit          String?   // original office when detailed
   detailedTo          String?   // office the employee is detailed to (re-assignment office)
   detailedDivision    String?   // division in the re-assignment office
   detailedFunction    String?   // function/designation in the re-assignment office
   detailedDate        DateTime? // date of re-assignment
+  designatedPositionFunction String?   // position/function when designated
+  designatedOrderFrom        DateTime? // start date of designation order
+  designatedOrderTo          DateTime? // end date of designation order
   fileboxLocation     String?   // physical filebox location of the 201 file
   file201Status       String?   @default("Available") // Available | Borrowed | Overdue | Lost
   profilePicture      String?   // Profile picture file path (optional)

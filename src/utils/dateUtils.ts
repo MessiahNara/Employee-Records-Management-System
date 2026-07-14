@@ -26,6 +26,29 @@ export function formatDateDDMMYYYY(dateString: string | Date | null | undefined)
 }
 
 /**
+ * Format a date string to MM/DD/YYYY format (M/D/Y)
+ * @param dateString - ISO date string or Date object
+ * @returns Formatted date string in MM/DD/YYYY format
+ */
+export function formatDateMDY(dateString: string | Date | null | undefined): string {
+  if (!dateString) return '—';
+
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '—';
+
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+
+    return `${month}/${day}/${year}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '—';
+  }
+}
+
+/**
  * Format a date string to "MONTH DD, YYYY" format (e.g. JANUARY 30, 2026)
  * @param dateString - ISO date string or Date object
  * @returns Formatted date string in long month uppercase format

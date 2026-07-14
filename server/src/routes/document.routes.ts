@@ -144,7 +144,7 @@ router.get('/:id/file', async (req: Request, res: Response) => {
 // Create document (multipart/form-data with actual file)
 router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Response) => {
   try {
-    const { employeeId, category, fileName, fileSize, mimeType } = req.body;
+    const { employeeId, category, fileName, fileSize, mimeType, aoNumber, aoYear } = req.body;
     const uploadedFile = req.file;
 
     console.log('[document] Upload received:', {
@@ -166,12 +166,53 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       return res.status(404).json({ error: 'Employee not found' });
     }
 
+    let finalFileName = fileName;
+    let finalFilePath = uploadedFile.path;
+
+    if (category === 'Administrative Order') {
+      const surname = employee.lastName.trim().toUpperCase();
+      const firstName = employee.firstName.trim().toUpperCase();
+      const middleInitial = employee.middleName && employee.middleName.trim() !== ''
+        ? employee.middleName.trim().charAt(0).toUpperCase()
+        : '';
+      
+      const namePart = middleInitial 
+        ? `${surname}, ${firstName}, ${middleInitial}.`
+        : `${surname}, ${firstName}`;
+      
+      const aoNum = aoNumber 
+        ? aoNumber.trim() 
+        : (employee.aoNumber ? employee.aoNumber.trim() : 'NO AO');
+      const aoYr = aoYear 
+        ? aoYear.trim() 
+        : (employee.aoYear ? employee.aoYear.trim() : 'NO SERIES');
+      
+      // Filename format: SURNAME, FIRST NAME, MIDDLE INITIAL_AO. NO, S. NO.pdf
+      const ext = path.extname(uploadedFile.originalname) || '.pdf';
+      const newBaseName = `${namePart}_AO. ${aoNum}, S. ${aoYr}`.replace(/[/\\?%*:|"<>]/g, '-');
+      finalFileName = `${newBaseName}${ext}`;
+      
+      // Perform physical file rename
+      const destDir = path.dirname(uploadedFile.path);
+      const newFilePath = path.join(destDir, finalFileName);
+      
+      try {
+        if (fs.existsSync(uploadedFile.path)) {
+          fs.renameSync(uploadedFile.path, newFilePath);
+          finalFilePath = newFilePath;
+          console.log(`[document] Renamed AO document from ${uploadedFile.path} to ${newFilePath}`);
+        }
+      } catch (renameError) {
+        console.error('[document] Error renaming AO file:', renameError);
+      }
+    }
+
     const document = await prisma.document.create({
       data: {
         employeeId,
         category,
-        fileName,
-        filePath: uploadedFile.path,
+        fileName: finalFileName,
+        filePath: finalFilePath,
         fileSize: parseInt(fileSize) || uploadedFile.size || 0,
         mimeType: mimeType || uploadedFile.mimetype || 'application/pdf',
       },
@@ -260,6 +301,31 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
       where: { id },
     });
 
+    // If it is an Administrative Order document, always clear the employee's AO fields
+    if (document.category === 'Administrative Order') {
+      try {
+        await prisma.employee.update({
+          where: { id: document.employeeId },
+          data: {
+            aoNumber: null,
+            aoYear: null,
+            aoType: null,
+            detailedTo: null,
+            detailedDivision: null,
+            detailedFunction: null,
+            detailedDate: null,
+            designatedPositionFunction: null,
+            designatedOrderFrom: null,
+            designatedOrderTo: null,
+            isDetailed: false,
+          },
+        });
+        console.log(`Cleared AO fields for employee ${document.employeeId} after Administrative Order document deletion.`);
+      } catch (empUpdateError) {
+        console.error(`Error clearing AO fields for employee ${document.employeeId}:`, empUpdateError);
+      }
+    }
+
     // Create audit log for document deletion
     await createAuditLog(prisma, {
       userId,
@@ -330,6 +396,37 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
         },
       },
     });
+
+    // Find any documents that are in the Administrative Order category and update their employees
+    const aoDocuments = documents.filter(doc => doc.category === 'Administrative Order');
+    if (aoDocuments.length > 0) {
+      try {
+        const employeeIdsToClear = [...new Set(aoDocuments.map(doc => doc.employeeId))];
+        await prisma.employee.updateMany({
+          where: {
+            id: {
+              in: employeeIdsToClear,
+            },
+          },
+          data: {
+            aoNumber: null,
+            aoYear: null,
+            aoType: null,
+            detailedTo: null,
+            detailedDivision: null,
+            detailedFunction: null,
+            detailedDate: null,
+            designatedPositionFunction: null,
+            designatedOrderFrom: null,
+            designatedOrderTo: null,
+            isDetailed: false,
+          },
+        });
+        console.log(`Cleared AO fields for employees: ${employeeIdsToClear.join(', ')} due to bulk Administrative Order document deletion.`);
+      } catch (empUpdateError) {
+        console.error('Error clearing AO fields during bulk delete:', empUpdateError);
+      }
+    }
 
     // Create bulk delete audit log
     const count = result.count;

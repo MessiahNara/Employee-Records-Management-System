@@ -2,7 +2,7 @@
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
-  overflow: hidden;
+  overflow: visible;
   width: 100%;
 }
 
@@ -16,11 +16,11 @@
   background-color: var(--bg-tertiary);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
 }
 
 .table__header {
-  padding: 0.2rem 0.25rem;
+  padding: 0.85rem 1rem;
   text-align: left;
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -28,6 +28,8 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border-color);
+  overflow: visible;
+  position: relative;
 }
 
 .table__body {
@@ -56,7 +58,7 @@
 }
 
 .table__cell {
-  padding: 0.2rem 0.25rem;
+  padding: 0.85rem 1rem;
   font-size: var(--font-size-base);
   color: var(--text-primary);
   word-wrap: break-word;

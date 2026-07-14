@@ -16,6 +16,7 @@ const ACTION_LABELS: Record<string, string> = {
   bulk_delete_employee: 'Bulk Delete Employees',
   delete_document: 'Delete Document',
   bulk_delete_document: 'Bulk Delete Documents',
+  delete_report_entry: 'Delete Report Entry',
   sync_import: 'Sync Import',
   update_user: 'Update User',
   delete_user: 'Delete User',
@@ -148,6 +149,10 @@ function Approvals() {
         const names = (payload.employeeNames || []).map((e: any) => `${e.lastName}, ${e.firstName}`).join('; ');
         return `Delete ${payload.ids?.length || 0} employees${names ? ': ' + names : ''}`;
       }
+      case 'delete_report_entry': {
+        const entryNames = (payload.entryNames || []).join('; ');
+        return `Delete ${payload.ids?.length || 1} report entr${payload.ids?.length === 1 ? 'y' : 'ies'}${entryNames ? ': ' + entryNames : ''}`;
+      }
       case 'delete_document':
         return `Delete document: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}`;
       case 'bulk_delete_document': {
@@ -209,6 +214,9 @@ function Approvals() {
           approverName,
           approvalToken
         );
+        break;
+      case 'delete_report_entry':
+        await api.employee.deleteReportEntries(payload.ids || [entityId]);
         break;
       case 'update_user': {
         // Extract only the 'to' values from { from, to } structure
