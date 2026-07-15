@@ -7,7 +7,7 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   hideCloseButton?: boolean;
 }
 
@@ -20,6 +20,20 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
 
     // Store the previously focused element
     previousActiveElement.current = document.activeElement as HTMLElement;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = 'unset';
+
+      // Restore focus to the previously focused element
+      if (previousActiveElement.current) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
 
     // Handle Escape key to close modal
     const handleEscape = (e: KeyboardEvent) => {
@@ -29,16 +43,8 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
     };
 
     document.addEventListener('keydown', handleEscape);
-    document.body.style.overflow = 'hidden';
-
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
-
-      // Restore focus to the previously focused element
-      if (previousActiveElement.current) {
-        previousActiveElement.current.focus();
-      }
     };
   }, [isOpen, onClose, hideCloseButton]);
 

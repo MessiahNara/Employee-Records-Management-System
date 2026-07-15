@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { createAuditLog, getEmployeeName } from '../utils/auditHelper';
+import { checkAndAddDropdownOptions } from '../utils/dropdownOptionsHelper';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { uploadProfilePicture } from '../middleware/upload';
 import fs from 'fs';
@@ -333,6 +334,13 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    // Auto-populate custom dynamic options
+    await checkAndAddDropdownOptions({
+      officeNames: [officeName, motherUnit, detailedTo],
+      positions: [position, designatedPositionFunction],
+      appointmentStatuses: [appointmentStatus],
+    });
+
     // Get user info from headers
     const userId = req.headers['x-user-id'] as string || 'system';
     const userName = req.headers['x-user-name'] as string || 'System';
@@ -402,6 +410,26 @@ router.post('/sync-import', requireSuperadminApproval, async (req: Request, res:
 
     const toCreate = normalizedEmployees.filter((emp) => !existingIds.has(emp.id));
     const toUpdate = normalizedEmployees.filter((emp) => existingIds.has(emp.id));
+
+    // Auto-populate dynamic options from imported employees
+    const officeNamesSet = new Set<string>();
+    const positionsSet = new Set<string>();
+    const statusSet = new Set<string>();
+
+    for (const emp of normalizedEmployees) {
+      if (emp.officeName) officeNamesSet.add(emp.officeName);
+      if (emp.motherUnit) officeNamesSet.add(emp.motherUnit);
+      if (emp.detailedTo) officeNamesSet.add(emp.detailedTo);
+      if (emp.position) positionsSet.add(emp.position);
+      if ((emp as any).designatedPositionFunction) positionsSet.add((emp as any).designatedPositionFunction);
+      if (emp.appointmentStatus) statusSet.add(emp.appointmentStatus);
+    }
+
+    await checkAndAddDropdownOptions({
+      officeNames: Array.from(officeNamesSet),
+      positions: Array.from(positionsSet),
+      appointmentStatuses: Array.from(statusSet),
+    });
 
     // Bulk insert new employees in one query
     if (toCreate.length > 0) {
@@ -547,6 +575,13 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     const employee = await prisma.employee.update({
       where: { id },
       data: updateData,
+    });
+
+    // Auto-populate custom dynamic options
+    await checkAndAddDropdownOptions({
+      officeNames: [updateData.officeName, updateData.motherUnit, updateData.detailedTo],
+      positions: [updateData.position, updateData.designatedPositionFunction],
+      appointmentStatuses: [updateData.appointmentStatus],
     });
 
     // Get user info from headers
@@ -738,6 +773,13 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
         data: updateData,
       });
 
+      // Auto-populate custom dynamic options
+      await checkAndAddDropdownOptions({
+        officeNames: [updateData.officeName, updateData.motherUnit, updateData.detailedTo],
+        positions: [updateData.position, updateData.designatedPositionFunction],
+        appointmentStatuses: [updateData.appointmentStatus],
+      });
+
       // Create audit log with both old and new values so history can be reconstructed
       await createAuditLog(prisma, {
         userId,
@@ -752,6 +794,13 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       res.json(employee);
       return;
     }
+
+    // Auto-populate custom dynamic options
+    await checkAndAddDropdownOptions({
+      officeNames: [updateData.officeName, updateData.motherUnit, updateData.detailedTo],
+      positions: [updateData.position, updateData.designatedPositionFunction],
+      appointmentStatuses: [updateData.appointmentStatus],
+    });
 
     // Create audit log for ID-change path (oldValues not easily available, omit)
     await createAuditLog(prisma, {

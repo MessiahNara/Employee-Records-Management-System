@@ -58,6 +58,11 @@
   max-width: 900px;
 }
 
+.modal--xl {
+  width: 100%;
+  max-width: 1400px;
+}
+
 .modal__header {
   display: flex;
   align-items: center;

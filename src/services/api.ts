@@ -602,7 +602,32 @@ export const documentApi = {
       body: JSON.stringify(data),
     });
   },
-  upload: (file: File, data: { employeeId: string; employeeName: string; category: string; fileName: string; fileSize: number; mimeType: string; aoNumber?: string; aoYear?: string }, userId?: string, userName?: string) => {
+  upload: (
+    file: File,
+    data: {
+      employeeId: string;
+      employeeName: string;
+      category: string;
+      fileName: string;
+      fileSize: number;
+      mimeType: string;
+      aoNumber?: string;
+      aoYear?: string;
+      aoType?: string;
+      detailedTo?: string;
+      detailedDivision?: string;
+      detailedFunction?: string;
+      detailedDate?: string;
+      designatedPositionFunction?: string;
+      designatedOrderFrom?: string;
+      designatedOrderTo?: string;
+      appointmentFrom?: string;
+      appointmentTo?: string;
+      autoRename?: boolean;
+    },
+    userId?: string,
+    userName?: string
+  ) => {
     const formData = new FormData();
     // Fields must come before the file so multer can read them in destination/filename callbacks
     formData.append('employeeId', data.employeeId);
@@ -613,6 +638,17 @@ export const documentApi = {
     formData.append('mimeType', data.mimeType);
     if (data.aoNumber) formData.append('aoNumber', data.aoNumber);
     if (data.aoYear) formData.append('aoYear', data.aoYear);
+    if (data.aoType) formData.append('aoType', data.aoType);
+    if (data.detailedTo) formData.append('detailedTo', data.detailedTo);
+    if (data.detailedDivision) formData.append('detailedDivision', data.detailedDivision);
+    if (data.detailedFunction) formData.append('detailedFunction', data.detailedFunction);
+    if (data.detailedDate) formData.append('detailedDate', data.detailedDate);
+    if (data.designatedPositionFunction) formData.append('designatedPositionFunction', data.designatedPositionFunction);
+    if (data.designatedOrderFrom) formData.append('designatedOrderFrom', data.designatedOrderFrom);
+    if (data.designatedOrderTo) formData.append('designatedOrderTo', data.designatedOrderTo);
+    if (data.appointmentFrom) formData.append('appointmentFrom', data.appointmentFrom);
+    if (data.appointmentTo) formData.append('appointmentTo', data.appointmentTo);
+    if (data.autoRename !== undefined) formData.append('autoRename', String(data.autoRename));
     formData.append('file', file);
 
     const headers: Record<string, string> = {};
@@ -691,21 +727,21 @@ export const auditApi = {
 
 // System Settings API
 export const systemSettingsApi = {
-  get: () => apiRequest<{ idleTimeout: number | null; appointmentStatuses: string[]; officeNames: string[]; positions: string[] }>('/system-settings'),
-  update: (idleTimeout: number | null, userRole: string) => 
-    apiRequest<{ idleTimeout: number | null; message: string }>('/system-settings', {
+  get: () => apiRequest<{ idleTimeout: number | null; autoRename: boolean; appointmentStatuses: string[]; officeNames: string[]; positions: string[]; aoYears?: string[]; reasonsForSeparation?: string[] }>('/system-settings'),
+  update: (data: { idleTimeout?: number | null; autoRename?: boolean }, userRole: string) => 
+    apiRequest<{ idleTimeout: number | null; autoRename: boolean; message: string }>('/system-settings', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'X-User-Role': userRole,
       },
-      body: JSON.stringify({ idleTimeout }),
+      body: JSON.stringify(data),
     }),
   updateDropdownOptions: (
-    options: { appointmentStatuses?: string[]; officeNames?: string[]; positions?: string[] },
+    options: { appointmentStatuses?: string[]; officeNames?: string[]; positions?: string[]; aoYears?: string[]; reasonsForSeparation?: string[] },
     userRole: string
   ) =>
-    apiRequest<{ appointmentStatuses: string[]; officeNames: string[]; positions: string[]; message: string }>(
+    apiRequest<{ appointmentStatuses: string[]; officeNames: string[]; positions: string[]; aoYears: string[]; reasonsForSeparation: string[]; message: string }>(
       '/system-settings/dropdown-options',
       {
         method: 'PUT',
@@ -723,7 +759,8 @@ export const approvalApi = {
   getPending: () => apiRequest<any[]>('/approvals?status=pending'),
   getAll: () => apiRequest<any[]>('/approvals?status=all'),
   getPendingCount: () => apiRequest<{ count: number }>('/approvals/pending-count'),
-  submit: (data: {
+  getMyRequests: (userId: string) => apiRequest<any[]>(`/approvals/my-requests?userId=${encodeURIComponent(userId)}`),
+  submit: async (data: {
     requestedBy: string;
     requestedByName: string;
     action: string;
@@ -731,25 +768,46 @@ export const approvalApi = {
     entityId: string;
     entityName?: string;
     payload: any;
-  }) => apiRequest<any>('/approvals', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  }),
-  approve: (id: string, credentials: { username: string; password: string }) =>
-    apiRequest<any>(`/approvals/${id}/approve`, {
+  }) => {
+    const res = await apiRequest<any>('/approvals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('approvalsUpdated'));
+    }
+    return res;
+  },
+  approve: async (id: string, credentials: { username: string; password: string }) => {
+    const res = await apiRequest<any>(`/approvals/${id}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials),
-    }),
-  reject: (id: string, reason?: string) =>
-    apiRequest<any>(`/approvals/${id}/reject`, {
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('approvalsUpdated'));
+    }
+    return res;
+  },
+  reject: async (id: string, reason?: string) => {
+    const res = await apiRequest<any>(`/approvals/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
-    }),
-  remove: (id: string) =>
-    apiRequest<any>(`/approvals/${id}`, { method: 'DELETE' }),
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('approvalsUpdated'));
+    }
+    return res;
+  },
+  remove: async (id: string) => {
+    const res = await apiRequest<any>(`/approvals/${id}`, { method: 'DELETE' });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('approvalsUpdated'));
+    }
+    return res;
+  },
 };
 
 // Health check

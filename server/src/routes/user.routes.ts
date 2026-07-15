@@ -4,6 +4,7 @@ import prisma from '../lib/prisma';
 import { uploadProfilePicture } from '../middleware/upload';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { issueSuperadminApprovalToken } from '../lib/superadminApproval';
+import { createAuditLog, getUserName } from '../utils/auditHelper';
 import path from 'path';
 import fs from 'fs';
 
@@ -125,6 +126,18 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    // Audit log: user created
+    const actorId = req.headers['x-user-id'] as string || 'system';
+    const actorName = req.headers['x-user-name'] as string || 'System';
+    await createAuditLog(prisma, {
+      userId: actorId,
+      userName: actorName,
+      action: 'create',
+      entity: 'user',
+      entityId: user.id,
+      entityName: getUserName(user),
+    });
+
     res.status(201).json(user);
   } catch (error) {
     console.error('Error creating user:', error);
@@ -137,6 +150,16 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
   try {
     const { id } = req.params;
     const { username, firstName, lastName, role, password } = req.body;
+
+    // Snapshot old values for audit metadata
+    const oldUser = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, firstName: true, lastName: true, role: true },
+    });
+
+    if (!oldUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     const updateData: any = {};
     if (username) updateData.username = username;
@@ -155,6 +178,34 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
         lastName: true,
         role: true,
         updatedAt: true,
+      },
+    });
+
+    // Audit log: user updated
+    const actorId = req.headers['x-user-id'] as string || 'system';
+    const actorName = req.headers['x-user-name'] as string || 'System';
+    const authorizingUserName = req.headers['x-authorizing-user-name'] as string || actorName;
+    const changedFields = Object.keys(updateData).filter(f => f !== 'password');
+    const oldValues: any = {};
+    const newValues: any = {};
+    for (const field of changedFields) {
+      oldValues[field] = (oldUser as any)[field] ?? null;
+      newValues[field] = (user as any)[field] ?? null;
+    }
+    if (password) changedFields.push('password'); // include in log without exposing value
+
+    await createAuditLog(prisma, {
+      userId: actorId,
+      userName: actorName,
+      action: 'update',
+      entity: 'user',
+      entityId: user.id,
+      entityName: getUserName(user),
+      details: {
+        changedFields,
+        values: newValues,
+        oldValues,
+        authorizingUserName,
       },
     });
 
@@ -224,15 +275,22 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       updateData.password = await bcrypt.hash(updateData.password, SALT_ROUNDS);
     }
 
+    // Shared audit context
+    const actorId = req.headers['x-user-id'] as string || 'system';
+    const actorName = req.headers['x-user-name'] as string || 'System';
+    const authorizingUserName = req.headers['x-authorizing-user-name'] as string || actorName;
+
     // If ID is being updated, we need to handle it specially
     if (updateData.id && updateData.id !== id) {
       // Create new user with new ID and delete old one (within transaction)
+      let oldUserSnapshot: any = null;
       const result = await prisma.$transaction(async (tx) => {
         // Get old user data
         const oldUser = await tx.user.findUnique({ where: { id } });
         if (!oldUser) {
           throw new Error('User not found');
         }
+        oldUserSnapshot = oldUser;
 
         // Delete old user first to avoid unique constraint violation
         await tx.user.delete({ where: { id } });
@@ -264,9 +322,44 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
         return newUser;
       });
 
+      // Audit log: user ID changed (and any other updated fields)
+      const changedFields = Object.keys(updateData).filter(f => f !== 'password');
+      const oldValues: any = {};
+      const newValues: any = {};
+      for (const field of changedFields) {
+        oldValues[field] = oldUserSnapshot ? (oldUserSnapshot as any)[field] ?? null : null;
+        newValues[field] = (result as any)[field] ?? null;
+      }
+      if (updateData.password) changedFields.push('password');
+
+      await createAuditLog(prisma, {
+        userId: actorId,
+        userName: actorName,
+        action: 'update',
+        entity: 'user',
+        entityId: result.id,
+        entityName: getUserName(result),
+        details: {
+          changedFields,
+          values: newValues,
+          oldValues,
+          authorizingUserName,
+          previousId: id,
+        },
+      });
+
       res.json(result);
     } else {
-      // Normal update without ID change
+      // Normal update without ID change — snapshot old values first
+      const oldUser = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, firstName: true, lastName: true, role: true, permissions: true },
+      });
+
+      if (!oldUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
       const user = await prisma.user.update({
         where: { id },
         data: updateData,
@@ -275,10 +368,38 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
           username: true,
           firstName: true,
           lastName: true,
-          profilePicture: true, // Include profile picture
+          profilePicture: true,
           role: true,
           permissions: true,
           updatedAt: true,
+        },
+      });
+
+      // Determine whether this is a permissions-only change
+      const changedFields = Object.keys(updateData).filter(f => f !== 'password');
+      const isPermissionsOnly = changedFields.length === 1 && changedFields[0] === 'permissions';
+      const auditAction = isPermissionsOnly ? 'permission_change' : 'update';
+
+      const oldValues: any = {};
+      const newValues: any = {};
+      for (const field of changedFields) {
+        oldValues[field] = (oldUser as any)[field] ?? null;
+        newValues[field] = (user as any)[field] ?? null;
+      }
+      if (updateData.password) changedFields.push('password');
+
+      await createAuditLog(prisma, {
+        userId: actorId,
+        userName: actorName,
+        action: auditAction,
+        entity: 'user',
+        entityId: user.id,
+        entityName: getUserName(user),
+        details: {
+          changedFields,
+          values: newValues,
+          oldValues,
+          authorizingUserName,
         },
       });
 
@@ -294,6 +415,32 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
 router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // Fetch user before deleting so we can include their name in the audit log
+    const userToDelete = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, firstName: true, lastName: true, role: true },
+    });
+
+    if (!userToDelete) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get actor info from headers
+    const actorId = req.headers['x-user-id'] as string || 'system';
+    const actorName = req.headers['x-user-name'] as string || 'System';
+    const authorizingUserName = req.headers['x-authorizing-user-name'] as string || actorName;
+
+    // Audit log BEFORE deletion so the record still exists if needed
+    await createAuditLog(prisma, {
+      userId: actorId,
+      userName: actorName,
+      action: 'delete',
+      entity: 'user',
+      entityId: id,
+      entityName: getUserName(userToDelete),
+      details: { authorizingUserName },
+    });
 
     await prisma.user.delete({
       where: { id },
@@ -528,6 +675,18 @@ router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'
       },
     });
 
+    // Audit log: profile picture uploaded
+    const actorId = req.headers['x-user-id'] as string || 'system';
+    const actorName = req.headers['x-user-name'] as string || 'System';
+    await createAuditLog(prisma, {
+      userId: actorId,
+      userName: actorName,
+      action: 'profile_picture_upload',
+      entity: 'user',
+      entityId: updatedUser.id,
+      entityName: getUserName(updatedUser),
+    });
+
     res.json({ profilePicture: updatedUser.profilePicture });
   } catch (error: any) {
     console.error('Error uploading profile picture:', error);
@@ -568,6 +727,22 @@ router.delete('/:id/profile-picture', async (req: Request, res: Response) => {
     await prisma.user.update({
       where: { id },
       data: { profilePicture: null },
+    });
+
+    // Audit log: profile picture removed
+    const userRecord = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, firstName: true, lastName: true },
+    });
+    const actorId = req.headers['x-user-id'] as string || 'system';
+    const actorName = req.headers['x-user-name'] as string || 'System';
+    await createAuditLog(prisma, {
+      userId: actorId,
+      userName: actorName,
+      action: 'profile_picture_remove',
+      entity: 'user',
+      entityId: id,
+      entityName: getUserName(userRecord),
     });
 
     res.json({ message: 'Profile picture removed successfully' });

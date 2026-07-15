@@ -7,6 +7,7 @@ import Users from './pages/Users';
 import AuditLogs from './pages/AuditLogs';
 import Settings from './pages/Settings';
 import Approvals from './pages/Approvals';
+import Requests from './pages/Requests';
 import Login from './pages/Login';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
@@ -61,6 +62,14 @@ function App() {
               />
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="settings" element={<Settings />} />
+              <Route
+                path="requests"
+                element={
+                  <RoleProtectedRoute allowedRoles={['staff', 'admin']}>
+                    <Requests />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route
                 path="approvals"
                 element={

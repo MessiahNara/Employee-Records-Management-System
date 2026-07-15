@@ -25,13 +25,41 @@ export function generateAuditDescription(data: AuditLogData): string {
     case 'create':
       return `${user} added a new ${entityType}: ${name}`;
     
-    case 'update':
+    case 'update': {
+      // Special handling for appointment-related field changes on employees
+      if (entity.toLowerCase() === 'employee' && details?.changedFields) {
+        const appointmentFields = [
+          'appointmentStatus', 'appointmentFrom', 'appointmentTo', 'expirationDate',
+          'aoNumber', 'aoYear', 'aoType',
+        ];
+        const changedFields: string[] = details.changedFields;
+        const appointmentChanges = changedFields.filter((f: string) => appointmentFields.includes(f));
+        const otherChanges = changedFields.filter((f: string) => !appointmentFields.includes(f));
+
+        if (appointmentChanges.length > 0 && otherChanges.length === 0) {
+          // Pure appointment update
+          if (appointmentChanges.length === 1) {
+            const field = formatFieldName(appointmentChanges[0]);
+            const value = details.values?.[appointmentChanges[0]];
+            if (value !== undefined && value !== null && value !== '') {
+              return `${user} updated appointment ${field} of ${name} to ${value}`;
+            }
+            return `${user} updated appointment ${field} of ${name}`;
+          }
+          return `${user} updated appointment details of ${name} (${appointmentChanges.map(formatFieldName).join(', ')})`;
+        }
+
+        if (appointmentChanges.length > 0 && otherChanges.length > 0) {
+          return `${user} updated appointment and other details of ${name} (${changedFields.length} fields)`;
+        }
+      }
+
       if (details?.changedFields) {
-        const fields = details.changedFields;
+        const fields: string[] = details.changedFields;
         if (fields.length === 1) {
           const field = formatFieldName(fields[0]);
           const value = details.values?.[fields[0]];
-          if (value !== undefined && value !== null) {
+          if (value !== undefined && value !== null && value !== '') {
             return `${user} updated ${field} of ${name} to ${value}`;
           }
           return `${user} updated ${field} of ${name}`;
@@ -40,6 +68,7 @@ export function generateAuditDescription(data: AuditLogData): string {
         }
       }
       return `${user} updated ${entityType}: ${name}`;
+    }
     
     case 'delete':
       // For documents, show employee name if available
@@ -49,8 +78,8 @@ export function generateAuditDescription(data: AuditLogData): string {
           : '';
         return `${user} deleted ${entityType} from ${details.employeeName}: ${name}${authInfo}`;
       }
-      // For employees, show authorizing user if available
-      if (entity.toLowerCase() === 'employee' && details?.authorizingUserName) {
+      // For employees and users, show authorizing user if available
+      if ((entity.toLowerCase() === 'employee' || entity.toLowerCase() === 'user') && details?.authorizingUserName) {
         const authInfo = details.authorizingUserName !== user 
           ? ` (Authorized by: ${details.authorizingUserName})` 
           : '';
@@ -74,6 +103,19 @@ export function generateAuditDescription(data: AuditLogData): string {
     case 'download': {
       const employeeNameDownload = details?.employeeName || name;
       return `${user} downloaded a document from ${employeeNameDownload}: ${name}`;
+    }
+
+    case 'profile_picture_upload':
+      return `${user} uploaded a profile picture for ${entityType}: ${name}`;
+
+    case 'profile_picture_remove':
+      return `${user} removed the profile picture of ${entityType}: ${name}`;
+
+    case 'permission_change': {
+      const authInfo = details?.authorizingUserName && details.authorizingUserName !== user
+        ? ` (Authorized by: ${details.authorizingUserName})`
+        : '';
+      return `${user} updated permissions for user: ${name}${authInfo}`;
     }
     
     default:

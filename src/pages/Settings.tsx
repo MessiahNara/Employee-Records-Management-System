@@ -57,6 +57,10 @@ function Settings() {
   const [newOfficeName, setNewOfficeName] = useState('');
   const [newPosition, setNewPosition] = useState('');
   const [isSavingDropdowns, setIsSavingDropdowns] = useState(false);
+  const [aoYears, setAoYears] = useState<string[]>([]);
+  const [newAoYear, setNewAoYear] = useState('');
+  const [reasonsForSeparation, setReasonsForSeparation] = useState<string[]>([]);
+  const [newReasonForSeparation, setNewReasonForSeparation] = useState('');
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof ProfileFormData, string>>>({});
 
   // Bulk profile picture upload state
@@ -106,6 +110,8 @@ function Settings() {
       setAppointmentStatuses(settings.appointmentStatuses ?? []);
       setOfficeNames(settings.officeNames ?? []);
       setPositions(settings.positions ?? []);
+      setAoYears(settings.aoYears ?? []);
+      setReasonsForSeparation(settings.reasonsForSeparation ?? []);
     } catch {
       // non-fatal
     }
@@ -127,7 +133,7 @@ function Settings() {
     setIsSavingDropdowns(true);
     try {
       await api.systemSettings.updateDropdownOptions(
-        { appointmentStatuses, officeNames, positions },
+        { appointmentStatuses, officeNames, positions, aoYears, reasonsForSeparation },
         currentUser?.role || ''
       );
       showToast('Dropdown options saved successfully!', 'success');
@@ -453,7 +459,7 @@ function Settings() {
 
     try {
       // Update global system setting
-      await api.systemSettings.update(timeoutValue, currentUser?.role || '');
+      await api.systemSettings.update({ idleTimeout: timeoutValue }, currentUser?.role || '');
       
       // Refresh idle timeout in context
       await refreshIdleTimeout();
@@ -1029,6 +1035,60 @@ function Settings() {
                           </span>
                         ))}
                         {positions.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Series Years */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Series Years</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new series year..."
+                          value={newAoYear}
+                          onChange={(e) => setNewAoYear(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(aoYears, setAoYears, newAoYear, setNewAoYear))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(aoYears, setAoYears, newAoYear, setNewAoYear)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {aoYears.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(aoYears, setAoYears, item)}>×</button>
+                          </span>
+                        ))}
+                        {aoYears.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Reasons for Separation */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Reasons for Separation</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new reason..."
+                          value={newReasonForSeparation}
+                          onChange={(e) => setNewReasonForSeparation(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(reasonsForSeparation, setReasonsForSeparation, newReasonForSeparation, setNewReasonForSeparation))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(reasonsForSeparation, setReasonsForSeparation, newReasonForSeparation, setNewReasonForSeparation)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {reasonsForSeparation.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(reasonsForSeparation, setReasonsForSeparation, item)}>×</button>
+                          </span>
+                        ))}
+                        {reasonsForSeparation.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
                       </div>
                     </div>
 

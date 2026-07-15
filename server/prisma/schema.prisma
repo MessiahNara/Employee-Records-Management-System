@@ -34,6 +34,9 @@ model SystemSetting {
   appointmentStatuses Json?    // Custom appointment status options
   officeNames         Json?    // Custom office/hospital name options
   positions           Json?    // Custom position/function options
+  aoYears             Json?    // Custom series year options
+  reasonsForSeparation Json?   // Custom reason for separation options
+  autoRename          Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -91,6 +94,22 @@ model Document {
   mimeType    String   @default("application/pdf")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  uploadedBy                  String?   // Name of user who uploaded the document
+
+  // New AO fields
+  aoNumber                    String?
+  aoYear                      String?
+  aoType                      String?
+  detailedTo                  String?
+  detailedDivision            String?
+  detailedFunction            String?
+  detailedDate                DateTime?
+  designatedPositionFunction  String?
+  designatedOrderFrom         DateTime?
+  designatedOrderTo           DateTime?
+  appointmentFrom             DateTime?
+  appointmentTo               DateTime?
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 

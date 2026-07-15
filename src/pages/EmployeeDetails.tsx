@@ -14,6 +14,7 @@ import { Employee } from '../types/employee';
 import { formatDateDDMMYYYY, formatDateLong, formatDateMDY } from '../utils/dateUtils';
 import api from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
+import { useToast } from '../contexts/ToastContext';
 import './EmployeeDetails.css';
 
 function EmployeeDetails() {
@@ -23,13 +24,57 @@ function EmployeeDetails() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [showRenewalAlert, setShowRenewalAlert] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | undefined>(undefined);
   const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
   const [showChangePhotoConfirm, setShowChangePhotoConfirm] = useState(false);
   const [show201Modal, setShow201Modal] = useState(false);
   const [show201History, setShow201History] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const { showToast } = useToast();
+
+  const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const [isNearingExpiration, setIsNearingExpiration] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
+  const [remainingDaysCount, setRemainingDaysCount] = useState(0);
+  const [hasActionedRenewal, setHasActionedRenewal] = useState(false);
+
+  // Yes (renewal form) workflow
+  const [showRenewalForm, setShowRenewalForm] = useState(false);
+  const [renewalForm, setRenewalForm] = useState({
+    appointmentStatus: '',
+    appointmentFrom: '',
+    appointmentTo: '',
+  });
+  const [renewalErrors, setRenewalErrors] = useState<Record<string, string>>({});
+  const [isSubmittingRenewal, setIsSubmittingRenewal] = useState(false);
+
+  // No (decline/separation form) workflow
+  const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [declineForm, setDeclineForm] = useState({
+    dateOfSeparation: new Date().toISOString().split('T')[0],
+    reasonForSeparation: '',
+  });
+  const [declineErrors, setDeclineErrors] = useState<Record<string, string>>({});
+
+  // Dynamic dropdown options
+  const [dropdownOptions, setDropdownOptions] = useState<{
+    appointmentStatuses: string[];
+    officeNames: string[];
+    positions: string[];
+    reasonsForSeparation: string[];
+  }>({ appointmentStatuses: [], officeNames: [], positions: [], reasonsForSeparation: [] });
+
+  useEffect(() => {
+    api.systemSettings.get().then((s) => {
+      setDropdownOptions({
+        appointmentStatuses: s.appointmentStatuses ?? [],
+        officeNames: s.officeNames ?? [],
+        positions: s.positions ?? [],
+        reasonsForSeparation: s.reasonsForSeparation ?? [],
+      });
+    }).catch(() => { });
+  }, []);
 
   const currentUser = getAuthState();
   const userRole = currentUser?.role || 'viewer';
@@ -53,8 +98,10 @@ function EmployeeDetails() {
   }, [location.search, employee]);
 
   useEffect(() => {
-    if (!employee?.appointmentTo || employee.status !== 'Active') {
-      setShowRenewalAlert(false);
+    if (!employee || employee.status !== 'Active' || !employee.appointmentTo || hasActionedRenewal) {
+      setShowRenewalModal(false);
+      setIsNearingExpiration(false);
+      setIsExpired(false);
       return;
     }
 
@@ -67,9 +114,22 @@ function EmployeeDetails() {
     const millisecondsPerDay = 1000 * 60 * 60 * 24;
     const remainingDays = Math.ceil((appointmentToDate.getTime() - today.getTime()) / millisecondsPerDay);
 
-    // Show the renewal alert only for appointments due within 30 days (not overdue).
-    setShowRenewalAlert(remainingDays >= 0 && remainingDays <= 30);
-  }, [employee]);
+    if (remainingDays < 0) {
+      setIsExpired(true);
+      setIsNearingExpiration(false);
+      setRemainingDaysCount(Math.abs(remainingDays));
+      setShowRenewalModal(true);
+    } else if (remainingDays <= 30) {
+      setIsNearingExpiration(true);
+      setIsExpired(false);
+      setRemainingDaysCount(remainingDays);
+      setShowRenewalModal(true);
+    } else {
+      setShowRenewalModal(false);
+      setIsNearingExpiration(false);
+      setIsExpired(false);
+    }
+  }, [employee, hasActionedRenewal]);
 
   const fetchEmployee = async (employeeId: string) => {
     try {
@@ -83,6 +143,132 @@ function EmployeeDetails() {
       setNotFound(true);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeclineRenewal = async () => {
+    if (!employee) return;
+    const errors: Record<string, string> = {};
+    if (!declineForm.dateOfSeparation) errors.dateOfSeparation = 'Date of Separation is required';
+    if (!declineForm.reasonForSeparation) errors.reasonForSeparation = 'Reason for Separation is required';
+
+    if (Object.keys(errors).length > 0) {
+      setDeclineErrors(errors);
+      return;
+    }
+
+    setIsSubmittingRenewal(true);
+    try {
+      const changedFields: any = {
+        status: { from: employee.status, to: 'Inactive' },
+        dateOfSeparation: { 
+          from: employee.dateOfSeparation ? new Date(employee.dateOfSeparation).toISOString().split('T')[0] : null, 
+          to: declineForm.dateOfSeparation 
+        },
+        reasonOfSeparation: { 
+          from: employee.reasonForSeparation, 
+          to: declineForm.reasonForSeparation 
+        },
+      };
+
+      const empName = `${employee.lastName}, ${employee.firstName}`;
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'update_employee',
+        entityType: 'employee',
+        entityId: employee.id,
+        entityName: empName,
+        payload: changedFields,
+      });
+
+      setHasActionedRenewal(true);
+      setShowRenewalModal(false);
+      showToast('⚠️ Status update submitted to approval queue.', 'info');
+    } catch (err: any) {
+      console.error('Error submitting decline renewal:', err);
+      showToast(err.message || 'Failed to submit status update request.', 'error');
+    } finally {
+      setIsSubmittingRenewal(false);
+    }
+  };
+
+  const handleDeclineFormChange = (key: string, val: string) => {
+    setDeclineForm(prev => ({ ...prev, [key]: val }));
+    if (declineErrors[key]) {
+      setDeclineErrors(prev => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+    }
+  };
+
+  const handleRenewalFormChange = (key: string, val: string) => {
+    setRenewalForm(prev => ({ ...prev, [key]: val }));
+    if (renewalErrors[key]) {
+      setRenewalErrors(prev => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+    }
+  };
+
+  const STATUSES_REQUIRING_DATES = ['casual', 'consultant', 'contract of service', 'contractual', 'job order'];
+
+  const renewalStatusRequiresDates = STATUSES_REQUIRING_DATES.includes(
+    renewalForm.appointmentStatus.toLowerCase().trim()
+  );
+
+  const handleSubmitRenewal = async () => {
+    if (!employee) return;
+    const errors: Record<string, string> = {};
+    if (!renewalForm.appointmentStatus) errors.appointmentStatus = 'Appointment Status is required';
+    if (renewalStatusRequiresDates) {
+      if (!renewalForm.appointmentFrom) errors.appointmentFrom = 'Appointment From is required';
+      if (!renewalForm.appointmentTo) errors.appointmentTo = 'Appointment To is required';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setRenewalErrors(errors);
+      return;
+    }
+
+    setIsSubmittingRenewal(true);
+    try {
+      const changedFields: any = {
+        appointmentStatus: { from: employee.appointmentStatus, to: renewalForm.appointmentStatus },
+        appointmentFrom: { 
+          from: employee.appointmentFrom ? new Date(employee.appointmentFrom).toISOString().split('T')[0] : null, 
+          to: renewalStatusRequiresDates ? renewalForm.appointmentFrom : null,
+        },
+        appointmentTo: { 
+          from: employee.appointmentTo ? new Date(employee.appointmentTo).toISOString().split('T')[0] : null, 
+          to: renewalStatusRequiresDates ? renewalForm.appointmentTo : null,
+        },
+        status: { from: employee.status, to: 'Active' },
+      };
+
+      const empName = `${employee.lastName}, ${employee.firstName}`;
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'update_employee',
+        entityType: 'employee',
+        entityId: employee.id,
+        entityName: empName,
+        payload: changedFields,
+      });
+
+      setHasActionedRenewal(true);
+      setShowRenewalModal(false);
+      showToast('✅ Renewal update submitted to approval queue.', 'success');
+    } catch (err: any) {
+      console.error('Error submitting renewal request:', err);
+      showToast(err.message || 'Failed to submit renewal request.', 'error');
+    } finally {
+      setIsSubmittingRenewal(false);
     }
   };
 
@@ -442,14 +628,256 @@ function EmployeeDetails() {
       </div>
 
       <Modal
-        isOpen={showRenewalAlert}
-        onClose={() => setShowRenewalAlert(false)}
+        isOpen={showRenewalModal}
+        onClose={() => {
+          setHasActionedRenewal(true);
+          setShowRenewalModal(false);
+          setShowRenewalForm(false);
+          setShowDeclineForm(false);
+        }}
         title="Appointment Notice"
-        size="sm"
+        size="md"
       >
-        <p style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.125rem', margin: 0 }}>
-          KAILANGAN NG IRENEW!!!
-        </p>
+        <div style={{ padding: '0.5rem 0' }}>
+          {!showRenewalForm && !showDeclineForm ? (
+            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{
+                fontSize: '3.5rem',
+                marginBottom: '1rem',
+                color: isExpired ? 'var(--color-danger)' : 'var(--color-warning, #f59e0b)',
+                lineHeight: 1
+              }}>
+                ⚠️
+              </div>
+              <h3 style={{
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                marginBottom: '0.75rem',
+                color: 'var(--text-primary)'
+              }}>
+                {isExpired ? 'Appointment Expired' : 'Appointment Expiration Warning'}
+              </h3>
+              <p style={{
+                fontSize: '1rem',
+                color: 'var(--text-secondary)',
+                lineHeight: '1.6',
+                marginBottom: '1.5rem',
+                maxWidth: '420px'
+              }}>
+                {isExpired ? (
+                  <>
+                    The active appointment for <strong>{employee.firstName} {employee.lastName}</strong> expired <strong>{remainingDaysCount}</strong> day(s) ago on <strong>{formatDateLong(employee.appointmentTo)}</strong>.
+                  </>
+                ) : (
+                  <>
+                    The active appointment for <strong>{employee.firstName} {employee.lastName}</strong> is nearing expiration and will end in <strong>{remainingDaysCount}</strong> day(s) on <strong>{formatDateLong(employee.appointmentTo)}</strong>.
+                  </>
+                )}
+              </p>
+              <div style={{
+                borderTop: '1px solid var(--border-color)',
+                width: '100%',
+                paddingTop: '1.25rem',
+                marginTop: '0.5rem'
+              }}>
+                <p style={{
+                  fontWeight: 600,
+                  fontSize: '0.9375rem',
+                  marginBottom: '1.25rem',
+                  color: 'var(--text-primary)'
+                }}>
+                  Do you want to renew this employee's appointment?
+                </p>
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                  <Button 
+                    variant="primary" 
+                    onClick={() => setShowRenewalForm(true)}
+                    style={{ minWidth: '130px', padding: '0.625rem 1.25rem' }}
+                  >
+                    Yes (Renew)
+                  </Button>
+                  <Button 
+                    variant="danger" 
+                    onClick={() => setShowDeclineForm(true)}
+                    style={{ minWidth: '150px', padding: '0.625rem 1.25rem' }}
+                  >
+                    No (Set Inactive)
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : showRenewalForm ? (
+            <div style={{ padding: '1rem 1.5rem' }}>
+              <h3 style={{ 
+                fontSize: '1.25rem', 
+                fontWeight: 700, 
+                marginBottom: '1.5rem', 
+                textAlign: 'center',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '0.75rem',
+                color: 'var(--text-primary)'
+              }}>
+                Renew Appointment for {employee.firstName} {employee.lastName}
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Appointment Status <span style={{ color: 'var(--color-danger)' }}>*</span>
+                  </label>
+                  <select
+                    className="dashboard__form-select"
+                    value={renewalForm.appointmentStatus}
+                    onChange={(e) => handleRenewalFormChange('appointmentStatus', e.target.value)}
+                    style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9375rem' }}
+                  >
+                    <option value="">Select appointment status</option>
+                    {dropdownOptions.appointmentStatuses.map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                  {renewalErrors.appointmentStatus && (
+                    <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>
+                      ⚠️ {renewalErrors.appointmentStatus}
+                    </span>
+                  )}
+                </div>
+
+                {renewalStatusRequiresDates && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Appointment From <span style={{ color: 'var(--color-danger)' }}>*</span>
+                      </label>
+                      <input
+                        type="date"
+                        className="dashboard__form-input"
+                        value={renewalForm.appointmentFrom}
+                        onChange={(e) => handleRenewalFormChange('appointmentFrom', e.target.value)}
+                        style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: '0.9375rem' }}
+                      />
+                      {renewalErrors.appointmentFrom && (
+                        <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>
+                          ⚠️ {renewalErrors.appointmentFrom}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Appointment To <span style={{ color: 'var(--color-danger)' }}>*</span>
+                      </label>
+                      <input
+                        type="date"
+                        className="dashboard__form-input"
+                        value={renewalForm.appointmentTo}
+                        onChange={(e) => handleRenewalFormChange('appointmentTo', e.target.value)}
+                        style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: '0.9375rem' }}
+                      />
+                      {renewalErrors.appointmentTo && (
+                        <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>
+                          ⚠️ {renewalErrors.appointmentTo}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowRenewalForm(false)}
+                  style={{ padding: '0.625rem 1.25rem' }}
+                >
+                  Back
+                </Button>
+                <Button 
+                  variant="primary" 
+                  disabled={isSubmittingRenewal} 
+                  onClick={handleSubmitRenewal}
+                  style={{ padding: '0.625rem 1.25rem' }}
+                >
+                  {isSubmittingRenewal ? 'Submitting...' : 'Submit for Approval'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: '1rem 1.5rem' }}>
+              <h3 style={{ 
+                fontSize: '1.25rem', 
+                fontWeight: 700, 
+                marginBottom: '1.5rem', 
+                textAlign: 'center',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '0.75rem',
+                color: 'var(--text-primary)'
+              }}>
+                Set Employee Inactive: {employee.firstName} {employee.lastName}
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Date of Separation <span style={{ color: 'var(--color-danger)' }}>*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="dashboard__form-input"
+                    value={declineForm.dateOfSeparation}
+                    onChange={(e) => handleDeclineFormChange('dateOfSeparation', e.target.value)}
+                    style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: '0.9375rem' }}
+                  />
+                  {declineErrors.dateOfSeparation && (
+                    <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>
+                      ⚠️ {declineErrors.dateOfSeparation}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Reason for Separation <span style={{ color: 'var(--color-danger)' }}>*</span>
+                  </label>
+                  <select
+                    className="dashboard__form-select"
+                    value={declineForm.reasonForSeparation}
+                    onChange={(e) => handleDeclineFormChange('reasonForSeparation', e.target.value)}
+                    style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9375rem' }}
+                  >
+                    <option value="">Select reason for separation</option>
+                    {dropdownOptions.reasonsForSeparation.map((reason) => (
+                      <option key={reason} value={reason}>{reason}</option>
+                    ))}
+                  </select>
+                  {declineErrors.reasonForSeparation && (
+                    <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>
+                      ⚠️ {declineErrors.reasonForSeparation}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowDeclineForm(false)}
+                  style={{ padding: '0.625rem 1.25rem' }}
+                >
+                  Back
+                </Button>
+                <Button 
+                  variant="danger" 
+                  disabled={isSubmittingRenewal} 
+                  onClick={handleDeclineRenewal}
+                  style={{ padding: '0.625rem 1.25rem' }}
+                >
+                  {isSubmittingRenewal ? 'Submitting...' : 'Submit for Approval'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
 
       <Modal

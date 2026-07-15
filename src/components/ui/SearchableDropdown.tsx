@@ -9,6 +9,7 @@ interface SearchableDropdownProps {
   emptyMessage?: string;
   className?: string;
   id?: string;
+  disabled?: boolean;
 }
 
 export default function SearchableDropdown({
@@ -19,6 +20,7 @@ export default function SearchableDropdown({
   emptyMessage = 'No results found',
   className = '',
   id,
+  disabled = false,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState(value);
@@ -118,20 +120,41 @@ export default function SearchableDropdown({
     }
   };
 
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSearchTerm('');
+    onChange('');
+    setIsOpen(false);
+    setHighlightedIndex(-1);
+  };
+
   return (
     <div ref={containerRef} className={`searchable-dropdown ${className}`}>
-      <input
-        id={id}
-        type="text"
-        className="searchable-dropdown__input"
-        placeholder={placeholder}
-        value={searchTerm}
-        onChange={handleInputChange}
-        onFocus={() => setIsOpen(true)}
-        onClick={() => setIsOpen(true)}
-        onKeyDown={handleKeyDown}
-        autoComplete="off"
-      />
+      <div className="searchable-dropdown__input-wrapper">
+        <input
+          id={id}
+          type="text"
+          className="searchable-dropdown__input"
+          placeholder={placeholder}
+          value={searchTerm}
+          onChange={handleInputChange}
+          onFocus={() => !disabled && setIsOpen(true)}
+          onClick={() => !disabled && setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+          disabled={disabled}
+        />
+        {searchTerm && !disabled && (
+          <button
+            type="button"
+            className="searchable-dropdown__clear-btn"
+            onClick={handleClear}
+            aria-label="Clear selection"
+          >
+            &times;
+          </button>
+        )}
+      </div>
       {isOpen && (
         <div className="searchable-dropdown__menu">
           {filteredOptions.length > 0 ? (

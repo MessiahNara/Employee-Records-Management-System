@@ -109,10 +109,10 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   // Get selected documents info for bulk delete
   const selectedDocuments = documents.filter(doc => selectedDocumentIds.has(doc.id));
 
-  const handleUpload = async (files: File[], category: DocumentCategory) => {
+  const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any) => {
     try {
       for (let i = 0; i < files.length; i++) {
-        await uploadDocument(files[i], category);
+        await uploadDocument(files[i], category, aoData);
       }
       setActiveCategory(category);
       showToast(
@@ -258,6 +258,8 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           document={selectedDocument}
           pdfData={pdfData}
           canDownloadOrPrint={canDownloadOrPrint}
+          employeeId={employeeId}
+          employeeName={employeeName}
         />
 
       </div>

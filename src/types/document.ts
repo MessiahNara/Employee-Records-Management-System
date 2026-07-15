@@ -14,6 +14,18 @@ export interface EmployeeDocument {
   uploadedAt: string;
   uploadedBy: string;
   fileSize: number; // in KB
+  aoNumber?: string;
+  aoYear?: string;
+  aoType?: string;
+  detailedTo?: string;
+  detailedDivision?: string;
+  detailedFunction?: string;
+  detailedDate?: string;
+  designatedPositionFunction?: string;
+  designatedOrderFrom?: string;
+  designatedOrderTo?: string;
+  appointmentFrom?: string;
+  appointmentTo?: string;
 }
 
 export interface DocumentFolder {

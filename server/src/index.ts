@@ -13,6 +13,7 @@ import systemSettingsRoutes from './routes/systemSettings.routes';
 import file201Routes from './routes/file201.routes';
 import approvalRoutes from './routes/approval.routes';
 import { validateSession } from './middleware/session';
+import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
 
 dotenv.config();
 
@@ -97,6 +98,8 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     console.log(`🚀 Server is running on https://localhost:${PORT}`);
     console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
     console.log(`🔒 Using HTTPS with self-signed certificate`);
+    // Seed existing database values into dynamic dropdown lists on start
+    syncExistingRecordsToDropdownOptions();
   });
 } else {
   console.error('❌ SSL certificates not found!');
@@ -108,3 +111,4 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
 }
 
 export default app;
+// Force nodemon reload after modal print preview and casing fixes

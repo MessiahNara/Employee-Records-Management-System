@@ -1,12 +1,22 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { createAuditLog, getEmployeeName } from '../utils/auditHelper';
+import { checkAndAddDropdownOptions } from '../utils/dropdownOptionsHelper';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { uploadDocumentFile } from '../middleware/upload';
 import fs from 'fs';
 import path from 'path';
 
 const router = Router();
+
+const toNullableDate = (value: any): Date | null => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
 
 // Get all documents
 router.get('/', async (req: Request, res: Response) => {
@@ -144,7 +154,26 @@ router.get('/:id/file', async (req: Request, res: Response) => {
 // Create document (multipart/form-data with actual file)
 router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Response) => {
   try {
-    const { employeeId, category, fileName, fileSize, mimeType, aoNumber, aoYear } = req.body;
+    const {
+      employeeId,
+      category,
+      fileName,
+      fileSize,
+      mimeType,
+      aoNumber,
+      aoYear,
+      aoType,
+      detailedTo,
+      detailedDivision,
+      detailedFunction,
+      detailedDate,
+      designatedPositionFunction,
+      designatedOrderFrom,
+      designatedOrderTo,
+      appointmentFrom,
+      appointmentTo,
+      autoRename
+    } = req.body;
     const uploadedFile = req.file;
 
     console.log('[document] Upload received:', {
@@ -169,7 +198,9 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
     let finalFileName = fileName;
     let finalFilePath = uploadedFile.path;
 
-    if (category === 'Administrative Order') {
+    const isAutoRenameEnabled = autoRename === 'true';
+
+    if (category === 'Administrative Order' && isAutoRenameEnabled) {
       const surname = employee.lastName.trim().toUpperCase();
       const firstName = employee.firstName.trim().toUpperCase();
       const middleInitial = employee.middleName && employee.middleName.trim() !== ''
@@ -207,6 +238,9 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       }
     }
 
+    const userId = req.headers['x-user-id'] as string || 'system';
+    const userName = req.headers['x-user-name'] as string || 'System';
+
     const document = await prisma.document.create({
       data: {
         employeeId,
@@ -215,11 +249,27 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
         filePath: finalFilePath,
         fileSize: parseInt(fileSize) || uploadedFile.size || 0,
         mimeType: mimeType || uploadedFile.mimetype || 'application/pdf',
+        uploadedBy: userName,
+        aoNumber: aoNumber || null,
+        aoYear: aoYear || null,
+        aoType: aoType || null,
+        detailedTo: detailedTo || null,
+        detailedDivision: detailedDivision || null,
+        detailedFunction: detailedFunction || null,
+        detailedDate: toNullableDate(detailedDate),
+        designatedPositionFunction: designatedPositionFunction || null,
+        designatedOrderFrom: toNullableDate(designatedOrderFrom),
+        designatedOrderTo: toNullableDate(designatedOrderTo),
+        appointmentFrom: toNullableDate(appointmentFrom),
+        appointmentTo: toNullableDate(appointmentTo),
       },
     });
 
-    const userId = req.headers['x-user-id'] as string || 'system';
-    const userName = req.headers['x-user-name'] as string || 'System';
+    // Auto-populate custom dynamic options from AO fields
+    await checkAndAddDropdownOptions({
+      officeNames: [detailedTo],
+      positions: [designatedPositionFunction],
+    });
 
     await createAuditLog(prisma, {
       userId,
@@ -227,7 +277,7 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       action: 'upload',
       entity: 'document',
       entityId: document.id,
-      entityName: fileName,
+      entityName: finalFileName,
       details: {
         category,
         employeeName: getEmployeeName(employee),
@@ -301,28 +351,37 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
       where: { id },
     });
 
-    // If it is an Administrative Order document, always clear the employee's AO fields
+    // If it is an Administrative Order document, clear employee's active AO fields ONLY if they match this document's info,
+    // or if the deleted document has no specific AO info (legacy).
     if (document.category === 'Administrative Order') {
-      try {
-        await prisma.employee.update({
-          where: { id: document.employeeId },
-          data: {
-            aoNumber: null,
-            aoYear: null,
-            aoType: null,
-            detailedTo: null,
-            detailedDivision: null,
-            detailedFunction: null,
-            detailedDate: null,
-            designatedPositionFunction: null,
-            designatedOrderFrom: null,
-            designatedOrderTo: null,
-            isDetailed: false,
-          },
-        });
-        console.log(`Cleared AO fields for employee ${document.employeeId} after Administrative Order document deletion.`);
-      } catch (empUpdateError) {
-        console.error(`Error clearing AO fields for employee ${document.employeeId}:`, empUpdateError);
+      const emp = document.employee;
+      const isLegacyDoc = !document.aoNumber;
+      const isMatchingActiveAo = emp && emp.aoNumber === document.aoNumber && emp.aoYear === document.aoYear;
+
+      if (isLegacyDoc || isMatchingActiveAo) {
+        try {
+          await prisma.employee.update({
+            where: { id: document.employeeId },
+            data: {
+              aoNumber: null,
+              aoYear: null,
+              aoType: null,
+              detailedTo: null,
+              detailedDivision: null,
+              detailedFunction: null,
+              detailedDate: null,
+              designatedPositionFunction: null,
+              designatedOrderFrom: null,
+              designatedOrderTo: null,
+              isDetailed: false,
+            },
+          });
+          console.log(`Cleared active AO fields for employee ${document.employeeId} after Administrative Order document deletion.`);
+        } catch (empUpdateError) {
+          console.error(`Error clearing AO fields for employee ${document.employeeId}:`, empUpdateError);
+        }
+      } else {
+        console.log(`Not clearing active AO fields for employee ${document.employeeId} because deleted document is not the active AO.`);
       }
     }
 
@@ -397,32 +456,35 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
       },
     });
 
-    // Find any documents that are in the Administrative Order category and update their employees
+    // Find any documents that are in the Administrative Order category and update their employees conditionally
     const aoDocuments = documents.filter(doc => doc.category === 'Administrative Order');
     if (aoDocuments.length > 0) {
       try {
-        const employeeIdsToClear = [...new Set(aoDocuments.map(doc => doc.employeeId))];
-        await prisma.employee.updateMany({
-          where: {
-            id: {
-              in: employeeIdsToClear,
-            },
-          },
-          data: {
-            aoNumber: null,
-            aoYear: null,
-            aoType: null,
-            detailedTo: null,
-            detailedDivision: null,
-            detailedFunction: null,
-            detailedDate: null,
-            designatedPositionFunction: null,
-            designatedOrderFrom: null,
-            designatedOrderTo: null,
-            isDetailed: false,
-          },
-        });
-        console.log(`Cleared AO fields for employees: ${employeeIdsToClear.join(', ')} due to bulk Administrative Order document deletion.`);
+        for (const doc of aoDocuments) {
+          const emp = doc.employee;
+          const isLegacyDoc = !doc.aoNumber;
+          const isMatchingActiveAo = emp && emp.aoNumber === doc.aoNumber && emp.aoYear === doc.aoYear;
+
+          if (isLegacyDoc || isMatchingActiveAo) {
+            await prisma.employee.update({
+              where: { id: doc.employeeId },
+              data: {
+                aoNumber: null,
+                aoYear: null,
+                aoType: null,
+                detailedTo: null,
+                detailedDivision: null,
+                detailedFunction: null,
+                detailedDate: null,
+                designatedPositionFunction: null,
+                designatedOrderFrom: null,
+                designatedOrderTo: null,
+                isDetailed: false,
+              },
+            });
+            console.log(`Cleared active AO fields for employee ${doc.employeeId} during bulk Administrative Order document deletion.`);
+          }
+        }
       } catch (empUpdateError) {
         console.error('Error clearing AO fields during bulk delete:', empUpdateError);
       }

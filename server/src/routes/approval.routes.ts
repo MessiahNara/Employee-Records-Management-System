@@ -1,9 +1,28 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { issueSuperadminApprovalToken } from '../lib/superadminApproval';
+import { createAuditLog } from '../utils/auditHelper';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
+
+// GET /api/approvals/my-requests — list requests submitted by a specific user
+router.get('/my-requests', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId query param is required' });
+
+    const requests = await (prisma as any).approvalRequest.findMany({
+      where: { requestedBy: userId as string },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    res.json(requests);
+  } catch (error) {
+    console.error('Error fetching my requests:', error);
+    res.status(500).json({ error: 'Failed to fetch requests' });
+  }
+});
 
 // GET /api/approvals — list all pending requests (superadmin/developer only)
 router.get('/', async (req: Request, res: Response) => {
@@ -61,6 +80,28 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    // Audit: document access request submitted
+    const actionLabel: Record<string, string> = {
+      view_document:     'requested to view',
+      print_document:    'requested to print',
+      download_document: 'requested to download',
+    };
+    const label = actionLabel[action] ?? `submitted approval request for ${action}`;
+    await createAuditLog(prisma, {
+      userId: requestedBy,
+      userName: requestedByName || 'Unknown',
+      action: 'request_access',
+      entity: entityType,
+      entityId,
+      entityName: entityName || entityId,
+      details: {
+        approvalRequestId: request.id,
+        actionRequested: action,
+        description: `${requestedByName || 'Unknown'} ${label}: ${entityName || entityId}`,
+        purpose: payload?.purpose || null,
+      },
+    });
+
     res.status(201).json(request);
   } catch (error) {
     console.error('Error creating approval request:', error);
@@ -72,7 +113,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/:id/approve', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { username, password, approverId, approverName } = req.body;
+    const { username, password, approverId } = req.body;
 
     // Verify superadmin credentials
     const user = await prisma.user.findFirst({ where: { username } });
@@ -114,6 +155,24 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
       },
     });
 
+    // Audit: request approved
+    const approverName = `${user.lastName}, ${user.firstName}`;
+    await createAuditLog(prisma, {
+      userId: user.id,
+      userName: approverName,
+      action: 'approve_request',
+      entity: approvalReq.entityType,
+      entityId: approvalReq.entityId,
+      entityName: approvalReq.entityName || approvalReq.entityId,
+      details: {
+        approvalRequestId: id,
+        actionApproved: approvalReq.action,
+        requestedBy: approvalReq.requestedByName,
+        description: `${approverName} approved ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, ' ')}: ${approvalReq.entityName || approvalReq.entityId}`,
+        purpose: approvalReq.payload?.purpose || null,
+      },
+    });
+
     // Return the token and payload so the frontend can execute the action
     res.json({
       approved: true,
@@ -149,6 +208,23 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
         approvedByName: approverName || null,
         rejectedReason: reason || 'Rejected by administrator',
         resolvedAt: new Date(),
+      },
+    });
+
+    // Audit: request rejected
+    await createAuditLog(prisma, {
+      userId: approverId || 'system',
+      userName: approverName || 'System',
+      action: 'reject_request',
+      entity: approvalReq.entityType,
+      entityId: approvalReq.entityId,
+      entityName: approvalReq.entityName || approvalReq.entityId,
+      details: {
+        approvalRequestId: id,
+        actionRejected: approvalReq.action,
+        requestedBy: approvalReq.requestedByName,
+        rejectedReason: reason || 'Rejected by administrator',
+        description: `${approverName || 'System'} rejected ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, ' ')}: ${approvalReq.entityName || approvalReq.entityId}`,
       },
     });
 

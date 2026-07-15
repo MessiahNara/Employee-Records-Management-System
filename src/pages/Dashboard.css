@@ -1191,3 +1191,41 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* Print styles for Generated Reports preview */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .printable-report, .printable-report * {
+    visibility: visible !important;
+  }
+  .printable-report {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  /* Remove overlay modal background and headers when printing */
+  .modal-overlay {
+    background: none !important;
+    position: absolute !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .modal {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .modal__header, .modal__footer, .modal__close {
+    display: none !important;
+  }
+}
+

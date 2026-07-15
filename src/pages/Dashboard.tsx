@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useLocation } from 'react-router-dom';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import Table, { Column } from '../components/ui/Table';
 import SearchBar from '../components/ui/SearchBar';
 import Badge from '../components/ui/Badge';
@@ -85,6 +87,264 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   administrativeOrder: true,
 };
 
+const escapeXml = (unsafe: string) => {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+};
+
+const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus?: string) => {
+  // ── Column header labels ──────────────────────────────────────────────────
+  const officeHeader = aoStatus === 'Designated'
+    ? 'Designated Office'
+    : aoStatus === 'All Employees'
+      ? 'Detailed/Designated Office/Hospital'
+      : 'Detailed/Transferred Office/Hospital';
+
+  const durationHeader = aoStatus === 'Designated'
+    ? 'Duration of Designated Order'
+    : 'Duration of Detailed Order';
+
+  // ── Keep original column widths from the template (no changes) ────────────
+  // Columns B–D share width 35.77, E=13.11, F=14.66, G=24.
+
+  // ── Dynamic row-height helper ─────────────────────────────────────────────
+  // Each data column has a fixed width in Excel units. We estimate how many
+  // lines of text a value will wrap to and multiply by the single-line height.
+  // Column widths (in Excel chars): B=35.77, C=35.77, D=35.77, G=24
+  // Font is ~7pt; at that size, approx 1 Excel width unit ≈ 1 printable char.
+  // Add a small buffer and take the max across all wrapped columns.
+  const BASE_ROW_HT = 19.95;        // single-line row height (pt) from template
+  const LINE_HT = 13.5;         // height per additional wrapped line (pt)
+  const CHARS_B = 33;           // usable chars in col B (name) before wrap
+  const CHARS_C = 33;           // usable chars in col C (mother unit)
+  const CHARS_D = 33;           // usable chars in col D (office)
+  const CHARS_G = 22;           // usable chars in col G (AO no.)
+
+  const calcRowHt = (name: string, mother: string, office: string, ao: string): number => {
+    const linesFor = (text: string, maxChars: number) =>
+      text.length === 0 ? 1 : Math.ceil(text.length / maxChars);
+    const lines = Math.max(
+      linesFor(name, CHARS_B),
+      linesFor(mother, CHARS_C),
+      linesFor(office, CHARS_D),
+      linesFor(ao, CHARS_G)
+    );
+    return lines <= 1 ? BASE_ROW_HT : BASE_ROW_HT + (lines - 1) * LINE_HT;
+  };
+
+  // ── Replace title cell A6 ─────────────────────────────────────────────────
+  xmlStr = xmlStr.replace(
+    /(<c r="A6"[^>]*>)([\s\S]*?)(<\/c>)/,
+    `<c r="A6" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c>`
+  );
+
+  // ── Replace column headers D7 and E7 ─────────────────────────────────────
+  xmlStr = xmlStr.replace(
+    /(<c r="D7"[^>]*>)([\s\S]*?)(<\/c>)/,
+    `<c r="D7" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c>`
+  );
+  xmlStr = xmlStr.replace(
+    /(<c r="E7"[^>]*>)([\s\S]*?)(<\/c>)/,
+    `<c r="E7" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c>`
+  );
+
+  // ── Page layout constants ─────────────────────────────────────────────────
+  // Each page: 91 data rows (row 9–99 on page 1, then repeating blocks)
+  // Within each page block:
+  //   pos 0       → first row styles      (sA=6,  sBC=12, sD=13, sEF=14, sG=15)
+  //   pos 1–14    → pre-divider rows      (sA=7,  sBC=16, sD=17, sEF=18, sG=19)
+  //   pos 15      → mid-page divider      (sA=11, sBC=22, sD=23, sEF=24, sG=25)
+  //   pos 16–57   → post-divider middle   (sA=7,  sBC=16, sD=17, sEF=18, sG=19)
+  //   pos 58–88   → near-bottom rows      (sA=8,  sBC=16, sD=17, sEF=26, sG=19)
+  //   pos 89      → penultimate row       (sA=9,  sBC=16, sD=17, sEF=27, sG=28)
+  //   pos 90      → last row              (sA=10, sBC=29, sD=30, sEF=31, sG=32)
+  // Total per page = 91 positions (pos 0–90), but pos 15 is the divider (no data)
+  // So each page holds 90 data rows + 1 divider row
+
+  const ROWS_PER_PAGE = 90; // actual data rows per page (divider row doesn't count)
+  const DIVIDER_POS = 15;   // position within page block where divider row sits
+
+  const formatDateMDYStr = (dateVal: any) => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+
+  // Determine styles for a position within a page block
+  const getStyles = (posInPage: number, totalInPage: number) => {
+    if (posInPage === 0) return { sA: '6', sBC: '12', sD: '13', sEF: '14', sG: '15' };
+    const last = totalInPage - 1; // last data position in this page
+    const penul = totalInPage - 2;
+    if (posInPage === last) return { sA: '10', sBC: '29', sD: '30', sEF: '31', sG: '32' };
+    if (posInPage === penul) return { sA: '9', sBC: '16', sD: '17', sEF: '27', sG: '28' };
+    if (posInPage >= 58) return { sA: '8', sBC: '16', sD: '17', sEF: '26', sG: '19' };
+    return { sA: '7', sBC: '16', sD: '17', sEF: '18', sG: '19' };
+  };
+
+  // ── Extract XML before row 9 and after </sheetData> ───────────────────────
+  const row9Start = xmlStr.indexOf('<row r="9"');
+  if (row9Start === -1) return xmlStr;
+  const sheetDataEnd = xmlStr.indexOf('</sheetData>');
+  if (sheetDataEnd === -1) return xmlStr;
+
+  // We'll also need the header rows 1–8 XML to repeat on subsequent pages
+  // Extract rows 1–8 from the original XML
+  const row9End = row9Start; // everything before row 9 is the header
+  const headerRowsXml = xmlStr.substring(xmlStr.indexOf('<row r="1"'), row9End);
+
+  const xmlBefore = xmlStr.substring(0, xmlStr.indexOf('<row r="1"'));
+  const xmlAfterSheetData = xmlStr.substring(sheetDataEnd);
+
+  // ── Build pages ───────────────────────────────────────────────────────────
+  let newRowsXml = '';
+  let globalRowNum = 9; // actual XML row number (increments continuously)
+  let dataIdx = 0;      // index into rowsData
+  let pageNum = 0;
+
+  while (dataIdx < rowsData.length) {
+    // Slice data for this page
+    const pageData = rowsData.slice(dataIdx, dataIdx + ROWS_PER_PAGE);
+    const pageCount = pageData.length;
+
+    // For page 2+, re-emit the header rows with updated row numbers
+    if (pageNum > 0) {
+      // Re-emit rows 1–8 shifted to current globalRowNum
+      // We just rebuild the 8 header rows manually using the known styles
+      const headerStart = globalRowNum;
+      // Rows 1–5: header info rows
+      const headerTexts = [
+        'Republic of the Philippines',
+        'Province of Pangasinan',
+        'Lingayen',
+        'HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE',
+        ''
+      ];
+      newRowsXml += `<row r="${headerStart}" spans="1:12" ht="15" customHeight="1" x14ac:dyDescent="0.25"><c r="A${headerStart}" s="37" t="inlineStr"><is><t>${headerTexts[0]}</t></is></c><c r="B${headerStart}" s="37"/><c r="C${headerStart}" s="37"/><c r="D${headerStart}" s="37"/><c r="E${headerStart}" s="37"/><c r="F${headerStart}" s="37"/><c r="G${headerStart}" s="37"/></row>`;
+      for (let h = 1; h <= 4; h++) {
+        const rn = headerStart + h;
+        const sty = h === 4 ? '38' : '38';
+        const txt = headerTexts[h];
+        const thickBot = h === 4 ? ' thickBot="1"' : '';
+        newRowsXml += `<row r="${rn}" spans="1:12" ht="15" customHeight="1"${thickBot} x14ac:dyDescent="0.25"><c r="A${rn}" s="${sty}" t="inlineStr"><is><t>${escapeXml(txt)}</t></is></c><c r="B${rn}" s="${sty}"/><c r="C${rn}" s="${sty}"/><c r="D${rn}" s="${sty}"/><c r="E${rn}" s="${sty}"/><c r="F${rn}" s="${sty}"/><c r="G${rn}" s="${sty}"/></row>`;
+      }
+      globalRowNum += 5;
+
+      // Title row (A6 equivalent)
+      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${globalRowNum}" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c><c r="B${globalRowNum}" s="40"/><c r="C${globalRowNum}" s="40"/><c r="D${globalRowNum}" s="40"/><c r="E${globalRowNum}" s="40"/><c r="F${globalRowNum}" s="40"/><c r="G${globalRowNum}" s="41"/></row>`;
+      globalRowNum++;
+
+      // Column header row 7
+      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${globalRowNum}" s="35" t="inlineStr"><is><t>NO.</t></is></c><c r="B${globalRowNum}" s="35" t="inlineStr"><is><t>Name of Employee</t></is></c><c r="C${globalRowNum}" s="35" t="inlineStr"><is><t>Mother Unit</t></is></c><c r="D${globalRowNum}" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c><c r="E${globalRowNum}" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c><c r="F${globalRowNum}" s="42"/><c r="G${globalRowNum}" s="35" t="inlineStr"><is><t>Administrative Order No.</t></is></c></row>`;
+      globalRowNum++;
+
+      // Sub-header row 8 (From / To)
+      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${globalRowNum}" s="36"/><c r="B${globalRowNum}" s="36"/><c r="C${globalRowNum}" s="36"/><c r="D${globalRowNum}" s="36"/><c r="E${globalRowNum}" s="5" t="inlineStr"><is><t>From</t></is></c><c r="F${globalRowNum}" s="5" t="inlineStr"><is><t>To</t></is></c><c r="G${globalRowNum}" s="36"/></row>`;
+      globalRowNum++;
+    }
+
+    // Emit data rows for this page
+    let posInPage = 0; // tracks position within page (skips divider)
+    for (let i = 0; i < pageCount; i++) {
+      // Insert divider row at position DIVIDER_POS
+      if (posInPage === DIVIDER_POS) {
+        newRowsXml += `<row r="${globalRowNum}" spans="1:26" ht="19.95" customHeight="1" x14ac:dyDescent="0.25"><c r="A${globalRowNum}" s="11"/><c r="B${globalRowNum}" s="22"/><c r="C${globalRowNum}" s="22"/><c r="D${globalRowNum}" s="23"/><c r="E${globalRowNum}" s="24"/><c r="F${globalRowNum}" s="24"/><c r="G${globalRowNum}" s="25"/></row>`;
+        globalRowNum++;
+        posInPage++;
+      }
+
+      const row = pageData[i];
+      const st = getStyles(posInPage === 0 && i === 0 ? 0 : posInPage, pageCount + (pageCount >= DIVIDER_POS ? 1 : 0));
+
+      const noVal = String(dataIdx + i + 1);
+      const nameVal = row.name || '';
+      const motherVal = row.motherUnit || '';
+      const officeVal = row.detailedOffice || '';
+      const fromVal = formatDateMDYStr(row.durationFrom);
+      const toVal = formatDateMDYStr(row.durationTo);
+      const aoVal = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '';
+
+      const rowHt = calcRowHt(nameVal, motherVal, officeVal, aoVal);
+
+      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="${rowHt}" customHeight="1" x14ac:dyDescent="0.25">`;
+      newRowsXml += `<c r="A${globalRowNum}" s="${st.sA}" t="inlineStr"><is><t>${escapeXml(noVal)}</t></is></c>`;
+      newRowsXml += `<c r="B${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(nameVal)}</t></is></c>`;
+      newRowsXml += `<c r="C${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(motherVal)}</t></is></c>`;
+      newRowsXml += `<c r="D${globalRowNum}" s="${st.sD}" t="inlineStr"><is><t>${escapeXml(officeVal)}</t></is></c>`;
+      newRowsXml += `<c r="E${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(fromVal)}</t></is></c>`;
+      newRowsXml += `<c r="F${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(toVal)}</t></is></c>`;
+      newRowsXml += `<c r="G${globalRowNum}" s="${st.sG}" t="inlineStr"><is><t>${escapeXml(aoVal)}</t></is></c>`;
+      newRowsXml += `</row>`;
+
+      globalRowNum++;
+      posInPage++;
+    }
+
+    dataIdx += ROWS_PER_PAGE;
+    pageNum++;
+
+    // Emit signature rows after each page's data
+    for (let s = 0; s < 13; s++) {
+      newRowsXml += `<row r="${globalRowNum}" spans="3:7" ht="12.75" customHeight="1" x14ac:dyDescent="0.25"><c r="C${globalRowNum}" s="3"/><c r="D${globalRowNum}" s="3"/><c r="G${globalRowNum}" s="4"/></row>`;
+      globalRowNum++;
+    }
+  }
+
+  // ── Rebuild mergeCells for all pages ─────────────────────────────────────
+  // The original mergeCells only covers page 1. We need to add merges for all
+  // repeated header blocks on pages 2+.
+  // Page 1 merges are already in the template; pages 2+ need the same pattern
+  // offset by their header start row.
+  const baseMerges = [
+    'A1:G1', 'A2:G2', 'A3:G3', 'A4:G4', 'A5:G5', 'A6:G6',
+    'A7:A8', 'B7:B8', 'C7:C8', 'D7:D8', 'E7:F7', 'G7:G8'
+  ];
+
+  const allMerges = [...baseMerges]; // page 1 merges
+
+  // Note: for the merge cells we calculate from page 2 onwards
+  // using the known offset pattern
+  // Page 2 starts at row 9 + (90+1 data+divider rows) + 13 sig rows = 9 + 91 + 13 = 113
+  for (let p = 1; p < pageNum; p++) {
+    const offset = p * (91 + 8 + 13); // 91=data+divider, 8=header rows, 13=sig
+    allMerges.push(
+      `A${1 + offset}:G${1 + offset}`,
+      `A${2 + offset}:G${2 + offset}`,
+      `A${3 + offset}:G${3 + offset}`,
+      `A${4 + offset}:G${4 + offset}`,
+      `A${5 + offset}:G${5 + offset}`,
+      `A${6 + offset}:G${6 + offset}`,
+      `A${7 + offset}:A${8 + offset}`,
+      `B${7 + offset}:B${8 + offset}`,
+      `C${7 + offset}:C${8 + offset}`,
+      `D${7 + offset}:D${8 + offset}`,
+      `E${7 + offset}:F${7 + offset}`,
+      `G${7 + offset}:G${8 + offset}`
+    );
+  }
+
+  const mergeCellsXml = `<mergeCells count="${allMerges.length}">${allMerges.map(r => `<mergeCell ref="${r}"/>`).join('')}</mergeCells>`;
+
+  // Replace existing mergeCells block
+  const newXml = xmlBefore + headerRowsXml + newRowsXml + `</sheetData>` +
+    xmlAfterSheetData
+      .replace(/<mergeCells[\s\S]*?<\/mergeCells>/, mergeCellsXml)
+      .replace('</sheetData>', ''); // already added above
+
+  return newXml;
+};
+
 function Dashboard() {
   const navigate = useNavigate();
   const { showToast, showWelcomeToast } = useToast();
@@ -104,6 +364,7 @@ function Dashboard() {
   const [isBulkDownloadLoading, setIsBulkDownloadLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [aoFile, setAoFile] = useState<File | null>(null);
+  const [autoRename, setAutoRename] = useState(false);
   const [pendingUpdatePayload, setPendingUpdatePayload] = useState<{ employeeId: string; changedFields: any } | null>(null);
   const [pendingImportEmployees, setPendingImportEmployees] = useState<ImportedEmployee[] | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
@@ -121,6 +382,7 @@ function Dashboard() {
   const [reportMotherUnit, setReportMotherUnit] = useState('all');
   const [reportDetailedOffice, setReportDetailedOffice] = useState('all');
   const [reportDesignatedPosition, setReportDesignatedPosition] = useState('all');
+  const [isReportPreviewOpen, setIsReportPreviewOpen] = useState(false);
   const [reportAoNumber, setReportAoNumber] = useState('');
   const [reportAoYear, setReportAoYear] = useState('');
   const [reportActiveTab, setReportActiveTab] = useState<'active' | 'inactive' | 'expiring' | 'expired'>('active');
@@ -217,17 +479,28 @@ function Dashboard() {
     appointmentStatuses: string[];
     officeNames: string[];
     positions: string[];
-  }>({ appointmentStatuses: [], officeNames: [], positions: [] });
+    aoYears: string[];
+    reasonsForSeparation: string[];
+  }>({ appointmentStatuses: [], officeNames: [], positions: [], aoYears: [], reasonsForSeparation: [] });
 
-  useEffect(() => {
-    api.systemSettings.get().then((s) => {
+  const fetchDropdownOptions = useCallback(async () => {
+    try {
+      const s = await api.systemSettings.get();
       setDropdownOptions({
         appointmentStatuses: s.appointmentStatuses ?? [],
         officeNames: s.officeNames ?? [],
         positions: s.positions ?? [],
+        aoYears: s.aoYears ?? [],
+        reasonsForSeparation: s.reasonsForSeparation ?? [],
       });
-    }).catch(() => { });
+    } catch (err) {
+      console.error('Failed to fetch dropdown options:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchDropdownOptions();
+  }, [fetchDropdownOptions]);
 
   // For superadmin and admin, they have all permissions
   // For superadmin, they have all permissions
@@ -384,19 +657,42 @@ function Dashboard() {
       return '';
     };
 
-    const buildRow = (source: any, suffix: string, docId = ''): ReportRow => {
+    const buildRow = (source: any, suffix: string, docId = '', docSource?: any): ReportRow => {
       const birthDate = source.dateOfBirth ? new Date(source.dateOfBirth) : null;
       const birthMonthValue = birthDate ? String(birthDate.getMonth() + 1).padStart(2, '0') : '';
-      const aoType = inferAoType(source);
+
+      // If we have a docSource with specific AO details, merge them so they override employee fields.
+      const isCurrentAo = !docSource || !docSource.aoNumber || !source.aoNumber ||
+        String(docSource.aoNumber || '').trim() === String(source.aoNumber || '').trim();
+
+      const activeSource = docSource
+        ? {
+          ...source,
+          aoNumber: docSource.aoNumber || source.aoNumber,
+          aoYear: docSource.aoYear || (isCurrentAo ? source.aoYear : ''),
+          aoType: docSource.aoType || (isCurrentAo ? source.aoType : ''),
+          detailedTo: docSource.detailedTo || (isCurrentAo ? source.detailedTo : ''),
+          detailedDivision: docSource.detailedDivision || (isCurrentAo ? source.detailedDivision : ''),
+          detailedFunction: docSource.detailedFunction || (isCurrentAo ? source.detailedFunction : ''),
+          detailedDate: docSource.detailedDate || (isCurrentAo ? source.detailedDate : null),
+          designatedPositionFunction: docSource.designatedPositionFunction || (isCurrentAo ? source.designatedPositionFunction : ''),
+          designatedOrderFrom: docSource.designatedOrderFrom || (isCurrentAo ? source.designatedOrderFrom : null),
+          designatedOrderTo: docSource.designatedOrderTo || (isCurrentAo ? source.designatedOrderTo : null),
+          appointmentFrom: docSource.appointmentFrom || (isCurrentAo ? source.appointmentFrom : null),
+          appointmentTo: docSource.appointmentTo || (isCurrentAo ? source.appointmentTo : null),
+        }
+        : source;
+
+      const aoType = inferAoType(activeSource);
 
       // Detailed: duration = appointmentFrom / appointmentTo
       // Designated: duration = designatedOrderFrom / designatedOrderTo
       const durationFrom = aoType === 'Detailed'
-        ? String(source.appointmentFrom || '').trim()
-        : String(source.designatedOrderFrom || '').trim();
+        ? String(activeSource.appointmentFrom || '').trim()
+        : String(activeSource.designatedOrderFrom || '').trim();
       const durationTo = aoType === 'Detailed'
-        ? String(source.appointmentTo || '').trim()
-        : String(source.designatedOrderTo || '').trim();
+        ? String(activeSource.appointmentTo || '').trim()
+        : String(activeSource.designatedOrderTo || '').trim();
 
       const aoOrderMonth = durationFrom
         ? String(new Date(durationFrom).getMonth() + 1).padStart(2, '0')
@@ -419,13 +715,13 @@ function Dashboard() {
         motherUnit,
         aoType,
         assignedUnit: motherUnit || '-',
-        detailedOffice: String(source.detailedTo || '').trim(),
-        designatedPositionFunction: String(source.designatedPositionFunction || '').trim(),
+        detailedOffice: String(activeSource.detailedTo || '').trim(),
+        designatedPositionFunction: String(activeSource.designatedPositionFunction || '').trim(),
         durationFrom,
         durationTo,
         dateOfBirth,
-        aoNumber: String(source.aoNumber || '').trim(),
-        seriesNumber: String(source.aoYear || source.seriesNumber || ''),
+        aoNumber: String(activeSource.aoNumber || '').trim(),
+        seriesNumber: String(activeSource.aoYear || activeSource.seriesNumber || ''),
         birthMonthValue,
         aoOrderMonth,
         status: source.status,
@@ -443,12 +739,9 @@ function Dashboard() {
       if (aoDocs.length === 0) return;
 
       aoDocs.forEach((doc: any) => {
-        // Each document carries its own aoNumber / aoYear embedded in the filename
-        // (format: "NAME_AO. {aoNum}, S. {aoYear}.pdf"), but the most reliable
-        // source is the employee's current fields for the LATEST document.
-        // We pass the employee as-is; the AO number shown will be the one stored
-        // on the employee record. Each row gets a unique docId so deletion is precise.
-        const row = buildRow(emp, `doc-${doc.id}`, doc.id);
+        // Build the row prioritizing fields from the document itself if present,
+        // and falling back to employee fields.
+        const row = buildRow(emp, `doc-${doc.id}`, doc.id, doc);
         // Only include if there's an AO number and a valid AO type
         if (row.aoNumber || row.aoType) {
           currentRows.push(row);
@@ -523,9 +816,9 @@ function Dashboard() {
           // (meaning it's already represented as a currentRow)
           const empDocs = (emp as any).documents || [];
           const alreadyCurrentDoc = empDocs.some((d: any) => {
-            // The current document AO number is stored on the employee record
-            // so if the doc belongs to this employee and the aoNumber matches, skip
-            return d.category === 'Administrative Order' && prevAoNumber === currAoNumber;
+            return d.category === 'Administrative Order' &&
+              String(d.aoNumber || '').trim() === prevAoNumber &&
+              String(d.aoYear || '').trim() === String(previousState.aoYear || '').trim();
           });
           if (alreadyCurrentDoc) {
             currentState = previousState;
@@ -581,7 +874,7 @@ function Dashboard() {
   }, [allEmployees]);
 
   const uniqueMotherUnitsInDatabase = useMemo(() => {
-    const motherUnits = allEmployees.map(emp => emp.motherUnit || emp.officeHospitalName).filter(Boolean);
+    const motherUnits = allEmployees.flatMap(emp => [(emp as any).motherUnit, emp.officeHospitalName]).filter(Boolean);
     return [...new Set(motherUnits)].sort();
   }, [allEmployees]);
 
@@ -595,7 +888,13 @@ function Dashboard() {
         if (!row.name.toLowerCase().includes(query)) return false;
       }
 
-      if (reportMotherUnit !== 'all' && row.motherUnit.toLowerCase() !== reportMotherUnit.toLowerCase()) return false;
+      if (reportMotherUnit !== 'all') {
+        const query = reportMotherUnit.toLowerCase();
+        const matchesMotherUnit = row.motherUnit.toLowerCase() === query;
+        const matchesOfficeHospitalName = row.rawEmployee && row.rawEmployee.officeHospitalName && row.rawEmployee.officeHospitalName.toLowerCase() === query;
+        const matchesRawMotherUnit = row.rawEmployee && (row.rawEmployee as any).motherUnit && (row.rawEmployee as any).motherUnit.toLowerCase() === query;
+        if (!matchesMotherUnit && !matchesOfficeHospitalName && !matchesRawMotherUnit) return false;
+      }
 
       if (reportDetailedOffice !== 'all') {
         if (row.aoType === 'Detailed' && row.detailedOffice.toLowerCase() !== reportDetailedOffice.toLowerCase()) return false;
@@ -1093,7 +1392,35 @@ function Dashboard() {
     return [selectionColumn, ...filteredBaseColumns];
   }, [reportAoStatus, reportSortPriority, reportsForActiveTab, selectedReportRowIds, visibleColumns]);
 
-  const exportReportData = (format: 'xlsx' | 'csv') => {
+  const getFormattedTitle = () => {
+    const months = {
+      '01': 'JANUARY', '02': 'FEBRUARY', '03': 'MARCH', '04': 'APRIL',
+      '05': 'MAY', '06': 'JUNE', '07': 'JULY', '08': 'AUGUST',
+      '09': 'SEPTEMBER', '10': 'OCTOBER', '11': 'NOVEMBER', '12': 'DECEMBER'
+    };
+
+    const fromMonth = reportAoOrderMonthFrom ? months[reportAoOrderMonthFrom as keyof typeof months] : '';
+    const toMonth = reportAoOrderMonthTo ? months[reportAoOrderMonthTo as keyof typeof months] : '';
+    const year = reportAoYear ? reportAoYear.trim() : '';
+
+    let title = 'LIST OF EMPLOYEES WITH ADMINISTRATIVE ORDERS';
+
+    if (fromMonth && toMonth) {
+      title += ` ISSUED FROM ${fromMonth} - ${toMonth}`;
+    } else if (fromMonth) {
+      title += ` ISSUED FROM ${fromMonth}`;
+    } else if (toMonth) {
+      title += ` ISSUED TO ${toMonth}`;
+    }
+
+    if (year) {
+      title += ` ${year}`;
+    }
+
+    return title;
+  };
+
+  const exportReportData = async (format: 'xlsx' | 'csv') => {
     // Export only the rows visible in the currently active tab
     const tabRows =
       reportActiveTab === 'active'
@@ -1104,41 +1431,95 @@ function Dashboard() {
             ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
             : sortedReportRows.filter((row) => isExpired(row.durationTo));
 
-    const exportRows = tabRows.map((row, idx) => {
-      const exportObj: Record<string, string> = { '#': String(idx + 1) };
+    const title = getFormattedTitle();
+    const fileName = `AO-Report-${reportAoStatus.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}`;
 
-      const allPossibleFields: { key: string; label: string; value: string }[] = [
-        { key: 'employeeId', label: 'Employment ID', value: row.employeeId },
-        { key: 'name', label: 'Name of Employee', value: row.name },
-        { key: 'position', label: 'Position', value: row.position || '' },
-        { key: 'motherUnit', label: 'Mother Unit', value: row.motherUnit || '' },
-        { key: 'detailedOffice', label: reportAoStatus === 'Detailed' ? 'Detailed/Transferred Office/Hospital' : reportAoStatus === 'Designated' ? 'Designated Office' : 'Detailed/Designated Office/Hospital', value: row.detailedOffice || '' },
-        { key: 'designatedPositionFunction', label: 'Designated Position/Function', value: row.designatedPositionFunction || '' },
-        { key: 'durationFrom', label: 'Duration From', value: row.durationFrom ? formatDateMDY(row.durationFrom) : '' },
-        { key: 'durationTo', label: 'Duration To', value: row.durationTo ? formatDateMDY(row.durationTo) : '' },
-        { key: 'dateOfBirth', label: 'Date of Birth', value: row.dateOfBirth || '' },
-        { key: 'administrativeOrder', label: 'Administrative Order No.', value: `${row.aoNumber ? `AO ${row.aoNumber}` : ''}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim() },
-      ];
+    if (format === 'xlsx') {
+      try {
+        // Fetch the template file
+        const response = await fetch('/template.xlsx');
+        if (!response.ok) throw new Error('Template file not found or failed to load');
+        const arrayBuffer = await response.arrayBuffer();
 
-      allPossibleFields.forEach(field => {
-        // Respect current UI view: only export columns currently visible in the table
-        if (currentAvailableKeys.includes(field.key) && visibleColumns[field.key] !== false) {
-          exportObj[field.label] = field.value;
+        // Load zip container
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const sheetXmlPath = 'xl/worksheets/sheet1.xml';
+        const sheetXmlStr = await zip.file(sheetXmlPath)?.async('string');
+        if (!sheetXmlStr) throw new Error('Invalid excel template package: sheet1.xml missing');
+
+        // Modify sheetData XML content — pass the AO status so column headers adapt
+        const modifiedXml = modifySheetXml(sheetXmlStr, title, tabRows, reportAoStatus);
+
+        // Patch styles.xml: remove shrinkToFit so the dynamic row heights we
+        // set are respected — text wraps within the column and the row expands.
+        const stylesXmlPath = 'xl/styles.xml';
+        const stylesXmlStr = await zip.file(stylesXmlPath)?.async('string');
+        if (stylesXmlStr) {
+          const patchedStylesXml = stylesXmlStr.replace(/\s*shrinkToFit="1"/g, '');
+          zip.file(stylesXmlPath, patchedStylesXml);
         }
+
+        // Add <sheetPr fitToPage> and update pageSetup with fitToWidth=1
+        // so the sheet scales to fit 1 page wide when printed.
+        let finalXml = modifiedXml;
+        if (!finalXml.includes('<sheetPr')) {
+          finalXml = finalXml.replace(
+            /(<(?:dimension|sheetViews)[^>]*(?:\/>|>))/,
+            '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>$1'
+          );
+        }
+        finalXml = finalXml.replace(
+          /<pageSetup([^>]*?)\/>/,
+          (_match, attrs: string) => {
+            const cleaned = attrs
+              .replace(/\s*fitToWidth="[^"]*"/g, '')
+              .replace(/\s*fitToHeight="[^"]*"/g, '')
+              .replace(/\s*scale="[^"]*"/g, '');
+            return `<pageSetup${cleaned} fitToWidth="1" fitToHeight="0"/>`;
+          }
+        );
+        zip.file(sheetXmlPath, finalXml);
+
+        // Re-generate the zip archive as an xlsx file blob
+        const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+        // Save download using file-saver
+        saveAs(blob, `${fileName}.xlsx`);
+        showToast('✅ Report successfully exported to formatted Excel.', 'success');
+      } catch (err: any) {
+        console.error('Failed to export using Excel template:', err);
+        showToast(`Failed to export Excel template: ${err.message}`, 'error');
+      }
+    } else {
+      // Export as default JSON sheet for non-Detailed XLSX or CSV format
+      const exportRows = tabRows.map((row, idx) => {
+        const exportObj: Record<string, string> = { '#': String(idx + 1) };
+        const allPossibleFields = [
+          { key: 'employeeId', label: 'Employment ID', value: row.employeeId },
+          { key: 'name', label: 'Name of Employee', value: row.name },
+          { key: 'position', label: 'Position', value: row.position || '' },
+          { key: 'motherUnit', label: 'Mother Unit', value: row.motherUnit || '' },
+          { key: 'detailedOffice', label: reportAoStatus === 'Detailed' ? 'Detailed/Transferred Office/Hospital' : reportAoStatus === 'Designated' ? 'Designated Office' : 'Detailed/Designated Office/Hospital', value: row.detailedOffice || '' },
+          { key: 'designatedPositionFunction', label: 'Designated Position/Function', value: row.designatedPositionFunction || '' },
+          { key: 'durationFrom', label: 'Duration From', value: row.durationFrom ? formatDateMDY(row.durationFrom) : '' },
+          { key: 'durationTo', label: 'Duration To', value: row.durationTo ? formatDateMDY(row.durationTo) : '' },
+          { key: 'dateOfBirth', label: 'Date of Birth', value: row.dateOfBirth || '' },
+          { key: 'administrativeOrder', label: 'Administrative Order No.', value: `${row.aoNumber ? `AO ${row.aoNumber}` : ''}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim() },
+        ];
+
+        allPossibleFields.forEach(field => {
+          if (currentAvailableKeys.includes(field.key) && visibleColumns[field.key] !== false) {
+            exportObj[field.label] = field.value;
+          }
+        });
+
+        return exportObj;
       });
 
-      return exportObj;
-    });
+      const sheetName = reportAoStatus === 'Designated' ? 'Designated Reports' : reportAoStatus === 'Detailed' ? 'Detailed Reports' : 'All Employees';
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
 
-    const sheetName = reportAoStatus === 'Designated' ? 'Designated Reports' : reportAoStatus === 'Detailed' ? 'Detailed Reports' : 'All Employees';
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-
-    const fileName = `AO-Report-${reportAoStatus.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}`;
-    if (format === 'xlsx') {
-      XLSX.writeFile(workbook, `${fileName}.xlsx`);
-    } else {
+      // CSV export
       const csv = XLSX.utils.sheet_to_csv(worksheet);
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -1150,6 +1531,136 @@ function Dashboard() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     }
+  };
+
+  const printReportData = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showToast('Pop-up blocked. Please allow pop-ups to print the report.', 'error');
+      return;
+    }
+
+    const tabRows =
+      reportActiveTab === 'active'
+        ? sortedReportRows.filter((row) => row.status === 'Active')
+        : reportActiveTab === 'inactive'
+          ? sortedReportRows.filter((row) => row.status === 'Inactive')
+          : reportActiveTab === 'expiring'
+            ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
+            : sortedReportRows.filter((row) => isExpired(row.durationTo));
+
+    const title = getFormattedTitle();
+    const ROWS_PER_PAGE = 90;
+    const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));
+
+    const officeColHeader = reportAoStatus === 'Designated'
+      ? 'Designated Office'
+      : reportAoStatus === 'All Employees'
+        ? 'Detailed/Designated Office/Hospital'
+        : 'Detailed/Transferred Office/Hospital';
+
+    const durationColHeader = reportAoStatus === 'Designated'
+      ? 'Duration of Designated Order'
+      : 'Duration of Detailed Order';
+
+    const logoSrc = `${window.location.origin}/template_logo.png`;
+
+    const headerHtml = `
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:14px;">
+        <img src="${logoSrc}" alt="Logo" style="height:65px;width:auto;" onerror="this.style.display='none';" />
+        <div style="text-align:center;flex-grow:1;padding:0 12px;">
+          <div style="font-size:10.5pt;font-style:italic;font-weight:normal;">Republic of the Philippines</div>
+          <div style="font-size:11pt;font-weight:bold;margin-top:2px;">Province of Pangasinan</div>
+          <div style="font-size:10pt;font-weight:normal;margin-top:2px;">Lingayen</div>
+          <div style="font-size:11.5pt;font-weight:bold;margin-top:4px;font-family:Calibri,Arial,sans-serif;">HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+        </div>
+        <div style="width:65px;"></div>
+      </div>`;
+
+    const tableHeaderHtml = `
+      <thead>
+        <tr style="background-color:#f2f2f2;">
+          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:5%;">NO.</th>
+          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Name of Employee</th>
+          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Mother Unit</th>
+          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">${officeColHeader}</th>
+          <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;">${durationColHeader}</th>
+          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:19%;">Administrative Order No.</th>
+        </tr>
+        <tr style="background-color:#f2f2f2;">
+          <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;">From</th>
+          <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;">To</th>
+        </tr>
+      </thead>`;
+
+    const pagesHtml = Array.from({ length: pageCount }, (_, pageIdx) => {
+      const pageRows = tabRows.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
+      const rowsHtml = pageRows.length === 0
+        ? `<tr><td colspan="7" style="border:1px solid #000;padding:20px;text-align:center;color:#555;">No records found matching current filters.</td></tr>`
+        : pageRows.map((row, idx) => {
+            const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
+            const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
+            return `
+              <tr>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;">${globalIdx + 1}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:left;vertical-align:top;word-break:break-word;white-space:normal;">${row.name}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:left;vertical-align:top;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:left;vertical-align:top;word-break:break-word;white-space:normal;">${row.detailedOffice || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;">${row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;">${row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;word-break:break-word;">${ao}</td>
+              </tr>`;
+          }).join('');
+
+      const pageBreakStyle = pageIdx < pageCount - 1
+        ? 'page-break-after:always;margin-bottom:40px;padding-bottom:40px;border-bottom:3px dashed #aaa;'
+        : '';
+
+      return `
+        <div style="${pageBreakStyle}">
+          ${headerHtml}
+          <div style="text-align:center;font-weight:bold;font-size:11pt;font-family:Calibri,Arial,sans-serif;text-transform:uppercase;margin-bottom:14px;letter-spacing:0.3px;">
+            ${title}${pageCount > 1 ? ` <span style="font-size:9pt;font-weight:normal;margin-left:10px;color:#444;">(Page ${pageIdx + 1} of ${pageCount})</span>` : ''}
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-family:Calibri,Arial,sans-serif;table-layout:fixed;">
+            ${tableHeaderHtml}
+            <tbody>${rowsHtml}</tbody>
+          </table>
+
+        </div>`;
+    }).join('');
+
+    const html = `
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            @media print {
+              @page { size: landscape; margin: 0.5in; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: Calibri, Arial, sans-serif;
+              color: #000;
+              margin: 20px;
+              padding: 0;
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   const handleDeleteReportEntries = (ids: string[]) => {
@@ -1448,6 +1959,7 @@ function Dashboard() {
   const handleCloseAddEmployeeModal = useCallback(() => {
     setIsAddEmployeeModalOpen(false);
     setAoFile(null);
+    setAutoRename(false);
   }, []);
 
   const handleOpenUpdateEmployeeModal = (employee: Employee) => {
@@ -1483,6 +1995,7 @@ function Dashboard() {
     setFormData(employeeFormData);
     setOriginalEmployeeData(employeeFormData); // Store original data for comparison
     setFormErrors({});
+    setAutoRename(false);
     setIsUpdateEmployeeModalOpen(true);
   };
 
@@ -1491,6 +2004,7 @@ function Dashboard() {
     setSelectedEmployee(null);
     setOriginalEmployeeData(null);
     setAoFile(null);
+    setAutoRename(false);
   }, []);
 
   const handleCloseBulkDownloadModal = useCallback(() => {
@@ -1617,6 +2131,7 @@ function Dashboard() {
               mimeType: aoFile.type || 'application/pdf',
               aoNumber: formData.aoNumber,
               aoYear: formData.aoYear,
+              autoRename,
             },
             currentUser?.id,
             `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
@@ -1630,6 +2145,7 @@ function Dashboard() {
       handleCloseAddEmployeeModal();
       fetchEmployees();
       fetchAllEmployeesForKPI(); // Refresh KPI data
+      fetchDropdownOptions(); // Refresh searchable dropdown choices
     } catch (error) {
       console.error('Error saving employee:', error);
       showToast('Failed to save employee. Please try again.', 'error');
@@ -1703,6 +2219,7 @@ function Dashboard() {
                 mimeType: aoFile.type || 'application/pdf',
                 aoNumber: formData.aoNumber,
                 aoYear: formData.aoYear,
+                autoRename,
               },
               currentUser?.id,
               `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
@@ -1739,6 +2256,7 @@ function Dashboard() {
               mimeType: aoFile.type || 'application/pdf',
               aoNumber: formData.aoNumber,
               aoYear: formData.aoYear,
+              autoRename,
             },
             currentUser?.id,
             `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
@@ -1797,6 +2315,7 @@ function Dashboard() {
       handleCloseUpdateEmployeeModal();
       fetchEmployees();
       fetchAllEmployeesForKPI();
+      fetchDropdownOptions(); // Refresh searchable dropdown choices
     } catch (error: any) {
       console.error('Error updating employee:', error);
       throw new Error(error.message || 'Failed to update employee');
@@ -2110,6 +2629,7 @@ function Dashboard() {
       setShowAllEmployees(true);
       await fetchEmployees();
       await fetchAllEmployeesForKPI();
+      fetchDropdownOptions(); // Refresh searchable dropdown choices
 
       showToast(
         `Sync complete: ${result.insertedCount} added, ${result.updatedCount} updated.`,
@@ -2157,7 +2677,7 @@ function Dashboard() {
           </h1>
           <p className="dashboard__subtitle">
             {viewMode === 'reports'
-              ? 'View statistical reports and birthday summaries of employees'
+              ? 'View and generate reports of employees'
               : `Manage and track all employee records in the system (${allEmployees.length} employees)`}
           </p>
         </div>
@@ -2488,21 +3008,14 @@ function Dashboard() {
                   🗑️ Delete Selected ({selectedReportRowIds.size})
                 </Button>
               )}
+
               <Button
-                variant="secondary"
+                variant="primary"
                 size="sm"
-                onClick={() => exportReportData('xlsx')}
+                onClick={() => setIsReportPreviewOpen(true)}
                 disabled={sortedReportRows.length === 0}
               >
-                📊 Export XLSX
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => exportReportData('csv')}
-                disabled={sortedReportRows.length === 0}
-              >
-                📄 Export CSV
+                🖨️ View & Print
               </Button>
               <div ref={dropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
                 <Button
@@ -2951,28 +3464,13 @@ function Dashboard() {
             <label htmlFor="office-hospital-name" className="dashboard__form-label">
               Office / Hospital Name <span className="dashboard__required">*</span>
             </label>
-            {dropdownOptions.officeNames.length > 0 ? (
-              <select
-                id="office-hospital-name"
-                className="dashboard__form-select"
-                value={formData.officeHospitalName}
-                onChange={(e) => handleFormChange('officeHospitalName', e.target.value)}
-              >
-                <option value="">Select office or hospital name</option>
-                {dropdownOptions.officeNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="office-hospital-name"
-                className="dashboard__form-input"
-                type="text"
-                placeholder="Enter office or hospital name"
-                value={formData.officeHospitalName}
-                onChange={(e) => handleFormChange('officeHospitalName', e.target.value)}
-              />
-            )}
+            <SearchableDropdown
+              id="office-hospital-name"
+              options={dropdownOptions.officeNames}
+              value={formData.officeHospitalName}
+              onChange={(val) => handleFormChange('officeHospitalName', val)}
+              placeholder="Select or enter office or hospital name"
+            />
             {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
           </div>
 
@@ -2980,28 +3478,13 @@ function Dashboard() {
             <label htmlFor="position-function" className="dashboard__form-label">
               Position / Function <span className="dashboard__required">*</span>
             </label>
-            {dropdownOptions.positions.length > 0 ? (
-              <select
-                id="position-function"
-                className="dashboard__form-select"
-                value={formData.positionFunction}
-                onChange={(e) => handleFormChange('positionFunction', e.target.value)}
-              >
-                <option value="">Select position or function</option>
-                {dropdownOptions.positions.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="position-function"
-                className="dashboard__form-input"
-                type="text"
-                placeholder="Enter position or function"
-                value={formData.positionFunction}
-                onChange={(e) => handleFormChange('positionFunction', e.target.value)}
-              />
-            )}
+            <SearchableDropdown
+              id="position-function"
+              options={dropdownOptions.positions}
+              value={formData.positionFunction}
+              onChange={(val) => handleFormChange('positionFunction', val)}
+              placeholder="Select or enter position or function"
+            />
             {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
           </div>
 
@@ -3046,14 +3529,17 @@ function Dashboard() {
                 <label htmlFor="reasonForSeparation" className="dashboard__form-label">
                   Reason for Separation <span className="dashboard__required">*</span>
                 </label>
-                <textarea
+                <select
                   id="reasonForSeparation"
-                  className="dashboard__form-textarea"
-                  placeholder="Enter reason for separation"
+                  className="dashboard__form-select"
                   value={formData.reasonForSeparation}
                   onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
-                  rows={3}
-                />
+                >
+                  <option value="">Select reason for separation</option>
+                  {dropdownOptions.reasonsForSeparation.map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
                 {formErrors.reasonForSeparation && (
                   <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
                 )}
@@ -3150,8 +3636,8 @@ function Dashboard() {
                 onChange={(e) => handleFormChange('aoYear', e.target.value)}
               >
                 <option value="">Select series year</option>
-                {Array.from({ length: 21 }, (_, i) => 2015 + i).map((year) => (
-                  <option key={year} value={year.toString()}>{year}</option>
+                {dropdownOptions.aoYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
               {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
@@ -3177,14 +3663,28 @@ function Dashboard() {
               }}
             />
             {aoFile && (
-              <p style={{
-                fontSize: '0.8125rem',
-                marginTop: '0.375rem',
-                color: 'var(--color-success)',
-                fontWeight: 500
-              }}>
-                ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-              </p>
+              <>
+                <p style={{
+                  fontSize: '0.8125rem',
+                  marginTop: '0.375rem',
+                  color: 'var(--color-success)',
+                  fontWeight: 500
+                }}>
+                  ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+                </p>
+                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="add-auto-rename"
+                    checked={autoRename}
+                    onChange={(e) => setAutoRename(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="add-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Auto rename file according to AO details
+                  </label>
+                </div>
+              </>
             )}
             {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
           </div>
@@ -3195,28 +3695,13 @@ function Dashboard() {
                 <label htmlFor="detailedTo" className="dashboard__form-label">
                   Detailed/Transferred Office
                 </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="detailedTo"
-                    className="dashboard__form-select"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  >
-                    <option value="">Select office</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="detailedTo"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter office"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  />
-                )}
+                <SearchableDropdown
+                  id="detailedTo"
+                  options={dropdownOptions.officeNames}
+                  value={formData.detailedTo}
+                  onChange={(val) => handleFormChange('detailedTo', val)}
+                  placeholder="Select or enter office"
+                />
               </div>
 
               <div className="dashboard__form-field">
@@ -3260,56 +3745,26 @@ function Dashboard() {
                 <label htmlFor="designatedOffice" className="dashboard__form-label">
                   Designated Office
                 </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="designatedOffice"
-                    className="dashboard__form-select"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  >
-                    <option value="">Select office</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="designatedOffice"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter designated office"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  />
-                )}
+                <SearchableDropdown
+                  id="designatedOffice"
+                  options={dropdownOptions.officeNames}
+                  value={formData.detailedTo}
+                  onChange={(val) => handleFormChange('detailedTo', val)}
+                  placeholder="Select or enter designated office"
+                />
               </div>
 
               <div className="dashboard__form-field">
                 <label htmlFor="designatedPositionFunction" className="dashboard__form-label">
                   Designated Position Function
                 </label>
-                {dropdownOptions.positions.length > 0 ? (
-                  <select
-                    id="designatedPositionFunction"
-                    className="dashboard__form-select"
-                    value={formData.designatedPositionFunction}
-                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
-                  >
-                    <option value="">Select position</option>
-                    {dropdownOptions.positions.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="designatedPositionFunction"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter position function"
-                    value={formData.designatedPositionFunction}
-                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
-                  />
-                )}
+                <SearchableDropdown
+                  id="designatedPositionFunction"
+                  options={dropdownOptions.positions}
+                  value={formData.designatedPositionFunction}
+                  onChange={(val) => handleFormChange('designatedPositionFunction', val)}
+                  placeholder="Select or enter position function"
+                />
               </div>
 
               <div className="dashboard__form-row">
@@ -3470,28 +3925,13 @@ function Dashboard() {
             <label htmlFor="edit-office-hospital-name" className="dashboard__form-label">
               Office / Hospital Name
             </label>
-            {dropdownOptions.officeNames.length > 0 ? (
-              <select
-                id="edit-office-hospital-name"
-                className="dashboard__form-select"
-                value={formData.officeHospitalName}
-                onChange={(e) => handleFormChange('officeHospitalName', e.target.value)}
-              >
-                <option value="">Select office or hospital name</option>
-                {dropdownOptions.officeNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="edit-office-hospital-name"
-                className="dashboard__form-input"
-                type="text"
-                placeholder="Enter office or hospital name"
-                value={formData.officeHospitalName}
-                onChange={(e) => handleFormChange('officeHospitalName', e.target.value)}
-              />
-            )}
+            <SearchableDropdown
+              id="edit-office-hospital-name"
+              options={dropdownOptions.officeNames}
+              value={formData.officeHospitalName}
+              onChange={(val) => handleFormChange('officeHospitalName', val)}
+              placeholder="Select or enter office or hospital name"
+            />
             {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
           </div>
 
@@ -3499,28 +3939,13 @@ function Dashboard() {
             <label htmlFor="edit-position-function" className="dashboard__form-label">
               Position / Function
             </label>
-            {dropdownOptions.positions.length > 0 ? (
-              <select
-                id="edit-position-function"
-                className="dashboard__form-select"
-                value={formData.positionFunction}
-                onChange={(e) => handleFormChange('positionFunction', e.target.value)}
-              >
-                <option value="">Select position or function</option>
-                {dropdownOptions.positions.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id="edit-position-function"
-                className="dashboard__form-input"
-                type="text"
-                placeholder="Enter position or function"
-                value={formData.positionFunction}
-                onChange={(e) => handleFormChange('positionFunction', e.target.value)}
-              />
-            )}
+            <SearchableDropdown
+              id="edit-position-function"
+              options={dropdownOptions.positions}
+              value={formData.positionFunction}
+              onChange={(val) => handleFormChange('positionFunction', val)}
+              placeholder="Select or enter position or function"
+            />
             {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
           </div>
 
@@ -3565,14 +3990,17 @@ function Dashboard() {
                 <label htmlFor="update-reasonForSeparation" className="dashboard__form-label">
                   Reason for Separation
                 </label>
-                <textarea
+                <select
                   id="update-reasonForSeparation"
-                  className="dashboard__form-textarea"
-                  placeholder="Enter reason for separation"
+                  className="dashboard__form-select"
                   value={formData.reasonForSeparation}
                   onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
-                  rows={3}
-                />
+                >
+                  <option value="">Select reason for separation</option>
+                  {dropdownOptions.reasonsForSeparation.map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
                 {formErrors.reasonForSeparation && (
                   <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
                 )}
@@ -3669,8 +4097,8 @@ function Dashboard() {
                 onChange={(e) => handleFormChange('aoYear', e.target.value)}
               >
                 <option value="">Select series year</option>
-                {Array.from({ length: 21 }, (_, i) => 2015 + i).map((year) => (
-                  <option key={year} value={year.toString()}>{year}</option>
+                {dropdownOptions.aoYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
               {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
@@ -3696,14 +4124,28 @@ function Dashboard() {
               }}
             />
             {aoFile && (
-              <p style={{
-                fontSize: '0.8125rem',
-                marginTop: '0.375rem',
-                color: 'var(--color-success)',
-                fontWeight: 500
-              }}>
-                ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-              </p>
+              <>
+                <p style={{
+                  fontSize: '0.8125rem',
+                  marginTop: '0.375rem',
+                  color: 'var(--color-success)',
+                  fontWeight: 500
+                }}>
+                  ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+                </p>
+                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="update-auto-rename"
+                    checked={autoRename}
+                    onChange={(e) => setAutoRename(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="update-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Auto rename file according to AO details
+                  </label>
+                </div>
+              </>
             )}
             {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
           </div>
@@ -3714,28 +4156,13 @@ function Dashboard() {
                 <label htmlFor="edit-detailedTo" className="dashboard__form-label">
                   Detailed/Transferred Office
                 </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="edit-detailedTo"
-                    className="dashboard__form-select"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  >
-                    <option value="">Select office</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="edit-detailedTo"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter office"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  />
-                )}
+                <SearchableDropdown
+                  id="edit-detailedTo"
+                  options={dropdownOptions.officeNames}
+                  value={formData.detailedTo}
+                  onChange={(val) => handleFormChange('detailedTo', val)}
+                  placeholder="Select or enter office"
+                />
               </div>
 
               <div className="dashboard__form-field">
@@ -3779,56 +4206,26 @@ function Dashboard() {
                 <label htmlFor="edit-designatedOffice" className="dashboard__form-label">
                   Designated Office
                 </label>
-                {dropdownOptions.officeNames.length > 0 ? (
-                  <select
-                    id="edit-designatedOffice"
-                    className="dashboard__form-select"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  >
-                    <option value="">Select office</option>
-                    {dropdownOptions.officeNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="edit-designatedOffice"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter designated office"
-                    value={formData.detailedTo}
-                    onChange={(e) => handleFormChange('detailedTo', e.target.value)}
-                  />
-                )}
+                <SearchableDropdown
+                  id="edit-designatedOffice"
+                  options={dropdownOptions.officeNames}
+                  value={formData.detailedTo}
+                  onChange={(val) => handleFormChange('detailedTo', val)}
+                  placeholder="Select or enter designated office"
+                />
               </div>
 
               <div className="dashboard__form-field">
                 <label htmlFor="edit-designatedPositionFunction" className="dashboard__form-label">
                   Designated Position Function
                 </label>
-                {dropdownOptions.positions.length > 0 ? (
-                  <select
-                    id="edit-designatedPositionFunction"
-                    className="dashboard__form-select"
-                    value={formData.designatedPositionFunction}
-                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
-                  >
-                    <option value="">Select position</option>
-                    {dropdownOptions.positions.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="edit-designatedPositionFunction"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter position function"
-                    value={formData.designatedPositionFunction}
-                    onChange={(e) => handleFormChange('designatedPositionFunction', e.target.value)}
-                  />
-                )}
+                <SearchableDropdown
+                  id="edit-designatedPositionFunction"
+                  options={dropdownOptions.positions}
+                  value={formData.designatedPositionFunction}
+                  onChange={(val) => handleFormChange('designatedPositionFunction', val)}
+                  placeholder="Select or enter position function"
+                />
               </div>
 
               <div className="dashboard__form-row">
@@ -3956,6 +4353,182 @@ function Dashboard() {
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginTop: '0.75rem' }}>
             This request will be sent to a Super Admin for approval. Once approved, the selected entries and their corresponding Administrative Order documents will be permanently removed.
           </p>
+        </div>
+      </Modal>
+
+      {/* Report Preview Modal */}
+      <Modal
+        isOpen={isReportPreviewOpen}
+        onClose={() => setIsReportPreviewOpen(false)}
+        title="Report Preview & Export"
+        size="xl"
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
+            <Button
+              variant="secondary"
+              onClick={() => setIsReportPreviewOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => exportReportData('csv')}
+              disabled={sortedReportRows.length === 0}
+            >
+              📄 Export CSV
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => exportReportData('xlsx')}
+              disabled={sortedReportRows.length === 0}
+            >
+              📊 Export XLSX
+            </Button>
+            <Button
+              variant="primary"
+              onClick={printReportData}
+              disabled={sortedReportRows.length === 0}
+            >
+              🖨️ Print
+            </Button>
+          </div>
+        }
+      >
+        <div className="printable-report" style={{
+          fontFamily: "'Times New Roman', Times, serif",
+          color: '#000',
+          backgroundColor: '#fff',
+          padding: '1rem',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--border-color)',
+          overflowX: 'auto',
+          lineHeight: '1.3'
+        }}>
+          {(() => {
+            const tabRows =
+              reportActiveTab === 'active'
+                ? sortedReportRows.filter((row) => row.status === 'Active')
+                : reportActiveTab === 'inactive'
+                  ? sortedReportRows.filter((row) => row.status === 'Inactive')
+                  : reportActiveTab === 'expiring'
+                    ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
+                    : sortedReportRows.filter((row) => isExpired(row.durationTo));
+
+            const ROWS_PER_PAGE = 90;
+            const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));
+            const officeColHeader = reportAoStatus === 'Designated'
+              ? 'Designated Office'
+              : reportAoStatus === 'All Employees'
+                ? 'Detailed/Designated Office/Hospital'
+                : 'Detailed/Transferred Office/Hospital';
+            const durationColHeader = reportAoStatus === 'Designated'
+              ? 'Duration of Designated Order'
+              : 'Duration of Detailed Order';
+
+            const headerBlock = (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '2px solid #000',
+                paddingBottom: '10px',
+                marginBottom: '14px'
+              }}>
+                <img
+                  src="/template_logo.png"
+                  alt="Logo"
+                  style={{ height: '65px', width: 'auto' }}
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
+                <div style={{ textAlign: 'center', flexGrow: 1, padding: '0 12px' }}>
+                  <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
+                  <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
+                  <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                </div>
+                <div style={{ width: '65px' }} />
+              </div>
+            );
+
+            const tableHeader = (
+              <thead>
+                <tr style={{ backgroundColor: '#f2f2f2' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>NO.</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Name of Employee</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Mother Unit</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>{officeColHeader}</th>
+                  <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{durationColHeader}</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '19%' }}>Administrative Order No.</th>
+                </tr>
+                <tr style={{ backgroundColor: '#f2f2f2' }}>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%' }}>From</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%' }}>To</th>
+                </tr>
+              </thead>
+            );
+
+            if (tabRows.length === 0) {
+              return (
+                <>
+                  {headerBlock}
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '16px' }}>{getFormattedTitle()}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                    {tableHeader}
+                    <tbody>
+                      <tr><td colSpan={7} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>No records found matching current filters.</td></tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+
+            return Array.from({ length: pageCount }, (_, pageIdx) => {
+              const pageRows = tabRows.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
+              return (
+                <div
+                  key={pageIdx}
+                  style={{
+                    pageBreakAfter: pageIdx < pageCount - 1 ? 'always' : 'auto',
+                    marginBottom: pageIdx < pageCount - 1 ? '40px' : '0',
+                    paddingBottom: pageIdx < pageCount - 1 ? '40px' : '0',
+                    borderBottom: pageIdx < pageCount - 1 ? '3px dashed #aaa' : 'none',
+                  }}
+                >
+                  {headerBlock}
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', fontFamily: 'Calibri, Arial, sans-serif', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.3px' }}>
+                    {getFormattedTitle()}
+                    {pageCount > 1 && (
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
+                        (Page {pageIdx + 1} of {pageCount})
+                      </span>
+                    )}
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Calibri, Arial, sans-serif', tableLayout: 'fixed' }}>
+                    {tableHeader}
+                    <tbody>
+                      {pageRows.map((row, idx) => {
+                        const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
+                        return (
+                          <tr key={globalIdx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top' }}>{globalIdx + 1}</td>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'left', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'left', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'left', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top' }}>{row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top' }}>{row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top', wordBreak: 'break-word' }}>
+                              {row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                </div>
+              );
+            });
+          })()}
         </div>
       </Modal>
     </div>

@@ -158,6 +158,7 @@
 .sidebar__nav-icon {
   font-size: var(--font-size-lg);
   width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -7,7 +7,7 @@ interface UsePDFDocumentsReturn {
   documents: EmployeeDocument[];
   loading: boolean;
   error: string | null;
-  uploadDocument: (file: File, category: DocumentCategory) => Promise<void>;
+  uploadDocument: (file: File, category: DocumentCategory, aoData?: any) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
   getDocumentData: (documentId: string) => string | null;
   refreshDocuments: () => void;
@@ -17,7 +17,7 @@ interface UsePDFDocumentsReturn {
 const validatePDFFile = (file: File): { valid: boolean; error?: string } => {
   if (!file) return { valid: false, error: 'No file selected' };
   if (file.type !== 'application/pdf') return { valid: false, error: 'Only PDF files are allowed' };
-  if (!file.name.endsWith('.pdf')) return { valid: false, error: 'File must have .pdf extension' };
+  if (!file.name.toLowerCase().endsWith('.pdf')) return { valid: false, error: 'File must have .pdf extension' };
   if (file.size === 0) return { valid: false, error: 'File is empty' };
   return { valid: true };
 };
@@ -40,8 +40,20 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
         fileName: doc.fileName,
         category: doc.category as DocumentCategory,
         uploadedAt: doc.createdAt,
-        uploadedBy: 'User', // TODO: Get from user data when available
+        uploadedBy: doc.uploadedBy || 'Unknown',
         fileSize: Math.round(doc.fileSize / 1024), // Convert bytes to KB
+        aoNumber: doc.aoNumber || undefined,
+        aoYear: doc.aoYear || undefined,
+        aoType: doc.aoType || undefined,
+        detailedTo: doc.detailedTo || undefined,
+        detailedDivision: doc.detailedDivision || undefined,
+        detailedFunction: doc.detailedFunction || undefined,
+        detailedDate: doc.detailedDate || undefined,
+        designatedPositionFunction: doc.designatedPositionFunction || undefined,
+        designatedOrderFrom: doc.designatedOrderFrom || undefined,
+        designatedOrderTo: doc.designatedOrderTo || undefined,
+        appointmentFrom: doc.appointmentFrom || undefined,
+        appointmentTo: doc.appointmentTo || undefined,
       }));
       
       setDocuments(mappedDocs);
@@ -58,7 +70,7 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
   }, [employeeId]);
 
   // Upload a new document
-  const uploadDocument = async (file: File, category: DocumentCategory): Promise<void> => {
+  const uploadDocument = async (file: File, category: DocumentCategory, aoData?: any): Promise<void> => {
     // Validate file before entering try-catch
     const validation = validatePDFFile(file);
     if (!validation.valid) {
@@ -77,9 +89,13 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
+          ...aoData
         },
         currentUser?.id,
-        `${currentUser?.firstName} ${currentUser?.lastName}`
+        currentUser?.name ||
+          [currentUser?.lastName, currentUser?.firstName].filter(Boolean).join(', ') ||
+          currentUser?.username ||
+          'Unknown'
       );
 
       try {

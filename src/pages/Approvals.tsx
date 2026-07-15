@@ -21,6 +21,9 @@ const ACTION_LABELS: Record<string, string> = {
   update_user: 'Update User',
   delete_user: 'Delete User',
   borrow_201: 'Borrow 201 File',
+  view_document: 'View Document',
+  print_document: 'Print Document',
+  download_document: 'Download Document',
 };
 
 function Approvals() {
@@ -161,6 +164,12 @@ function Approvals() {
       }
       case 'borrow_201':
         return `Borrow 201 of ${payload.employeeName}${payload.borrowerName ? ' — Borrowed By: ' + payload.borrowerName : ''}${payload.purpose ? ' | Purpose: ' + payload.purpose : ''}`;
+      case 'view_document':
+      case 'print_document':
+      case 'download_document': {
+        const actionWord = req.action === 'view_document' ? 'View' : req.action === 'print_document' ? 'Print' : 'Download';
+        return `${actionWord}: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}${payload.employeeName ? ` — Employee: ${payload.employeeName}` : ''}${payload.purpose ? ` | Purpose: ${payload.purpose}` : ''}`;
+      }
       default:
         return req.entityName || req.entityId;
     }
@@ -238,6 +247,14 @@ function Approvals() {
           purpose: payload.purpose || undefined,
           releasedBy: payload.releasedBy,
         });
+        break;
+      case 'view_document':
+        // Approval grants 24-hour access — the actual viewing happens in the Requests panel.
+        // Nothing to execute server-side; the updated status + resolvedAt in the DB is enough.
+        break;
+      case 'print_document':
+      case 'download_document':
+        // These are also executed from the Requests panel after approval.
         break;
       default:
         console.warn('Unknown action to execute:', action);
