@@ -1194,6 +1194,10 @@
 
 /* Print styles for Generated Reports preview */
 @media print {
+  @page {
+    size: 13in 8.5in;
+    margin: 0.5in;
+  }
   body * {
     visibility: hidden !important;
   }
@@ -1209,6 +1213,11 @@
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
+  }
+  .printable-report > div {
+    border-bottom: none !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
   }
   /* Remove overlay modal background and headers when printing */
   .modal-overlay {

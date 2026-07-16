@@ -9,6 +9,8 @@ import Settings from './pages/Settings';
 import Approvals from './pages/Approvals';
 import Requests from './pages/Requests';
 import Login from './pages/Login';
+import Calendar from './pages/Calendar';
+import CalendarActivities from './pages/CalendarActivities';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
@@ -50,6 +52,8 @@ function App() {
               }
             >
               <Route index element={<Dashboard />} />
+              <Route path="calendar" element={<Calendar />} />
+              <Route path="calendar-activities" element={<CalendarActivities />} />
               <Route path="reports" element={<Dashboard />} />
               <Route path="employees/:id" element={<EmployeeDetails />} />
               <Route 

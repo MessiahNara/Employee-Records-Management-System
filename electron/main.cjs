@@ -299,6 +299,36 @@ ipcMain.handle('get-server-url', () => {
   return GLOBAL_SERVER_URL;
 });
 
+// IPC handler for frontend to print window contents to PDF and open it
+ipcMain.handle('print-to-pdf', async (event, options) => {
+  try {
+    const { shell } = require('electron');
+    const pdfPath = path.join(app.getPath('temp'), `ERMS-Report-${Date.now()}.pdf`);
+    
+    // Custom page size (landscape coupon: 13x8.5 inches)
+    // 1 inch = 25400 microns. 
+    // 13in = 330200 microns. 
+    // 8.5in = 215900 microns.
+    const data = await mainWindow.webContents.printToPDF({
+      marginsType: 1, // Use CSS margins defined in Dashboard.css
+      pageSize: {
+        width: 330200,
+        height: 215900
+      },
+      landscape: true,
+      printBackground: true,
+      ...options
+    });
+    
+    fs.writeFileSync(pdfPath, data);
+    await shell.openPath(pdfPath);
+    return { success: true };
+  } catch (err) {
+    console.error('[ipc] Failed to generate PDF:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // Create window when app is ready
 app.whenReady().then(() => {
   // Allow self-signed certificates for all requests in this session

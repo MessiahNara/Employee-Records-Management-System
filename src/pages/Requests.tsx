@@ -9,8 +9,8 @@ import { useToast } from '../contexts/ToastContext';
 import { MdRefresh, MdAccessTime, MdCheckCircle, MdCancel, MdPending, MdVisibility, MdPrint, MdDownload } from 'react-icons/md';
 import './Requests.css';
 
-const TTL_HOURS = 24;
-const TTL_MS = TTL_HOURS * 60 * 60 * 1000;
+const TTL_MINUTES = 30;
+const TTL_MS = TTL_MINUTES * 60 * 1000;
 
 const ACTION_LABELS: Record<string, string> = {
   view_document: 'View Document',
@@ -32,7 +32,10 @@ function formatCountdown(ms: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
-  return `${h}h ${m}m ${s}s`;
+  if (h > 0) {
+    return `${h}h ${m}m ${s}s`;
+  }
+  return `${m}m ${s}s`;
 }
 
 function Requests() {

@@ -112,65 +112,56 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
     ? 'Duration of Designated Order'
     : 'Duration of Detailed Order';
 
-  // ── Keep original column widths from the template (no changes) ────────────
-  // Columns B–D share width 35.77, E=13.11, F=14.66, G=24.
+  const designatedHeader = aoStatus === 'Designated'
+    ? 'Designated Position'
+    : 'Designated Position/Function';
+
+  // ── Re-write column widths to accommodate 7 or 9 columns ──────────────────
+  let colsXml = '';
+  if (aoStatus === 'Detailed') {
+    colsXml = `<cols><col min="1" max="1" width="6.33203125" customWidth="1"/><col min="2" max="4" width="35.77734375" customWidth="1"/><col min="5" max="5" width="13.109375" customWidth="1"/><col min="6" max="6" width="14.6640625" customWidth="1"/><col min="7" max="7" width="24" customWidth="1"/><col min="8" max="26" width="8.6640625" customWidth="1"/></cols>`;
+  } else {
+    colsXml = `<cols><col min="1" max="1" width="6.33203125" customWidth="1"/><col min="2" max="2" width="30" customWidth="1"/><col min="3" max="3" width="22" customWidth="1"/><col min="4" max="5" width="30" customWidth="1"/><col min="6" max="6" width="22" customWidth="1"/><col min="7" max="7" width="13.109375" customWidth="1"/><col min="8" max="8" width="14.6640625" customWidth="1"/><col min="9" max="9" width="24" customWidth="1"/><col min="10" max="26" width="8.6640625" customWidth="1"/></cols>`;
+  }
+  xmlStr = xmlStr.replace(/<cols>[\s\S]*?<\/cols>/, colsXml);
 
   // ── Dynamic row-height helper ─────────────────────────────────────────────
-  // Each data column has a fixed width in Excel units. We estimate how many
-  // lines of text a value will wrap to and multiply by the single-line height.
-  // Column widths (in Excel chars): B=35.77, C=35.77, D=35.77, G=24
-  // Font is ~7pt; at that size, approx 1 Excel width unit ≈ 1 printable char.
-  // Add a small buffer and take the max across all wrapped columns.
-  const BASE_ROW_HT = 19.95;        // single-line row height (pt) from template
-  const LINE_HT = 13.5;         // height per additional wrapped line (pt)
-  const CHARS_B = 33;           // usable chars in col B (name) before wrap
-  const CHARS_C = 33;           // usable chars in col C (mother unit)
-  const CHARS_D = 33;           // usable chars in col D (office)
-  const CHARS_G = 22;           // usable chars in col G (AO no.)
+  const BASE_ROW_HT = 19.95;
+  const LINE_HT = 13.5;
+  const CHARS_B = 24;
+  const CHARS_C = 20;
+  const CHARS_D = 24;
+  const CHARS_E = 24;
+  const CHARS_F = 20;
+  const CHARS_I = 22;
 
-  const calcRowHt = (name: string, mother: string, office: string, ao: string): number => {
+  const calcRowHt = (name: string, pos: string, mother: string, office: string, desigPos: string, ao: string): number => {
     const linesFor = (text: string, maxChars: number) =>
       text.length === 0 ? 1 : Math.ceil(text.length / maxChars);
-    const lines = Math.max(
-      linesFor(name, CHARS_B),
-      linesFor(mother, CHARS_C),
-      linesFor(office, CHARS_D),
-      linesFor(ao, CHARS_G)
-    );
-    return lines <= 1 ? BASE_ROW_HT : BASE_ROW_HT + (lines - 1) * LINE_HT;
+
+    if (aoStatus === 'Detailed') {
+      const lines = Math.max(
+        linesFor(name, 33),
+        linesFor(mother, 33),
+        linesFor(office, 33),
+        linesFor(ao, 22)
+      );
+      return lines <= 1 ? BASE_ROW_HT : BASE_ROW_HT + (lines - 1) * LINE_HT;
+    } else {
+      const lines = Math.max(
+        linesFor(name, CHARS_B),
+        linesFor(pos, CHARS_C),
+        linesFor(mother, CHARS_D),
+        linesFor(office, CHARS_E),
+        linesFor(desigPos, CHARS_F),
+        linesFor(ao, CHARS_I)
+      );
+      return lines <= 1 ? BASE_ROW_HT : BASE_ROW_HT + (lines - 1) * LINE_HT;
+    }
   };
 
-  // ── Replace title cell A6 ─────────────────────────────────────────────────
-  xmlStr = xmlStr.replace(
-    /(<c r="A6"[^>]*>)([\s\S]*?)(<\/c>)/,
-    `<c r="A6" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c>`
-  );
-
-  // ── Replace column headers D7 and E7 ─────────────────────────────────────
-  xmlStr = xmlStr.replace(
-    /(<c r="D7"[^>]*>)([\s\S]*?)(<\/c>)/,
-    `<c r="D7" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c>`
-  );
-  xmlStr = xmlStr.replace(
-    /(<c r="E7"[^>]*>)([\s\S]*?)(<\/c>)/,
-    `<c r="E7" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c>`
-  );
-
-  // ── Page layout constants ─────────────────────────────────────────────────
-  // Each page: 91 data rows (row 9–99 on page 1, then repeating blocks)
-  // Within each page block:
-  //   pos 0       → first row styles      (sA=6,  sBC=12, sD=13, sEF=14, sG=15)
-  //   pos 1–14    → pre-divider rows      (sA=7,  sBC=16, sD=17, sEF=18, sG=19)
-  //   pos 15      → mid-page divider      (sA=11, sBC=22, sD=23, sEF=24, sG=25)
-  //   pos 16–57   → post-divider middle   (sA=7,  sBC=16, sD=17, sEF=18, sG=19)
-  //   pos 58–88   → near-bottom rows      (sA=8,  sBC=16, sD=17, sEF=26, sG=19)
-  //   pos 89      → penultimate row       (sA=9,  sBC=16, sD=17, sEF=27, sG=28)
-  //   pos 90      → last row              (sA=10, sBC=29, sD=30, sEF=31, sG=32)
-  // Total per page = 91 positions (pos 0–90), but pos 15 is the divider (no data)
-  // So each page holds 90 data rows + 1 divider row
-
-  const ROWS_PER_PAGE = 90; // actual data rows per page (divider row doesn't count)
-  const DIVIDER_POS = 15;   // position within page block where divider row sits
+  const ROWS_PER_PAGE = 90;
+  const DIVIDER_POS = 15;
 
   const formatDateMDYStr = (dateVal: any) => {
     if (!dateVal) return '';
@@ -182,10 +173,9 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
     return `${month}/${day}/${year}`;
   };
 
-  // Determine styles for a position within a page block
   const getStyles = (posInPage: number, totalInPage: number) => {
     if (posInPage === 0) return { sA: '6', sBC: '12', sD: '13', sEF: '14', sG: '15' };
-    const last = totalInPage - 1; // last data position in this page
+    const last = totalInPage - 1;
     const penul = totalInPage - 2;
     if (posInPage === last) return { sA: '10', sBC: '29', sD: '30', sEF: '31', sG: '32' };
     if (posInPage === penul) return { sA: '9', sBC: '16', sD: '17', sEF: '27', sG: '28' };
@@ -193,73 +183,129 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
     return { sA: '7', sBC: '16', sD: '17', sEF: '18', sG: '19' };
   };
 
-  // ── Extract XML before row 9 and after </sheetData> ───────────────────────
-  const row9Start = xmlStr.indexOf('<row r="9"');
-  if (row9Start === -1) return xmlStr;
+  const generateHeaderBlock = (start: number): string => {
+    const designatedHeader = aoStatus === 'Designated'
+      ? 'Designated Position'
+      : 'Designated Position/Function';
+
+    const headerTexts = [
+      'Republic of the Philippines',
+      'Province of Pangasinan',
+      'Lingayen',
+      'HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE',
+      ''
+    ];
+
+    let block = '';
+
+    if (aoStatus === 'Detailed') {
+      block += `<row r="${start}" spans="1:12" ht="15" customHeight="1" x14ac:dyDescent="0.25"><c r="A${start}" s="37" t="inlineStr"><is><t>${headerTexts[0]}</t></is></c><c r="B${start}" s="37"/><c r="C${start}" s="37"/><c r="D${start}" s="37"/><c r="E${start}" s="37"/><c r="F${start}" s="37"/><c r="G${start}" s="37"/></row>`;
+      for (let h = 1; h <= 4; h++) {
+        const rn = start + h;
+        const sty = '38';
+        const txt = headerTexts[h];
+        const thickBot = h === 4 ? ' thickBot="1"' : '';
+        block += `<row r="${rn}" spans="1:12" ht="15" customHeight="1"${thickBot} x14ac:dyDescent="0.25"><c r="A${rn}" s="${sty}" t="inlineStr"><is><t>${escapeXml(txt)}</t></is></c><c r="B${rn}" s="${sty}"/><c r="C${rn}" s="${sty}"/><c r="D${rn}" s="${sty}"/><c r="E${rn}" s="${sty}"/><c r="F${rn}" s="${sty}"/><c r="G${rn}" s="${sty}"/></row>`;
+      }
+      const titleRow = start + 5;
+      block += `<row r="${titleRow}" spans="1:12" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${titleRow}" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c><c r="B${titleRow}" s="40"/><c r="C${titleRow}" s="40"/><c r="D${titleRow}" s="40"/><c r="E${titleRow}" s="40"/><c r="F${titleRow}" s="40"/><c r="G${titleRow}" s="41"/></row>`;
+
+      const h7 = start + 6;
+      block += `<row r="${h7}" spans="1:12" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${h7}" s="35" t="inlineStr"><is><t>NO.</t></is></c><c r="B${h7}" s="35" t="inlineStr"><is><t>Name of Employee</t></is></c><c r="C${h7}" s="35" t="inlineStr"><is><t>Mother Unit</t></is></c><c r="D${h7}" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c><c r="E${h7}" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c><c r="F${h7}" s="42"/><c r="G${h7}" s="35" t="inlineStr"><is><t>Administrative Order No.</t></is></c></row>`;
+
+      const h8 = start + 7;
+      block += `<row r="${h8}" spans="1:12" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${h8}" s="36"/><c r="B${h8}" s="36"/><c r="C${h8}" s="36"/><c r="D${h8}" s="36"/><c r="E${h8}" s="5" t="inlineStr"><is><t>From</t></is></c><c r="F${h8}" s="5" t="inlineStr"><is><t>To</t></is></c><c r="G${h8}" s="36"/></row>`;
+    } else {
+      block += `<row r="${start}" spans="1:12" ht="15" customHeight="1" x14ac:dyDescent="0.25"><c r="A${start}" s="37" t="inlineStr"><is><t>${headerTexts[0]}</t></is></c><c r="B${start}" s="37"/><c r="C${start}" s="37"/><c r="D${start}" s="37"/><c r="E${start}" s="37"/><c r="F${start}" s="37"/><c r="G${start}" s="37"/><c r="H${start}" s="37"/><c r="I${start}" s="37"/></row>`;
+      for (let h = 1; h <= 4; h++) {
+        const rn = start + h;
+        const sty = '38';
+        const txt = headerTexts[h];
+        const thickBot = h === 4 ? ' thickBot="1"' : '';
+        block += `<row r="${rn}" spans="1:12" ht="15" customHeight="1"${thickBot} x14ac:dyDescent="0.25"><c r="A${rn}" s="${sty}" t="inlineStr"><is><t>${escapeXml(txt)}</t></is></c><c r="B${rn}" s="${sty}"/><c r="C${rn}" s="${sty}"/><c r="D${rn}" s="${sty}"/><c r="E${rn}" s="${sty}"/><c r="F${rn}" s="${sty}"/><c r="G${rn}" s="${sty}"/><c r="H${rn}" s="${sty}"/><c r="I${rn}" s="${sty}"/></row>`;
+      }
+      const titleRow = start + 5;
+      block += `<row r="${titleRow}" spans="1:12" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${titleRow}" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c><c r="B${titleRow}" s="40"/><c r="C${titleRow}" s="40"/><c r="D${titleRow}" s="40"/><c r="E${titleRow}" s="40"/><c r="F${titleRow}" s="40"/><c r="G${titleRow}" s="40"/><c r="H${titleRow}" s="40"/><c r="I${titleRow}" s="41"/></row>`;
+
+      const h7 = start + 6;
+      block += `<row r="${h7}" spans="1:12" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${h7}" s="35" t="inlineStr"><is><t>NO.</t></is></c><c r="B${h7}" s="35" t="inlineStr"><is><t>Name of Employee</t></is></c><c r="C${h7}" s="35" t="inlineStr"><is><t>Position</t></is></c><c r="D${h7}" s="35" t="inlineStr"><is><t>Mother Unit</t></is></c><c r="E${h7}" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c><c r="F${h7}" s="35" t="inlineStr"><is><t>${escapeXml(designatedHeader)}</t></is></c><c r="G${h7}" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c><c r="H${h7}" s="42"/><c r="I${h7}" s="35" t="inlineStr"><is><t>Administrative Order No.</t></is></c></row>`;
+
+      const h8 = start + 7;
+      block += `<row r="${h8}" spans="1:12" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${h8}" s="36"/><c r="B${h8}" s="36"/><c r="C${h8}" s="36"/><c r="D${h8}" s="36"/><c r="E${h8}" s="36"/><c r="F${h8}" s="36"/><c r="G${h8}" s="5" t="inlineStr"><is><t>From</t></is></c><c r="H${h8}" s="5" t="inlineStr"><is><t>To</t></is></c><c r="I${h8}" s="36"/></row>`;
+    }
+
+    return block;
+  };
+
+  const row1Start = xmlStr.indexOf('<row r="1"');
+  if (row1Start === -1) return { xml: xmlStr, lastRow: 8 };
+  const xmlBefore = xmlStr.substring(0, row1Start);
+
   const sheetDataEnd = xmlStr.indexOf('</sheetData>');
-  if (sheetDataEnd === -1) return xmlStr;
-
-  // We'll also need the header rows 1–8 XML to repeat on subsequent pages
-  // Extract rows 1–8 from the original XML
-  const row9End = row9Start; // everything before row 9 is the header
-  const headerRowsXml = xmlStr.substring(xmlStr.indexOf('<row r="1"'), row9End);
-
-  const xmlBefore = xmlStr.substring(0, xmlStr.indexOf('<row r="1"'));
+  if (sheetDataEnd === -1) return { xml: xmlStr, lastRow: 8 };
   const xmlAfterSheetData = xmlStr.substring(sheetDataEnd);
+
+  const row9Start = xmlStr.indexOf('<row r="9"');
+  const originalHeaderRowsXml = row9Start !== -1
+    ? xmlStr.substring(row1Start, row9Start)
+    : xmlStr.substring(row1Start, sheetDataEnd);
+
+  let patchedHeaderRowsXml = originalHeaderRowsXml;
+  if (aoStatus === 'Detailed') {
+    patchedHeaderRowsXml = patchedHeaderRowsXml
+      .replace(
+        /<row r="6"[\s\S]*?<\/row>/,
+        `<row r="6" spans="1:12" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A6" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c><c r="B6" s="40"/><c r="C6" s="40"/><c r="D6" s="40"/><c r="E6" s="40"/><c r="F6" s="40"/><c r="G6" s="41"/></row>`
+      )
+      .replace(
+        /<row r="7"[\s\S]*?<\/row>/,
+        `<row r="7" spans="1:12" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A7" s="35" t="inlineStr"><is><t>NO.</t></is></c><c r="B7" s="35" t="inlineStr"><is><t>Name of Employee</t></is></c><c r="C7" s="35" t="inlineStr"><is><t>Mother Unit</t></is></c><c r="D7" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c><c r="E7" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c><c r="F7" s="42"/><c r="G7" s="35" t="inlineStr"><is><t>Administrative Order No.</t></is></c></row>`
+      )
+      .replace(
+        /<row r="8"[\s\S]*?<\/row>/,
+        `<row r="8" spans="1:12" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A8" s="36"/><c r="B8" s="36"/><c r="C8" s="36"/><c r="D8" s="36"/><c r="E8" s="5" t="inlineStr"><is><t>From</t></is></c><c r="F8" s="5" t="inlineStr"><is><t>To</t></is></c><c r="G8" s="36"/></row>`
+      );
+  } else {
+    patchedHeaderRowsXml = patchedHeaderRowsXml
+      .replace(
+        /<row r="6"[\s\S]*?<\/row>/,
+        `<row r="6" spans="1:12" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A6" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c><c r="B6" s="40"/><c r="C6" s="40"/><c r="D6" s="40"/><c r="E6" s="40"/><c r="F6" s="40"/><c r="G6" s="40"/><c r="H6" s="40"/><c r="I6" s="41"/></row>`
+      )
+      .replace(
+        /<row r="7"[\s\S]*?<\/row>/,
+        `<row r="7" spans="1:12" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A7" s="35" t="inlineStr"><is><t>NO.</t></is></c><c r="B7" s="35" t="inlineStr"><is><t>Name of Employee</t></is></c><c r="C7" s="35" t="inlineStr"><is><t>Position</t></is></c><c r="D7" s="35" t="inlineStr"><is><t>Mother Unit</t></is></c><c r="E7" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c><c r="F7" s="35" t="inlineStr"><is><t>${escapeXml(designatedHeader)}</t></is></c><c r="G7" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c><c r="H7" s="42"/><c r="I7" s="35" t="inlineStr"><is><t>Administrative Order No.</t></is></c></row>`
+      )
+      .replace(
+        /<row r="8"[\s\S]*?<\/row>/,
+        `<row r="8" spans="1:12" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A8" s="36"/><c r="B8" s="36"/><c r="C8" s="36"/><c r="D8" s="36"/><c r="E8" s="36"/><c r="F8" s="36"/><c r="G8" s="5" t="inlineStr"><is><t>From</t></is></c><c r="H8" s="5" t="inlineStr"><is><t>To</t></is></c><c r="I8" s="36"/></row>`
+      );
+  }
 
   // ── Build pages ───────────────────────────────────────────────────────────
   let newRowsXml = '';
-  let globalRowNum = 9; // actual XML row number (increments continuously)
-  let dataIdx = 0;      // index into rowsData
+  let globalRowNum = 9;
+  let dataIdx = 0;
   let pageNum = 0;
+  const headerStartRows: number[] = [1];
 
   while (dataIdx < rowsData.length) {
-    // Slice data for this page
     const pageData = rowsData.slice(dataIdx, dataIdx + ROWS_PER_PAGE);
     const pageCount = pageData.length;
 
-    // For page 2+, re-emit the header rows with updated row numbers
     if (pageNum > 0) {
-      // Re-emit rows 1–8 shifted to current globalRowNum
-      // We just rebuild the 8 header rows manually using the known styles
-      const headerStart = globalRowNum;
-      // Rows 1–5: header info rows
-      const headerTexts = [
-        'Republic of the Philippines',
-        'Province of Pangasinan',
-        'Lingayen',
-        'HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE',
-        ''
-      ];
-      newRowsXml += `<row r="${headerStart}" spans="1:12" ht="15" customHeight="1" x14ac:dyDescent="0.25"><c r="A${headerStart}" s="37" t="inlineStr"><is><t>${headerTexts[0]}</t></is></c><c r="B${headerStart}" s="37"/><c r="C${headerStart}" s="37"/><c r="D${headerStart}" s="37"/><c r="E${headerStart}" s="37"/><c r="F${headerStart}" s="37"/><c r="G${headerStart}" s="37"/></row>`;
-      for (let h = 1; h <= 4; h++) {
-        const rn = headerStart + h;
-        const sty = h === 4 ? '38' : '38';
-        const txt = headerTexts[h];
-        const thickBot = h === 4 ? ' thickBot="1"' : '';
-        newRowsXml += `<row r="${rn}" spans="1:12" ht="15" customHeight="1"${thickBot} x14ac:dyDescent="0.25"><c r="A${rn}" s="${sty}" t="inlineStr"><is><t>${escapeXml(txt)}</t></is></c><c r="B${rn}" s="${sty}"/><c r="C${rn}" s="${sty}"/><c r="D${rn}" s="${sty}"/><c r="E${rn}" s="${sty}"/><c r="F${rn}" s="${sty}"/><c r="G${rn}" s="${sty}"/></row>`;
-      }
-      globalRowNum += 5;
-
-      // Title row (A6 equivalent)
-      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${globalRowNum}" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c><c r="B${globalRowNum}" s="40"/><c r="C${globalRowNum}" s="40"/><c r="D${globalRowNum}" s="40"/><c r="E${globalRowNum}" s="40"/><c r="F${globalRowNum}" s="40"/><c r="G${globalRowNum}" s="41"/></row>`;
-      globalRowNum++;
-
-      // Column header row 7
-      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${globalRowNum}" s="35" t="inlineStr"><is><t>NO.</t></is></c><c r="B${globalRowNum}" s="35" t="inlineStr"><is><t>Name of Employee</t></is></c><c r="C${globalRowNum}" s="35" t="inlineStr"><is><t>Mother Unit</t></is></c><c r="D${globalRowNum}" s="35" t="inlineStr"><is><t>${escapeXml(officeHeader)}</t></is></c><c r="E${globalRowNum}" s="39" t="inlineStr"><is><t>${escapeXml(durationHeader)}</t></is></c><c r="F${globalRowNum}" s="42"/><c r="G${globalRowNum}" s="35" t="inlineStr"><is><t>Administrative Order No.</t></is></c></row>`;
-      globalRowNum++;
-
-      // Sub-header row 8 (From / To)
-      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A${globalRowNum}" s="36"/><c r="B${globalRowNum}" s="36"/><c r="C${globalRowNum}" s="36"/><c r="D${globalRowNum}" s="36"/><c r="E${globalRowNum}" s="5" t="inlineStr"><is><t>From</t></is></c><c r="F${globalRowNum}" s="5" t="inlineStr"><is><t>To</t></is></c><c r="G${globalRowNum}" s="36"/></row>`;
-      globalRowNum++;
+      headerStartRows.push(globalRowNum);
+      newRowsXml += generateHeaderBlock(globalRowNum);
+      globalRowNum += 8;
     }
 
-    // Emit data rows for this page
-    let posInPage = 0; // tracks position within page (skips divider)
+    let posInPage = 0;
     for (let i = 0; i < pageCount; i++) {
-      // Insert divider row at position DIVIDER_POS
       if (posInPage === DIVIDER_POS) {
-        newRowsXml += `<row r="${globalRowNum}" spans="1:26" ht="19.95" customHeight="1" x14ac:dyDescent="0.25"><c r="A${globalRowNum}" s="11"/><c r="B${globalRowNum}" s="22"/><c r="C${globalRowNum}" s="22"/><c r="D${globalRowNum}" s="23"/><c r="E${globalRowNum}" s="24"/><c r="F${globalRowNum}" s="24"/><c r="G${globalRowNum}" s="25"/></row>`;
+        if (aoStatus === 'Detailed') {
+          newRowsXml += `<row r="${globalRowNum}" spans="1:7" ht="19.95" customHeight="1" x14ac:dyDescent="0.25"><c r="A${globalRowNum}" s="11"/><c r="B${globalRowNum}" s="22"/><c r="C${globalRowNum}" s="22"/><c r="D${globalRowNum}" s="23"/><c r="E${globalRowNum}" s="24"/><c r="F${globalRowNum}" s="24"/><c r="G${globalRowNum}" s="25"/></row>`;
+        } else {
+          newRowsXml += `<row r="${globalRowNum}" spans="1:9" ht="19.95" customHeight="1" x14ac:dyDescent="0.25"><c r="A${globalRowNum}" s="11"/><c r="B${globalRowNum}" s="22"/><c r="C${globalRowNum}" s="22"/><c r="D${globalRowNum}" s="22"/><c r="E${globalRowNum}" s="23"/><c r="F${globalRowNum}" s="22"/><c r="G${globalRowNum}" s="24"/><c r="H${globalRowNum}" s="24"/><c r="I${globalRowNum}" s="25"/></row>`;
+        }
         globalRowNum++;
         posInPage++;
       }
@@ -269,23 +315,39 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
 
       const noVal = String(dataIdx + i + 1);
       const nameVal = row.name || '';
+      const posVal = row.position || '';
       const motherVal = row.motherUnit || '';
       const officeVal = row.detailedOffice || '';
+      const desigPosVal = row.designatedPositionFunction || '';
       const fromVal = formatDateMDYStr(row.durationFrom);
       const toVal = formatDateMDYStr(row.durationTo);
       const aoVal = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '';
 
-      const rowHt = calcRowHt(nameVal, motherVal, officeVal, aoVal);
+      const rowHt = calcRowHt(nameVal, posVal, motherVal, officeVal, desigPosVal, aoVal);
 
-      newRowsXml += `<row r="${globalRowNum}" spans="1:12" ht="${rowHt}" customHeight="1" x14ac:dyDescent="0.25">`;
-      newRowsXml += `<c r="A${globalRowNum}" s="${st.sA}" t="inlineStr"><is><t>${escapeXml(noVal)}</t></is></c>`;
-      newRowsXml += `<c r="B${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(nameVal)}</t></is></c>`;
-      newRowsXml += `<c r="C${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(motherVal)}</t></is></c>`;
-      newRowsXml += `<c r="D${globalRowNum}" s="${st.sD}" t="inlineStr"><is><t>${escapeXml(officeVal)}</t></is></c>`;
-      newRowsXml += `<c r="E${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(fromVal)}</t></is></c>`;
-      newRowsXml += `<c r="F${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(toVal)}</t></is></c>`;
-      newRowsXml += `<c r="G${globalRowNum}" s="${st.sG}" t="inlineStr"><is><t>${escapeXml(aoVal)}</t></is></c>`;
-      newRowsXml += `</row>`;
+      if (aoStatus === 'Detailed') {
+        newRowsXml += `<row r="${globalRowNum}" spans="1:7" ht="${rowHt}" customHeight="1" x14ac:dyDescent="0.25">`;
+        newRowsXml += `<c r="A${globalRowNum}" s="${st.sA}" t="inlineStr"><is><t>${escapeXml(noVal)}</t></is></c>`;
+        newRowsXml += `<c r="B${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(nameVal)}</t></is></c>`;
+        newRowsXml += `<c r="C${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(motherVal)}</t></is></c>`;
+        newRowsXml += `<c r="D${globalRowNum}" s="${st.sD}" t="inlineStr"><is><t>${escapeXml(officeVal)}</t></is></c>`;
+        newRowsXml += `<c r="E${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(fromVal)}</t></is></c>`;
+        newRowsXml += `<c r="F${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(toVal)}</t></is></c>`;
+        newRowsXml += `<c r="G${globalRowNum}" s="${st.sG}" t="inlineStr"><is><t>${escapeXml(aoVal)}</t></is></c>`;
+        newRowsXml += `</row>`;
+      } else {
+        newRowsXml += `<row r="${globalRowNum}" spans="1:9" ht="${rowHt}" customHeight="1" x14ac:dyDescent="0.25">`;
+        newRowsXml += `<c r="A${globalRowNum}" s="${st.sA}" t="inlineStr"><is><t>${escapeXml(noVal)}</t></is></c>`;
+        newRowsXml += `<c r="B${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(nameVal)}</t></is></c>`;
+        newRowsXml += `<c r="C${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(posVal)}</t></is></c>`;
+        newRowsXml += `<c r="D${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(motherVal)}</t></is></c>`;
+        newRowsXml += `<c r="E${globalRowNum}" s="${st.sD}" t="inlineStr"><is><t>${escapeXml(officeVal)}</t></is></c>`;
+        newRowsXml += `<c r="F${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(desigPosVal)}</t></is></c>`;
+        newRowsXml += `<c r="G${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(fromVal)}</t></is></c>`;
+        newRowsXml += `<c r="H${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(toVal)}</t></is></c>`;
+        newRowsXml += `<c r="I${globalRowNum}" s="${st.sG}" t="inlineStr"><is><t>${escapeXml(aoVal)}</t></is></c>`;
+        newRowsXml += `</row>`;
+      }
 
       globalRowNum++;
       posInPage++;
@@ -294,55 +356,63 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
     dataIdx += ROWS_PER_PAGE;
     pageNum++;
 
-    // Emit signature rows after each page's data
     for (let s = 0; s < 13; s++) {
-      newRowsXml += `<row r="${globalRowNum}" spans="3:7" ht="12.75" customHeight="1" x14ac:dyDescent="0.25"><c r="C${globalRowNum}" s="3"/><c r="D${globalRowNum}" s="3"/><c r="G${globalRowNum}" s="4"/></row>`;
+      if (aoStatus === 'Detailed') {
+        newRowsXml += `<row r="${globalRowNum}" spans="3:7" ht="12.75" customHeight="1" x14ac:dyDescent="0.25"><c r="C${globalRowNum}" s="3"/><c r="D${globalRowNum}" s="3"/><c r="G${globalRowNum}" s="4"/></row>`;
+      } else {
+        newRowsXml += `<row r="${globalRowNum}" spans="4:9" ht="12.75" customHeight="1" x14ac:dyDescent="0.25"><c r="D${globalRowNum}" s="3"/><c r="E${globalRowNum}" s="3"/><c r="I${globalRowNum}" s="4"/></row>`;
+      }
       globalRowNum++;
     }
   }
 
   // ── Rebuild mergeCells for all pages ─────────────────────────────────────
-  // The original mergeCells only covers page 1. We need to add merges for all
-  // repeated header blocks on pages 2+.
-  // Page 1 merges are already in the template; pages 2+ need the same pattern
-  // offset by their header start row.
-  const baseMerges = [
-    'A1:G1', 'A2:G2', 'A3:G3', 'A4:G4', 'A5:G5', 'A6:G6',
-    'A7:A8', 'B7:B8', 'C7:C8', 'D7:D8', 'E7:F7', 'G7:G8'
-  ];
-
-  const allMerges = [...baseMerges]; // page 1 merges
-
-  // Note: for the merge cells we calculate from page 2 onwards
-  // using the known offset pattern
-  // Page 2 starts at row 9 + (90+1 data+divider rows) + 13 sig rows = 9 + 91 + 13 = 113
-  for (let p = 1; p < pageNum; p++) {
-    const offset = p * (91 + 8 + 13); // 91=data+divider, 8=header rows, 13=sig
-    allMerges.push(
-      `A${1 + offset}:G${1 + offset}`,
-      `A${2 + offset}:G${2 + offset}`,
-      `A${3 + offset}:G${3 + offset}`,
-      `A${4 + offset}:G${4 + offset}`,
-      `A${5 + offset}:G${5 + offset}`,
-      `A${6 + offset}:G${6 + offset}`,
-      `A${7 + offset}:A${8 + offset}`,
-      `B${7 + offset}:B${8 + offset}`,
-      `C${7 + offset}:C${8 + offset}`,
-      `D${7 + offset}:D${8 + offset}`,
-      `E${7 + offset}:F${7 + offset}`,
-      `G${7 + offset}:G${8 + offset}`
-    );
+  const allMerges: string[] = [];
+  for (let p = 0; p < pageNum; p++) {
+    const start = headerStartRows[p];
+    if (aoStatus === 'Detailed') {
+      allMerges.push(
+        `A${start}:G${start}`,
+        `A${1 + start}:G${1 + start}`,
+        `A${2 + start}:G${2 + start}`,
+        `A${3 + start}:G${3 + start}`,
+        `A${4 + start}:G${4 + start}`,
+        `A${5 + start}:G${5 + start}`,
+        `A${6 + start}:A${7 + start}`,
+        `B${6 + start}:B${7 + start}`,
+        `C${6 + start}:C${7 + start}`,
+        `D${6 + start}:D${7 + start}`,
+        `E${6 + start}:F${6 + start}`,
+        `G${6 + start}:G${7 + start}`
+      );
+    } else {
+      allMerges.push(
+        `A${start}:I${start}`,
+        `A${1 + start}:I${1 + start}`,
+        `A${2 + start}:I${2 + start}`,
+        `A${3 + start}:I${3 + start}`,
+        `A${4 + start}:I${4 + start}`,
+        `A${5 + start}:I${5 + start}`,
+        `A${6 + start}:A${7 + start}`,
+        `B${6 + start}:B${7 + start}`,
+        `C${6 + start}:C${7 + start}`,
+        `D${6 + start}:D${7 + start}`,
+        `E${6 + start}:E${7 + start}`,
+        `F${6 + start}:F${7 + start}`,
+        `G${6 + start}:H${6 + start}`,
+        `I${6 + start}:I${7 + start}`
+      );
+    }
   }
 
   const mergeCellsXml = `<mergeCells count="${allMerges.length}">${allMerges.map(r => `<mergeCell ref="${r}"/>`).join('')}</mergeCells>`;
 
-  // Replace existing mergeCells block
-  const newXml = xmlBefore + headerRowsXml + newRowsXml + `</sheetData>` +
+  const newXml = xmlBefore + patchedHeaderRowsXml + newRowsXml + `</sheetData>` +
     xmlAfterSheetData
       .replace(/<mergeCells[\s\S]*?<\/mergeCells>/, mergeCellsXml)
-      .replace('</sheetData>', ''); // already added above
+      .replace('</sheetData>', '');
 
-  return newXml;
+  return { xml: newXml, lastRow: globalRowNum - 1 };
 };
 
 function Dashboard() {
@@ -862,6 +932,8 @@ function Dashboard() {
 
     return [...currentRows, ...dedupedAuditRows];
   }, [allEmployees, employeeAuditLogs]);
+
+
 
   const uniqueDetailedOfficesInDatabase = useMemo(() => {
     const offices = allEmployees.map(emp => emp.detailedTo).filter(Boolean);
@@ -1448,20 +1520,57 @@ function Dashboard() {
         if (!sheetXmlStr) throw new Error('Invalid excel template package: sheet1.xml missing');
 
         // Modify sheetData XML content — pass the AO status so column headers adapt
-        const modifiedXml = modifySheetXml(sheetXmlStr, title, tabRows, reportAoStatus);
+        const { xml: modifiedXml, lastRow } = modifySheetXml(sheetXmlStr, title, tabRows, reportAoStatus);
 
-        // Patch styles.xml: remove shrinkToFit so the dynamic row heights we
-        // set are respected — text wraps within the column and the row expands.
+        // Patch styles.xml: remove shrinkToFit and ensure wrapText is set on target columns
+        // so the dynamic row heights we set are respected — text wraps within the column.
         const stylesXmlPath = 'xl/styles.xml';
         const stylesXmlStr = await zip.file(stylesXmlPath)?.async('string');
         if (stylesXmlStr) {
-          const patchedStylesXml = stylesXmlStr.replace(/\s*shrinkToFit="1"/g, '');
+          const patchedStylesXml = stylesXmlStr.replace(
+            /<cellXfs\s+count="(\d+)">([\s\S]*?)<\/cellXfs>/,
+            (match: string, count: string, xfsContent: string) => {
+              const xfRegex = /<xf\s+([^>]*)>([\s\S]*?)<\/xf>/g;
+              let idx = 0;
+              const modifiedXfs = xfsContent.replace(xfRegex, (xfMatch: string, xfAttrs: string, xfBody: string) => {
+                let updatedBody = xfBody;
+                const targetIndexes = [12, 13, 15, 16, 17, 19, 22, 23, 28, 29, 30, 32];
+                if (targetIndexes.includes(idx)) {
+                  if (updatedBody.includes('<alignment')) {
+                    updatedBody = updatedBody.replace(/<alignment\s+([^>]*)\/>/, (alignMatch: string, alignAttrs: string) => {
+                      const cleanedAttrs = alignAttrs
+                        .replace(/\s*shrinkToFit="[^"]*"/g, '')
+                        .replace(/\s*wrapText="[^"]*"/g, '');
+                      return `<alignment ${cleanedAttrs} wrapText="1"/>`;
+                    });
+                  }
+                } else {
+                  if (updatedBody.includes('<alignment')) {
+                    updatedBody = updatedBody.replace(/<alignment\s+([^>]*)\/>/, (alignMatch: string, alignAttrs: string) => {
+                      const cleanedAttrs = alignAttrs.replace(/\s*shrinkToFit="[^"]*"/g, '');
+                      return `<alignment ${cleanedAttrs}/>`;
+                    });
+                  }
+                }
+                idx++;
+                return `<xf ${xfAttrs}>${updatedBody}</xf>`;
+              });
+              return `<cellXfs count="${count}">${modifiedXfs}</cellXfs>`;
+            }
+          );
           zip.file(stylesXmlPath, patchedStylesXml);
         }
 
         // Add <sheetPr fitToPage> and update pageSetup with fitToWidth=1
         // so the sheet scales to fit 1 page wide when printed.
+        const lastColLetter = reportAoStatus === 'Detailed' ? 'G' : 'I';
         let finalXml = modifiedXml;
+        // Update sheet dimension to match the exact row count written
+        finalXml = finalXml.replace(
+          /<dimension\s+ref="[^"]*"\s*\/>/,
+          `<dimension ref="A1:${lastColLetter}${lastRow}"/>`
+        );
+
         if (!finalXml.includes('<sheetPr')) {
           finalXml = finalXml.replace(
             /(<(?:dimension|sheetViews)[^>]*(?:\/>|>))/,
@@ -1470,15 +1579,60 @@ function Dashboard() {
         }
         finalXml = finalXml.replace(
           /<pageSetup([^>]*?)\/>/,
-          (_match, attrs: string) => {
+          (_match: string, attrs: string) => {
             const cleaned = attrs
               .replace(/\s*fitToWidth="[^"]*"/g, '')
               .replace(/\s*fitToHeight="[^"]*"/g, '')
-              .replace(/\s*scale="[^"]*"/g, '');
+              .replace(/\s*scale="[^"]*"/g, '')
+              .replace(/\s*r:id="[^"]*"/g, '');
             return `<pageSetup${cleaned} fitToWidth="1" fitToHeight="0"/>`;
           }
         );
         zip.file(sheetXmlPath, finalXml);
+
+        // Remove printerSettings relationship from sheet1.xml.rels and delete printerSettings1.bin
+        // to prevent Excel from using cached binary printer/page setup configurations.
+        const relsXmlPath = 'xl/worksheets/_rels/sheet1.xml.rels';
+        const relsXmlStr = await zip.file(relsXmlPath)?.async('string');
+        if (relsXmlStr) {
+          const patchedRelsXml = relsXmlStr.replace(
+            /<Relationship[^>]*printerSettings[^>]*\/>/,
+            ''
+          );
+          zip.file(relsXmlPath, patchedRelsXml);
+        }
+        zip.remove('xl/printerSettings/printerSettings1.bin');
+
+        // Patch workbook.xml print area to match the exact row count written
+        const workbookXmlPath = 'xl/workbook.xml';
+        const workbookXmlStr = await zip.file(workbookXmlPath)?.async('string');
+        if (workbookXmlStr) {
+          const patchedWorkbookXml = workbookXmlStr.replace(
+            /<definedName name="_xlnm\.Print_Area"([^>]*)>([^<]*)<\/definedName>/,
+            (match: string, attrs: string, val: string) => {
+              const newVal = val.replace(/\$[G|I]\$\d+$/, `$${lastColLetter}$${lastRow}`);
+              return `<definedName name="_xlnm.Print_Area"${attrs}>${newVal}</definedName>`;
+            }
+          );
+          zip.file(workbookXmlPath, patchedWorkbookXml);
+        }
+
+        // Shift logo drawing anchor to column D (index 3) for Designated / All Employees
+        // to maintain its centered position in the 9-column sheet.
+        const drawingXmlPath = 'xl/drawings/drawing1.xml';
+        const drawingXmlStr = await zip.file(drawingXmlPath)?.async('string');
+        if (drawingXmlStr) {
+          let patchedDrawingXml = drawingXmlStr;
+          if (reportAoStatus !== 'Detailed') {
+            // Keep column index 2 (Column C) but increase colOff to 1,450,000 EMUs
+            // to adjust the logo slightly to the right to match the centering of the template.
+            patchedDrawingXml = patchedDrawingXml.replace(
+              /<xdr:colOff>18203<\/xdr:colOff>/,
+              '<xdr:colOff>1300000</xdr:colOff>'
+            );
+          }
+          zip.file(drawingXmlPath, patchedDrawingXml);
+        }
 
         // Re-generate the zip archive as an xlsx file blob
         const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1550,7 +1704,7 @@ function Dashboard() {
             : sortedReportRows.filter((row) => isExpired(row.durationTo));
 
     const title = getFormattedTitle();
-    const ROWS_PER_PAGE = 90;
+    const ROWS_PER_PAGE = 13;
     const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));
 
     const officeColHeader = reportAoStatus === 'Designated'
@@ -1566,51 +1720,93 @@ function Dashboard() {
     const logoSrc = `${window.location.origin}/template_logo.png`;
 
     const headerHtml = `
-      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:14px;">
-        <img src="${logoSrc}" alt="Logo" style="height:65px;width:auto;" onerror="this.style.display='none';" />
-        <div style="text-align:center;flex-grow:1;padding:0 12px;">
+      <div style="position:relative;border:1px solid #000;border-bottom:2px solid #000;padding:10px 12px;text-align:center;">
+        <img src="${logoSrc}" alt="Logo" style="position:absolute;left:32%;top:50%;transform:translateY(-50%);height:65px;width:auto;" onerror="this.style.display='none';" />
+        <div style="display:inline-block;text-align:center;">
           <div style="font-size:10.5pt;font-style:italic;font-weight:normal;">Republic of the Philippines</div>
           <div style="font-size:11pt;font-weight:bold;margin-top:2px;">Province of Pangasinan</div>
           <div style="font-size:10pt;font-weight:normal;margin-top:2px;">Lingayen</div>
           <div style="font-size:11.5pt;font-weight:bold;margin-top:4px;font-family:Calibri,Arial,sans-serif;">HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
         </div>
-        <div style="width:65px;"></div>
       </div>`;
 
-    const tableHeaderHtml = `
-      <thead>
-        <tr style="background-color:#f2f2f2;">
-          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:5%;">NO.</th>
-          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Name of Employee</th>
-          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Mother Unit</th>
-          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">${officeColHeader}</th>
-          <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;">${durationColHeader}</th>
-          <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:19%;">Administrative Order No.</th>
-        </tr>
-        <tr style="background-color:#f2f2f2;">
-          <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;">From</th>
-          <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;">To</th>
-        </tr>
-      </thead>`;
+    const designatedHeader = reportAoStatus === 'Designated'
+      ? 'Designated Position'
+      : 'Designated Position/Function';
+
+    const isDetailed = reportAoStatus === 'Detailed';
+    let tableHeaderHtml = '';
+
+    if (isDetailed) {
+      tableHeaderHtml = `
+        <thead>
+          <tr style="background-color:#ffffff;">
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:5%;">NO.</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Name of Employee</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Mother Unit</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">${officeColHeader}</th>
+            <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;">${durationColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:19%;">Administrative Order No.</th>
+          </tr>
+          <tr style="background-color:#ffffff;">
+            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;vertical-align:middle;">From</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;vertical-align:middle;">To</th>
+          </tr>
+        </thead>`;
+    } else {
+      tableHeaderHtml = `
+        <thead>
+          <tr style="background-color:#ffffff;">
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:4%;">NO.</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">Name of Employee</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">Position</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">Mother Unit</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">${officeColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">${designatedHeader}</th>
+            <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">${durationColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:13%;">Administrative Order No.</th>
+          </tr>
+          <tr style="background-color:#ffffff;">
+            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">From</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">To</th>
+          </tr>
+        </thead>`;
+    }
 
     const pagesHtml = Array.from({ length: pageCount }, (_, pageIdx) => {
       const pageRows = tabRows.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
       const rowsHtml = pageRows.length === 0
-        ? `<tr><td colspan="7" style="border:1px solid #000;padding:20px;text-align:center;color:#555;">No records found matching current filters.</td></tr>`
+        ? `<tr><td colspan="${isDetailed ? 7 : 9}" style="border:1px solid #000;padding:20px;text-align:center;color:#555;font-family:'Times New Roman',Times,serif;vertical-align:middle;">No records found matching current filters.</td></tr>`
         : pageRows.map((row, idx) => {
-            const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
-            const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
+          const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
+          const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
+
+          if (isDetailed) {
             return `
-              <tr>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;">${globalIdx + 1}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:left;vertical-align:top;word-break:break-word;white-space:normal;">${row.name}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:left;vertical-align:top;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:left;vertical-align:top;word-break:break-word;white-space:normal;">${row.detailedOffice || ''}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;">${row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;">${row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:top;word-break:break-word;">${ao}</td>
+              <tr style="background-color:#ffffff;">
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.name}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.detailedOffice || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;">${ao}</td>
               </tr>`;
-          }).join('');
+          } else {
+            return `
+              <tr style="background-color:#ffffff;">
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.name}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.position || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.detailedOffice || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.designatedPositionFunction || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;">${ao}</td>
+              </tr>`;
+          }
+        }).join('');
 
       const pageBreakStyle = pageIdx < pageCount - 1
         ? 'page-break-after:always;margin-bottom:40px;padding-bottom:40px;border-bottom:3px dashed #aaa;'
@@ -1619,10 +1815,10 @@ function Dashboard() {
       return `
         <div style="${pageBreakStyle}">
           ${headerHtml}
-          <div style="text-align:center;font-weight:bold;font-size:11pt;font-family:Calibri,Arial,sans-serif;text-transform:uppercase;margin-bottom:14px;letter-spacing:0.3px;">
+          <div style="text-align:center;font-weight:bold;font-size:11pt;font-family:'Times New Roman',Times,serif;text-transform:uppercase;padding:8px 6px;border-left:1px solid #000;border-right:1px solid #000;border-bottom:1px solid #000;letter-spacing:0.3px;">
             ${title}${pageCount > 1 ? ` <span style="font-size:9pt;font-weight:normal;margin-left:10px;color:#444;">(Page ${pageIdx + 1} of ${pageCount})</span>` : ''}
           </div>
-          <table style="width:100%;border-collapse:collapse;font-family:Calibri,Arial,sans-serif;table-layout:fixed;">
+          <table style="width:100%;border-collapse:collapse;font-family:'Times New Roman',Times,serif;table-layout:fixed;">
             ${tableHeaderHtml}
             <tbody>${rowsHtml}</tbody>
           </table>
@@ -1640,7 +1836,7 @@ function Dashboard() {
               body { margin: 0; }
             }
             body {
-              font-family: Calibri, Arial, sans-serif;
+              font-family: 'Times New Roman', Times, serif;
               color: #000;
               margin: 20px;
               padding: 0;
@@ -1650,10 +1846,13 @@ function Dashboard() {
         <body>
           ${pagesHtml}
           <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
+            // Run print immediately once DOM is written
+            window.print();
+            window.onafterprint = function() {
+              window.close();
             };
+            // Fallback timeout in case onafterprint doesn't fire
+            setTimeout(function() { window.close(); }, 10000);
           </script>
         </body>
       </html>`;
@@ -2673,11 +2872,11 @@ function Dashboard() {
       <div className="dashboard__header">
         <div>
           <h1 className="dashboard__title">
-            {viewMode === 'reports' ? 'Generated Reports' : 'Employee Management'}
+            {viewMode === 'reports' ? 'Administrative Reports' : 'Employee Management'}
           </h1>
           <p className="dashboard__subtitle">
             {viewMode === 'reports'
-              ? 'View and generate reports of employees'
+              ? 'Generate administrative reports of employees'
               : `Manage and track all employee records in the system (${allEmployees.length} employees)`}
           </p>
         </div>
@@ -2837,13 +3036,18 @@ function Dashboard() {
 
               <div className="reports-view__filter-card">
                 <label className="dashboard__filter-label">Series Year</label>
-                <input
-                  type="text"
-                  className="dashboard__form-input"
-                  placeholder="Search by Series Year..."
+                <select
+                  className="dashboard__filter-select"
                   value={reportAoYear}
                   onChange={(e) => setReportAoYear(e.target.value)}
-                />
+                >
+                  <option value="">All Series Years</option>
+                  {dropdownOptions.aoYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
               </div>
 
 
@@ -4372,13 +4576,6 @@ function Dashboard() {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => exportReportData('csv')}
-              disabled={sortedReportRows.length === 0}
-            >
-              📄 Export CSV
-            </Button>
-            <Button
-              variant="secondary"
               onClick={() => exportReportData('xlsx')}
               disabled={sortedReportRows.length === 0}
             >
@@ -4386,7 +4583,18 @@ function Dashboard() {
             </Button>
             <Button
               variant="primary"
-              onClick={printReportData}
+              onClick={async () => {
+                const electronApi = (window as any).electron;
+                if (electronApi && typeof electronApi.printToPdf === 'function') {
+                  showToast('Generating print preview PDF...', 'info');
+                  const res = await electronApi.printToPdf();
+                  if (!res.success) {
+                    showToast(`Failed to generate print preview: ${res.error}`, 'error');
+                  }
+                } else {
+                  window.print();
+                }
+              }}
               disabled={sortedReportRows.length === 0}
             >
               🖨️ Print
@@ -4414,7 +4622,7 @@ function Dashboard() {
                     ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
                     : sortedReportRows.filter((row) => isExpired(row.durationTo));
 
-            const ROWS_PER_PAGE = 90;
+            const ROWS_PER_PAGE = 13;
             const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));
             const officeColHeader = reportAoStatus === 'Designated'
               ? 'Designated Office'
@@ -4427,32 +4635,42 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                position: 'relative',
+                border: '1px solid #000',
                 borderBottom: '2px solid #000',
-                paddingBottom: '10px',
-                marginBottom: '14px'
+                padding: '10px 12px',
+                textAlign: 'center'
               }}>
                 <img
                   src="/template_logo.png"
                   alt="Logo"
-                  style={{ height: '65px', width: 'auto' }}
+                  style={{
+                    position: 'absolute',
+                    left: '28%',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    height: '65px',
+                    width: 'auto'
+                  }}
                   onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                 />
-                <div style={{ textAlign: 'center', flexGrow: 1, padding: '0 12px' }}>
+                <div style={{ display: 'inline-block', textAlign: 'center' }}>
                   <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
                   <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
                   <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
                   <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
                 </div>
-                <div style={{ width: '65px' }} />
               </div>
             );
 
-            const tableHeader = (
+            const isDetailed = reportAoStatus === 'Detailed';
+            const designatedHeader = reportAoStatus === 'Designated'
+              ? 'Designated Position'
+              : 'Designated Position/Function';
+
+            const tableHeader = isDetailed ? (
               <thead>
-                <tr style={{ backgroundColor: '#f2f2f2' }}>
+                <tr style={{ backgroundColor: '#ffffff' }}>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>NO.</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Name of Employee</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Mother Unit</th>
@@ -4460,9 +4678,26 @@ function Dashboard() {
                   <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{durationColHeader}</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '19%' }}>Administrative Order No.</th>
                 </tr>
-                <tr style={{ backgroundColor: '#f2f2f2' }}>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%' }}>From</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%' }}>To</th>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>From</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>To</th>
+                </tr>
+              </thead>
+            ) : (
+              <thead>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Name of Employee</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Position</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Mother Unit</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>{officeColHeader}</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{designatedHeader}</th>
+                  <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>{durationColHeader}</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>Administrative Order No.</th>
+                </tr>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>From</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>To</th>
                 </tr>
               </thead>
             );
@@ -4471,11 +4706,22 @@ function Dashboard() {
               return (
                 <>
                   {headerBlock}
-                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', textTransform: 'uppercase', marginBottom: '16px' }}>{getFormattedTitle()}</div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '11pt',
+                    fontFamily: "'Times New Roman', Times, serif",
+                    textTransform: 'uppercase',
+                    padding: '8px 6px',
+                    borderLeft: '1px solid #000',
+                    borderRight: '1px solid #000',
+                    borderBottom: '1px solid #000',
+                    letterSpacing: '0.3px'
+                  }}>{getFormattedTitle()}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: "'Times New Roman', Times, serif" }}>
                     {tableHeader}
                     <tbody>
-                      <tr><td colSpan={7} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>No records found matching current filters.</td></tr>
+                      <tr><td colSpan={isDetailed ? 7 : 9} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
                     </tbody>
                   </table>
                 </>
@@ -4495,7 +4741,18 @@ function Dashboard() {
                   }}
                 >
                   {headerBlock}
-                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '11pt', fontFamily: 'Calibri, Arial, sans-serif', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.3px' }}>
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '11pt',
+                    fontFamily: "'Times New Roman', Times, serif",
+                    textTransform: 'uppercase',
+                    padding: '8px 6px',
+                    borderLeft: '1px solid #000',
+                    borderRight: '1px solid #000',
+                    borderBottom: '1px solid #000',
+                    letterSpacing: '0.3px'
+                  }}>
                     {getFormattedTitle()}
                     {pageCount > 1 && (
                       <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
@@ -4503,24 +4760,43 @@ function Dashboard() {
                       </span>
                     )}
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Calibri, Arial, sans-serif', tableLayout: 'fixed' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
                     {tableHeader}
                     <tbody>
                       {pageRows.map((row, idx) => {
                         const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
-                        return (
-                          <tr key={globalIdx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top' }}>{globalIdx + 1}</td>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'left', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'left', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'left', verticalAlign: 'top', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top' }}>{row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top' }}>{row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'top', wordBreak: 'break-word' }}>
-                              {row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—'}
-                            </td>
-                          </tr>
-                        );
+
+                        if (isDetailed) {
+                          return (
+                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{globalIdx + 1}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>
+                                {row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        } else {
+                          return (
+                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{globalIdx + 1}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.position || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.designatedPositionFunction || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>
+                                {row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—'}
+                              </td>
+                            </tr>
+                          );
+                        }
                       })}
                     </tbody>
                   </table>

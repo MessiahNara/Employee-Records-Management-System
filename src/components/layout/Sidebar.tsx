@@ -1,9 +1,19 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getAuthState } from '../../utils/mockAuth';
-import { MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder, MdFactCheck, MdInsertChart, MdInbox } from 'react-icons/md';
+import {
+  MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder,
+  MdAssignmentTurnedIn, MdInsertChart, MdInbox, MdCalendarToday,
+  MdExpandMore, MdChevronRight
+} from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
+
+interface SubItem {
+  path: string;
+  label: string;
+  badge?: number;
+}
 
 interface NavItem {
   path: string;
@@ -12,6 +22,9 @@ interface NavItem {
   iconColor: string;
   requiredRoles?: string[];
   badge?: number;
+  subItems?: SubItem[];
+  isOpen?: boolean;
+  onToggle?: () => void;
 }
 
 interface NavGroup {
@@ -22,15 +35,33 @@ interface NavGroup {
 interface SidebarProps {
   isCollapsed: boolean;
   isMobileOpen: boolean;
+  onExpandSidebar?: () => void;
 }
 
-function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
+function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   const currentUser = getAuthState();
   const userRole = currentUser?.role || '';
   const isSuperAdminOrDeveloper = userRole === 'superadmin' || userRole === 'developer';
   const isStaffOrAdmin = userRole === 'staff' || userRole === 'admin';
   const [pendingCount, setPendingCount] = useState(0);
   const [myRequestsCount, setMyRequestsCount] = useState(0);
+  const [calendarCount, setCalendarCount] = useState(0);
+
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isReportsOpen, setIsReportsOpen] = useState(false);
+
+  // Auto-expand menus based on current URL path
+  useEffect(() => {
+    if (currentPath === '/calendar' || currentPath === '/calendar-activities') {
+      setIsCalendarOpen(true);
+    }
+    if (currentPath === '/reports') {
+      setIsReportsOpen(true);
+    }
+  }, [currentPath]);
 
   // Poll pending approvals count every 5 seconds (admins/superadmins) & listen for updates
   useEffect(() => {
@@ -39,7 +70,7 @@ function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
     const fetch = () => {
       api.approvals.getPendingCount()
         .then((r) => setPendingCount(r.count))
-        .catch(() => {});
+        .catch(() => { });
     };
 
     fetch();
@@ -61,7 +92,7 @@ function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
           const pending = reqs.filter((r: any) => r.status === 'pending').length;
           setMyRequestsCount(pending);
         })
-        .catch(() => {});
+        .catch(() => { });
     };
 
     fetchMyCount();
@@ -73,11 +104,112 @@ function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
     };
   }, [isStaffOrAdmin, currentUser?.id]);
 
+  // Poll calendar alerts count (expired/expiring within 30 days) and listen for updates
+  useEffect(() => {
+    const fetchCalendarCount = async () => {
+      try {
+        const [employees, pendingApprovals] = await Promise.all([
+          api.employee.getAll({ status: 'Active' }),
+          api.approvals.getPending()
+        ]);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const millisecondsPerDay = 1000 * 60 * 60 * 24;
+
+        const inferAoType = (data: any): 'Detailed' | 'Designated' | '' => {
+          const rawAoType = String(data.aoType || '').trim().toLowerCase();
+          if (rawAoType === 'detailed') return 'Detailed';
+          if (rawAoType === 'designated') return 'Designated';
+          if (data.isDetailed === true) return 'Detailed';
+          if (
+            String(data.designatedPositionFunction || '').trim() ||
+            String(data.designatedOrderFrom || '').trim() ||
+            String(data.designatedOrderTo || '').trim()
+          ) return 'Designated';
+          return '';
+        };
+
+        let count = 0;
+        employees.forEach((emp: any) => {
+          // Action Taken: Check if a renewal update is pending approval
+          const hasPendingRenewal = pendingApprovals.some(
+            (r: any) => r.action === 'update_employee' && r.entityId === emp.id && r.status === 'pending'
+          );
+          if (hasPendingRenewal) return; // Action Taken -> Blue (not counted in warnings)
+
+          const aoType = inferAoType(emp);
+          const expDateStr = aoType === 'Designated' ? emp.designatedOrderTo : emp.appointmentTo;
+          if (!expDateStr) return;
+
+          const expDate = new Date(expDateStr);
+          expDate.setHours(0, 0, 0, 0);
+
+          const remainingDays = Math.ceil((expDate.getTime() - today.getTime()) / millisecondsPerDay);
+          if (remainingDays <= 30) {
+            count++;
+          }
+        });
+
+        setCalendarCount(count);
+      } catch (err) {
+        console.error('Failed to fetch calendar counter:', err);
+      }
+    };
+
+    fetchCalendarCount();
+    window.addEventListener('approvalsUpdated', fetchCalendarCount);
+    window.addEventListener('employeeUpdated', fetchCalendarCount);
+    const interval = setInterval(fetchCalendarCount, 15000);
+    return () => {
+      window.removeEventListener('approvalsUpdated', fetchCalendarCount);
+      window.removeEventListener('employeeUpdated', fetchCalendarCount);
+      clearInterval(interval);
+    };
+  }, []);
+
   const isAdmin = userRole === 'superadmin' || userRole === 'admin' || userRole === 'developer';
 
   const mainItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: MdDashboard, iconColor: '#3b82f6' },
-    { path: '/reports', label: 'Generated Reports', icon: MdInsertChart, iconColor: '#10b981' },
+    {
+      path: '#calendar-menu',
+      label: 'Calendar',
+      icon: MdCalendarToday,
+      iconColor: '#ec4899',
+      badge: calendarCount,
+      subItems: [
+        { path: '/calendar', label: 'Expirations Calendar', badge: calendarCount },
+        { path: '/calendar-activities', label: 'Calendar of Activities' }
+      ],
+      isOpen: isCalendarOpen,
+      onToggle: () => {
+        if (isCollapsed && onExpandSidebar) {
+          onExpandSidebar();
+          setIsCalendarOpen(true);
+        } else {
+          setIsCalendarOpen(!isCalendarOpen);
+        }
+      }
+    },
+    {
+      path: '#reports-menu',
+      label: 'Generated Reports',
+      icon: MdInsertChart,
+      iconColor: '#10b981',
+      subItems: [
+        { path: '/reports', label: 'Administrative Order' }
+      ],
+      isOpen: isReportsOpen,
+      onToggle: () => {
+        if (isCollapsed && onExpandSidebar) {
+          onExpandSidebar();
+          setIsReportsOpen(true);
+        } else {
+          setIsReportsOpen(!isReportsOpen);
+        }
+      }
+    },
   ];
 
   // For non-admins (staff), put Requests under Main
@@ -110,7 +242,7 @@ function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
     {
       path: '/approvals',
       label: 'Request & Approvals',
-      icon: MdFactCheck,
+      icon: MdAssignmentTurnedIn,
       iconColor: '#10b981',
       requiredRoles: ['superadmin', 'developer'],
       badge: pendingCount
@@ -154,6 +286,67 @@ function Sidebar({ isCollapsed, isMobileOpen }: SidebarProps) {
             <div className="sidebar__nav-items">
               {group.items.filter(item => hasAccess(item)).map((item) => {
                 const IconComponent = item.icon;
+                const hasChildren = item.subItems && item.subItems.length > 0;
+
+                if (hasChildren) {
+                  const subItemsCount = item.subItems!.reduce((acc, sub) => acc + (sub.badge || 0), 0);
+
+                  return (
+                    <div key={item.path} className="sidebar__nav-group-container">
+                      <button
+                        type="button"
+                        onClick={item.onToggle}
+                        className={`sidebar__nav-item sidebar__nav-item--parent ${item.isOpen ? 'sidebar__nav-item--expanded' : ''}`}
+                        title={isCollapsed ? item.label : undefined}
+                        style={{ width: '100%', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer' }}
+                      >
+                        <span style={{ position: 'relative', display: 'inline-flex' }}>
+                          <IconComponent
+                            className="sidebar__nav-icon"
+                            style={{ color: item.iconColor }}
+                          />
+                          {isCollapsed && subItemsCount > 0 && (
+                            <span className="sidebar__nav-badge">{subItemsCount > 99 ? '99+' : subItemsCount}</span>
+                          )}
+                        </span>
+                        {!isCollapsed && <span className="sidebar__nav-label">{item.label}</span>}
+
+                        {!isCollapsed && (
+                          <span className="sidebar__nav-arrow" style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}>
+                            {item.isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
+                          </span>
+                        )}
+
+                        {!isCollapsed && subItemsCount > 0 && !item.isOpen && (
+                          <span className="sidebar__nav-badge-label" style={{ marginLeft: '8px' }}>
+                            {subItemsCount > 99 ? '99+' : subItemsCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {item.isOpen && !isCollapsed && (
+                        <div className="sidebar__sub-items">
+                          {item.subItems!.map((sub) => (
+                            <NavLink
+                              key={sub.path}
+                              to={sub.path}
+                              className={({ isActive }) =>
+                                `sidebar__sub-item ${isActive ? 'sidebar__sub-item--active' : ''}`
+                              }
+                            >
+                              <span className="sidebar__sub-item-dot" />
+                              <span className="sidebar__sub-item-label">{sub.label}</span>
+                              {sub.badge != null && sub.badge > 0 && (
+                                <span className="sidebar__sub-item-badge">{sub.badge}</span>
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
                   <NavLink
                     key={item.path}

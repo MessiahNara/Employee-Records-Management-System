@@ -87,7 +87,11 @@ function MainLayout() {
 
   return (
     <div className={`main-layout ${isSidebarCollapsed ? 'main-layout--sidebar-collapsed' : ''}`}>
-      <Sidebar isCollapsed={isSidebarCollapsed} isMobileOpen={isMobileMenuOpen} />
+      <Sidebar 
+        isCollapsed={isSidebarCollapsed} 
+        isMobileOpen={isMobileMenuOpen} 
+        onExpandSidebar={() => setIsSidebarCollapsed(false)} 
+      />
       
       {/* Mobile overlay */}
       {isMobile && isMobileMenuOpen && (

@@ -30,6 +30,8 @@ function PDFViewer({
 }: PDFViewerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [zoom, setZoom] = useState(100);
 
   // Approval-request state
   const [pendingAction, setPendingAction] = useState<ApprovalAction>(null);
@@ -40,6 +42,19 @@ function PDFViewer({
   const { showToast } = useToast();
   const currentUser = getAuthState();
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? dateStr : date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const handleZoomIn = () => setZoom(prev => Math.min(200, prev + 25));
+  const handleZoomOut = () => setZoom(prev => Math.max(50, prev - 25));
+
   useEffect(() => {
     if (isOpen && pdfData) {
       setIsLoading(true);
@@ -48,10 +63,12 @@ function PDFViewer({
     }
   }, [isOpen, pdfData]);
 
-  // Reset maximized state when modal closes
+  // Reset maximized, minimized and zoom state when modal closes
   useEffect(() => {
     if (!isOpen) {
       setIsMaximized(false);
+      setIsMinimized(false);
+      setZoom(100);
       setPendingAction(null);
       setApprovalPurpose('');
       setPurposeError('');
@@ -172,8 +189,26 @@ function PDFViewer({
 
   if (!employeeDocument) return null;
 
+  if (isOpen && isMinimized) {
+    return (
+      <div className="pdf-viewer-dock" onClick={(e) => e.stopPropagation()}>
+        <span className="pdf-viewer-dock__title" title={employeeDocument.fileName}>
+          📄 {employeeDocument.fileName}
+        </span>
+        <div className="pdf-viewer-dock__actions">
+          <button type="button" onClick={() => setIsMinimized(false)} title="Restore window" aria-label="Restore window">
+            ➕
+          </button>
+          <button type="button" onClick={onClose} title="Close" aria-label="Close">
+            ✕
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Only privileged users get a real src — everyone else sees the locked placeholder
-  const iframeSrc = pdfData && canDownloadOrPrint ? pdfData : '';
+  const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#zoom=${zoom}` : '';
 
   const modalSize = isMaximized ? 'xl' : 'lg';
 
@@ -184,8 +219,9 @@ function PDFViewer({
         onClose={onClose}
         title={employeeDocument.fileName}
         size={modalSize}
+        isMaximized={isMaximized}
       >
-        <div className={`pdf-viewer ${!canDownloadOrPrint ? 'pdf-viewer--no-print' : ''}`}>
+        <div className={`pdf-viewer ${!canDownloadOrPrint ? 'pdf-viewer--no-print' : ''} ${isMaximized ? 'pdf-viewer--maximized' : ''}`}>
           <div className="pdf-viewer__header">
             <div className="pdf-viewer__metadata">
               <span className="pdf-viewer__meta-item">
@@ -195,19 +231,32 @@ function PDFViewer({
                 <strong>Uploaded by:</strong> {employeeDocument.uploadedBy}
               </span>
               <span className="pdf-viewer__meta-item">
-                <strong>Date:</strong> {new Date(employeeDocument.uploadedAt).toLocaleDateString()}
+                <strong>Date:</strong> {formatDate(employeeDocument.uploadedAt)}
               </span>
             </div>
 
             <div className="pdf-viewer__actions">
-              {/* Min / Max toggle */}
+              {/* Window Controls: Minus (Minimize) and Plus (Maximize) */}
               <button
+                type="button"
+                className="pdf-viewer__window-btn"
+                onClick={() => setIsMinimized(true)}
+                title="Minimize file viewer"
+                aria-label="Minimize file viewer"
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+              >
+                ➖
+              </button>
+
+              <button
+                type="button"
                 className="pdf-viewer__window-btn"
                 onClick={() => setIsMaximized((prev) => !prev)}
-                title={isMaximized ? 'Minimize window' : 'Maximize window'}
-                aria-label={isMaximized ? 'Minimize window' : 'Maximize window'}
+                title={isMaximized ? 'Restore window' : 'Maximize window'}
+                aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
               >
-                {isMaximized ? '🗗' : '🗖'}
+                ➕
               </button>
 
               {canDownloadOrPrint ? (
@@ -260,6 +309,7 @@ function PDFViewer({
             {/* Privileged users — render the iframe */}
             {canDownloadOrPrint && iframeSrc && (
               <iframe
+                key={zoom}
                 src={iframeSrc}
                 className="pdf-viewer__iframe"
                 title={employeeDocument.fileName}

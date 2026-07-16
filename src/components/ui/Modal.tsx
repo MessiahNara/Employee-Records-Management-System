@@ -9,9 +9,10 @@ interface ModalProps {
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   hideCloseButton?: boolean;
+  isMaximized?: boolean;
 }
 
-function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideCloseButton = false }: ModalProps) {
+function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideCloseButton = false, isMaximized = false }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -51,10 +52,10 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
+    <div className={`modal-overlay ${isMaximized ? 'modal-overlay--maximized' : ''}`} role="dialog" aria-modal="true">
       <div
         ref={modalRef}
-        className={`modal modal--${size}`}
+        className={`modal modal--${size} ${isMaximized ? 'modal--maximized' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
