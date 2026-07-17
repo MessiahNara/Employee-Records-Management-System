@@ -66,10 +66,14 @@ export default function Calendar() {
   const [modalTodoText, setModalTodoText] = useState('');
 
   // Load data
+  // Load data and poll for updates
   useEffect(() => {
+    let isInitialLoad = true;
     const fetchData = async () => {
       try {
-        setIsLoading(true);
+        if (isInitialLoad) {
+          setIsLoading(true);
+        }
         const [empData, approvalData] = await Promise.all([
           api.employee.getAll({ status: 'Active' }),
           api.approvals.getPending()
@@ -78,12 +82,18 @@ export default function Calendar() {
         setPendingApprovals(approvalData);
       } catch (err) {
         console.error('Failed to load data for calendar:', err);
-        showToast('Error loading calendar data. Please refresh.', 'error');
+        if (isInitialLoad) {
+          showToast('Error loading calendar data. Please refresh.', 'error');
+        }
       } finally {
-        setIsLoading(false);
+        if (isInitialLoad) {
+          setIsLoading(false);
+          isInitialLoad = false;
+        }
       }
     };
     fetchData();
+    const interval = setInterval(fetchData, 5000);
 
     // Load todos from localStorage
     const savedTodos = localStorage.getItem('hrmdo_calendar_todos');
@@ -94,6 +104,8 @@ export default function Calendar() {
         localStorage.removeItem('hrmdo_calendar_todos');
       }
     }
+
+    return () => clearInterval(interval);
   }, [showToast]);
 
   // Save todos to localStorage when they change
@@ -140,52 +152,68 @@ export default function Calendar() {
       return '';
     };
 
-    return employees.map((emp) => {
+    const alertsList: EmployeeAlert[] = [];
+
+    employees.forEach((emp) => {
       const aoType = inferAoType(emp);
-      const expDateStr = aoType === 'Designated' ? emp.designatedOrderTo : emp.appointmentTo;
-      if (!expDateStr) return null;
 
-      const expDate = new Date(expDateStr);
-      expDate.setHours(0, 0, 0, 0);
+      const processAlert = (expDateStr: string | undefined, alertAoType: string) => {
+        if (!expDateStr) return;
 
-      const remainingDays = Math.ceil((expDate.getTime() - today.getTime()) / millisecondsPerDay);
+        const expDate = new Date(expDateStr);
+        if (isNaN(expDate.getTime())) return;
+        expDate.setHours(0, 0, 0, 0);
 
-      // Check if a renewal request has already been submitted to the Approvals queue
-      const hasPendingRenewal = pendingApprovals.some(
-        (r: any) => r.action === 'update_employee' && r.entityId === emp.id && r.status === 'pending'
-      );
+        const remainingDays = Math.ceil((expDate.getTime() - today.getTime()) / millisecondsPerDay);
 
-      let color: 'red' | 'orange' | 'yellow' | 'blue';
-      let urgencyLabel = '';
+        const hasPendingRenewal = pendingApprovals.some(
+          (r: any) => r.action === 'update_employee' && r.entityId === emp.id && r.status === 'pending'
+        );
 
-      if (hasPendingRenewal) {
-        color = 'blue';
-        urgencyLabel = 'Action Taken (Renewal Pending)';
-      } else if (remainingDays < 0) {
-        color = 'red';
-        urgencyLabel = `Expired (${Math.abs(remainingDays)} days ago)`;
-      } else if (remainingDays <= 7) {
-        color = 'orange';
-        urgencyLabel = `Urgent (${remainingDays} days left)`;
-      } else if (remainingDays <= 30) {
-        color = 'yellow';
-        urgencyLabel = `Warning (${remainingDays} days left)`;
-      } else {
-        return null; // Not expiring within warning range (30 days)
-      }
+        let color: 'red' | 'orange' | 'yellow' | 'blue';
+        let urgencyLabel = '';
 
-      return {
-        id: emp.id,
-        name: `${emp.lastName}, ${emp.firstName} ${emp.middleName || ''}`.trim(),
-        position: emp.positionFunction || 'Employee',
-        office: emp.officeHospitalName || emp.motherUnit || 'N/A',
-        aoType: aoType || 'Appointment',
-        expDate: parseDateKey(expDateStr),
-        color,
-        urgencyLabel,
-        remainingDays
+        if (hasPendingRenewal) {
+          color = 'blue';
+          urgencyLabel = 'Action Taken (Renewal Pending)';
+        } else if (remainingDays < 0) {
+          color = 'red';
+          urgencyLabel = `Expired (${Math.abs(remainingDays)} days ago)`;
+        } else if (remainingDays <= 7) {
+          color = 'orange';
+          urgencyLabel = `Urgent (${remainingDays} days left)`;
+        } else if (remainingDays <= 30) {
+          color = 'yellow';
+          urgencyLabel = `Warning (${remainingDays} days left)`;
+        } else {
+          return;
+        }
+
+        alertsList.push({
+          id: emp.id,
+          name: `${emp.lastName}, ${emp.firstName} ${emp.middleName || ''}`.trim(),
+          position: emp.positionFunction || 'Employee',
+          office: emp.officeHospitalName || emp.motherUnit || 'N/A',
+          aoType: alertAoType,
+          expDate: parseDateKey(expDateStr),
+          color,
+          urgencyLabel,
+          remainingDays
+        });
       };
-    }).filter(Boolean) as EmployeeAlert[];
+
+      // 1. Process regular appointment expiration
+      processAlert(emp.appointmentTo, 'Appointment');
+
+      // 2. Process detailed/designated AO expiration
+      if (aoType === 'Detailed') {
+        processAlert(emp.detailedOrderTo, 'Detailed');
+      } else if (aoType === 'Designated') {
+        processAlert(emp.designatedOrderTo, 'Designated');
+      }
+    });
+
+    return alertsList;
   }, [employees, pendingApprovals]);
 
   // Group alerts by formatted expiration date
@@ -629,7 +657,7 @@ export default function Calendar() {
                   <div className="expiring-list">
                     {selectedDateEmployees.map((emp) => (
                       <div
-                        key={emp.id}
+                        key={`${emp.id}-${emp.aoType}`}
                         className={`expiring-item expiring-item--border-${emp.color}`}
                         onClick={() => {
                           closeModal();

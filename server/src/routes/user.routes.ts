@@ -19,6 +19,12 @@ function getProfilePicturesDir(): string {
     : path.join(__dirname, '../../uploads/profile-pictures');
 }
 
+function getDeletedUsersDir(): string {
+  return process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'deleted-users')
+    : path.join(__dirname, '../../uploads/deleted-users');
+}
+
 const router = Router();
 
 // Get all users
@@ -419,7 +425,18 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
     // Fetch user before deleting so we can include their name in the audit log
     const userToDelete = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, firstName: true, lastName: true, role: true },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        profilePicture: true,
+        permissions: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     if (!userToDelete) {
@@ -441,6 +458,28 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
       entityName: getUserName(userToDelete),
       details: { authorizingUserName },
     });
+
+    // Create the deleted-users archive folder if it doesn't exist
+    const deletedUsersDir = getDeletedUsersDir();
+    if (!fs.existsSync(deletedUsersDir)) {
+      fs.mkdirSync(deletedUsersDir, { recursive: true });
+    }
+
+    // Move profile picture if exists
+    if (userToDelete.profilePicture) {
+      const originalPicPath = path.join(getProfilePicturesDir(), path.basename(userToDelete.profilePicture));
+      if (fs.existsSync(originalPicPath)) {
+        const archivedPicName = `${id}_${path.basename(userToDelete.profilePicture)}`;
+        const archivedPicPath = path.join(deletedUsersDir, archivedPicName);
+        fs.copyFileSync(originalPicPath, archivedPicPath);
+        fs.unlinkSync(originalPicPath);
+      }
+    }
+
+    // Save user details backup JSON
+    const backupFileName = `${id}_${userToDelete.username}.json`;
+    const backupFilePath = path.join(deletedUsersDir, backupFileName);
+    fs.writeFileSync(backupFilePath, JSON.stringify(userToDelete, null, 2));
 
     await prisma.user.delete({
       where: { id },

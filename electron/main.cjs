@@ -126,7 +126,11 @@ function isServiceRunning() {
 function startBackendServer() {
   if (!app.isPackaged) return;
   const clientConfig = readClientConfig();
-  if (clientConfig?.serverUrl) return; // client build — use remote server
+  if (clientConfig?.serverUrl) {
+    GLOBAL_SERVER_URL = clientConfig.serverUrl;
+    console.log('[server-url] Client config loaded. Server URL set to:', GLOBAL_SERVER_URL);
+    return; // client build — use remote server
+  }
 
   // If the Windows Service is already running, don't start a second server process.
   // The service runs server.bundle.cjs in the background independently of this app.

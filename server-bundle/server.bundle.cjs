@@ -17977,17 +17977,17 @@ var require_router = __commonJS({
     var toString = Object.prototype.toString;
     var proto = module2.exports = function(options) {
       var opts = options || {};
-      function router8(req, res, next) {
-        router8.handle(req, res, next);
+      function router9(req, res, next) {
+        router9.handle(req, res, next);
       }
-      setPrototypeOf(router8, proto);
-      router8.params = {};
-      router8._params = [];
-      router8.caseSensitive = opts.caseSensitive;
-      router8.mergeParams = opts.mergeParams;
-      router8.strict = opts.strict;
-      router8.stack = [];
-      return router8;
+      setPrototypeOf(router9, proto);
+      router9.params = {};
+      router9._params = [];
+      router9.caseSensitive = opts.caseSensitive;
+      router9.mergeParams = opts.mergeParams;
+      router9.strict = opts.strict;
+      router9.stack = [];
+      return router9;
     };
     proto.param = function param(name, fn) {
       if (typeof name === "function") {
@@ -20579,7 +20579,7 @@ var require_application = __commonJS({
   "server/node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router8 = require_router();
+    var Router9 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query = require_query();
@@ -20644,7 +20644,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router8({
+        this._router = new Router9({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -20653,17 +20653,17 @@ var require_application = __commonJS({
       }
     };
     app2.handle = function handle(req, res, callback) {
-      var router8 = this._router;
+      var router9 = this._router;
       var done = callback || finalhandler(req, res, {
         env: this.get("env"),
         onerror: logerror.bind(this)
       });
-      if (!router8) {
+      if (!router9) {
         debug("no routes defined on app");
         done();
         return;
       }
-      router8.handle(req, res, done);
+      router9.handle(req, res, done);
     };
     app2.use = function use(fn) {
       var offset = 0;
@@ -20683,15 +20683,15 @@ var require_application = __commonJS({
         throw new TypeError("app.use() requires a middleware function");
       }
       this.lazyrouter();
-      var router8 = this._router;
+      var router9 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router8.use(path6, fn2);
+          return router9.use(path6, fn2);
         }
         debug(".use app under %s", path6);
         fn2.mountpath = path6;
         fn2.parent = this;
-        router8.use(path6, function mounted_app(req, res, next) {
+        router9.use(path6, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -22506,7 +22506,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router8 = require_router();
+    var Router9 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -22529,7 +22529,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router8;
+    exports2.Router = Router9;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -30953,7 +30953,7 @@ __export(src_exports, {
   default: () => src_default
 });
 module.exports = __toCommonJS(src_exports);
-var import_express8 = __toESM(require_express2());
+var import_express9 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_dotenv = __toESM(require_main());
 var import_path5 = __toESM(require("path"));
@@ -32833,12 +32833,155 @@ function requireSuperadminApproval(req, res, next) {
   next();
 }
 
+// server/src/utils/auditHelper.ts
+function generateAuditDescription(data) {
+  const { action, entity, entityName, userName, details } = data;
+  const user = userName || "System";
+  const entityType = formatEntityType(entity);
+  const name = entityName || "Unknown";
+  switch (action.toLowerCase()) {
+    case "create":
+      return `${user} added a new ${entityType}: ${name}`;
+    case "update": {
+      if (entity.toLowerCase() === "employee" && details?.changedFields) {
+        const appointmentFields = [
+          "appointmentStatus",
+          "appointmentFrom",
+          "appointmentTo",
+          "expirationDate",
+          "aoNumber",
+          "aoYear",
+          "aoType"
+        ];
+        const changedFields = details.changedFields;
+        const appointmentChanges = changedFields.filter((f) => appointmentFields.includes(f));
+        const otherChanges = changedFields.filter((f) => !appointmentFields.includes(f));
+        if (appointmentChanges.length > 0 && otherChanges.length === 0) {
+          if (appointmentChanges.length === 1) {
+            const field = formatFieldName(appointmentChanges[0]);
+            const value = details.values?.[appointmentChanges[0]];
+            if (value !== void 0 && value !== null && value !== "") {
+              return `${user} updated appointment ${field} of ${name} to ${value}`;
+            }
+            return `${user} updated appointment ${field} of ${name}`;
+          }
+          return `${user} updated appointment details of ${name} (${appointmentChanges.map(formatFieldName).join(", ")})`;
+        }
+        if (appointmentChanges.length > 0 && otherChanges.length > 0) {
+          return `${user} updated appointment and other details of ${name} (${changedFields.length} fields)`;
+        }
+      }
+      if (details?.changedFields) {
+        const fields = details.changedFields;
+        if (fields.length === 1) {
+          const field = formatFieldName(fields[0]);
+          const value = details.values?.[fields[0]];
+          if (value !== void 0 && value !== null && value !== "") {
+            return `${user} updated ${field} of ${name} to ${value}`;
+          }
+          return `${user} updated ${field} of ${name}`;
+        } else if (fields.length > 1) {
+          return `${user} updated ${fields.length} fields of ${name}`;
+        }
+      }
+      return `${user} updated ${entityType}: ${name}`;
+    }
+    case "delete":
+      if (entity.toLowerCase() === "document" && details?.employeeName) {
+        const authInfo = details?.authorizingUserName && details.authorizingUserName !== user ? ` (Authorized by: ${details.authorizingUserName})` : "";
+        return `${user} deleted ${entityType} from ${details.employeeName}: ${name}${authInfo}`;
+      }
+      if ((entity.toLowerCase() === "employee" || entity.toLowerCase() === "user") && details?.authorizingUserName) {
+        const authInfo = details.authorizingUserName !== user ? ` (Authorized by: ${details.authorizingUserName})` : "";
+        return `${user} deleted ${entityType}: ${name}${authInfo}`;
+      }
+      return `${user} deleted ${entityType}: ${name}`;
+    case "status_change": {
+      const newStatus = details?.status || details?.values?.status;
+      if (newStatus) {
+        return `${user} changed status of ${name} to ${newStatus}`;
+      }
+      return `${user} changed status of ${name}`;
+    }
+    case "upload": {
+      const employeeNameUpload = details?.employeeName || name;
+      return `${user} uploaded a document to ${employeeNameUpload}: ${name}`;
+    }
+    case "download": {
+      const employeeNameDownload = details?.employeeName || name;
+      return `${user} downloaded a document from ${employeeNameDownload}: ${name}`;
+    }
+    case "profile_picture_upload":
+      return `${user} uploaded a profile picture for ${entityType}: ${name}`;
+    case "profile_picture_remove":
+      return `${user} removed the profile picture of ${entityType}: ${name}`;
+    case "permission_change": {
+      const authInfo = details?.authorizingUserName && details.authorizingUserName !== user ? ` (Authorized by: ${details.authorizingUserName})` : "";
+      return `${user} updated permissions for user: ${name}${authInfo}`;
+    }
+    default:
+      return `${user} performed ${action} on ${entityType}: ${name}`;
+  }
+}
+function formatEntityType(entity) {
+  const entityMap = {
+    "employee": "employee",
+    "user": "user",
+    "document": "document",
+    "record": "record"
+  };
+  return entityMap[entity.toLowerCase()] || entity;
+}
+function formatFieldName(field) {
+  const formatted = field.replace(/([A-Z])/g, " $1").replace(/_/g, " ").toLowerCase().trim();
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+function getEmployeeName(employee) {
+  if (!employee) return "Unknown Employee";
+  const parts = [
+    employee.firstName,
+    employee.middleName,
+    employee.lastName
+  ].filter(Boolean);
+  return parts.join(" ") || "Unknown Employee";
+}
+function getUserName(user) {
+  if (!user) return "Unknown User";
+  if (user.firstName && user.lastName) {
+    return `${user.firstName} ${user.lastName}`;
+  }
+  return user.username || user.name || "Unknown User";
+}
+async function createAuditLog(prisma4, data) {
+  const description = generateAuditDescription({
+    action: data.action,
+    entity: data.entity,
+    entityName: data.entityName,
+    userName: data.userName,
+    details: data.details
+  });
+  return await prisma4.auditLog.create({
+    data: {
+      userId: data.userId,
+      action: data.action,
+      entity: data.entity,
+      entityId: data.entityId,
+      details: description,
+      // Store human-readable description here
+      metadata: data.details ? data.details : void 0
+    }
+  });
+}
+
 // server/src/routes/user.routes.ts
 var import_path2 = __toESM(require("path"));
 var import_fs2 = __toESM(require("fs"));
 var SALT_ROUNDS = 10;
 function getProfilePicturesDir() {
   return process.env.UPLOADS_DIR ? import_path2.default.join(process.env.UPLOADS_DIR, "profile-pictures") : import_path2.default.join(__dirname, "../../uploads/profile-pictures");
+}
+function getDeletedUsersDir() {
+  return process.env.UPLOADS_DIR ? import_path2.default.join(process.env.UPLOADS_DIR, "deleted-users") : import_path2.default.join(__dirname, "../../uploads/deleted-users");
 }
 var router = (0, import_express.Router)();
 router.get("/", async (req, res) => {
@@ -32936,6 +33079,16 @@ router.post("/", async (req, res) => {
         createdAt: true
       }
     });
+    const actorId = req.headers["x-user-id"] || "system";
+    const actorName = req.headers["x-user-name"] || "System";
+    await createAuditLog(prisma_default, {
+      userId: actorId,
+      userName: actorName,
+      action: "create",
+      entity: "user",
+      entityId: user.id,
+      entityName: getUserName(user)
+    });
     res.status(201).json(user);
   } catch (error) {
     console.error("Error creating user:", error);
@@ -32946,6 +33099,13 @@ router.put("/:id", requireSuperadminApproval, async (req, res) => {
   try {
     const { id } = req.params;
     const { username, firstName, lastName, role, password } = req.body;
+    const oldUser = await prisma_default.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, firstName: true, lastName: true, role: true }
+    });
+    if (!oldUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
     const updateData = {};
     if (username) updateData.username = username;
     if (firstName) updateData.firstName = firstName;
@@ -32962,6 +33122,31 @@ router.put("/:id", requireSuperadminApproval, async (req, res) => {
         lastName: true,
         role: true,
         updatedAt: true
+      }
+    });
+    const actorId = req.headers["x-user-id"] || "system";
+    const actorName = req.headers["x-user-name"] || "System";
+    const authorizingUserName = req.headers["x-authorizing-user-name"] || actorName;
+    const changedFields = Object.keys(updateData).filter((f) => f !== "password");
+    const oldValues = {};
+    const newValues = {};
+    for (const field of changedFields) {
+      oldValues[field] = oldUser[field] ?? null;
+      newValues[field] = user[field] ?? null;
+    }
+    if (password) changedFields.push("password");
+    await createAuditLog(prisma_default, {
+      userId: actorId,
+      userName: actorName,
+      action: "update",
+      entity: "user",
+      entityId: user.id,
+      entityName: getUserName(user),
+      details: {
+        changedFields,
+        values: newValues,
+        oldValues,
+        authorizingUserName
       }
     });
     res.json(user);
@@ -33009,12 +33194,17 @@ router.patch("/:id", requireSuperadminApproval, async (req, res) => {
     if (updateData.password) {
       updateData.password = await bcryptjs_default.hash(updateData.password, SALT_ROUNDS);
     }
+    const actorId = req.headers["x-user-id"] || "system";
+    const actorName = req.headers["x-user-name"] || "System";
+    const authorizingUserName = req.headers["x-authorizing-user-name"] || actorName;
     if (updateData.id && updateData.id !== id) {
+      let oldUserSnapshot = null;
       const result = await prisma_default.$transaction(async (tx) => {
         const oldUser = await tx.user.findUnique({ where: { id } });
         if (!oldUser) {
           throw new Error("User not found");
         }
+        oldUserSnapshot = oldUser;
         await tx.user.delete({ where: { id } });
         const newUser = await tx.user.create({
           data: {
@@ -33040,8 +33230,38 @@ router.patch("/:id", requireSuperadminApproval, async (req, res) => {
         });
         return newUser;
       });
+      const changedFields = Object.keys(updateData).filter((f) => f !== "password");
+      const oldValues = {};
+      const newValues = {};
+      for (const field of changedFields) {
+        oldValues[field] = oldUserSnapshot ? oldUserSnapshot[field] ?? null : null;
+        newValues[field] = result[field] ?? null;
+      }
+      if (updateData.password) changedFields.push("password");
+      await createAuditLog(prisma_default, {
+        userId: actorId,
+        userName: actorName,
+        action: "update",
+        entity: "user",
+        entityId: result.id,
+        entityName: getUserName(result),
+        details: {
+          changedFields,
+          values: newValues,
+          oldValues,
+          authorizingUserName,
+          previousId: id
+        }
+      });
       res.json(result);
     } else {
+      const oldUser = await prisma_default.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, firstName: true, lastName: true, role: true, permissions: true }
+      });
+      if (!oldUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const user = await prisma_default.user.update({
         where: { id },
         data: updateData,
@@ -33051,10 +33271,33 @@ router.patch("/:id", requireSuperadminApproval, async (req, res) => {
           firstName: true,
           lastName: true,
           profilePicture: true,
-          // Include profile picture
           role: true,
           permissions: true,
           updatedAt: true
+        }
+      });
+      const changedFields = Object.keys(updateData).filter((f) => f !== "password");
+      const isPermissionsOnly = changedFields.length === 1 && changedFields[0] === "permissions";
+      const auditAction = isPermissionsOnly ? "permission_change" : "update";
+      const oldValues = {};
+      const newValues = {};
+      for (const field of changedFields) {
+        oldValues[field] = oldUser[field] ?? null;
+        newValues[field] = user[field] ?? null;
+      }
+      if (updateData.password) changedFields.push("password");
+      await createAuditLog(prisma_default, {
+        userId: actorId,
+        userName: actorName,
+        action: auditAction,
+        entity: "user",
+        entityId: user.id,
+        entityName: getUserName(user),
+        details: {
+          changedFields,
+          values: newValues,
+          oldValues,
+          authorizingUserName
         }
       });
       res.json(user);
@@ -33067,6 +33310,52 @@ router.patch("/:id", requireSuperadminApproval, async (req, res) => {
 router.delete("/:id", requireSuperadminApproval, async (req, res) => {
   try {
     const { id } = req.params;
+    const userToDelete = await prisma_default.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        profilePicture: true,
+        permissions: true,
+        lastLogin: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    if (!userToDelete) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const actorId = req.headers["x-user-id"] || "system";
+    const actorName = req.headers["x-user-name"] || "System";
+    const authorizingUserName = req.headers["x-authorizing-user-name"] || actorName;
+    await createAuditLog(prisma_default, {
+      userId: actorId,
+      userName: actorName,
+      action: "delete",
+      entity: "user",
+      entityId: id,
+      entityName: getUserName(userToDelete),
+      details: { authorizingUserName }
+    });
+    const deletedUsersDir = getDeletedUsersDir();
+    if (!import_fs2.default.existsSync(deletedUsersDir)) {
+      import_fs2.default.mkdirSync(deletedUsersDir, { recursive: true });
+    }
+    if (userToDelete.profilePicture) {
+      const originalPicPath = import_path2.default.join(getProfilePicturesDir(), import_path2.default.basename(userToDelete.profilePicture));
+      if (import_fs2.default.existsSync(originalPicPath)) {
+        const archivedPicName = `${id}_${import_path2.default.basename(userToDelete.profilePicture)}`;
+        const archivedPicPath = import_path2.default.join(deletedUsersDir, archivedPicName);
+        import_fs2.default.copyFileSync(originalPicPath, archivedPicPath);
+        import_fs2.default.unlinkSync(originalPicPath);
+      }
+    }
+    const backupFileName = `${id}_${userToDelete.username}.json`;
+    const backupFilePath = import_path2.default.join(deletedUsersDir, backupFileName);
+    import_fs2.default.writeFileSync(backupFilePath, JSON.stringify(userToDelete, null, 2));
     await prisma_default.user.delete({
       where: { id }
     });
@@ -33247,6 +33536,16 @@ router.post("/:id/profile-picture", uploadProfilePicture.single("profilePicture"
         permissions: true
       }
     });
+    const actorId = req.headers["x-user-id"] || "system";
+    const actorName = req.headers["x-user-name"] || "System";
+    await createAuditLog(prisma_default, {
+      userId: actorId,
+      userName: actorName,
+      action: "profile_picture_upload",
+      entity: "user",
+      entityId: updatedUser.id,
+      entityName: getUserName(updatedUser)
+    });
     res.json({ profilePicture: updatedUser.profilePicture });
   } catch (error) {
     console.error("Error uploading profile picture:", error);
@@ -33276,6 +33575,20 @@ router.delete("/:id/profile-picture", async (req, res) => {
       where: { id },
       data: { profilePicture: null }
     });
+    const userRecord = await prisma_default.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, firstName: true, lastName: true }
+    });
+    const actorId = req.headers["x-user-id"] || "system";
+    const actorName = req.headers["x-user-name"] || "System";
+    await createAuditLog(prisma_default, {
+      userId: actorId,
+      userName: actorName,
+      action: "profile_picture_remove",
+      entity: "user",
+      entityId: id,
+      entityName: getUserName(userRecord)
+    });
     res.json({ message: "Profile picture removed successfully" });
   } catch (error) {
     console.error("Error removing profile picture:", error);
@@ -33287,100 +33600,121 @@ var user_routes_default = router;
 // server/src/routes/employee.routes.ts
 var import_express2 = __toESM(require_express2());
 
-// server/src/utils/auditHelper.ts
-function generateAuditDescription(data) {
-  const { action, entity, entityName, userName, details } = data;
-  const user = userName || "System";
-  const entityType = formatEntityType(entity);
-  const name = entityName || "Unknown";
-  switch (action.toLowerCase()) {
-    case "create":
-      return `${user} added a new ${entityType}: ${name}`;
-    case "update":
-      if (details?.changedFields) {
-        const fields = details.changedFields;
-        if (fields.length === 1) {
-          const field = formatFieldName(fields[0]);
-          const value = details.values?.[fields[0]];
-          if (value !== void 0 && value !== null) {
-            return `${user} updated ${field} of ${name} to ${value}`;
+// server/src/utils/dropdownOptionsHelper.ts
+async function checkAndAddDropdownOptions(data) {
+  try {
+    let settings = await prisma_default.systemSetting.findFirst();
+    if (!settings) {
+      settings = await prisma_default.systemSetting.create({
+        data: {
+          appointmentStatuses: [],
+          officeNames: [],
+          positions: []
+        }
+      });
+    }
+    const currentOfficeNames = new Set(settings.officeNames ?? []);
+    const currentPositions = new Set(settings.positions ?? []);
+    const currentAppointmentStatuses = new Set(settings.appointmentStatuses ?? []);
+    let needsUpdate = false;
+    if (data.officeNames) {
+      for (const office of data.officeNames) {
+        if (office && office.trim() !== "") {
+          const trimmed = office.trim();
+          if (!currentOfficeNames.has(trimmed)) {
+            currentOfficeNames.add(trimmed);
+            needsUpdate = true;
           }
-          return `${user} updated ${field} of ${name}`;
-        } else if (fields.length > 1) {
-          return `${user} updated ${fields.length} fields of ${name}`;
         }
       }
-      return `${user} updated ${entityType}: ${name}`;
-    case "delete":
-      if (entity.toLowerCase() === "document" && details?.employeeName) {
-        const authInfo = details?.authorizingUserName && details.authorizingUserName !== user ? ` (Authorized by: ${details.authorizingUserName})` : "";
-        return `${user} deleted ${entityType} from ${details.employeeName}: ${name}${authInfo}`;
-      }
-      if (entity.toLowerCase() === "employee" && details?.authorizingUserName) {
-        const authInfo = details.authorizingUserName !== user ? ` (Authorized by: ${details.authorizingUserName})` : "";
-        return `${user} deleted ${entityType}: ${name}${authInfo}`;
-      }
-      return `${user} deleted ${entityType}: ${name}`;
-    case "status_change": {
-      const newStatus = details?.status || details?.values?.status;
-      if (newStatus) {
-        return `${user} changed status of ${name} to ${newStatus}`;
-      }
-      return `${user} changed status of ${name}`;
     }
-    case "upload": {
-      const employeeNameUpload = details?.employeeName || name;
-      return `${user} uploaded a document to ${employeeNameUpload}: ${name}`;
+    if (data.positions) {
+      for (const pos of data.positions) {
+        if (pos && pos.trim() !== "") {
+          const trimmed = pos.trim();
+          if (!currentPositions.has(trimmed)) {
+            currentPositions.add(trimmed);
+            needsUpdate = true;
+          }
+        }
+      }
     }
-    case "download": {
-      const employeeNameDownload = details?.employeeName || name;
-      return `${user} downloaded a document from ${employeeNameDownload}: ${name}`;
+    if (data.appointmentStatuses) {
+      for (const status of data.appointmentStatuses) {
+        if (status && status.trim() !== "") {
+          const trimmed = status.trim();
+          if (!currentAppointmentStatuses.has(trimmed)) {
+            currentAppointmentStatuses.add(trimmed);
+            needsUpdate = true;
+          }
+        }
+      }
     }
-    default:
-      return `${user} performed ${action} on ${entityType}: ${name}`;
+    if (needsUpdate) {
+      await prisma_default.systemSetting.update({
+        where: { id: settings.id },
+        data: {
+          officeNames: Array.from(currentOfficeNames).sort(),
+          positions: Array.from(currentPositions).sort(),
+          appointmentStatuses: Array.from(currentAppointmentStatuses).sort()
+        }
+      });
+      console.log("[settings] Automatically added new dynamic dropdown options");
+    }
+  } catch (error) {
+    console.error("[settings] Error auto-populating dropdown options:", error);
   }
 }
-function formatEntityType(entity) {
-  const entityMap = {
-    "employee": "employee",
-    "user": "user",
-    "document": "document",
-    "record": "record"
-  };
-  return entityMap[entity.toLowerCase()] || entity;
-}
-function formatFieldName(field) {
-  const formatted = field.replace(/([A-Z])/g, " $1").replace(/_/g, " ").toLowerCase().trim();
-  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-}
-function getEmployeeName(employee) {
-  if (!employee) return "Unknown Employee";
-  const parts = [
-    employee.firstName,
-    employee.middleName,
-    employee.lastName
-  ].filter(Boolean);
-  return parts.join(" ") || "Unknown Employee";
-}
-async function createAuditLog(prisma3, data) {
-  const description = generateAuditDescription({
-    action: data.action,
-    entity: data.entity,
-    entityName: data.entityName,
-    userName: data.userName,
-    details: data.details
-  });
-  return await prisma3.auditLog.create({
-    data: {
-      userId: data.userId,
-      action: data.action,
-      entity: data.entity,
-      entityId: data.entityId,
-      details: description,
-      // Store human-readable description here
-      metadata: data.details ? data.details : void 0
+async function syncExistingRecordsToDropdownOptions() {
+  try {
+    console.log("[settings] Starting database check to sync existing offices and positions to dynamic settings...");
+    const employees = await prisma_default.employee.findMany({
+      select: {
+        officeName: true,
+        position: true,
+        appointmentStatus: true,
+        motherUnit: true,
+        detailedTo: true,
+        designatedPositionFunction: true
+      }
+    });
+    const officeNamesSet = /* @__PURE__ */ new Set();
+    const positionsSet = /* @__PURE__ */ new Set();
+    const statusSet = /* @__PURE__ */ new Set();
+    employees.forEach((emp) => {
+      if (emp.officeName) officeNamesSet.add(emp.officeName);
+      if (emp.motherUnit) officeNamesSet.add(emp.motherUnit);
+      if (emp.detailedTo) officeNamesSet.add(emp.detailedTo);
+      if (emp.position) positionsSet.add(emp.position);
+      if (emp.designatedPositionFunction) positionsSet.add(emp.designatedPositionFunction);
+      if (emp.appointmentStatus) statusSet.add(emp.appointmentStatus);
+    });
+    const documents = await prisma_default.document.findMany({
+      where: {
+        category: "Administrative Order"
+      },
+      select: {
+        detailedTo: true,
+        designatedPositionFunction: true
+      }
+    });
+    documents.forEach((doc) => {
+      if (doc.detailedTo) officeNamesSet.add(doc.detailedTo);
+      if (doc.designatedPositionFunction) positionsSet.add(doc.designatedPositionFunction);
+    });
+    if (officeNamesSet.size === 0 && positionsSet.size === 0 && statusSet.size === 0) {
+      console.log("[settings] No existing employee records found to sync.");
+      return;
     }
-  });
+    await checkAndAddDropdownOptions({
+      officeNames: Array.from(officeNamesSet),
+      positions: Array.from(positionsSet),
+      appointmentStatuses: Array.from(statusSet)
+    });
+    console.log("[settings] Completed database check and synchronized all existing values.");
+  } catch (error) {
+    console.error("[settings] Error syncing existing records to dynamic settings:", error);
+  }
 }
 
 // server/src/routes/employee.routes.ts
@@ -33613,6 +33947,8 @@ router2.post("/", async (req, res) => {
       detailedDivision,
       detailedFunction,
       detailedDate,
+      detailedOrderFrom,
+      detailedOrderTo,
       designatedPositionFunction,
       designatedOrderFrom,
       designatedOrderTo,
@@ -33652,11 +33988,18 @@ router2.post("/", async (req, res) => {
         detailedDivision: detailedDivision || null,
         detailedFunction: detailedFunction || null,
         detailedDate: detailedDate ? new Date(detailedDate) : null,
+        detailedOrderFrom: detailedOrderFrom ? new Date(detailedOrderFrom) : null,
+        detailedOrderTo: detailedOrderTo ? new Date(detailedOrderTo) : null,
         designatedPositionFunction: designatedPositionFunction || null,
         designatedOrderFrom: designatedOrderFrom ? new Date(designatedOrderFrom) : null,
         designatedOrderTo: designatedOrderTo ? new Date(designatedOrderTo) : null,
         fileboxLocation: fileboxLocation || null
       }
+    });
+    await checkAndAddDropdownOptions({
+      officeNames: [officeName, motherUnit, detailedTo],
+      positions: [position, designatedPositionFunction],
+      appointmentStatuses: [appointmentStatus]
     });
     const userId = req.headers["x-user-id"] || "system";
     const userName = req.headers["x-user-name"] || "System";
@@ -33711,6 +34054,22 @@ router2.post("/sync-import", requireSuperadminApproval, async (req, res) => {
     const existingIds = new Set(existingEmployees.map((emp) => emp.id));
     const toCreate = normalizedEmployees.filter((emp) => !existingIds.has(emp.id));
     const toUpdate = normalizedEmployees.filter((emp) => existingIds.has(emp.id));
+    const officeNamesSet = /* @__PURE__ */ new Set();
+    const positionsSet = /* @__PURE__ */ new Set();
+    const statusSet = /* @__PURE__ */ new Set();
+    for (const emp of normalizedEmployees) {
+      if (emp.officeName) officeNamesSet.add(emp.officeName);
+      if (emp.motherUnit) officeNamesSet.add(emp.motherUnit);
+      if (emp.detailedTo) officeNamesSet.add(emp.detailedTo);
+      if (emp.position) positionsSet.add(emp.position);
+      if (emp.designatedPositionFunction) positionsSet.add(emp.designatedPositionFunction);
+      if (emp.appointmentStatus) statusSet.add(emp.appointmentStatus);
+    }
+    await checkAndAddDropdownOptions({
+      officeNames: Array.from(officeNamesSet),
+      positions: Array.from(positionsSet),
+      appointmentStatuses: Array.from(statusSet)
+    });
     if (toCreate.length > 0) {
       await prisma_default.employee.createMany({
         data: toCreate.map((emp) => ({
@@ -33830,6 +34189,12 @@ router2.put("/:id", requireSuperadminApproval, async (req, res) => {
     if ("designatedOrderTo" in updateData) {
       updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
     }
+    if ("detailedOrderFrom" in updateData) {
+      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+    }
+    if ("detailedOrderTo" in updateData) {
+      updateData.detailedOrderTo = updateData.detailedOrderTo ? new Date(updateData.detailedOrderTo) : null;
+    }
     const oldEmployee = await prisma_default.employee.findUnique({ where: { id } });
     if (!oldEmployee) {
       return res.status(404).json({ error: "Employee not found" });
@@ -33841,6 +34206,11 @@ router2.put("/:id", requireSuperadminApproval, async (req, res) => {
     const employee = await prisma_default.employee.update({
       where: { id },
       data: updateData
+    });
+    await checkAndAddDropdownOptions({
+      officeNames: [updateData.officeName, updateData.motherUnit, updateData.detailedTo],
+      positions: [updateData.position, updateData.designatedPositionFunction],
+      appointmentStatuses: [updateData.appointmentStatus]
     });
     const userId = req.headers["x-user-id"] || "system";
     const userName = req.headers["x-user-name"] || "System";
@@ -33889,6 +34259,8 @@ router2.patch("/:id", requireSuperadminApproval, async (req, res) => {
       "detailedDivision",
       "detailedFunction",
       "detailedDate",
+      "detailedOrderFrom",
+      "detailedOrderTo",
       "designatedPositionFunction",
       "designatedOrderFrom",
       "designatedOrderTo",
@@ -33926,6 +34298,12 @@ router2.patch("/:id", requireSuperadminApproval, async (req, res) => {
     }
     if ("designatedOrderTo" in updateData) {
       updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
+    }
+    if ("detailedOrderFrom" in updateData) {
+      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+    }
+    if ("detailedOrderTo" in updateData) {
+      updateData.detailedOrderTo = updateData.detailedOrderTo ? new Date(updateData.detailedOrderTo) : null;
     }
     if ("isDetailed" in updateData) {
       updateData.isDetailed = updateData.isDetailed === true || updateData.isDetailed === "true";
@@ -33981,6 +34359,8 @@ router2.patch("/:id", requireSuperadminApproval, async (req, res) => {
             detailedDivision: updateData.detailedDivision !== void 0 ? updateData.detailedDivision : oldEmployee.detailedDivision,
             detailedFunction: updateData.detailedFunction !== void 0 ? updateData.detailedFunction : oldEmployee.detailedFunction,
             detailedDate: updateData.detailedDate !== void 0 ? updateData.detailedDate : oldEmployee.detailedDate,
+            detailedOrderFrom: updateData.detailedOrderFrom !== void 0 ? updateData.detailedOrderFrom : oldEmployee.detailedOrderFrom,
+            detailedOrderTo: updateData.detailedOrderTo !== void 0 ? updateData.detailedOrderTo : oldEmployee.detailedOrderTo,
             designatedPositionFunction: updateData.designatedPositionFunction !== void 0 ? updateData.designatedPositionFunction : oldEmployee.designatedPositionFunction,
             designatedOrderFrom: updateData.designatedOrderFrom !== void 0 ? updateData.designatedOrderFrom : oldEmployee.designatedOrderFrom,
             designatedOrderTo: updateData.designatedOrderTo !== void 0 ? updateData.designatedOrderTo : oldEmployee.designatedOrderTo,
@@ -34017,6 +34397,11 @@ router2.patch("/:id", requireSuperadminApproval, async (req, res) => {
         where: { id },
         data: updateData
       });
+      await checkAndAddDropdownOptions({
+        officeNames: [updateData.officeName, updateData.motherUnit, updateData.detailedTo],
+        positions: [updateData.position, updateData.designatedPositionFunction],
+        appointmentStatuses: [updateData.appointmentStatus]
+      });
       await createAuditLog(prisma_default, {
         userId,
         userName,
@@ -34029,6 +34414,11 @@ router2.patch("/:id", requireSuperadminApproval, async (req, res) => {
       res.json(employee);
       return;
     }
+    await checkAndAddDropdownOptions({
+      officeNames: [updateData.officeName, updateData.motherUnit, updateData.detailedTo],
+      positions: [updateData.position, updateData.designatedPositionFunction],
+      appointmentStatuses: [updateData.appointmentStatus]
+    });
     await createAuditLog(prisma_default, {
       userId,
       userName,
@@ -34094,10 +34484,49 @@ router2.post("/bulk-delete", requireSuperadminApproval, async (req, res) => {
     const userId = req.headers["x-user-id"] || "system";
     const userName = req.headers["x-user-name"] || "System";
     const authorizingUserName = req.headers["x-authorizing-user-name"];
+    const documents = await prisma_default.document.findMany({
+      where: {
+        employeeId: {
+          in: ids
+        }
+      },
+      select: {
+        filePath: true
+      }
+    });
     let totalDeletedFiles = 0;
-    for (const employeeId of ids) {
-      const deletedCount = await deletePhysicalFiles(employeeId);
-      totalDeletedFiles += deletedCount;
+    for (const doc of documents) {
+      try {
+        if (import_fs3.default.existsSync(doc.filePath)) {
+          import_fs3.default.unlinkSync(doc.filePath);
+          totalDeletedFiles++;
+        }
+      } catch (fileError) {
+        console.error(`Error deleting physical file ${doc.filePath}:`, fileError);
+      }
+    }
+    const employeesToDelete = await prisma_default.employee.findMany({
+      where: {
+        id: {
+          in: ids
+        }
+      },
+      select: {
+        profilePicture: true
+      }
+    });
+    for (const emp of employeesToDelete) {
+      if (emp.profilePicture) {
+        try {
+          const uploadsDir2 = process.env.UPLOADS_DIR || import_path3.default.join(__dirname, "../../uploads");
+          const profilePicPath = import_path3.default.join(uploadsDir2, "profile-pictures", import_path3.default.basename(emp.profilePicture));
+          if (import_fs3.default.existsSync(profilePicPath)) {
+            import_fs3.default.unlinkSync(profilePicPath);
+          }
+        } catch (picError) {
+          console.error(`Error deleting profile picture for employee:`, picError);
+        }
+      }
     }
     console.log(`Bulk delete: Deleted ${totalDeletedFiles} physical file(s) for ${ids.length} employee(s)`);
     const count = ids.length;
@@ -34259,6 +34688,8 @@ router2.post("/delete-report-entries", async (req, res) => {
                 detailedDivision: null,
                 detailedFunction: null,
                 detailedDate: null,
+                detailedOrderFrom: null,
+                detailedOrderTo: null,
                 designatedPositionFunction: null,
                 designatedOrderFrom: null,
                 designatedOrderTo: null,
@@ -34321,6 +34752,8 @@ router2.post("/delete-report-entries", async (req, res) => {
               detailedDivision: null,
               detailedFunction: null,
               detailedDate: null,
+              detailedOrderFrom: null,
+              detailedOrderTo: null,
               designatedPositionFunction: null,
               designatedOrderFrom: null,
               designatedOrderTo: null,
@@ -34483,7 +34916,8 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
       designatedOrderFrom,
       designatedOrderTo,
       appointmentFrom,
-      appointmentTo
+      appointmentTo,
+      autoRename
     } = req.body;
     const uploadedFile = req.file;
     console.log("[document] Upload received:", {
@@ -34503,7 +34937,8 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
     }
     let finalFileName = fileName;
     let finalFilePath = uploadedFile.path;
-    if (category === "Administrative Order") {
+    const isAutoRenameEnabled = autoRename === "true";
+    if (category === "Administrative Order" && isAutoRenameEnabled) {
       const surname = employee.lastName.trim().toUpperCase();
       const firstName = employee.firstName.trim().toUpperCase();
       const middleInitial = employee.middleName && employee.middleName.trim() !== "" ? employee.middleName.trim().charAt(0).toUpperCase() : "";
@@ -34525,6 +34960,33 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
         console.error("[document] Error renaming AO file:", renameError);
       }
     }
+    const duplicate = await prisma_default.document.findFirst({
+      where: {
+        employeeId,
+        fileName: finalFileName
+      }
+    });
+    if (duplicate) {
+      if (req.body.replace === "true") {
+        try {
+          if (import_fs4.default.existsSync(duplicate.filePath) && duplicate.filePath !== finalFilePath) {
+            import_fs4.default.unlinkSync(duplicate.filePath);
+          }
+        } catch (err) {
+          console.error("Error deleting old physical file during replacement:", err);
+        }
+        await prisma_default.document.delete({
+          where: { id: duplicate.id }
+        });
+      } else {
+        if (import_fs4.default.existsSync(finalFilePath)) {
+          import_fs4.default.unlinkSync(finalFilePath);
+        }
+        return res.status(409).json({ error: "A document with this name already exists" });
+      }
+    }
+    const userId = req.headers["x-user-id"] || "system";
+    const userName = req.headers["x-user-name"] || "System";
     const document2 = await prisma_default.document.create({
       data: {
         employeeId,
@@ -34533,6 +34995,7 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
         filePath: finalFilePath,
         fileSize: parseInt(fileSize) || uploadedFile.size || 0,
         mimeType: mimeType || uploadedFile.mimetype || "application/pdf",
+        uploadedBy: userName,
         aoNumber: aoNumber || null,
         aoYear: aoYear || null,
         aoType: aoType || null,
@@ -34547,15 +35010,17 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
         appointmentTo: toNullableDate2(appointmentTo)
       }
     });
-    const userId = req.headers["x-user-id"] || "system";
-    const userName = req.headers["x-user-name"] || "System";
+    await checkAndAddDropdownOptions({
+      officeNames: [detailedTo],
+      positions: [designatedPositionFunction]
+    });
     await createAuditLog(prisma_default, {
       userId,
       userName,
       action: "upload",
       entity: "document",
       entityId: document2.id,
-      entityName: fileName,
+      entityName: finalFileName,
       details: {
         category,
         employeeName: getEmployeeName(employee),
@@ -34627,6 +35092,8 @@ router3.delete("/:id", requireSuperadminApproval, async (req, res) => {
               detailedDivision: null,
               detailedFunction: null,
               detailedDate: null,
+              detailedOrderFrom: null,
+              detailedOrderTo: null,
               designatedPositionFunction: null,
               designatedOrderFrom: null,
               designatedOrderTo: null,
@@ -34716,6 +35183,8 @@ router3.post("/bulk-delete", requireSuperadminApproval, async (req, res) => {
                 detailedDivision: null,
                 detailedFunction: null,
                 detailedDate: null,
+                detailedOrderFrom: null,
+                detailedOrderTo: null,
                 designatedPositionFunction: null,
                 designatedOrderFrom: null,
                 designatedOrderTo: null,
@@ -34970,6 +35439,29 @@ var DEFAULT_APPOINTMENT_STATUSES = [
   "Probationary",
   "Temporary"
 ];
+var DEFAULT_REASONS_FOR_SEPARATION = [
+  "Expiration of Appointment",
+  "AWOL",
+  "Death",
+  "Devolution",
+  "Dismissal",
+  "Dropped from the Service",
+  "End of Contract",
+  "End of Term",
+  "Re-Appointment",
+  "Re-Employment",
+  "Resignation",
+  "Retirement",
+  "Reinstatement",
+  "Suspension",
+  "Terminal Leave",
+  "Termination of Employment",
+  "Transferred"
+];
+var DEFAULT_AO_YEARS = Array.from(
+  { length: (/* @__PURE__ */ new Date()).getFullYear() - 2015 + 11 },
+  (_, i) => (2015 + i).toString()
+).reverse();
 var requireSuperAdmin = (req, res, next) => {
   const userRole = req.headers["x-user-role"];
   if (userRole !== "superadmin" && userRole !== "developer") {
@@ -34989,14 +35481,17 @@ router5.get("/", async (req, res) => {
     let settings = await prisma2.systemSetting.findFirst();
     if (!settings) {
       settings = await prisma2.systemSetting.create({
-        data: { idleTimeout: null }
+        data: { idleTimeout: null, autoRename: false }
       });
     }
     res.json({
       idleTimeout: settings.idleTimeout,
+      autoRename: settings.autoRename,
       appointmentStatuses: settings.appointmentStatuses ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: settings.officeNames ?? [],
-      positions: settings.positions ?? []
+      positions: settings.positions ?? [],
+      aoYears: settings.aoYears ?? DEFAULT_AO_YEARS,
+      reasonsForSeparation: settings.reasonsForSeparation ?? DEFAULT_REASONS_FOR_SEPARATION
     });
   } catch (error) {
     console.error("Error fetching system settings:", error);
@@ -35005,20 +35500,34 @@ router5.get("/", async (req, res) => {
 });
 router5.put("/", requireSuperAdmin, async (req, res) => {
   try {
-    const { idleTimeout } = req.body;
-    if (idleTimeout !== null && (typeof idleTimeout !== "number" || idleTimeout < 0)) {
-      return res.status(400).json({ error: "Invalid idleTimeout value" });
+    const { idleTimeout, autoRename } = req.body;
+    const updateData = {};
+    if (idleTimeout !== void 0) {
+      if (idleTimeout !== null && (typeof idleTimeout !== "number" || idleTimeout < 0)) {
+        return res.status(400).json({ error: "Invalid idleTimeout value" });
+      }
+      updateData.idleTimeout = idleTimeout;
+    }
+    if (autoRename !== void 0) {
+      if (typeof autoRename !== "boolean") {
+        return res.status(400).json({ error: "Invalid autoRename value" });
+      }
+      updateData.autoRename = autoRename;
     }
     let settings = await prisma2.systemSetting.findFirst();
     if (settings) {
       settings = await prisma2.systemSetting.update({
         where: { id: settings.id },
-        data: { idleTimeout }
+        data: updateData
       });
     } else {
-      settings = await prisma2.systemSetting.create({ data: { idleTimeout } });
+      settings = await prisma2.systemSetting.create({ data: { idleTimeout: idleTimeout ?? null, autoRename: autoRename ?? false } });
     }
-    res.json({ idleTimeout: settings.idleTimeout, message: "System settings updated successfully" });
+    res.json({
+      idleTimeout: settings.idleTimeout,
+      autoRename: settings.autoRename,
+      message: "System settings updated successfully"
+    });
   } catch (error) {
     console.error("Error updating system settings:", error);
     res.status(500).json({ error: "Failed to update system settings" });
@@ -35026,11 +35535,13 @@ router5.put("/", requireSuperAdmin, async (req, res) => {
 });
 router5.put("/dropdown-options", requireDeveloperRole, async (req, res) => {
   try {
-    const { appointmentStatuses, officeNames, positions } = req.body;
+    const { appointmentStatuses, officeNames, positions, aoYears, reasonsForSeparation } = req.body;
     const updateData = {};
     if (Array.isArray(appointmentStatuses)) updateData.appointmentStatuses = appointmentStatuses;
     if (Array.isArray(officeNames)) updateData.officeNames = officeNames;
     if (Array.isArray(positions)) updateData.positions = positions;
+    if (Array.isArray(aoYears)) updateData.aoYears = aoYears;
+    if (Array.isArray(reasonsForSeparation)) updateData.reasonsForSeparation = reasonsForSeparation;
     let settings = await prisma2.systemSetting.findFirst();
     if (settings) {
       settings = await prisma2.systemSetting.update({ where: { id: settings.id }, data: updateData });
@@ -35041,6 +35552,8 @@ router5.put("/dropdown-options", requireDeveloperRole, async (req, res) => {
       appointmentStatuses: settings.appointmentStatuses ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: settings.officeNames ?? [],
       positions: settings.positions ?? [],
+      aoYears: settings.aoYears ?? DEFAULT_AO_YEARS,
+      reasonsForSeparation: settings.reasonsForSeparation ?? DEFAULT_REASONS_FOR_SEPARATION,
       message: "Dropdown options updated successfully"
     });
   } catch (error) {
@@ -35234,6 +35747,21 @@ var file201_routes_default = router6;
 // server/src/routes/approval.routes.ts
 var import_express7 = __toESM(require_express2());
 var router7 = (0, import_express7.Router)();
+router7.get("/my-requests", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: "userId query param is required" });
+    const requests = await prisma_default.approvalRequest.findMany({
+      where: { requestedBy: userId },
+      orderBy: { createdAt: "desc" },
+      take: 200
+    });
+    res.json(requests);
+  } catch (error) {
+    console.error("Error fetching my requests:", error);
+    res.status(500).json({ error: "Failed to fetch requests" });
+  }
+});
 router7.get("/", async (req, res) => {
   try {
     const status = req.query.status || "pending";
@@ -35280,6 +35808,26 @@ router7.post("/", async (req, res) => {
         status: "pending"
       }
     });
+    const actionLabel = {
+      view_document: "requested to view",
+      print_document: "requested to print",
+      download_document: "requested to download"
+    };
+    const label = actionLabel[action] ?? `submitted approval request for ${action}`;
+    await createAuditLog(prisma_default, {
+      userId: requestedBy,
+      userName: requestedByName || "Unknown",
+      action: "request_access",
+      entity: entityType,
+      entityId,
+      entityName: entityName || entityId,
+      details: {
+        approvalRequestId: request.id,
+        actionRequested: action,
+        description: `${requestedByName || "Unknown"} ${label}: ${entityName || entityId}`,
+        purpose: payload?.purpose || null
+      }
+    });
     res.status(201).json(request);
   } catch (error) {
     console.error("Error creating approval request:", error);
@@ -35289,7 +35837,7 @@ router7.post("/", async (req, res) => {
 router7.post("/:id/approve", async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, password, approverId, approverName } = req.body;
+    const { username, password, approverId } = req.body;
     const user = await prisma_default.user.findFirst({ where: { username } });
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
     const valid = await bcryptjs_default.compare(password, user.password);
@@ -35316,6 +35864,22 @@ router7.post("/:id/approve", async (req, res) => {
         approvedBy: user.id,
         approvedByName: `${user.lastName}, ${user.firstName}`,
         resolvedAt: /* @__PURE__ */ new Date()
+      }
+    });
+    const approverName = `${user.lastName}, ${user.firstName}`;
+    await createAuditLog(prisma_default, {
+      userId: user.id,
+      userName: approverName,
+      action: "approve_request",
+      entity: approvalReq.entityType,
+      entityId: approvalReq.entityId,
+      entityName: approvalReq.entityName || approvalReq.entityId,
+      details: {
+        approvalRequestId: id,
+        actionApproved: approvalReq.action,
+        requestedBy: approvalReq.requestedByName,
+        description: `${approverName} approved ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, " ")}: ${approvalReq.entityName || approvalReq.entityId}`,
+        purpose: approvalReq.payload?.purpose || null
       }
     });
     res.json({
@@ -35350,6 +35914,21 @@ router7.post("/:id/reject", async (req, res) => {
         resolvedAt: /* @__PURE__ */ new Date()
       }
     });
+    await createAuditLog(prisma_default, {
+      userId: approverId || "system",
+      userName: approverName || "System",
+      action: "reject_request",
+      entity: approvalReq.entityType,
+      entityId: approvalReq.entityId,
+      entityName: approvalReq.entityName || approvalReq.entityId,
+      details: {
+        approvalRequestId: id,
+        actionRejected: approvalReq.action,
+        requestedBy: approvalReq.requestedByName,
+        rejectedReason: reason || "Rejected by administrator",
+        description: `${approverName || "System"} rejected ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, " ")}: ${approvalReq.entityName || approvalReq.entityId}`
+      }
+    });
     res.json({ rejected: true });
   } catch (error) {
     console.error("Error rejecting request:", error);
@@ -35366,6 +35945,88 @@ router7.delete("/:id", async (req, res) => {
   }
 });
 var approval_routes_default = router7;
+
+// server/src/routes/activity.routes.ts
+var import_express8 = __toESM(require_express2());
+var import_client3 = require("@prisma/client");
+var router8 = (0, import_express8.Router)();
+var prisma3 = new import_client3.PrismaClient();
+var requireAdmin = async (req, res, next) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  try {
+    const user = await prisma3.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized: User not found" });
+    }
+    if (user.role !== "superadmin" && user.role !== "admin" && user.role !== "developer") {
+      return res.status(403).json({ error: "Forbidden: Only administrators can modify activities" });
+    }
+    next();
+  } catch (error) {
+    console.error("Error validating user role:", error);
+    res.status(500).json({ error: "Failed to validate user role" });
+  }
+};
+router8.get("/", async (req, res) => {
+  try {
+    const activities = await prisma3.activity.findMany({
+      orderBy: { dateFrom: "desc" }
+    });
+    res.json(activities);
+  } catch (error) {
+    console.error("Error fetching activities:", error);
+    res.status(500).json({ error: "Failed to fetch activities" });
+  }
+});
+router8.post("/", requireAdmin, async (req, res) => {
+  try {
+    const { title, dateFrom, dateTo, timeFrom, timeTo, location, category, description } = req.body;
+    if (!title || !dateFrom || !category) {
+      return res.status(400).json({ error: "Title, start date, and category are required" });
+    }
+    const activity = await prisma3.activity.create({
+      data: {
+        title,
+        dateFrom,
+        dateTo: dateTo || null,
+        timeFrom: timeFrom || null,
+        timeTo: timeTo || null,
+        location: location || "N/A",
+        category,
+        description: description || ""
+      }
+    });
+    res.status(201).json(activity);
+  } catch (error) {
+    console.error("Error creating activity:", error);
+    res.status(500).json({ error: "Failed to create activity" });
+  }
+});
+router8.delete("/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const activity = await prisma3.activity.findUnique({
+      where: { id }
+    });
+    if (!activity) {
+      return res.status(404).json({ error: "Activity not found" });
+    }
+    await prisma3.activity.delete({
+      where: { id }
+    });
+    res.json({ message: "Activity deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting activity:", error);
+    res.status(500).json({ error: "Failed to delete activity" });
+  }
+});
+var activity_routes_default = router8;
 
 // server/src/middleware/session.ts
 async function validateSession(req, res, next) {
@@ -35402,7 +36063,7 @@ async function validateSession(req, res, next) {
 
 // server/src/index.ts
 import_dotenv.default.config();
-var app = (0, import_express8.default)();
+var app = (0, import_express9.default)();
 var PORT = process.env.PORT || 5e3;
 var HOST = process.env.HOST || "0.0.0.0";
 console.log("[server] Environment configuration:");
@@ -35411,10 +36072,10 @@ console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`  - UPLOADS_DIR: ${process.env.UPLOADS_DIR}`);
 console.log(`  - __dirname: ${__dirname}`);
 app.use((0, import_cors.default)());
-app.use(import_express8.default.json({ limit: "50mb" }));
-app.use(import_express8.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express9.default.json({ limit: "50mb" }));
+app.use(import_express9.default.urlencoded({ extended: true, limit: "50mb" }));
 var uploadsPath = process.env.UPLOADS_DIR || import_path5.default.join(__dirname, "../uploads");
-app.use("/uploads", import_express8.default.static(uploadsPath));
+app.use("/uploads", import_express9.default.static(uploadsPath));
 var remoteUploadsUrl = process.env.REMOTE_UPLOADS_URL;
 if (remoteUploadsUrl) {
   app.use("/uploads", (req, res) => {
@@ -35441,12 +36102,13 @@ app.use("/api/audit", audit_routes_default);
 app.use("/api/system-settings", systemSettings_routes_default);
 app.use("/api/file201", file201_routes_default);
 app.use("/api/approvals", approval_routes_default);
+app.use("/api/activities", activity_routes_default);
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
 var frontendDist = process.env.FRONTEND_DIST;
 if (frontendDist && import_fs5.default.existsSync(frontendDist)) {
-  app.use(import_express8.default.static(frontendDist));
+  app.use(import_express9.default.static(frontendDist));
   app.get("*", (_req, res) => {
     res.sendFile(import_path5.default.join(frontendDist, "index.html"));
   });
@@ -35462,6 +36124,7 @@ if (import_fs5.default.existsSync(certPath) && import_fs5.default.existsSync(key
     console.log(`\u{1F680} Server is running on https://localhost:${PORT}`);
     console.log(`\u{1F4CA} API endpoints available at https://localhost:${PORT}/api`);
     console.log(`\u{1F512} Using HTTPS with self-signed certificate`);
+    syncExistingRecordsToDropdownOptions();
   });
 } else {
   console.error("\u274C SSL certificates not found!");

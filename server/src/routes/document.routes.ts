@@ -238,6 +238,34 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       }
     }
 
+    // Check if a document with the same name already exists for this employee
+    const duplicate = await prisma.document.findFirst({
+      where: {
+        employeeId,
+        fileName: finalFileName,
+      },
+    });
+
+    if (duplicate) {
+      if (req.body.replace === 'true') {
+        try {
+          if (fs.existsSync(duplicate.filePath) && duplicate.filePath !== finalFilePath) {
+            fs.unlinkSync(duplicate.filePath);
+          }
+        } catch (err) {
+          console.error('Error deleting old physical file during replacement:', err);
+        }
+        await prisma.document.delete({
+          where: { id: duplicate.id },
+        });
+      } else {
+        if (fs.existsSync(finalFilePath)) {
+          fs.unlinkSync(finalFilePath);
+        }
+        return res.status(409).json({ error: 'A document with this name already exists' });
+      }
+    }
+
     const userId = req.headers['x-user-id'] as string || 'system';
     const userName = req.headers['x-user-name'] as string || 'System';
 
@@ -370,6 +398,8 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
               detailedDivision: null,
               detailedFunction: null,
               detailedDate: null,
+              detailedOrderFrom: null,
+              detailedOrderTo: null,
               designatedPositionFunction: null,
               designatedOrderFrom: null,
               designatedOrderTo: null,
@@ -476,6 +506,8 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
                 detailedDivision: null,
                 detailedFunction: null,
                 detailedDate: null,
+                detailedOrderFrom: null,
+                detailedOrderTo: null,
                 designatedPositionFunction: null,
                 designatedOrderFrom: null,
                 designatedOrderTo: null,

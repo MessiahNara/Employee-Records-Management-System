@@ -465,42 +465,54 @@ export const employeeApi = {
       aoType,
     };
   },
-  create: (data: any, userId?: string, userName?: string) => {
+  create: async (data: any, userId?: string, userName?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
     
-    return apiRequest<any>('/employees', {
+    const res = await apiRequest<any>('/employees', {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+    }
+    return res;
   },
-  update: (id: string, data: any, userId?: string, userName?: string, approvalToken?: string) => {
+  update: async (id: string, data: any, userId?: string, userName?: string, approvalToken?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
     if (approvalToken) headers['X-Superadmin-Approval-Token'] = approvalToken;
     
-    return apiRequest<any>(`/employees/${id}`, {
+    const res = await apiRequest<any>(`/employees/${id}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify(data),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+    }
+    return res;
   },
-  partialUpdate: (id: string, data: any, userId?: string, userName?: string, approvalToken?: string) => {
+  partialUpdate: async (id: string, data: any, userId?: string, userName?: string, approvalToken?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
     if (approvalToken) headers['X-Superadmin-Approval-Token'] = approvalToken;
     
-    return apiRequest<any>(`/employees/${id}`, {
+    const res = await apiRequest<any>(`/employees/${id}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify(data),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+    }
+    return res;
   },
-  delete: (id: string, userId?: string, userName?: string, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
+  delete: async (id: string, userId?: string, userName?: string, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
@@ -508,12 +520,16 @@ export const employeeApi = {
     if (authorizingUserName) headers['X-Authorizing-User-Name'] = authorizingUserName;
     if (approvalToken) headers['X-Superadmin-Approval-Token'] = approvalToken;
     
-    return apiRequest<void>(`/employees/${id}`, {
+    const res = await apiRequest<void>(`/employees/${id}`, {
       method: 'DELETE',
       headers,
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+    }
+    return res;
   },
-  bulkDelete: (ids: string[], userId?: string, userName?: string, employeeNames?: Array<{ firstName: string; lastName: string }>, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
+  bulkDelete: async (ids: string[], userId?: string, userName?: string, employeeNames?: Array<{ firstName: string; lastName: string }>, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
@@ -521,11 +537,15 @@ export const employeeApi = {
     if (authorizingUserName) headers['X-Authorizing-User-Name'] = authorizingUserName;
     if (approvalToken) headers['X-Superadmin-Approval-Token'] = approvalToken;
     
-    return apiRequest<{ deletedCount: number }>('/employees/bulk-delete', {
+    const res = await apiRequest<{ deletedCount: number }>('/employees/bulk-delete', {
       method: 'POST',
       headers,
       body: JSON.stringify({ ids, employeeNames }),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+    }
+    return res;
   },
   syncImport: (
     employees: any[],
@@ -602,7 +622,7 @@ export const documentApi = {
       body: JSON.stringify(data),
     });
   },
-  upload: (
+  upload: async (
     file: File,
     data: {
       employeeId: string;
@@ -624,6 +644,7 @@ export const documentApi = {
       appointmentFrom?: string;
       appointmentTo?: string;
       autoRename?: boolean;
+      replace?: boolean;
     },
     userId?: string,
     userName?: string
@@ -649,13 +670,19 @@ export const documentApi = {
     if (data.appointmentFrom) formData.append('appointmentFrom', data.appointmentFrom);
     if (data.appointmentTo) formData.append('appointmentTo', data.appointmentTo);
     if (data.autoRename !== undefined) formData.append('autoRename', String(data.autoRename));
+    if (data.replace !== undefined) formData.append('replace', String(data.replace));
     formData.append('file', file);
 
     const headers: Record<string, string> = {};
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
 
-    return apiUpload<any>('/documents', formData, headers);
+    const res = await apiUpload<any>('/documents', formData, headers);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+      window.dispatchEvent(new Event('documentsUpdated'));
+    }
+    return res;
   },
   update: (id: string, data: any, userId?: string, approvalToken?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
@@ -668,7 +695,7 @@ export const documentApi = {
       body: JSON.stringify(data),
     });
   },
-  delete: (id: string, userId?: string, userName?: string, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
+  delete: async (id: string, userId?: string, userName?: string, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
     const headers: any = {};
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
@@ -676,12 +703,17 @@ export const documentApi = {
     if (authorizingUserName) headers['X-Authorizing-User-Name'] = authorizingUserName;
     if (approvalToken) headers['X-Superadmin-Approval-Token'] = approvalToken;
     
-    return apiRequest<void>(`/documents/${id}`, {
+    const res = await apiRequest<void>(`/documents/${id}`, {
       method: 'DELETE',
       headers,
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+      window.dispatchEvent(new Event('documentsUpdated'));
+    }
+    return res;
   },
-  bulkDelete: (ids: string[], userId?: string, userName?: string, documentNames?: Array<{ fileName: string; category: string }>, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
+  bulkDelete: async (ids: string[], userId?: string, userName?: string, documentNames?: Array<{ fileName: string; category: string }>, authorizingUserId?: string, authorizingUserName?: string, approvalToken?: string) => {
     const headers: any = { 'Content-Type': 'application/json' };
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
@@ -689,11 +721,16 @@ export const documentApi = {
     if (authorizingUserName) headers['X-Authorizing-User-Name'] = authorizingUserName;
     if (approvalToken) headers['X-Superadmin-Approval-Token'] = approvalToken;
     
-    return apiRequest<{ deletedCount: number; deletedFiles: number }>('/documents/bulk-delete', {
+    const res = await apiRequest<{ deletedCount: number; deletedFiles: number }>('/documents/bulk-delete', {
       method: 'POST',
       headers,
       body: JSON.stringify({ ids, documentNames }),
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('employeeUpdated'));
+      window.dispatchEvent(new Event('documentsUpdated'));
+    }
+    return res;
   },
   getStats: () => apiRequest<any>('/documents/stats/summary'),
 };
@@ -866,6 +903,30 @@ export const file201Api = {
     }),
 };
 
+// Activity/Calendar API
+export const activityApi = {
+  getAll: () => apiRequest<any[]>('/activities'),
+  create: (data: {
+    title: string;
+    dateFrom: string;
+    dateTo?: string;
+    timeFrom?: string;
+    timeTo?: string;
+    location: string;
+    category: string;
+    description: string;
+  }) =>
+    apiRequest<any>('/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiRequest<any>(`/activities/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 export default {
   user: userApi,
   employee: employeeApi,
@@ -874,5 +935,6 @@ export default {
   systemSettings: systemSettingsApi,
   file201: file201Api,
   approvals: approvalApi,
+  activities: activityApi,
   healthCheck,
 };

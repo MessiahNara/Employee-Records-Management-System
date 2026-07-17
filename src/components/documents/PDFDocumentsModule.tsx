@@ -10,6 +10,7 @@ import UploadModal from './UploadModal';
 import PDFViewer from './PDFViewer';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import Modal from '../ui/Modal';
 import './PDFDocumentsModule.css';
 
 interface PDFDocumentsModuleProps {
@@ -27,7 +28,24 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
   const [pdfData, setPdfData] = useState<string | null>(null);
+  const [isFolderUploading, setIsFolderUploading] = useState(false);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{
+    fileName: string;
+    onResolve: (action: 'replace' | 'skip', applyToAll: boolean) => void;
+  } | null>(null);
   const { showToast } = useToast();
+
+  const promptDuplicate = (fileName: string): Promise<{ action: 'replace' | 'skip'; applyToAll: boolean }> => {
+    return new Promise((resolve) => {
+      setDuplicateConfirm({
+        fileName,
+        onResolve: (action, applyToAll) => {
+          setDuplicateConfirm(null);
+          resolve({ action, applyToAll });
+        }
+      });
+    });
+  };
 
   const {
     documents,
@@ -111,19 +129,163 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
 
   const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any) => {
     try {
+      let globalDuplicateAction: 'replace' | 'skip' | null = null;
+      let uploadedCount = 0;
+      let canceledCount = 0;
+
       for (let i = 0; i < files.length; i++) {
-        await uploadDocument(files[i], category, aoData);
+        const file = files[i];
+        const isDuplicate = documents.some(
+          (doc) => doc.fileName.toLowerCase() === file.name.toLowerCase() &&
+                   doc.category.toLowerCase() === category.toLowerCase()
+        );
+
+        let replace = false;
+        if (isDuplicate) {
+          if (globalDuplicateAction === 'skip') {
+            canceledCount++;
+            continue;
+          }
+          if (globalDuplicateAction === 'replace') {
+            replace = true;
+          } else {
+            const result = await promptDuplicate(file.name);
+            if (result.applyToAll) {
+              globalDuplicateAction = result.action;
+            }
+            if (result.action === 'skip') {
+              canceledCount++;
+              continue;
+            }
+            replace = true;
+          }
+        }
+
+        await uploadDocument(file, category, aoData, false, replace);
+        uploadedCount++;
       }
+
       setActiveCategory(category);
-      showToast(
-        files.length > 1
-          ? `${files.length} documents uploaded successfully!`
-          : 'Document uploaded successfully!',
-        'success'
-      );
+
+      if (uploadedCount > 0) {
+        showToast(
+          `Uploaded ${uploadedCount} document(s) successfully.${canceledCount > 0 ? ` Canceled ${canceledCount} duplicate(s).` : ''}`,
+          'success'
+        );
+      } else if (canceledCount > 0) {
+        showToast(`Upload canceled: ${canceledCount} duplicate file(s) skipped.`, 'info');
+      }
     } catch (err: any) {
       console.error('PDFDocumentsModule: Upload failed:', err);
-      throw err;
+      showToast(err.message || 'Failed to upload document', 'error');
+    }
+  };
+
+  const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Filter only PDF files
+    const pdfFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'));
+    if (pdfFiles.length === 0) {
+      showToast('No PDF files found in the selected folder.', 'warning');
+      return;
+    }
+
+    setIsFolderUploading(true);
+    let successCount = 0;
+    let failCount = 0;
+    let canceledCount = 0;
+
+    // Define category mappings matching folder names
+    const getCategoryFromPath = (pathString: string): DocumentCategory => {
+      const normalizedPath = pathString.replace(/\\/g, '/');
+      const parts = normalizedPath.split('/');
+      
+      // The category folder is the immediate parent of the file, which is parts[parts.length - 2]
+      if (parts.length < 2) return activeCategory;
+      const parentDir = parts[parts.length - 2].toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+
+      if (parentDir.includes('personalinformation')) return 'Personal Information';
+      if (parentDir.includes('personnelaction') || parentDir.includes('appointment')) return 'Personnel Action / Appointment';
+      if (parentDir.includes('position') || parentDir.includes('jobdescription')) return 'Position / Job Description';
+      if (parentDir.includes('training')) return 'Training';
+      if (parentDir.includes('performance') || parentDir.includes('awards') || parentDir.includes('recognition')) return 'Performance / Awards & Recognition';
+      if (parentDir.includes('discipline')) return 'Employee Discipline';
+      if (parentDir.includes('administrative') || parentDir.includes('order')) return 'Administrative Order';
+
+      return activeCategory;
+    };
+
+    try {
+      let globalDuplicateAction: 'replace' | 'skip' | null = null;
+
+      for (const file of pdfFiles) {
+        const relPath = file.webkitRelativePath || file.name;
+        const resolvedCategory = getCategoryFromPath(relPath);
+
+        // Skip Administrative Order category in folder upload
+        if (resolvedCategory === 'Administrative Order') {
+          console.log(`Skipping Administrative Order document from folder scan: ${file.name}`);
+          continue;
+        }
+
+        const isDuplicate = documents.some(
+          (doc) => doc.fileName.toLowerCase() === file.name.toLowerCase() &&
+                   doc.category.toLowerCase() === resolvedCategory.toLowerCase()
+        );
+
+        let replace = false;
+        if (isDuplicate) {
+          if (globalDuplicateAction === 'skip') {
+            canceledCount++;
+            continue;
+          }
+          if (globalDuplicateAction === 'replace') {
+            replace = true;
+          } else {
+            const result = await promptDuplicate(file.name);
+            if (result.applyToAll) {
+              globalDuplicateAction = result.action;
+            }
+            if (result.action === 'skip') {
+              canceledCount++;
+              continue;
+            }
+            replace = true;
+          }
+        }
+
+        try {
+          await uploadDocument(file, resolvedCategory, undefined, true, replace);
+          successCount++;
+        } catch (uploadError) {
+          console.error(`Failed to upload ${file.name}:`, uploadError);
+          failCount++;
+        }
+      }
+
+      refreshDocuments();
+
+      let summaryMessage = `Uploaded ${successCount} document(s).`;
+      if (canceledCount > 0) {
+        summaryMessage += ` Canceled ${canceledCount} duplicate(s).`;
+      }
+      if (failCount > 0) {
+        summaryMessage += ` Failed ${failCount} document(s).`;
+      }
+
+      if (failCount === 0) {
+        showToast(summaryMessage, 'success');
+      } else {
+        showToast(summaryMessage, 'warning');
+      }
+    } catch (err: any) {
+      console.error('Folder upload error:', err);
+      showToast(err.message || 'Error uploading folder.', 'error');
+    } finally {
+      setIsFolderUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -187,13 +349,34 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
         <div className="pdf-documents-module__header">
           <h2 className="pdf-documents-module__title">Documents</h2>
           {canUpload && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsUploadModalOpen(true)}
-            >
-              📤 Upload Document
-            </Button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsUploadModalOpen(true)}
+                disabled={isFolderUploading}
+              >
+                📤 Upload Document
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => document.getElementById('folder-upload-input')?.click()}
+                disabled={isFolderUploading}
+              >
+                {isFolderUploading ? '⏳ Uploading...' : '📁 Upload Folder'}
+              </Button>
+              <input
+                id="folder-upload-input"
+                type="file"
+                /* @ts-ignore */
+                webkitdirectory=""
+                directory=""
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleFolderUpload}
+              />
+            </div>
           )}
         </div>
 
@@ -261,6 +444,53 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           employeeId={employeeId}
           employeeName={employeeName}
         />
+
+        {duplicateConfirm && (
+          <Modal
+            isOpen={true}
+            onClose={() => duplicateConfirm.onResolve('skip', false)}
+            title="Duplicate File Warning"
+            size="sm"
+          >
+            <div style={{ padding: '0.5rem 0' }}>
+              <p style={{ color: 'var(--text-primary)', marginBottom: '1.25rem', fontSize: '0.95rem', lineHeight: '1.5' }}>
+                A document named <strong>{duplicateConfirm.fileName}</strong> already exists. What would you like to do?
+              </p>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                <input
+                  type="checkbox"
+                  id="apply-to-all-dup"
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <label htmlFor="apply-to-all-dup" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none' }}>
+                  Apply to all remaining duplicate files
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    const checkbox = document.getElementById('apply-to-all-dup') as HTMLInputElement;
+                    duplicateConfirm.onResolve('skip', checkbox?.checked || false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const checkbox = document.getElementById('apply-to-all-dup') as HTMLInputElement;
+                    duplicateConfirm.onResolve('replace', checkbox?.checked || false);
+                  }}
+                >
+                  Apply
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
 
       </div>
     </Card>

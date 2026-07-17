@@ -61,3 +61,7 @@
   Pop $0
   DetailPrint "ERMS Backend Service removed."
 !macroend
+
+!macro customCheckAppRunning
+  ; Bypass running application check to prevent false-positive installer lockups
+!macroend

@@ -231,7 +231,7 @@ function PDFViewer({
                 <strong>Uploaded by:</strong> {employeeDocument.uploadedBy}
               </span>
               <span className="pdf-viewer__meta-item">
-                <strong>Date:</strong> {formatDate(employeeDocument.uploadedAt)}
+                <strong>Date:</strong> {formatDate(employeeDocument.uploadedAt || (employeeDocument as any).createdAt)}
               </span>
             </div>
 

@@ -281,6 +281,8 @@ router.post('/', async (req: Request, res: Response) => {
       detailedDivision,
       detailedFunction,
       detailedDate,
+      detailedOrderFrom,
+      detailedOrderTo,
       designatedPositionFunction,
       designatedOrderFrom,
       designatedOrderTo,
@@ -327,6 +329,8 @@ router.post('/', async (req: Request, res: Response) => {
         detailedDivision: detailedDivision || null,
         detailedFunction: detailedFunction || null,
         detailedDate: detailedDate ? new Date(detailedDate) : null,
+        detailedOrderFrom: detailedOrderFrom ? new Date(detailedOrderFrom) : null,
+        detailedOrderTo: detailedOrderTo ? new Date(detailedOrderTo) : null,
         designatedPositionFunction: designatedPositionFunction || null,
         designatedOrderFrom: designatedOrderFrom ? new Date(designatedOrderFrom) : null,
         designatedOrderTo: designatedOrderTo ? new Date(designatedOrderTo) : null,
@@ -561,6 +565,12 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     if ('designatedOrderTo' in updateData) {
       updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
     }
+    if ('detailedOrderFrom' in updateData) {
+      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+    }
+    if ('detailedOrderTo' in updateData) {
+      updateData.detailedOrderTo = updateData.detailedOrderTo ? new Date(updateData.detailedOrderTo) : null;
+    }
 
     // Fetch old values before overwriting so audit history can be reconstructed
     const oldEmployee = await prisma.employee.findUnique({ where: { id } });
@@ -617,7 +627,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       'id', 'lastName', 'firstName', 'middleName', 'dateOfBirth', 'gender',
       'officeName', 'appointmentStatus', 'status', 'position',
       'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'aoYear', 'aoType', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
-      'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate',
+      'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate', 'detailedOrderFrom', 'detailedOrderTo',
       'designatedPositionFunction', 'designatedOrderFrom', 'designatedOrderTo',
       'fileboxLocation', 'file201Status'
     ];
@@ -655,6 +665,12 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
     }
     if ('designatedOrderTo' in updateData) {
       updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
+    }
+    if ('detailedOrderFrom' in updateData) {
+      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+    }
+    if ('detailedOrderTo' in updateData) {
+      updateData.detailedOrderTo = updateData.detailedOrderTo ? new Date(updateData.detailedOrderTo) : null;
     }
     if ('isDetailed' in updateData) {
       updateData.isDetailed = updateData.isDetailed === true || updateData.isDetailed === 'true';
@@ -727,6 +743,8 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
             detailedDivision: updateData.detailedDivision !== undefined ? updateData.detailedDivision : oldEmployee.detailedDivision,
             detailedFunction: updateData.detailedFunction !== undefined ? updateData.detailedFunction : oldEmployee.detailedFunction,
             detailedDate: updateData.detailedDate !== undefined ? updateData.detailedDate : oldEmployee.detailedDate,
+            detailedOrderFrom: updateData.detailedOrderFrom !== undefined ? updateData.detailedOrderFrom : (oldEmployee as any).detailedOrderFrom,
+            detailedOrderTo: updateData.detailedOrderTo !== undefined ? updateData.detailedOrderTo : (oldEmployee as any).detailedOrderTo,
             designatedPositionFunction: updateData.designatedPositionFunction !== undefined ? updateData.designatedPositionFunction : (oldEmployee as any).designatedPositionFunction,
             designatedOrderFrom: updateData.designatedOrderFrom !== undefined ? updateData.designatedOrderFrom : (oldEmployee as any).designatedOrderFrom,
             designatedOrderTo: updateData.designatedOrderTo !== undefined ? updateData.designatedOrderTo : (oldEmployee as any).designatedOrderTo,
@@ -889,12 +907,57 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
     const userName = req.headers['x-user-name'] as string || 'System';
     const authorizingUserName = req.headers['x-authorizing-user-name'] as string;
 
-    // Delete physical files for all employees BEFORE deleting from database
+    // Fetch all documents for all target employees in one query
+    const documents = await prisma.document.findMany({
+      where: {
+        employeeId: {
+          in: ids,
+        },
+      },
+      select: {
+        filePath: true,
+      },
+    });
+
+    // Delete physical files for all employees in batch
     let totalDeletedFiles = 0;
-    for (const employeeId of ids) {
-      const deletedCount = await deletePhysicalFiles(employeeId);
-      totalDeletedFiles += deletedCount;
+    for (const doc of documents) {
+      try {
+        if (fs.existsSync(doc.filePath)) {
+          fs.unlinkSync(doc.filePath);
+          totalDeletedFiles++;
+        }
+      } catch (fileError) {
+        console.error(`Error deleting physical file ${doc.filePath}:`, fileError);
+      }
     }
+
+    // Fetch all employees to delete their profile pictures in batch
+    const employeesToDelete = await prisma.employee.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+      select: {
+        profilePicture: true,
+      },
+    });
+
+    for (const emp of employeesToDelete) {
+      if (emp.profilePicture) {
+        try {
+          const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '../../uploads');
+          const profilePicPath = path.join(uploadsDir, 'profile-pictures', path.basename(emp.profilePicture));
+          if (fs.existsSync(profilePicPath)) {
+            fs.unlinkSync(profilePicPath);
+          }
+        } catch (picError) {
+          console.error(`Error deleting profile picture for employee:`, picError);
+        }
+      }
+    }
+
     console.log(`Bulk delete: Deleted ${totalDeletedFiles} physical file(s) for ${ids.length} employee(s)`);
 
     // Create bulk delete audit log with metadata
@@ -1100,6 +1163,8 @@ router.post('/delete-report-entries', async (req: Request, res: Response) => {
                 detailedDivision: null,
                 detailedFunction: null,
                 detailedDate: null,
+                detailedOrderFrom: null,
+                detailedOrderTo: null,
                 designatedPositionFunction: null,
                 designatedOrderFrom: null,
                 designatedOrderTo: null,
@@ -1168,7 +1233,8 @@ router.post('/delete-report-entries', async (req: Request, res: Response) => {
             data: {
               aoNumber: null, aoYear: null, aoType: null,
               detailedTo: null, detailedDivision: null, detailedFunction: null,
-              detailedDate: null, designatedPositionFunction: null,
+              detailedDate: null, detailedOrderFrom: null, detailedOrderTo: null,
+              designatedPositionFunction: null,
               designatedOrderFrom: null, designatedOrderTo: null, isDetailed: false,
             }
           });

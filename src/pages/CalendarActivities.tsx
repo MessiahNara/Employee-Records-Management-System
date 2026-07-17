@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
+import api from '../services/api';
 import { MdCalendarToday, MdChevronLeft, MdChevronRight, MdEvent, MdAccessTime, MdLocationOn, MdAdd } from 'react-icons/md';
 import './CalendarActivities.css';
 
@@ -19,56 +20,7 @@ interface Activity {
   description: string;
 }
 
-const ACTIVITIES: Activity[] = [
-  {
-    id: 'act1',
-    title: 'HR Performance Evaluation Training',
-    dateFrom: '2026-07-20',
-    timeFrom: '09:00 AM',
-    timeTo: '12:00 PM',
-    location: 'Conference Hall A',
-    category: 'training',
-    description: 'Training seminar for supervisors and managers regarding performance evaluation procedures.'
-  },
-  {
-    id: 'act2',
-    title: 'National Holiday (Office Closed)',
-    dateFrom: '2026-07-27',
-    location: 'General Office',
-    category: 'holiday',
-    description: 'Observance of official national holiday. Normal office operations will resume the next day.'
-  },
-  {
-    id: 'act3',
-    title: 'Monthly HR & Administrative Meeting',
-    dateFrom: '2026-07-10',
-    timeFrom: '02:00 PM',
-    timeTo: '04:00 PM',
-    location: 'Executive Boardroom',
-    category: 'meeting',
-    description: 'Reviewing system operations, database backups, and monthly employee detail reports.'
-  },
-  {
-    id: 'act4',
-    title: 'New Employee Orientation Program',
-    dateFrom: '2026-08-03',
-    timeFrom: '08:30 AM',
-    timeTo: '04:30 PM',
-    location: 'Orientation Room 101',
-    category: 'training',
-    description: 'Welcoming new hires and introducing them to the Employee Records Management System.'
-  },
-  {
-    id: 'act5',
-    title: 'Quarterly Staff Appreciation Assembly',
-    dateFrom: '2026-08-14',
-    timeFrom: '03:00 PM',
-    timeTo: '05:00 PM',
-    location: 'Main Pavilion',
-    category: 'social',
-    description: 'Assembling all departments to recognize top performers and celebrate quarterly achievements.'
-  }
-];
+const ACTIVITIES: Activity[] = [];
 
 const TIME_OPTIONS = [
   '07:00 AM', '07:30 AM', '08:00 AM', '08:30 AM', '09:00 AM', '09:30 AM',
@@ -98,6 +50,7 @@ export default function CalendarActivities() {
 
   // Activities list state
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Add modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -114,20 +67,43 @@ export default function CalendarActivities() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [activityToDeleteId, setActivityToDeleteId] = useState<string | null>(null);
 
-  // Load activities from localStorage
+  // Load activities from API and poll for updates
   useEffect(() => {
-    const saved = localStorage.getItem('hrmdo_calendar_activities');
-    if (saved) {
+    let isInitialLoad = true;
+    const fetchActivities = async () => {
       try {
-        setActivities(JSON.parse(saved));
-      } catch {
-        setActivities(ACTIVITIES);
+        if (isInitialLoad) {
+          setIsLoading(true);
+        }
+        const data = await api.activities.getAll();
+        setActivities(data);
+      } catch (err: any) {
+        console.error('Failed to load activities:', err);
+        if (isInitialLoad) {
+          showToast(err.message || 'Failed to load activities.', 'error');
+          // Fallback to offline defaults
+          const saved = localStorage.getItem('hrmdo_calendar_activities');
+          if (saved) {
+            try {
+              setActivities(JSON.parse(saved));
+            } catch {
+              setActivities(ACTIVITIES);
+            }
+          } else {
+            setActivities(ACTIVITIES);
+          }
+        }
+      } finally {
+        if (isInitialLoad) {
+          setIsLoading(false);
+          isInitialLoad = false;
+        }
       }
-    } else {
-      setActivities(ACTIVITIES);
-      localStorage.setItem('hrmdo_calendar_activities', JSON.stringify(ACTIVITIES));
-    }
-  }, []);
+    };
+    fetchActivities();
+    const interval = setInterval(fetchActivities, 5000);
+    return () => clearInterval(interval);
+  }, [showToast]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -213,7 +189,7 @@ export default function CalendarActivities() {
     setIsAddModalOpen(true);
   };
 
-  const handleSaveActivity = (e: React.FormEvent) => {
+  const handleSaveActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
       showToast('Activity title is required.', 'error');
@@ -228,8 +204,7 @@ export default function CalendarActivities() {
       return;
     }
 
-    const newActivity: Activity = {
-      id: `act_${Date.now()}`,
+    const newActivityData = {
       title: formTitle.trim(),
       dateFrom: formDateFrom,
       dateTo: formDateTo || undefined,
@@ -240,13 +215,22 @@ export default function CalendarActivities() {
       description: formDescription.trim()
     };
 
-    const updated = [newActivity, ...activities];
-    setActivities(updated);
-    localStorage.setItem('hrmdo_calendar_activities', JSON.stringify(updated));
-    
-    setIsAddModalOpen(false);
-    setSelectedActivity(newActivity);
-    showToast('Activity added successfully', 'success');
+    try {
+      setIsLoading(true);
+      const createdActivity = await api.activities.create(newActivityData);
+      const updated = [createdActivity, ...activities];
+      setActivities(updated);
+      localStorage.setItem('hrmdo_calendar_activities', JSON.stringify(updated));
+      
+      setIsAddModalOpen(false);
+      setSelectedActivity(createdActivity);
+      showToast('Activity added successfully', 'success');
+    } catch (err: any) {
+      console.error('Failed to save activity:', err);
+      showToast(err.message || 'Failed to save activity.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteActivity = (id: string) => {
@@ -254,16 +238,25 @@ export default function CalendarActivities() {
     setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!activityToDeleteId) return;
 
-    const updated = activities.filter((act) => act.id !== activityToDeleteId);
-    setActivities(updated);
-    localStorage.setItem('hrmdo_calendar_activities', JSON.stringify(updated));
-    setSelectedActivity(null);
-    setIsDeleteModalOpen(false);
-    setActivityToDeleteId(null);
-    showToast('Activity deleted successfully', 'success');
+    try {
+      setIsLoading(true);
+      await api.activities.delete(activityToDeleteId);
+      const updated = activities.filter((act) => act.id !== activityToDeleteId);
+      setActivities(updated);
+      localStorage.setItem('hrmdo_calendar_activities', JSON.stringify(updated));
+      setSelectedActivity(null);
+      setIsDeleteModalOpen(false);
+      setActivityToDeleteId(null);
+      showToast('Activity deleted successfully', 'success');
+    } catch (err: any) {
+      console.error('Failed to delete activity:', err);
+      showToast(err.message || 'Failed to delete activity.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Partition the 42 cells into 6 weeks (7 days each)

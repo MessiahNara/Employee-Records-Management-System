@@ -7,7 +7,7 @@ interface UsePDFDocumentsReturn {
   documents: EmployeeDocument[];
   loading: boolean;
   error: string | null;
-  uploadDocument: (file: File, category: DocumentCategory, aoData?: any) => Promise<void>;
+  uploadDocument: (file: File, category: DocumentCategory, aoData?: any, skipRefresh?: boolean, replace?: boolean) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
   getDocumentData: (documentId: string) => string | null;
   refreshDocuments: () => void;
@@ -70,7 +70,13 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
   }, [employeeId]);
 
   // Upload a new document
-  const uploadDocument = async (file: File, category: DocumentCategory, aoData?: any): Promise<void> => {
+  const uploadDocument = async (
+    file: File,
+    category: DocumentCategory,
+    aoData?: any,
+    skipRefresh = false,
+    replace = false
+  ): Promise<void> => {
     // Validate file before entering try-catch
     const validation = validatePDFFile(file);
     if (!validation.valid) {
@@ -89,6 +95,7 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
+          replace,
           ...aoData
         },
         currentUser?.id,
@@ -98,10 +105,12 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
           'Unknown'
       );
 
-      try {
-        await loadDocuments();
-      } catch (refreshErr) {
-        console.warn('Failed to refresh documents after upload:', refreshErr);
+      if (!skipRefresh) {
+        try {
+          await loadDocuments();
+        } catch (refreshErr) {
+          console.warn('Failed to refresh documents after upload:', refreshErr);
+        }
       }
     } catch (err: any) {
       console.error('Upload error:', err);

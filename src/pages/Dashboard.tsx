@@ -528,6 +528,8 @@ function Dashboard() {
     motherUnit: '',
     detailedTo: '',
     detailedDivision: '',
+    detailedOrderFrom: '',
+    detailedOrderTo: '',
     designatedPositionFunction: '',
     designatedOrderFrom: '',
     designatedOrderTo: '',
@@ -543,6 +545,12 @@ function Dashboard() {
   const [selectedReportDocument, setSelectedReportDocument] = useState<any>(null);
   const [reportPdfData, setReportPdfData] = useState<string | null>(null);
   const [isReportViewerOpen, setIsReportViewerOpen] = useState(false);
+
+  const selectedReportEmployeeName = useMemo(() => {
+    if (!selectedReportDocument) return '';
+    const emp = allEmployees.find(e => e.id === selectedReportDocument.employeeId);
+    return emp ? `${emp.lastName}, ${emp.firstName} ${emp.middleName || ''}`.trim() : '';
+  }, [selectedReportDocument, allEmployees]);
 
   // Dynamic dropdown options loaded from system settings
   const [dropdownOptions, setDropdownOptions] = useState<{
@@ -612,11 +620,27 @@ function Dashboard() {
     localStorage.setItem('showAllEmployees', showAllEmployees.toString());
   }, [showAllEmployees]);
 
-  // Fetch all employees for KPI cards on initial load
+  // Fetch all employees for KPI cards on initial load and listen for updates
   useEffect(() => {
     fetchAllEmployeesForKPI();
     fetchEmployeeAuditLogs();
-  }, []);
+
+    const handleUpdate = () => {
+      fetchAllEmployeesForKPI();
+      fetchEmployeeAuditLogs();
+      fetchEmployees();
+    };
+
+    window.addEventListener('employeeUpdated', handleUpdate);
+    window.addEventListener('approvalsUpdated', handleUpdate);
+    window.addEventListener('documentsUpdated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('employeeUpdated', handleUpdate);
+      window.removeEventListener('approvalsUpdated', handleUpdate);
+      window.removeEventListener('documentsUpdated', handleUpdate);
+    };
+  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees]);
 
   // Fetch all employees for KPI cards (no filters)
   const fetchAllEmployeesForKPI = async () => {
@@ -755,13 +779,13 @@ function Dashboard() {
 
       const aoType = inferAoType(activeSource);
 
-      // Detailed: duration = appointmentFrom / appointmentTo
+      // Detailed: duration = detailedOrderFrom / detailedOrderTo
       // Designated: duration = designatedOrderFrom / designatedOrderTo
       const durationFrom = aoType === 'Detailed'
-        ? String(activeSource.appointmentFrom || '').trim()
+        ? String(activeSource.detailedOrderFrom || '').trim()
         : String(activeSource.designatedOrderFrom || '').trim();
       const durationTo = aoType === 'Detailed'
-        ? String(activeSource.appointmentTo || '').trim()
+        ? String(activeSource.detailedOrderTo || '').trim()
         : String(activeSource.designatedOrderTo || '').trim();
 
       const aoOrderMonth = durationFrom
@@ -1163,7 +1187,8 @@ function Dashboard() {
 
   const renderAdministrativeOrder = (row: ReportRow) => {
     const label = `${row.aoNumber ? `AO ${row.aoNumber}` : '-'}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim();
-    const docs = (row.rawEmployee as any).documents || [];
+    const rawEmp = row.rawEmployee || {};
+    const docs = (rawEmp as any).documents || [];
     // Use the specific document linked to this row via docId; fall back to any AO doc for audit rows
     const aoDoc = row.docId
       ? docs.find((d: any) => d.id === row.docId)
@@ -2145,6 +2170,8 @@ function Dashboard() {
       motherUnit: '',
       detailedTo: '',
       detailedDivision: '',
+      detailedOrderFrom: '',
+      detailedOrderTo: '',
       designatedPositionFunction: '',
       designatedOrderFrom: '',
       designatedOrderTo: '',
@@ -2185,6 +2212,8 @@ function Dashboard() {
       motherUnit: (employee as any).motherUnit || '',
       detailedTo: (employee as any).detailedTo || '',
       detailedDivision: (employee as any).detailedDivision || '',
+      detailedOrderFrom: convertToDateInputFormat((employee as any).detailedOrderFrom),
+      detailedOrderTo: convertToDateInputFormat((employee as any).detailedOrderTo),
       designatedPositionFunction: (employee as any).designatedPositionFunction || '',
       designatedOrderFrom: convertToDateInputFormat((employee as any).designatedOrderFrom),
       designatedOrderTo: convertToDateInputFormat((employee as any).designatedOrderTo),
@@ -2381,6 +2410,8 @@ function Dashboard() {
         motherUnit: 'motherUnit',
         detailedTo: 'detailedTo',
         detailedDivision: 'detailedDivision',
+        detailedOrderFrom: 'detailedOrderFrom',
+        detailedOrderTo: 'detailedOrderTo',
         designatedPositionFunction: 'designatedPositionFunction',
         designatedOrderFrom: 'designatedOrderFrom',
         designatedOrderTo: 'designatedOrderTo',
@@ -3927,16 +3958,16 @@ function Dashboard() {
                   id="appointment-from-add"
                   label="Duration of Detailed Order (From)"
                   type="date"
-                  value={formData.appointmentFrom}
-                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                  value={formData.detailedOrderFrom}
+                  onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
                   fullWidth
                 />
                 <Input
                   id="appointment-to-add"
                   label="Duration of Detailed Order (To)"
                   type="date"
-                  value={formData.appointmentTo}
-                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                  value={formData.detailedOrderTo}
+                  onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
                   fullWidth
                 />
               </div>
@@ -4388,16 +4419,16 @@ function Dashboard() {
                   id="edit-appointment-from-detailed"
                   label="Duration of Detailed Order (From)"
                   type="date"
-                  value={formData.appointmentFrom}
-                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                  value={formData.detailedOrderFrom}
+                  onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
                   fullWidth
                 />
                 <Input
                   id="edit-appointment-to-detailed"
                   label="Duration of Detailed Order (To)"
                   type="date"
-                  value={formData.appointmentTo}
-                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                  value={formData.detailedOrderTo}
+                  onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
                   fullWidth
                 />
               </div>
@@ -4514,6 +4545,8 @@ function Dashboard() {
         document={selectedReportDocument}
         pdfData={reportPdfData}
         canDownloadOrPrint={canDownloadOrPrint}
+        employeeId={selectedReportDocument?.employeeId || ''}
+        employeeName={selectedReportEmployeeName}
       />
 
       {/* Delete Report Entries Confirmation Modal */}

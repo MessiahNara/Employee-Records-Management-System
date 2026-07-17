@@ -69,6 +69,8 @@ model Employee {
   detailedDivision    String?   // division in the re-assignment office
   detailedFunction    String?   // function/designation in the re-assignment office
   detailedDate        DateTime? // date of re-assignment
+  detailedOrderFrom   DateTime? // start date of detailed order
+  detailedOrderTo     DateTime? // end date of detailed order
   designatedPositionFunction String?   // position/function when designated
   designatedOrderFrom        DateTime? // start date of designation order
   designatedOrderTo          DateTime? // end date of designation order
@@ -169,4 +171,20 @@ model ApprovalRequest {
   resolvedAt    DateTime?
 
   @@map("approval_requests")
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  title       String
+  dateFrom    String   // YYYY-MM-DD
+  dateTo      String?  // YYYY-MM-DD
+  timeFrom    String?  // HH:MM AM/PM or similar
+  timeTo      String?  // HH:MM AM/PM or similar
+  location    String
+  category    String   // training, holiday, meeting, social, medical
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("activities")
 }

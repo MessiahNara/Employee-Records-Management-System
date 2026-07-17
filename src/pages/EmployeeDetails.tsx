@@ -564,13 +564,13 @@ function EmployeeDetails() {
                 <div className="employee-details__detailed-field">
                   <label className="employee-details__detailed-label">Duration From</label>
                   <p className="employee-details__detailed-value">
-                    {employee.appointmentFrom ? formatDateMDY(employee.appointmentFrom) : '—'}
+                    {employee.detailedOrderFrom ? formatDateMDY(employee.detailedOrderFrom) : '—'}
                   </p>
                 </div>
                 <div className="employee-details__detailed-field">
                   <label className="employee-details__detailed-label">Duration To</label>
                   <p className="employee-details__detailed-value">
-                    {employee.appointmentTo ? formatDateMDY(employee.appointmentTo) : '—'}
+                    {employee.detailedOrderTo ? formatDateMDY(employee.detailedOrderTo) : '—'}
                   </p>
                 </div>
               </div>

@@ -24,6 +24,8 @@ export interface Employee {
   motherUnit?: string;
   detailedTo?: string;
   detailedDivision?: string;
+  detailedOrderFrom?: string;
+  detailedOrderTo?: string;
   designatedPositionFunction?: string;
   designatedOrderFrom?: string;
   designatedOrderTo?: string;
@@ -56,6 +58,8 @@ export interface EmployeeFormData {
   motherUnit: string;
   detailedTo: string;
   detailedDivision: string;
+  detailedOrderFrom: string;
+  detailedOrderTo: string;
   designatedPositionFunction: string;
   designatedOrderFrom: string;
   designatedOrderTo: string;
