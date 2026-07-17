@@ -43,7 +43,7 @@
 }
 
 .sidebar__logo-icon {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-3xl);
   flex-shrink: 0;
 }
 
@@ -111,7 +111,7 @@
   padding: var(--spacing-md);
   border-radius: var(--border-radius);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   font-weight: 500;
   transition: all var(--transition-fast);
   cursor: pointer;
@@ -156,9 +156,9 @@
 }
 
 .sidebar__nav-icon {
-  font-size: var(--font-size-lg);
-  width: 24px;
-  height: 24px;
+  font-size: var(--font-size-2xl);
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -404,3 +404,41 @@
 .sidebar__nav-item--expanded .sidebar__nav-arrow {
   color: var(--text-primary);
 }
+
+@keyframes pulse-red {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.sidebar__nav-badge--pulse,
+.sidebar__nav-badge-label--pulse {
+  animation: pulse-red 1.6s infinite;
+  background-color: var(--color-danger, #ef4444) !important;
+  color: #ffffff !important;
+}
+
+@keyframes attention-bg {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(239, 68, 68, 0.08); }
+  100% { background-color: transparent; }
+}
+
+.sidebar__nav-item--attention {
+  animation: attention-bg 2s infinite ease-in-out;
+  border: 1.5px dashed rgba(239, 68, 68, 0.4) !important;
+}
+
+.sidebar__nav-item--attention:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+

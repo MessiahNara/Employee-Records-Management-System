@@ -11,6 +11,7 @@ import Requests from './pages/Requests';
 import Login from './pages/Login';
 import Calendar from './pages/Calendar';
 import CalendarActivities from './pages/CalendarActivities';
+import Chats from './pages/Chats';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
@@ -52,6 +53,7 @@ function App() {
               }
             >
               <Route index element={<Dashboard />} />
+              <Route path="chats" element={<Chats />} />
               <Route path="calendar" element={<Calendar />} />
               <Route path="calendar-activities" element={<CalendarActivities />} />
               <Route path="reports" element={<Dashboard />} />

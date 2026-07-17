@@ -122,10 +122,26 @@ export default function Calendar() {
     return `${y}-${m}-${d}`;
   };
 
+  const parseLocalDate = (dateStr: string): Date => {
+    try {
+      if (dateStr && dateStr.length >= 10 && dateStr.includes('-')) {
+        const parts = dateStr.substring(0, 10).split('-');
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const parsed = new Date(y, m, d);
+        if (!isNaN(parsed.getTime())) return parsed;
+      }
+      return new Date(dateStr);
+    } catch {
+      return new Date(dateStr);
+    }
+  };
+
   const parseDateKey = (dateStr: string): string => {
     if (!dateStr) return '';
     try {
-      const d = new Date(dateStr);
+      const d = parseLocalDate(dateStr);
       if (isNaN(d.getTime())) return '';
       return formatDateKey(d);
     } catch {
@@ -160,9 +176,8 @@ export default function Calendar() {
       const processAlert = (expDateStr: string | undefined, alertAoType: string) => {
         if (!expDateStr) return;
 
-        const expDate = new Date(expDateStr);
+        const expDate = parseLocalDate(expDateStr);
         if (isNaN(expDate.getTime())) return;
-        expDate.setHours(0, 0, 0, 0);
 
         const remainingDays = Math.ceil((expDate.getTime() - today.getTime()) / millisecondsPerDay);
 
@@ -215,6 +230,11 @@ export default function Calendar() {
 
     return alertsList;
   }, [employees, pendingApprovals]);
+
+  // Filter critical/expired alerts
+  const criticalAlerts = useMemo(() => {
+    return employeeAlerts.filter(alert => alert.color === 'red');
+  }, [employeeAlerts]);
 
   // Group alerts by formatted expiration date
   const alertsByDate = useMemo(() => {

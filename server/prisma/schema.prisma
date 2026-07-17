@@ -188,3 +188,16 @@ model Activity {
 
   @@map("activities")
 }
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  senderId    String
+  senderName  String
+  recipientId String
+  content     String   @db.Text
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("chat_messages")
+}
+

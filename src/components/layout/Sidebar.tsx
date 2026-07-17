@@ -1,10 +1,10 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getAuthState } from '../../utils/mockAuth';
 import {
   MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder,
   MdAssignmentTurnedIn, MdInsertChart, MdInbox, MdCalendarToday,
-  MdExpandMore, MdChevronRight
+  MdExpandMore, MdChevronRight, MdChat
 } from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
@@ -46,6 +46,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   const [pendingCount, setPendingCount] = useState(0);
   const [myRequestsCount, setMyRequestsCount] = useState(0);
   const [calendarCount, setCalendarCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   const location = useLocation();
   const currentPath = location.pathname;
@@ -168,6 +169,81 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     };
   }, []);
 
+  const lastCountRef = useRef(0);
+
+  const playNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+
+      // Note 1
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      gain1.gain.setValueAtTime(0.12, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.3);
+
+      // Note 2 (slightly higher, delayed for pleasant ding-dong chime)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, now + 0.12); // A5
+      gain2.gain.setValueAtTime(0.12, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.45);
+    } catch (e) {
+      console.warn('Notification audio play blocked or failed:', e);
+    }
+  };
+
+  // Poll unread chat counts every 5 seconds to show badge next to "Chats" tab
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    // Track initial count to avoid playing sound on page load/mount
+    let isInitialLoad = true;
+
+    const fetchChatUnread = () => {
+      api.chats.getUnreadCounts()
+        .then((counts) => {
+          const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+          if (total > lastCountRef.current && !isInitialLoad) {
+            playNotificationSound();
+          }
+          isInitialLoad = false;
+          lastCountRef.current = total;
+          setChatUnreadCount(total);
+        })
+        .catch(() => {});
+    };
+
+    fetchChatUnread();
+    const interval = setInterval(fetchChatUnread, 5000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [currentUser?.id]);
+
+  // Update window/tab title on new messages
+  useEffect(() => {
+    if (chatUnreadCount > 0) {
+      document.title = `(${chatUnreadCount}) New Message - Employee Records Management`;
+    } else {
+      document.title = 'Employee Records Management';
+    }
+  }, [chatUnreadCount]);
+
   const isAdmin = userRole === 'superadmin' || userRole === 'admin' || userRole === 'developer';
 
   const mainItems: NavItem[] = [
@@ -225,6 +301,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   }
 
   mainItems.push({ path: '/settings', label: 'Settings', icon: MdSettings, iconColor: '#6b7280' });
+  mainItems.push({ path: '/chats', label: 'Chats', icon: MdChat, iconColor: '#8b5cf6', badge: chatUnreadCount });
 
   const adminItems: NavItem[] = [
     { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['superadmin', 'admin', 'developer'] },
@@ -352,7 +429,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
                     key={item.path}
                     to={item.path}
                     className={({ isActive }) =>
-                      `sidebar__nav-item ${isActive ? 'sidebar__nav-item--active' : ''}`
+                      `sidebar__nav-item ${isActive ? 'sidebar__nav-item--active' : ''} ${item.path === '/chats' && item.badge != null && item.badge > 0 ? 'sidebar__nav-item--attention' : ''}`
                     }
                     title={isCollapsed ? item.label : undefined}
                   >
@@ -364,12 +441,12 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
                             style={{ color: isActive ? '#ffffff' : item.iconColor }}
                           />
                           {isCollapsed && item.badge != null && item.badge > 0 && (
-                            <span className="sidebar__nav-badge">{item.badge > 99 ? '99+' : item.badge}</span>
+                            <span className={`sidebar__nav-badge ${item.path === '/chats' ? 'sidebar__nav-badge--pulse' : ''}`}>{item.badge > 99 ? '99+' : item.badge}</span>
                           )}
                         </span>
                         {!isCollapsed && <span className="sidebar__nav-label">{item.label}</span>}
                         {!isCollapsed && item.badge != null && item.badge > 0 && (
-                          <span className="sidebar__nav-badge-label">{item.badge > 99 ? '99+' : item.badge}</span>
+                          <span className={`sidebar__nav-badge-label ${item.path === '/chats' ? 'sidebar__nav-badge-label--pulse' : ''}`}>{item.badge > 99 ? '99+' : item.badge}</span>
                         )}
                       </>
                     )}

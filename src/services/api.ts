@@ -927,6 +927,19 @@ export const activityApi = {
     }),
 };
 
+// Chat API
+export const chatsApi = {
+  getMessages: (recipientId: string) => apiRequest<any[]>(`/chats?recipientId=${recipientId}`),
+  getUnreadCounts: () => apiRequest<Record<string, number>>('/chats/unread'),
+  getRecentContacts: () => apiRequest<any[]>('/chats/recent'),
+  sendMessage: (recipientId: string, content: string) =>
+    apiRequest<any>('/chats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipientId, content }),
+    }),
+};
+
 export default {
   user: userApi,
   employee: employeeApi,
@@ -936,5 +949,6 @@ export default {
   file201: file201Api,
   approvals: approvalApi,
   activities: activityApi,
+  chats: chatsApi,
   healthCheck,
 };
