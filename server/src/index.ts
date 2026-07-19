@@ -14,6 +14,7 @@ import file201Routes from './routes/file201.routes';
 import approvalRoutes from './routes/approval.routes';
 import activityRoutes from './routes/activity.routes';
 import chatRoutes from './routes/chat.routes';
+import yellowBoxRoutes from './routes/yellowBox.routes';
 import { validateSession } from './middleware/session';
 import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
 
@@ -72,6 +73,7 @@ app.use('/api/file201', file201Routes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/yellow-boxes', yellowBoxRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {

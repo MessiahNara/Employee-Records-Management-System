@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.23.0",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
     "qrcode": "^1.5.4",
@@ -43,6 +44,7 @@
     "@types/xlsx": "^0.0.35",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "electron": "^28.2.0",

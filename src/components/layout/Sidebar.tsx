@@ -305,6 +305,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
   const adminItems: NavItem[] = [
     { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['superadmin', 'admin', 'developer'] },
+    { path: '/file201', label: '201 File', icon: MdFolder, iconColor: '#3b82f6', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/audit-logs', label: 'Audit Logs', icon: MdDescription, iconColor: '#f59e0b', requiredRoles: ['superadmin', 'admin', 'developer'] },
     // If admin has role 'admin', they see Requests under Admin Tools
     {

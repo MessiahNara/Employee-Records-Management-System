@@ -22,6 +22,7 @@ model User {
   permissions    Json?    // Store CRUD permissions as JSON for staff users
   lastLogin      DateTime? // Track last login time
   activeSessionId String?  // For single device login verification
+  lastActive     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -77,6 +78,8 @@ model Employee {
   fileboxLocation     String?   // physical filebox location of the 201 file
   file201Status       String?   @default("Available") // Available | Borrowed | Overdue | Lost
   profilePicture      String?   // Profile picture file path (optional)
+  yellowBoxId         String?
+  yellowBox           YellowBox? @relation(fields: [yellowBoxId], references: [id])
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -196,8 +199,24 @@ model ChatMessage {
   recipientId String
   content     String   @db.Text
   read        Boolean  @default(false)
+  deletedBySender    Boolean  @default(false)
+  deletedByRecipient Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   @@map("chat_messages")
+}
+
+model YellowBox {
+  id         String     @id @default(uuid())
+  boxLabel   String     // e.g. "A-D"
+  office     String     // e.g. "GSO"
+  type       String     // e.g. "R1", "R2", "Non-Regular"
+  color      String     @default("#facc15") // e.g. yellow, blue, etc.
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  employees  Employee[]
+
+  @@map("yellow_boxes")
 }
 

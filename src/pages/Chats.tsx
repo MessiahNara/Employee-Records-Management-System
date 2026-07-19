@@ -4,7 +4,7 @@ import api from '../services/api';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { useToast } from '../contexts/ToastContext';
-import { MdSend, MdForum, MdAdd, MdClose, MdSearch } from 'react-icons/md';
+import { MdSend, MdForum, MdAdd, MdClose, MdSearch, MdDelete } from 'react-icons/md';
 import './Chats.css';
 
 interface Message {
@@ -24,6 +24,7 @@ interface UserContact {
   lastName: string;
   role: string;
   profilePicture?: string;
+  lastActive?: string;
   lastMessage?: {
     content: string;
     createdAt: string;
@@ -50,6 +51,8 @@ function Chats() {
   // UI States
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -186,7 +189,38 @@ function Chats() {
     });
   };
 
+  const handleDeleteConversation = async () => {
+    if (!activeContact || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await api.chats.deleteConversation(activeContact.id);
+      showToast('Conversation deleted successfully.', 'success');
+      
+      // Remove deleted contact from recent contacts list
+      setRecentContacts((prev) => prev.filter((c) => c.id !== activeContact.id));
+      setActiveContact(null);
+      setMessages([]);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      showToast('Failed to delete conversation.', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Helpers
+  const checkIsOnline = (lastActiveString: string | undefined) => {
+    if (!lastActiveString) return false;
+    try {
+      const lastActive = new Date(lastActiveString).getTime();
+      const now = new Date().getTime();
+      return (now - lastActive) < 10000;
+    } catch {
+      return false;
+    }
+  };
+
   const formatTime = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -233,17 +267,29 @@ function Chats() {
             <>
               {/* Active Chat Header */}
               <div className="chats-main__header">
-                <div className="chats-main__contact-avatar">
-                  {getInitials(activeContact.firstName, activeContact.lastName)}
+                <div className="chats-main__header-info">
+                  <div className="chats-main__avatar-container">
+                    <div className="chats-main__contact-avatar">
+                      {getInitials(activeContact.firstName, activeContact.lastName)}
+                    </div>
+                    {checkIsOnline(activeContact.lastActive) && <span className="online-indicator" />}
+                  </div>
+                  <div>
+                    <h3 className="chats-main__contact-name">
+                      {activeContact.firstName} {activeContact.lastName}
+                    </h3>
+                    <span className="chats-main__contact-role">
+                      {formatRole(activeContact.role)} • {checkIsOnline(activeContact.lastActive) ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="chats-main__contact-name">
-                    {activeContact.firstName} {activeContact.lastName}
-                  </h3>
-                  <span className="chats-main__contact-role">
-                    {formatRole(activeContact.role)}
-                  </span>
-                </div>
+                <button
+                  className="chats-main__delete-btn"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title="Delete Conversation"
+                >
+                  <MdDelete size={20} />
+                </button>
               </div>
 
               {/* Chat Thread */}
@@ -348,11 +394,14 @@ function Chats() {
                 return (
                   <div
                     key={contact.id}
-                    className={`contact-item ${isActive ? 'contact-item--active' : ''}`}
+                     className={`contact-item ${isActive ? 'contact-item--active' : ''}`}
                     onClick={() => setActiveContact(contact)}
                   >
-                    <div className="contact-item__avatar">
-                      {getInitials(contact.firstName, contact.lastName)}
+                    <div className="contact-item__avatar-container">
+                      <div className="contact-item__avatar">
+                        {getInitials(contact.firstName, contact.lastName)}
+                      </div>
+                      {checkIsOnline(contact.lastActive) && <span className="online-indicator" />}
                     </div>
                     <div className="contact-item__info">
                       <div className="contact-item__name-row">
@@ -415,8 +464,11 @@ function Chats() {
                     className="chat-modal__user-item"
                     onClick={() => handleSelectUser(user)}
                   >
-                    <div className="chat-modal__user-avatar">
-                      {getInitials(user.firstName, user.lastName)}
+                    <div className="chat-modal__user-avatar-container">
+                      <div className="chat-modal__user-avatar">
+                        {getInitials(user.firstName, user.lastName)}
+                      </div>
+                      {checkIsOnline(user.lastActive) && <span className="online-indicator" />}
                     </div>
                     <div className="chat-modal__user-info">
                       <div className="chat-modal__user-name">
@@ -429,6 +481,40 @@ function Chats() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Conversation Confirmation Modal */}
+      {showDeleteConfirm && activeContact && (
+        <div className="chat-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="chat-modal chat-modal--confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-modal__header">
+              <h3>Delete Conversation</h3>
+              <button className="chat-modal__close" onClick={() => setShowDeleteConfirm(false)}>
+                <MdClose size={22} />
+              </button>
+            </div>
+            <div className="chat-modal__body text-center">
+              <p className="chat-modal__confirm-msg">Are you sure you want to delete your conversation with <strong>{activeContact.firstName} {activeContact.lastName}</strong>?</p>
+              <p className="chat-modal__warn-text">This action cannot be undone and will delete all messages for both users.</p>
+              <div className="chat-modal__actions">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleDeleteConversation}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

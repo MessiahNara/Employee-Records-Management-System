@@ -537,6 +537,7 @@ function Dashboard() {
     file201Status: '',
   });
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+  const [showIdUpdate, setShowIdUpdate] = useState(false);
 
   // Get current user permissions
   const currentUser = getAuthState();
@@ -2189,6 +2190,7 @@ function Dashboard() {
   }, []);
 
   const handleOpenUpdateEmployeeModal = (employee: Employee) => {
+    setShowIdUpdate(false);
     setSelectedEmployee(employee);
     const employeeFormData: EmployeeFormData = {
       id: employee.id,
@@ -3628,6 +3630,10 @@ function Dashboard() {
         }
       >
         <div className="dashboard__employee-form">
+          <h3 className="dashboard__form-section-title">
+            Personal Information
+          </h3>
+
           <Input
             id="employee-id"
             label="Employee ID *"
@@ -3694,6 +3700,10 @@ function Dashboard() {
             </select>
             {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
           </div>
+
+          <h3 className="dashboard__form-section-title">
+            Employment Details
+          </h3>
 
           <div className="dashboard__form-field">
             <label htmlFor="office-hospital-name" className="dashboard__form-label">
@@ -3834,6 +3844,10 @@ function Dashboard() {
                 />
               </div>
             )}
+
+          <h3 className="dashboard__form-section-title">
+            Administrative Order (AO) Details
+          </h3>
 
           <div className="dashboard__form-field">
             <label htmlFor="ao-type" className="dashboard__form-label">
@@ -4023,15 +4037,24 @@ function Dashboard() {
             </>
           )}
 
-          <Input
-            id="filebox-location"
-            label="201 File Location"
-            type="text"
-            placeholder="Enter 201 file location"
-            value={formData.fileboxLocation}
-            onChange={(e) => handleFormChange('fileboxLocation', e.target.value)}
-            fullWidth
-          />
+          <h3 className="dashboard__form-section-title">
+            201 File Status
+          </h3>
+
+          <div className="dashboard__form-field">
+            <label htmlFor="file201-status" className="dashboard__form-label">
+              201 File Status
+            </label>
+            <select
+              id="file201-status"
+              className="dashboard__form-select"
+              value={formData.file201Status}
+              onChange={(e) => handleFormChange('file201Status', e.target.value)}
+            >
+              <option value="Available">Available</option>
+              <option value="Unavailable">Unavailable</option>
+            </select>
+          </div>
         </div>
       </Modal>
 
@@ -4065,39 +4088,55 @@ function Dashboard() {
             ℹ️ Update only the fields you want to change. Unchanged fields will retain their existing values.
           </p>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
-              Current Employee ID
-            </label>
-            <div style={{
-              padding: '0.75rem',
-              backgroundColor: 'var(--bg-secondary)',
-              borderRadius: 'var(--border-radius)',
-              fontSize: '0.875rem',
-              color: 'var(--text-secondary)',
-              fontFamily: 'monospace'
-            }}>
-              {selectedEmployee?.id}
+          {/* Collapsible ID Update Section */}
+          <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', padding: '1rem', backgroundColor: 'var(--bg-primary)' }}>
+            <div 
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }} 
+              onClick={() => setShowIdUpdate(!showIdUpdate)}
+            >
+              <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MdLock style={{ color: 'var(--text-secondary)' }} /> Update Employee ID (Advanced Options)
+              </span>
+              <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                {showIdUpdate ? 'Collapse ▲' : 'Expand ▼'}
+              </span>
             </div>
+            
+            {showIdUpdate && (
+              <div className="dashboard__id-update-section" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  ⚠️ Changing the Employee ID will update all references including documents and audit logs. Use with caution.
+                </p>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
+                    Current Employee ID
+                  </label>
+                  <div style={{
+                    padding: '0.75rem',
+                    backgroundColor: 'var(--bg-secondary)',
+                    borderRadius: 'var(--border-radius)',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'monospace'
+                  }}>
+                    {selectedEmployee?.id}
+                  </div>
+                </div>
+                <Input
+                  id="edit-employee-id"
+                  label="New Employee ID"
+                  placeholder="Enter new employee ID (e.g., EMP-002)"
+                  value={formData.id}
+                  onChange={(e) => handleFormChange('id', e.target.value)}
+                  fullWidth
+                />
+              </div>
+            )}
           </div>
 
-          <div className="dashboard__id-update-section" style={{ marginBottom: '1.5rem' }}>
-            <h4 style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-              Update Employee ID (Optional)
-            </h4>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              ⚠️ Changing the Employee ID will update all references including documents and audit logs. Use with caution.
-            </p>
-
-            <Input
-              id="edit-employee-id"
-              label="New Employee ID"
-              placeholder="Enter new employee ID (e.g., EMP-002)"
-              value={formData.id}
-              onChange={(e) => handleFormChange('id', e.target.value)}
-              fullWidth
-            />
-          </div>
+          <h3 className="dashboard__form-section-title">
+            Personal Information
+          </h3>
 
           <div className="dashboard__form-row">
             <Input
@@ -4155,6 +4194,10 @@ function Dashboard() {
             </select>
             {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
           </div>
+
+          <h3 className="dashboard__form-section-title">
+            Employment Details
+          </h3>
 
           <div className="dashboard__form-field">
             <label htmlFor="edit-office-hospital-name" className="dashboard__form-label">
@@ -4295,6 +4338,10 @@ function Dashboard() {
                 />
               </div>
             )}
+
+          <h3 className="dashboard__form-section-title">
+            Administrative Order (AO) Details
+          </h3>
 
           <div className="dashboard__form-field">
             <label htmlFor="update-ao-type" className="dashboard__form-label">
@@ -4484,25 +4531,24 @@ function Dashboard() {
             </>
           )}
 
-          <Input
-            id="edit-file201-status"
-            label="201 File Status"
-            type="text"
-            placeholder="Enter 201 file status"
-            value={formData.file201Status}
-            onChange={(e) => handleFormChange('file201Status', e.target.value)}
-            fullWidth
-          />
+          <h3 className="dashboard__form-section-title">
+            201 File Status
+          </h3>
 
-          <Input
-            id="edit-filebox-location"
-            label="201 File Location"
-            type="text"
-            placeholder="Enter 201 file location"
-            value={formData.fileboxLocation}
-            onChange={(e) => handleFormChange('fileboxLocation', e.target.value)}
-            fullWidth
-          />
+          <div className="dashboard__form-field">
+            <label htmlFor="edit-file201-status" className="dashboard__form-label">
+              201 File Status
+            </label>
+            <select
+              id="edit-file201-status"
+              className="dashboard__form-select"
+              value={formData.file201Status}
+              onChange={(e) => handleFormChange('file201Status', e.target.value)}
+            >
+              <option value="Available">Available</option>
+              <option value="Unavailable">Unavailable</option>
+            </select>
+          </div>
         </div>
       </Modal>
 

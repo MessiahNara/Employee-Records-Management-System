@@ -387,7 +387,19 @@ function EmployeeDetails() {
             <div className="employee-details__meta-fields">
               <div className="employee-details__meta-field">
                 <span className="employee-details__meta-label">201 File Location:</span>
-                <span className="employee-details__meta-value">{employee.fileboxLocation || <span className="employee-details__meta-empty">—</span>}</span>
+                <span className="employee-details__meta-value">
+                  {employee.yellowBox ? (
+                    <button 
+                      onClick={() => navigate(`/file201?highlight=${employee.yellowBox!.id}`)}
+                      className="employee-details__location-link-btn"
+                      title="Click to view and highlight this box"
+                    >
+                      Box {employee.yellowBox.boxLabel} ({employee.yellowBox.office})
+                    </button>
+                  ) : (
+                    employee.fileboxLocation || <span className="employee-details__meta-empty">—</span>
+                  )}
+                </span>
               </div>
               <div className="employee-details__meta-field">
                 <span className="employee-details__meta-label">201 File Status:</span>

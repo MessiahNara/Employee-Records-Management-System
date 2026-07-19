@@ -32,6 +32,13 @@ export interface Employee {
   fileboxLocation?: string;
   file201Status?: string;
   profilePicture?: string;
+  yellowBoxId?: string;
+  yellowBox?: {
+    id: string;
+    boxLabel: string;
+    office: string;
+    type: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

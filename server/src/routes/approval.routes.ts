@@ -194,7 +194,21 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
 router.post('/:id/reject', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { reason, approverId, approverName } = req.body;
+    const { reason } = req.body;
+
+    const userId = (req.headers['x-logged-in-user-id'] || req.headers['x-user-id']) as string;
+    let finalApproverId = userId || null;
+    let finalApproverName = 'System';
+
+    if (userId && userId !== 'system') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true }
+      });
+      if (user) {
+        finalApproverName = `${user.lastName}, ${user.firstName}`;
+      }
+    }
 
     const approvalReq = await (prisma as any).approvalRequest.findUnique({ where: { id } });
     if (!approvalReq) return res.status(404).json({ error: 'Approval request not found' });
@@ -204,8 +218,8 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
       where: { id },
       data: {
         status: 'rejected',
-        approvedBy: approverId || null,
-        approvedByName: approverName || null,
+        approvedBy: finalApproverId,
+        approvedByName: finalApproverName,
         rejectedReason: reason || 'Rejected by administrator',
         resolvedAt: new Date(),
       },
@@ -213,8 +227,8 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
 
     // Audit: request rejected
     await createAuditLog(prisma, {
-      userId: approverId || 'system',
-      userName: approverName || 'System',
+      userId: finalApproverId || 'system',
+      userName: finalApproverName,
       action: 'reject_request',
       entity: approvalReq.entityType,
       entityId: approvalReq.entityId,
@@ -224,7 +238,7 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
         actionRejected: approvalReq.action,
         requestedBy: approvalReq.requestedByName,
         rejectedReason: reason || 'Rejected by administrator',
-        description: `${approverName || 'System'} rejected ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, ' ')}: ${approvalReq.entityName || approvalReq.entityId}`,
+        description: `${finalApproverName} rejected ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, ' ')}: ${approvalReq.entityName || approvalReq.entityId}`,
       },
     });
 

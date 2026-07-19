@@ -20,6 +20,12 @@ export async function validateSession(req: Request, res: Response, next: NextFun
 
   if (userId && userId !== 'system') {
     try {
+      // Update last active timestamp
+      prisma.user.update({
+        where: { id: userId },
+        data: { lastActive: new Date() }
+      }).catch(err => console.error('[session] Error updating lastActive:', err));
+
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { activeSessionId: true }

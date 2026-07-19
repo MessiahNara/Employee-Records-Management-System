@@ -182,6 +182,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       where: { id },
       include: {
         documents: true,
+        yellowBox: true,
       },
     });
 

@@ -938,6 +938,54 @@ export const chatsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recipientId, content }),
     }),
+  deleteConversation: (recipientId: string) =>
+    apiRequest<any>(`/chats/${recipientId}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Yellow Box API
+export const yellowBoxesApi = {
+  getAll: () => apiRequest<any[]>('/yellow-boxes'),
+  getById: (id: string) => apiRequest<any>(`/yellow-boxes/${id}`),
+  create: (data: { boxLabel: string; office: string; type: string; color?: string }) =>
+    apiRequest<any>('/yellow-boxes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: { boxLabel: string; office: string; type: string; color?: string }) =>
+    apiRequest<any>(`/yellow-boxes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  remove: (id: string) =>
+    apiRequest<any>(`/yellow-boxes/${id}`, {
+      method: 'DELETE',
+    }),
+  addEmployee: (id: string, employeeId: string) =>
+    apiRequest<any>(`/yellow-boxes/${id}/employees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId }),
+    }),
+  removeEmployee: (id: string, employeeId: string) =>
+    apiRequest<any>(`/yellow-boxes/${id}/employees/${employeeId}`, {
+      method: 'DELETE',
+    }),
+  bulkAddEmployees: (id: string, employeeIds: string[]) =>
+    apiRequest<any>(`/yellow-boxes/${id}/employees/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeIds }),
+    }),
+  bulkRemoveEmployees: (id: string, employeeIds: string[]) =>
+    apiRequest<any>(`/yellow-boxes/${id}/employees/bulk-remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeIds }),
+    }),
 };
 
 export default {
@@ -950,5 +998,6 @@ export default {
   approvals: approvalApi,
   activities: activityApi,
   chats: chatsApi,
+  yellowBoxes: yellowBoxesApi,
   healthCheck,
 };

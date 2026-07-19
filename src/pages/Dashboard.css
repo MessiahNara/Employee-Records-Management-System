@@ -1238,3 +1238,21 @@
   }
 }
 
+/* Form Section Titles */
+.dashboard__form-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.dashboard__form-section-title:first-of-type {
+  margin-top: 0;
+}
+

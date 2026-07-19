@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import mkcert from 'vite-plugin-mkcert';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import path from 'path';
 
 export default defineConfig(() => {
   const devPort = 5174;
 
   return {
-    plugins: [react(), mkcert()],
+    plugins: [react(), basicSsl()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

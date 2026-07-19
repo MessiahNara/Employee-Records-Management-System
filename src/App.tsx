@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Calendar from './pages/Calendar';
 import CalendarActivities from './pages/CalendarActivities';
 import Chats from './pages/Chats';
+import File201 from './pages/File201';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
@@ -63,6 +64,14 @@ function App() {
                 element={
                   <RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'developer']}>
                     <Users />
+                  </RoleProtectedRoute>
+                } 
+              />
+              <Route 
+                path="file201" 
+                element={
+                  <RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'developer']}>
+                    <File201 />
                   </RoleProtectedRoute>
                 } 
               />

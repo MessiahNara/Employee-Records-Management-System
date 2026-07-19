@@ -40,6 +40,7 @@ router.get('/', async (req: Request, res: Response) => {
         role: true,
         permissions: true, // Include permissions
         lastLogin: true, // Include last login timestamp
+        lastActive: true,
         createdAt: true,
         updatedAt: true,
         // Exclude password from response

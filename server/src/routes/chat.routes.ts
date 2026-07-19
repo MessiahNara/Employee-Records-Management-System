@@ -46,13 +46,13 @@ router.get('/recent', async (req: Request, res: Response) => {
 
   try {
     const sentTo = await prisma.chatMessage.findMany({
-      where: { senderId: userId },
+      where: { senderId: userId, deletedBySender: false },
       select: { recipientId: true },
       distinct: ['recipientId'],
     });
 
     const receivedFrom = await prisma.chatMessage.findMany({
-      where: { recipientId: userId },
+      where: { recipientId: userId, deletedByRecipient: false },
       select: { senderId: true },
       distinct: ['senderId'],
     });
@@ -71,6 +71,7 @@ router.get('/recent', async (req: Request, res: Response) => {
         lastName: true,
         role: true,
         profilePicture: true,
+        lastActive: true,
       },
     });
 
@@ -80,8 +81,8 @@ router.get('/recent', async (req: Request, res: Response) => {
         const lastMsg = await prisma.chatMessage.findFirst({
           where: {
             OR: [
-              { senderId: userId, recipientId: contact.id },
-              { senderId: contact.id, recipientId: userId },
+              { senderId: userId, recipientId: contact.id, deletedBySender: false },
+              { senderId: contact.id, recipientId: userId, deletedByRecipient: false },
             ],
           },
           orderBy: {
@@ -131,8 +132,8 @@ router.get('/', async (req: Request, res: Response) => {
     const messages = await prisma.chatMessage.findMany({
       where: {
         OR: [
-          { senderId: userId, recipientId: recipientId },
-          { senderId: recipientId, recipientId: userId },
+          { senderId: userId, recipientId: recipientId, deletedBySender: false },
+          { senderId: recipientId, recipientId: userId, deletedByRecipient: false },
         ],
       },
       orderBy: {
@@ -207,4 +208,44 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/chats/:recipientId - Delete conversation history with a specific recipient
+router.delete('/:recipientId', async (req: Request, res: Response) => {
+  const userId = (req.headers['x-logged-in-user-id'] || req.headers['x-user-id']) as string;
+  const { recipientId } = req.params;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: User ID not provided' });
+  }
+
+  if (!recipientId) {
+    return res.status(400).json({ error: 'recipientId is required' });
+  }
+
+  try {
+    const updateSent = await prisma.chatMessage.updateMany({
+      where: { senderId: userId, recipientId: recipientId },
+      data: { deletedBySender: true }
+    });
+
+    const updateReceived = await prisma.chatMessage.updateMany({
+      where: { senderId: recipientId, recipientId: userId },
+      data: { deletedByRecipient: true }
+    });
+
+    // Clean up messages deleted by both users
+    await prisma.chatMessage.deleteMany({
+      where: {
+        deletedBySender: true,
+        deletedByRecipient: true
+      }
+    });
+
+    res.json({ message: 'Conversation deleted successfully', count: updateSent.count + updateReceived.count });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
 export default router;
+
