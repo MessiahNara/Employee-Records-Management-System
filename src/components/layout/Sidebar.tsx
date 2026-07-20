@@ -274,7 +274,8 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
       icon: MdInsertChart,
       iconColor: '#10b981',
       subItems: [
-        { path: '/reports', label: 'Administrative Order' }
+        { path: '/reports', label: 'Administrative Order' },
+        { path: '/reports/pulled-out', label: 'Pulled-Out Files' }
       ],
       isOpen: isReportsOpen,
       onToggle: () => {
@@ -408,6 +409,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
                             <NavLink
                               key={sub.path}
                               to={sub.path}
+                              end
                               className={({ isActive }) =>
                                 `sidebar__sub-item ${isActive ? 'sidebar__sub-item--active' : ''}`
                               }

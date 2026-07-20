@@ -3,6 +3,38 @@ import prisma from '../lib/prisma';
 
 const router = Router();
 
+// GET /api/file201/logs/all — get all borrow logs in the database
+router.get('/logs/all', async (req: Request, res: Response) => {
+  try {
+    const logs = await (prisma as any).file201BorrowLog.findMany({
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            officeName: true,
+            position: true,
+            appointmentStatus: true,
+            status: true,
+            yellowBox: {
+              select: {
+                office: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { dateBorrowed: 'desc' },
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching all borrow logs:', error);
+    res.status(500).json({ error: 'Failed to fetch all borrow logs' });
+  }
+});
+
 // GET /api/file201/:employeeId/history — get borrow history for an employee
 router.get('/:employeeId/history', async (req: Request, res: Response) => {
   try {
@@ -218,6 +250,42 @@ router.delete('/:employeeId/clear', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error clearing borrow history:', error);
     res.status(500).json({ error: 'Failed to clear history' });
+  }
+});
+// POST /api/file201/delete-logs — delete selected borrow logs
+router.post('/delete-logs', async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty IDs array' });
+    }
+
+    const logs = await (prisma as any).file201BorrowLog.findMany({
+      where: { id: { in: ids } },
+    });
+
+    await (prisma as any).file201BorrowLog.deleteMany({
+      where: { id: { in: ids } },
+    });
+
+    for (const log of logs) {
+      if (log.action === 'borrow' && !log.dateReturned) {
+        const active = await (prisma as any).file201BorrowLog.findFirst({
+          where: { employeeId: log.employeeId, action: 'borrow', dateReturned: null },
+        });
+        if (!active) {
+          await prisma.employee.update({
+            where: { id: log.employeeId },
+            data: { file201Status: 'Available' },
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, count: logs.length });
+  } catch (error: any) {
+    console.error('Error deleting borrow logs:', error);
+    res.status(500).json({ error: 'Failed to delete borrow logs', details: error.message });
   }
 });
 

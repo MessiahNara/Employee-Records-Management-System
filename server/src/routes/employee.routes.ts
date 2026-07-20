@@ -159,6 +159,7 @@ router.get('/', async (req: Request, res: Response) => {
       where,
       include: {
         documents: true,
+        yellowBox: true,
       },
       orderBy: [
         { lastName: 'asc' },

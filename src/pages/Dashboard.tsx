@@ -87,6 +87,40 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   administrativeOrder: true,
 };
 
+const BORROW_COLUMN_LABELS: Record<string, string> = {
+  employeeName: 'Employee File (Owner)',
+  appointmentStatus: 'Employment Status',
+  position: 'Position / Designation',
+  officeName: 'Office/Hospital',
+  borrowerName: 'Borrowed By',
+  purpose: 'Purpose / Reason',
+  dateBorrowed: 'Date Borrowed',
+  releasedBy: 'Released By',
+  status: 'Status',
+  dateReturned: 'Date Returned',
+  returnedByName: 'Returned By',
+  receivedBy: 'Received By',
+  fileCondition: 'File Condition',
+  remarks: 'Remarks',
+};
+
+const DEFAULT_VISIBLE_BORROW_COLUMNS: Record<string, boolean> = {
+  employeeName: true,
+  appointmentStatus: true,
+  position: true,
+  officeName: true,
+  borrowerName: true,
+  purpose: true,
+  dateBorrowed: true,
+  releasedBy: true,
+  status: true,
+  dateReturned: true,
+  returnedByName: true,
+  receivedBy: true,
+  fileCondition: true,
+  remarks: true,
+};
+
 const escapeXml = (unsafe: string) => {
   return unsafe.replace(/[<>&'"]/g, (c) => {
     switch (c) {
@@ -465,6 +499,37 @@ function Dashboard() {
   const [pendingDeleteReportIds, setPendingDeleteReportIds] = useState<string[]>([]);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
 
+  // Pulled-Out Files UI States
+  const reportsTab = location.pathname === '/reports/pulled-out' ? 'pulled-out' : 'ao';
+  const [borrowLogs, setBorrowLogs] = useState<any[]>([]);
+  const [borrowLogsLoading, setBorrowLogsLoading] = useState(false);
+  const [borrowSearchTerm, setBorrowSearchTerm] = useState('');
+  const [borrowStatusFilter, setBorrowStatusFilter] = useState<'All' | 'Borrowed' | 'Returned'>('All');
+  const [borrowDateFromFilter, setBorrowDateFromFilter] = useState('');
+  const [borrowDateToFilter, setBorrowDateToFilter] = useState('');
+  const [returnDateFromFilter, setReturnDateFromFilter] = useState('');
+  const [returnDateToFilter, setReturnDateToFilter] = useState('');
+  const [borrowCurrentPage, setBorrowCurrentPage] = useState(1);
+  const [borrowItemsPerPage, setBorrowItemsPerPage] = useState(10);
+  const [selectedBorrowLog, setSelectedBorrowLog] = useState<any>(null);
+  const [isBorrowDetailsModalOpen, setIsBorrowDetailsModalOpen] = useState(false);
+  const [selectedBorrowRowIds, setSelectedBorrowRowIds] = useState<Set<string>>(new Set());
+  const [isDeleteBorrowConfirmOpen, setIsDeleteBorrowConfirmOpen] = useState(false);
+  const [pendingDeleteBorrowIds, setPendingDeleteBorrowIds] = useState<string[]>([]);
+  const [isDeletingBorrow, setIsDeletingBorrow] = useState(false);
+
+  useEffect(() => {
+    setSelectedReportRowIds(new Set());
+    setSelectedBorrowRowIds(new Set());
+  }, [reportsTab]);
+
+  useEffect(() => {
+    if (borrowStatusFilter === 'Borrowed') {
+      setReturnDateFromFilter('');
+      setReturnDateToFilter('');
+    }
+  }, [borrowStatusFilter]);
+
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
     try {
       const saved = localStorage.getItem('report_visible_columns');
@@ -476,10 +541,25 @@ function Dashboard() {
   const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [isBorrowReportPreviewOpen, setIsBorrowReportPreviewOpen] = useState(false);
+  const [visibleBorrowColumns, setVisibleBorrowColumns] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('borrow_visible_columns');
+      return saved ? JSON.parse(saved) : DEFAULT_VISIBLE_BORROW_COLUMNS;
+    } catch {
+      return DEFAULT_VISIBLE_BORROW_COLUMNS;
+    }
+  });
+  const [isBorrowColumnDropdownOpen, setIsBorrowColumnDropdownOpen] = useState(false);
+  const borrowDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsColumnDropdownOpen(false);
+      }
+      if (borrowDropdownRef.current && !borrowDropdownRef.current.contains(event.target as Node)) {
+        setIsBorrowColumnDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -580,6 +660,25 @@ function Dashboard() {
   useEffect(() => {
     fetchDropdownOptions();
   }, [fetchDropdownOptions]);
+
+  const fetchBorrowLogs = useCallback(async () => {
+    try {
+      setBorrowLogsLoading(true);
+      const data = await api.file201.getAllLogs();
+      setBorrowLogs(data);
+    } catch (error) {
+      console.error('Failed to fetch borrow logs:', error);
+      showToast('Failed to load transaction logs.', 'error');
+    } finally {
+      setBorrowLogsLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (viewMode === 'reports' && reportsTab === 'pulled-out') {
+      fetchBorrowLogs();
+    }
+  }, [viewMode, reportsTab, fetchBorrowLogs]);
 
   // For superadmin and admin, they have all permissions
   // For superadmin, they have all permissions
@@ -1254,6 +1353,397 @@ function Dashboard() {
       localStorage.setItem('report_visible_columns', JSON.stringify(next));
       return next;
     });
+  };
+
+  // --- Pulled-Out Files columns, helpers, and filtering ---
+
+  const filteredBorrowRows = useMemo(() => {
+    return borrowLogs.filter((log) => {
+      const emp = log.employee;
+      const empName = emp ? `${emp.firstName} ${emp.lastName}`.toLowerCase() : '';
+      const borrower = (log.borrowerName || '').toLowerCase();
+      const purpose = (log.purpose || '').toLowerCase();
+      const released = (log.releasedBy || '').toLowerCase();
+      const returnedBy = (log.returnedByName || '').toLowerCase();
+      const received = (log.receivedBy || '').toLowerCase();
+
+      const search = borrowSearchTerm.toLowerCase().trim();
+      const matchSearch =
+        !search ||
+        empName.includes(search) ||
+        borrower.includes(search) ||
+        purpose.includes(search) ||
+        released.includes(search) ||
+        returnedBy.includes(search) ||
+        received.includes(search);
+
+      const isReturned = log.action === 'return' || !!log.dateReturned;
+      const matchStatus =
+        borrowStatusFilter === 'All' ||
+        (borrowStatusFilter === 'Borrowed' && !isReturned) ||
+        (borrowStatusFilter === 'Returned' && isReturned);
+
+      let matchBorrowDate = true;
+      if (log.dateBorrowed) {
+        const logDateStr = new Date(log.dateBorrowed).toLocaleDateString('en-CA');
+        if (borrowDateFromFilter && logDateStr < borrowDateFromFilter) matchBorrowDate = false;
+        if (borrowDateToFilter && logDateStr > borrowDateToFilter) matchBorrowDate = false;
+      } else if (borrowDateFromFilter || borrowDateToFilter) {
+        matchBorrowDate = false;
+      }
+
+      let matchReturnDate = true;
+      if (borrowStatusFilter !== 'Borrowed') {
+        if (log.dateReturned) {
+          const logReturnDateStr = new Date(log.dateReturned).toLocaleDateString('en-CA');
+          if (returnDateFromFilter && logReturnDateStr < returnDateFromFilter) matchReturnDate = false;
+          if (returnDateToFilter && logReturnDateStr > returnDateToFilter) matchReturnDate = false;
+        } else if (returnDateFromFilter || returnDateToFilter) {
+          matchReturnDate = false;
+        }
+      }
+
+      return matchSearch && matchStatus && matchBorrowDate && matchReturnDate;
+    });
+  }, [borrowLogs, borrowSearchTerm, borrowStatusFilter, borrowDateFromFilter, borrowDateToFilter, returnDateFromFilter, returnDateToFilter]);
+
+  const borrowTotalPages = Math.ceil(filteredBorrowRows.length / borrowItemsPerPage);
+
+  const paginatedBorrowLogs = useMemo(() => {
+    const start = (borrowCurrentPage - 1) * borrowItemsPerPage;
+    return filteredBorrowRows.slice(start, start + borrowItemsPerPage);
+  }, [filteredBorrowRows, borrowCurrentPage, borrowItemsPerPage]);
+
+  useEffect(() => {
+    setBorrowCurrentPage(1);
+  }, [borrowSearchTerm, borrowStatusFilter, borrowDateFromFilter, borrowDateToFilter, returnDateFromFilter, returnDateToFilter]);
+
+  const borrowColumns = useMemo<Column<any>[]>(() => {
+    const selectionColumn: Column<any> = {
+      key: 'selection',
+      header: (
+        <input
+          type="checkbox"
+          checked={
+            paginatedBorrowLogs.length > 0 &&
+            paginatedBorrowLogs.every((row) => selectedBorrowRowIds.has(row.id))
+          }
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setSelectedBorrowRowIds((prev) => {
+              const next = new Set(prev);
+              paginatedBorrowLogs.forEach((row) => {
+                if (checked) {
+                  next.add(row.id);
+                } else {
+                  next.delete(row.id);
+                }
+              });
+              return next;
+            });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'pointer' }}
+        />
+      ),
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedBorrowRowIds.has(row.id)}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setSelectedBorrowRowIds((prev) => {
+              const next = new Set(prev);
+              if (checked) {
+                next.add(row.id);
+              } else {
+                next.delete(row.id);
+              }
+              return next;
+            });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'pointer' }}
+        />
+      ),
+      width: '50px',
+    };
+
+    const cols: Column<any>[] = [
+      {
+        key: 'employeeName',
+        header: 'Employee Name (Owner)',
+        render: (row) => {
+          const emp = row.employee;
+          return emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+        }
+      },
+      {
+        key: 'officeName',
+        header: 'Office/Hospital',
+        render: (row) => row.employee?.yellowBox?.office || row.employee?.officeName || '—'
+      },
+      {
+        key: 'position',
+        header: 'Position / Designation',
+        render: (row) => row.employee?.position || '—'
+      },
+      {
+        key: 'appointmentStatus',
+        header: 'Employment Status',
+        render: (row) => {
+          const status = row.employee?.status;
+          return status ? (status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) : '—';
+        }
+      },
+      {
+        key: 'borrowerName',
+        header: 'Borrowed By',
+        render: (row) => row.borrowerName || '—'
+      },
+      {
+        key: 'purpose',
+        header: 'Purpose / Reason',
+        render: (row) => row.purpose || '—'
+      },
+      {
+        key: 'dateBorrowed',
+        header: 'Date Borrowed',
+        render: (row) => formatDateMDY(row.dateBorrowed)
+      },
+      {
+        key: 'releasedBy',
+        header: 'Released By',
+        render: (row) => row.releasedBy || '—'
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return (
+            <Badge variant={isReturned ? 'success' : 'warning'}>
+              {isReturned ? 'Returned' : 'Borrowed'}
+            </Badge>
+          );
+        }
+      },
+      {
+        key: 'dateReturned',
+        header: 'Date Returned',
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
+        }
+      },
+      {
+        key: 'returnedByName',
+        header: 'Returned By',
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? row.returnedByName || '—' : '';
+        }
+      },
+      {
+        key: 'receivedBy',
+        header: 'Received By',
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? row.receivedBy || '—' : '';
+        }
+      },
+      {
+        key: 'fileCondition',
+        header: 'File Condition',
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? row.fileCondition || '—' : '';
+        }
+      },
+      {
+        key: 'remarks',
+        header: 'Remarks',
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? row.remarks || '—' : '';
+        }
+      }
+    ];
+
+    const activeCols = cols.filter(c => {
+      if (visibleBorrowColumns[c.key] === false) return false;
+      if (borrowStatusFilter === 'Borrowed') {
+        const toHide = ['dateReturned', 'returnedByName', 'receivedBy', 'fileCondition', 'remarks'];
+        if (toHide.includes(c.key)) return false;
+      }
+      return true;
+    });
+    return [selectionColumn, ...activeCols];
+  }, [visibleBorrowColumns, paginatedBorrowLogs, selectedBorrowRowIds, borrowStatusFilter]);
+
+  const handleDeleteBorrowEntries = (ids: string[]) => {
+    setPendingDeleteBorrowIds(ids);
+    setIsDeleteBorrowConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteBorrowEntries = async () => {
+    if (pendingDeleteBorrowIds.length === 0) return;
+    try {
+      setIsDeletingBorrow(true);
+
+      const entryNames = pendingDeleteBorrowIds.map((rawId) => {
+        const row = borrowLogs.find((r) => r.id === rawId);
+        const emp = row?.employee;
+        const empName = emp ? `${emp.lastName}, ${emp.firstName}` : (row?.employeeId || 'N/A');
+        return row
+          ? `${empName} - Borrowed by ${row.borrowerName || 'N/A'} on ${new Date(row.dateBorrowed).toLocaleDateString()}`
+          : rawId;
+      });
+
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'delete_borrow_logs',
+        entityType: 'file201',
+        entityId: pendingDeleteBorrowIds.length === 1 ? pendingDeleteBorrowIds[0] : 'bulk',
+        entityName: pendingDeleteBorrowIds.length === 1 ? entryNames[0] : `${pendingDeleteBorrowIds.length} pulled-out file logs`,
+        payload: { ids: pendingDeleteBorrowIds, entryNames },
+      });
+
+      showToast('🗑️ Delete request submitted. Go to Approvals to review and execute.', 'info');
+      setIsDeleteBorrowConfirmOpen(false);
+      setPendingDeleteBorrowIds([]);
+      setSelectedBorrowRowIds(new Set());
+    } catch (err: any) {
+      showToast(`Failed to submit delete request: ${err.message}`, 'error');
+    } finally {
+      setIsDeletingBorrow(false);
+    }
+  };
+
+  const handlePrintBorrowLogs = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const rowsHtml = filteredBorrowRows.map((row, idx) => {
+      const emp = row.employee;
+      const empName = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+      const isReturned = row.action === 'return' || !!row.dateReturned;
+      return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${empName}</td>
+          <td>${row.employee?.appointmentStatus || '—'}</td>
+          <td>${row.employee?.position || '—'}</td>
+          <td>${row.employee?.yellowBox?.office || row.employee?.officeName || '—'}</td>
+          <td>${row.borrowerName || '—'}</td>
+          <td>${row.purpose || '—'}</td>
+          <td>${formatDateMDY(row.dateBorrowed)}</td>
+          <td>${row.releasedBy || '—'}</td>
+          <td>${isReturned ? 'Returned' : 'Borrowed'}</td>
+          <td>${isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '—'}</td>
+          <td>${isReturned ? (row.returnedByName || '—') : '—'}</td>
+          <td>${isReturned ? (row.receivedBy || '—') : '—'}</td>
+          <td>${isReturned ? (row.fileCondition || '—') : '—'}</td>
+          <td>${isReturned ? (row.remarks || '—') : '—'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Pulled-Out Files Report</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; }
+            h1 { text-align: center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <h1>Pulled-Out Files Transaction Report</h1>
+          <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Employee File (Owner)</th>
+                <th>Borrowed By</th>
+                <th>Position</th>
+                <th>Office</th>
+                <th>Purpose</th>
+                <th>Date Borrowed</th>
+                <th>Released By</th>
+                <th>Status</th>
+                <th>Date Returned</th>
+                <th>Returned By</th>
+                <th>Received By</th>
+                <th>File Condition</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleExportBorrowLogsToExcel = () => {
+    const dataToExport = filteredBorrowRows.map((row, idx) => {
+      const emp = row.employee;
+      const empName = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+      const isReturned = row.action === 'return' || !!row.dateReturned;
+      const record: any = {
+        '#': idx + 1,
+        'Employee File (Owner)': empName,
+        'Employment Status': row.employee?.appointmentStatus || '—',
+        'Position': row.employee?.position || '—',
+        'Office': row.employee?.yellowBox?.office || row.employee?.officeName || '—',
+        'Borrowed By': row.borrowerName || '—',
+        'Purpose': row.purpose || '—',
+        'Date Borrowed': formatDateMDY(row.dateBorrowed),
+        'Released By': row.releasedBy || '—',
+        'Status': isReturned ? 'Returned' : 'Borrowed',
+      };
+
+      if (borrowStatusFilter !== 'Borrowed') {
+        record['Date Returned'] = isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
+        record['Returned By'] = isReturned ? (row.returnedByName || '—') : '';
+        record['Received By'] = isReturned ? (row.receivedBy || '—') : '';
+        record['File Condition'] = isReturned ? (row.fileCondition || '—') : '';
+        record['Remarks'] = isReturned ? (row.remarks || '—') : '';
+      }
+
+      return record;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Pulled-Out Files');
+
+    // Auto-fit column widths
+    const maxLens = Object.keys(dataToExport[0] || {}).map(key => {
+      const maxColLen = dataToExport.reduce((max, r: any) => {
+        const len = String(r[key] || '').length;
+        return len > max ? len : max;
+      }, key.length);
+      return { wch: maxColLen + 3 };
+    });
+    worksheet['!cols'] = maxLens;
+
+    XLSX.writeFile(workbook, `Pulled-Out_Files_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const reportColumns = useMemo<Column<ReportRow>[]>(() => {
@@ -2905,11 +3395,11 @@ function Dashboard() {
       <div className="dashboard__header">
         <div>
           <h1 className="dashboard__title">
-            {viewMode === 'reports' ? 'Administrative Reports' : 'Employee Management'}
+            {viewMode === 'reports' ? (reportsTab === 'pulled-out' ? 'Pulled-Out Files Report' : 'Administrative Reports') : 'Employee Management'}
           </h1>
           <p className="dashboard__subtitle">
             {viewMode === 'reports'
-              ? 'Generate administrative reports of employees'
+              ? (reportsTab === 'pulled-out' ? 'View and track all borrowed and returned physical 201 records' : 'Generate administrative reports of employees')
               : `Manage and track all employee records in the system (${allEmployees.length} employees)`}
           </p>
         </div>
@@ -3013,369 +3503,626 @@ function Dashboard() {
 
       {viewMode === 'reports' ? (
         <div className="reports-view">
-          <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                Search and Filter
-              </h3>
-              <span className="reports-view__summary-pill">Total AO Reports: {sortedReportRows.length}</span>
-            </div>
 
-            <div className="reports-view__filters-grid">
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">Search Person</label>
-                <input
-                  type="text"
-                  className="dashboard__form-input"
-                  placeholder="Search by name..."
-                  value={reportSearchName}
-                  onChange={(e) => setReportSearchName(e.target.value)}
-                />
-              </div>
+          {reportsTab === 'ao' ? (
+            <>
+              <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                    Search and Filter
+                  </h3>
+                  <span className="reports-view__summary-pill">Total AO Reports: {sortedReportRows.length}</span>
+                </div>
 
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">AO Status</label>
-                <select
-                  className="dashboard__filter-select"
-                  value={reportAoStatus}
-                  onChange={(e) => setReportAoStatus(e.target.value as 'Detailed' | 'Designated' | 'All Employees')}
-                >
-                  <option value="All Employees">All Employees</option>
-                  <option value="Detailed">Detailed</option>
-                  <option value="Designated">Designated</option>
-                </select>
-              </div>
+                <div className="reports-view__filters-grid">
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Search Person</label>
+                    <input
+                      type="text"
+                      className="dashboard__form-input"
+                      placeholder="Search by name..."
+                      value={reportSearchName}
+                      onChange={(e) => setReportSearchName(e.target.value)}
+                    />
+                  </div>
 
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">Mother Unit</label>
-                <SearchableDropdown
-                  options={uniqueMotherUnitsInDatabase}
-                  value={reportMotherUnit === 'all' ? '' : reportMotherUnit}
-                  onChange={(val) => setReportMotherUnit(val === '' ? 'all' : val)}
-                  placeholder="All Mother Units"
-                />
-              </div>
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">AO Status</label>
+                    <select
+                      className="dashboard__filter-select"
+                      value={reportAoStatus}
+                      onChange={(e) => setReportAoStatus(e.target.value as 'Detailed' | 'Designated' | 'All Employees')}
+                    >
+                      <option value="All Employees">All Employees</option>
+                      <option value="Detailed">Detailed</option>
+                      <option value="Designated">Designated</option>
+                    </select>
+                  </div>
 
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">AO Number</label>
-                <input
-                  type="text"
-                  className="dashboard__form-input"
-                  placeholder="Search by AO Number..."
-                  value={reportAoNumber}
-                  onChange={(e) => setReportAoNumber(e.target.value)}
-                />
-              </div>
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Mother Unit</label>
+                    <SearchableDropdown
+                      options={uniqueMotherUnitsInDatabase}
+                      value={reportMotherUnit === 'all' ? '' : reportMotherUnit}
+                      onChange={(val) => setReportMotherUnit(val === '' ? 'all' : val)}
+                      placeholder="All Mother Units"
+                    />
+                  </div>
 
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">Series Year</label>
-                <select
-                  className="dashboard__filter-select"
-                  value={reportAoYear}
-                  onChange={(e) => setReportAoYear(e.target.value)}
-                >
-                  <option value="">All Series Years</option>
-                  {dropdownOptions.aoYears.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">AO Number</label>
+                    <input
+                      type="text"
+                      className="dashboard__form-input"
+                      placeholder="Search by AO Number..."
+                      value={reportAoNumber}
+                      onChange={(e) => setReportAoNumber(e.target.value)}
+                    />
+                  </div>
 
-
-
-            </div>
-
-            <div className="reports-view__filter-row reports-view__filter-row--compact" style={{ marginTop: '0.75rem' }}>
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">Administrative Orders Issued Month From</label>
-                <select
-                  className="dashboard__filter-select"
-                  value={reportAoOrderMonthFrom}
-                  onChange={(e) => setReportAoOrderMonthFrom(e.target.value)}
-                >
-                  <option value="">All Months</option>
-                  <option value="01">January</option>
-                  <option value="02">February</option>
-                  <option value="03">March</option>
-                  <option value="04">April</option>
-                  <option value="05">May</option>
-                  <option value="06">June</option>
-                  <option value="07">July</option>
-                  <option value="08">August</option>
-                  <option value="09">September</option>
-                  <option value="10">October</option>
-                  <option value="11">November</option>
-                  <option value="12">December</option>
-                </select>
-              </div>
-
-              <div className="reports-view__filter-card">
-                <label className="dashboard__filter-label">Administrative Orders Issued Month To</label>
-                <select
-                  className="dashboard__filter-select"
-                  value={reportAoOrderMonthTo}
-                  onChange={(e) => setReportAoOrderMonthTo(e.target.value)}
-                >
-                  <option value="">All Months</option>
-                  <option value="01">January</option>
-                  <option value="02">February</option>
-                  <option value="03">March</option>
-                  <option value="04">April</option>
-                  <option value="05">May</option>
-                  <option value="06">June</option>
-                  <option value="07">July</option>
-                  <option value="08">August</option>
-                  <option value="09">September</option>
-                  <option value="10">October</option>
-                  <option value="11">November</option>
-                  <option value="12">December</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setReportSearchName('');
-                  setReportMotherUnit('all');
-                  setReportDetailedOffice('all');
-                  setReportDesignatedPosition('all');
-                  setReportAoNumber('');
-                  setReportAoYear('');
-                  setReportAoOrderMonthFrom('');
-                  setReportAoOrderMonthTo('');
-                  setReportAoStatus('All Employees');
-                  setReportSortPriority([]);
-                  setReportActiveTab('active');
-                }}
-              >
-                Reset Filters
-              </Button>
-            </div>
-          </Card>
-
-          {/* Metric Cards */}
-          <div className="reports-view__metrics-grid">
-            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-success)' }}>
-              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>
-                ✔
-              </div>
-              <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size}</span>
-                <span className="reports-view__metric-label">Active Employees</span>
-              </div>
-            </div>
-
-            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
-              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
-                ✖
-              </div>
-              <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size}</span>
-                <span className="reports-view__metric-label">Inactive Employees</span>
-              </div>
-            </div>
-
-            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-warning)' }}>
-              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)' }}>
-                ⚠️
-              </div>
-              <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">
-                  {filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length}
-                </span>
-                <span className="reports-view__metric-label">Near Expiration (30 Days)</span>
-              </div>
-            </div>
-
-            <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
-              <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
-                🚫
-              </div>
-              <div className="reports-view__metric-info">
-                <span className="reports-view__metric-value">
-                  {filteredReportRows.filter((row) => isExpired(row.durationTo)).length}
-                </span>
-                <span className="reports-view__metric-label">Reached Deadline (Expired)</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tabs for detailed listings */}
-          <Card>
-            <div className="reports-view__tabs">
-              <button
-                className={`reports-view__tab-btn${reportActiveTab === 'active' ? ' reports-view__tab-btn--active' : ''}`}
-                onClick={() => setReportActiveTab('active')}
-              >
-                🟢 Active Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size})
-              </button>
-              <button
-                className={`reports-view__tab-btn${reportActiveTab === 'inactive' ? ' reports-view__tab-btn--active' : ''}`}
-                onClick={() => setReportActiveTab('inactive')}
-              >
-                🔴 Inactive Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size})
-              </button>
-              <button
-                className={`reports-view__tab-btn${reportActiveTab === 'expiring' ? ' reports-view__tab-btn--active' : ''}`}
-                onClick={() => setReportActiveTab('expiring')}
-              >
-                ⚠️ Near Expiration ({filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length})
-              </button>
-              <button
-                className={`reports-view__tab-btn${reportActiveTab === 'expired' ? ' reports-view__tab-btn--active' : ''}`}
-                onClick={() => setReportActiveTab('expired')}
-              >
-                🚫 Reached Deadline ({filteredReportRows.filter((row) => isExpired(row.durationTo)).length})
-              </button>
-            </div>
-
-            <div className="reports-view__export-actions">
-              {selectedReportRowIds.size > 0 && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDeleteReportEntries(Array.from(selectedReportRowIds))}
-                  style={{ marginRight: 'auto' }}
-                >
-                  🗑️ Delete Selected ({selectedReportRowIds.size})
-                </Button>
-              )}
-
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setIsReportPreviewOpen(true)}
-                disabled={sortedReportRows.length === 0}
-              >
-                🖨️ View & Print
-              </Button>
-              <div ref={dropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
-                >
-                  ⚙️ Columns
-                </Button>
-                {isColumnDropdownOpen && (
-                  <div className="reports-view__columns-dropdown">
-                    <div className="reports-view__columns-dropdown-header">
-                      <button
-                        type="button"
-                        onClick={handleSelectAllColumns}
-                        className="reports-view__columns-link"
-                      >
-                        Select All
-                      </button>
-                      <span className="reports-view__columns-divider">|</span>
-                      <button
-                        type="button"
-                        onClick={handleClearAllColumns}
-                        className="reports-view__columns-link"
-                      >
-                        Clear All
-                      </button>
-                    </div>
-                    <div className="reports-view__columns-dropdown-list">
-                      {currentAvailableKeys.map((key) => (
-                        <label key={key} className="reports-view__columns-item">
-                          <input
-                            type="checkbox"
-                            className="reports-view__columns-checkbox"
-                            checked={visibleColumns[key] !== false}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              setVisibleColumns((prev) => {
-                                const next = { ...prev, [key]: checked };
-                                localStorage.setItem('report_visible_columns', JSON.stringify(next));
-                                return next;
-                              });
-                            }}
-                          />
-                          <span className="reports-view__columns-label">{COLUMN_LABELS[key] || key}</span>
-                        </label>
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Series Year</label>
+                    <select
+                      className="dashboard__filter-select"
+                      value={reportAoYear}
+                      onChange={(e) => setReportAoYear(e.target.value)}
+                    >
+                      <option value="">All Series Years</option>
+                      {dropdownOptions.aoYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
                       ))}
-                    </div>
+                    </select>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            <div className="reports-view__table-container">
-              <div className="dashboard__table-scroll" style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
-                <Table
-                  columns={reportColumns}
-                  data={paginatedReports}
-                  keyExtractor={(row) => row.id}
-                  onRowClick={() => undefined}
-                  emptyMessage="No AO reports matching filters found"
-                />
-              </div>
-              {reportsForActiveTab.length > 0 && (
-                <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
-                  <div className="dashboard__page-size">
-                    <span className="dashboard__page-size-label">Rows per page:</span>
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <button
-                        key={size}
-                        className={`dashboard__page-size-btn${reportItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                        onClick={() => {
-                          setReportItemsPerPage(size);
-                          setReportCurrentPage(1);
-                        }}
-                      >
-                        {size}
-                      </button>
-                    ))}
+                <div className="reports-view__filter-row reports-view__filter-row--compact" style={{ marginTop: '0.75rem' }}>
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Administrative Orders Issued Month From</label>
+                    <select
+                      className="dashboard__filter-select"
+                      value={reportAoOrderMonthFrom}
+                      onChange={(e) => setReportAoOrderMonthFrom(e.target.value)}
+                    >
+                      <option value="">All Months</option>
+                      <option value="01">January</option>
+                      <option value="02">February</option>
+                      <option value="03">March</option>
+                      <option value="04">April</option>
+                      <option value="05">May</option>
+                      <option value="06">June</option>
+                      <option value="07">July</option>
+                      <option value="08">August</option>
+                      <option value="09">September</option>
+                      <option value="10">October</option>
+                      <option value="11">November</option>
+                      <option value="12">December</option>
+                    </select>
                   </div>
-                  {reportTotalPages > 1 && (
-                    <div className="dashboard__pagination-controls">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setReportCurrentPage(1)}
-                        disabled={reportCurrentPage === 1}
-                      >
-                        First
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setReportCurrentPage(reportCurrentPage - 1)}
-                        disabled={reportCurrentPage === 1}
-                      >
-                        Previous
-                      </Button>
-                      <div className="dashboard__pagination-info">
-                        Page {reportCurrentPage} of {reportTotalPages}
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Administrative Orders Issued Month To</label>
+                    <select
+                      className="dashboard__filter-select"
+                      value={reportAoOrderMonthTo}
+                      onChange={(e) => setReportAoOrderMonthTo(e.target.value)}
+                    >
+                      <option value="">All Months</option>
+                      <option value="01">January</option>
+                      <option value="02">February</option>
+                      <option value="03">March</option>
+                      <option value="04">April</option>
+                      <option value="05">May</option>
+                      <option value="06">June</option>
+                      <option value="07">July</option>
+                      <option value="08">August</option>
+                      <option value="09">September</option>
+                      <option value="10">October</option>
+                      <option value="11">November</option>
+                      <option value="12">December</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setReportSearchName('');
+                      setReportMotherUnit('all');
+                      setReportDetailedOffice('all');
+                      setReportDesignatedPosition('all');
+                      setReportAoNumber('');
+                      setReportAoYear('');
+                      setReportAoOrderMonthFrom('');
+                      setReportAoOrderMonthTo('');
+                      setReportAoStatus('All Employees');
+                      setReportSortPriority([]);
+                      setReportActiveTab('active');
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              </Card>
+
+              {/* Metric Cards */}
+              <div className="reports-view__metrics-grid">
+                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-success)' }}>
+                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>
+                    ✔
+                  </div>
+                  <div className="reports-view__metric-info">
+                    <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size}</span>
+                    <span className="reports-view__metric-label">Active Employees</span>
+                  </div>
+                </div>
+
+                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
+                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
+                    ✖
+                  </div>
+                  <div className="reports-view__metric-info">
+                    <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size}</span>
+                    <span className="reports-view__metric-label">Inactive Employees</span>
+                  </div>
+                </div>
+
+                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-warning)' }}>
+                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)' }}>
+                    ⚠️
+                  </div>
+                  <div className="reports-view__metric-info">
+                    <span className="reports-view__metric-value">
+                      {filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length}
+                    </span>
+                    <span className="reports-view__metric-label">Near Expiration (30 Days)</span>
+                  </div>
+                </div>
+
+                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
+                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
+                    🚫
+                  </div>
+                  <div className="reports-view__metric-info">
+                    <span className="reports-view__metric-value">
+                      {filteredReportRows.filter((row) => isExpired(row.durationTo)).length}
+                    </span>
+                    <span className="reports-view__metric-label">Reached Deadline (Expired)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs for detailed listings */}
+              <Card>
+                <div className="reports-view__tabs">
+                  <button
+                    className={`reports-view__tab-btn${reportActiveTab === 'active' ? ' reports-view__tab-btn--active' : ''}`}
+                    onClick={() => setReportActiveTab('active')}
+                  >
+                    🟢 Active Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size})
+                  </button>
+                  <button
+                    className={`reports-view__tab-btn${reportActiveTab === 'inactive' ? ' reports-view__tab-btn--active' : ''}`}
+                    onClick={() => setReportActiveTab('inactive')}
+                  >
+                    🔴 Inactive Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size})
+                  </button>
+                  <button
+                    className={`reports-view__tab-btn${reportActiveTab === 'expiring' ? ' reports-view__tab-btn--active' : ''}`}
+                    onClick={() => setReportActiveTab('expiring')}
+                  >
+                    ⚠️ Near Expiration ({filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length})
+                  </button>
+                  <button
+                    className={`reports-view__tab-btn${reportActiveTab === 'expired' ? ' reports-view__tab-btn--active' : ''}`}
+                    onClick={() => setReportActiveTab('expired')}
+                  >
+                    🚫 Reached Deadline ({filteredReportRows.filter((row) => isExpired(row.durationTo)).length})
+                  </button>
+                </div>
+
+                <div className="reports-view__export-actions">
+                  {selectedReportRowIds.size > 0 && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDeleteReportEntries(Array.from(selectedReportRowIds))}
+                      style={{ marginRight: 'auto' }}
+                    >
+                      🗑️ Delete Selected ({selectedReportRowIds.size})
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setIsReportPreviewOpen(true)}
+                    disabled={sortedReportRows.length === 0}
+                  >
+                    🖨️ View & Print
+                  </Button>
+                  <div ref={dropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
+                    >
+                      ⚙️ Columns
+                    </Button>
+                    {isColumnDropdownOpen && (
+                      <div className="reports-view__columns-dropdown">
+                        <div className="reports-view__columns-dropdown-header">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllColumns}
+                            className="reports-view__columns-link"
+                          >
+                            Select All
+                          </button>
+                          <span className="reports-view__columns-divider">|</span>
+                          <button
+                            type="button"
+                            onClick={handleClearAllColumns}
+                            className="reports-view__columns-link"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                        <div className="reports-view__columns-dropdown-list">
+                          {currentAvailableKeys.map((key) => (
+                            <label key={key} className="reports-view__columns-item">
+                              <input
+                                type="checkbox"
+                                className="reports-view__columns-checkbox"
+                                checked={visibleColumns[key] !== false}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setVisibleColumns((prev) => {
+                                    const next = { ...prev, [key]: checked };
+                                    localStorage.setItem('report_visible_columns', JSON.stringify(next));
+                                    return next;
+                                  });
+                                }}
+                              />
+                              <span className="reports-view__columns-label">{COLUMN_LABELS[key] || key}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setReportCurrentPage(reportCurrentPage + 1)}
-                        disabled={reportCurrentPage === reportTotalPages}
-                      >
-                        Next
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setReportCurrentPage(reportTotalPages)}
-                        disabled={reportCurrentPage === reportTotalPages}
-                      >
-                        Last
-                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="reports-view__table-container">
+                  <div className="dashboard__table-scroll" style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+                    <Table
+                      columns={reportColumns}
+                      data={paginatedReports}
+                      keyExtractor={(row) => row.id}
+                      onRowClick={() => undefined}
+                      emptyMessage="No AO reports matching filters found"
+                    />
+                  </div>
+                  {reportsForActiveTab.length > 0 && (
+                    <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
+                      <div className="dashboard__page-size">
+                        <span className="dashboard__page-size-label">Rows per page:</span>
+                        {PAGE_SIZE_OPTIONS.map((size) => (
+                          <button
+                            key={size}
+                            className={`dashboard__page-size-btn${reportItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                            onClick={() => {
+                              setReportItemsPerPage(size);
+                              setReportCurrentPage(1);
+                            }}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                      {reportTotalPages > 1 && (
+                        <div className="dashboard__pagination-controls">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setReportCurrentPage(1)}
+                            disabled={reportCurrentPage === 1}
+                          >
+                            First
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setReportCurrentPage(reportCurrentPage - 1)}
+                            disabled={reportCurrentPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <div className="dashboard__pagination-info">
+                            Page {reportCurrentPage} of {reportTotalPages}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setReportCurrentPage(reportCurrentPage + 1)}
+                            disabled={reportCurrentPage === reportTotalPages}
+                          >
+                            Next
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setReportCurrentPage(reportTotalPages)}
+                            disabled={reportCurrentPage === reportTotalPages}
+                          >
+                            Last
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              </Card>
+            </>
+          ) : (
+            <div className="pulled-out-reports">
+              <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                    Search and Filter
+                  </h3>
+                  <span className="reports-view__summary-pill">Total Transactions: {filteredBorrowRows.length}</span>
+                </div>
+
+                <div className="reports-view__filters-grid">
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Search</label>
+                    <input
+                      type="text"
+                      className="dashboard__form-input"
+                      placeholder="Search borrower, employee, purpose..."
+                      value={borrowSearchTerm}
+                      onChange={(e) => setBorrowSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Borrow Status</label>
+                    <select
+                      className="dashboard__filter-select"
+                      value={borrowStatusFilter}
+                      onChange={(e) => setBorrowStatusFilter(e.target.value as any)}
+                    >
+                      <option value="All">All Transactions</option>
+                      <option value="Borrowed">Currently Borrowed</option>
+                      <option value="Returned">Returned</option>
+                    </select>
+                  </div>
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Date Borrowed From</label>
+                    <input
+                      type="date"
+                      className="dashboard__form-input"
+                      value={borrowDateFromFilter}
+                      onChange={(e) => setBorrowDateFromFilter(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Date Borrowed To</label>
+                    <input
+                      type="date"
+                      className="dashboard__form-input"
+                      value={borrowDateToFilter}
+                      onChange={(e) => setBorrowDateToFilter(e.target.value)}
+                    />
+                  </div>
+
+                  {borrowStatusFilter !== 'Borrowed' && (
+                    <>
+                      <div className="reports-view__filter-card">
+                        <label className="dashboard__filter-label">Date Returned From</label>
+                        <input
+                          type="date"
+                          className="dashboard__form-input"
+                          value={returnDateFromFilter}
+                          onChange={(e) => setReturnDateFromFilter(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="reports-view__filter-card">
+                        <label className="dashboard__filter-label">Date Returned To</label>
+                        <input
+                          type="date"
+                          className="dashboard__form-input"
+                          value={returnDateToFilter}
+                          onChange={(e) => setReturnDateToFilter(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setBorrowSearchTerm('');
+                      setBorrowStatusFilter('All');
+                      setBorrowDateFromFilter('');
+                      setBorrowDateToFilter('');
+                      setReturnDateFromFilter('');
+                      setReturnDateToFilter('');
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              </Card>
+
+              <Card>
+                {borrowLogsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Loading transactions...</div>
+                ) : (
+                  <>
+                    <div className="reports-view__export-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                      {selectedBorrowRowIds.size > 0 && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDeleteBorrowEntries(Array.from(selectedBorrowRowIds))}
+                        >
+                          🗑️ Delete Selected ({selectedBorrowRowIds.size})
+                        </Button>
+                      )}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setIsBorrowReportPreviewOpen(true)}
+                        disabled={filteredBorrowRows.length === 0}
+                      >
+                        🖨️ View & Print
+                      </Button>
+                      <div ref={borrowDropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setIsBorrowColumnDropdownOpen(!isBorrowColumnDropdownOpen)}
+                        >
+                          ⚙️ Columns
+                        </Button>
+                        {isBorrowColumnDropdownOpen && (
+                          <div className="reports-view__columns-dropdown">
+                            <div className="reports-view__columns-dropdown-header">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVisibleBorrowColumns(DEFAULT_VISIBLE_BORROW_COLUMNS);
+                                  localStorage.setItem('borrow_visible_columns', JSON.stringify(DEFAULT_VISIBLE_BORROW_COLUMNS));
+                                }}
+                                className="reports-view__columns-link"
+                              >
+                                Select All
+                              </button>
+                              <span className="reports-view__columns-divider">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cleared = Object.keys(DEFAULT_VISIBLE_BORROW_COLUMNS).reduce((acc, k) => ({ ...acc, [k]: false }), {});
+                                  setVisibleBorrowColumns(cleared);
+                                  localStorage.setItem('borrow_visible_columns', JSON.stringify(cleared));
+                                }}
+                                className="reports-view__columns-link"
+                              >
+                                Clear All
+                              </button>
+                            </div>
+                            <div className="reports-view__columns-dropdown-list">
+                              {Object.keys(BORROW_COLUMN_LABELS).map((key) => (
+                                <label key={key} className="reports-view__columns-item">
+                                  <input
+                                    type="checkbox"
+                                    className="reports-view__columns-checkbox"
+                                    checked={visibleBorrowColumns[key] !== false}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setVisibleBorrowColumns((prev) => {
+                                        const next = { ...prev, [key]: checked };
+                                        localStorage.setItem('borrow_visible_columns', JSON.stringify(next));
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span className="reports-view__columns-label">{BORROW_COLUMN_LABELS[key] || key}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="reports-view__table-container" style={{ marginTop: '1rem' }}>
+                      <div className="dashboard__table-scroll" style={{ borderBottomLeftRadius: borrowTotalPages <= 1 ? 'var(--border-radius-lg)' : 0, borderBottomRightRadius: borrowTotalPages <= 1 ? 'var(--border-radius-lg)' : 0 }}>
+                        <Table
+                          columns={borrowColumns}
+                          data={paginatedBorrowLogs}
+                          keyExtractor={(row) => row.id}
+                          onRowClick={(row) => {
+                            setSelectedBorrowLog(row);
+                            setIsBorrowDetailsModalOpen(true);
+                          }}
+                          emptyMessage="No borrow/return transactions found"
+                        />
+                      </div>
+
+                      {borrowTotalPages > 1 && (
+                        <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
+                          <div className="dashboard__page-size">
+                            <span className="dashboard__page-size-label">Rows per page:</span>
+                            {PAGE_SIZE_OPTIONS.map((size) => (
+                              <button
+                                key={size}
+                                className={`dashboard__page-size-btn${borrowItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                                onClick={() => {
+                                  setBorrowItemsPerPage(size);
+                                  setBorrowCurrentPage(1);
+                                }}
+                              >
+                                {size}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="dashboard__pagination-controls">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setBorrowCurrentPage(1)}
+                              disabled={borrowCurrentPage === 1}
+                            >
+                              First
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setBorrowCurrentPage(borrowCurrentPage - 1)}
+                              disabled={borrowCurrentPage === 1}
+                            >
+                              Previous
+                            </Button>
+                            <div className="dashboard__pagination-info">
+                              Page {borrowCurrentPage} of {borrowTotalPages}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setBorrowCurrentPage(borrowCurrentPage + 1)}
+                              disabled={borrowCurrentPage === borrowTotalPages}
+                            >
+                              Next
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setBorrowCurrentPage(borrowTotalPages)}
+                              disabled={borrowCurrentPage === borrowTotalPages}
+                            >
+                              Last
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Card>
             </div>
-          </Card>
+          )}
         </div>
       ) : (
         <>
@@ -4639,6 +5386,48 @@ function Dashboard() {
         </div>
       </Modal>
 
+      {/* Delete Borrow Logs Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteBorrowConfirmOpen}
+        onClose={() => {
+          setIsDeleteBorrowConfirmOpen(false);
+          setPendingDeleteBorrowIds([]);
+        }}
+        title="Request Deletion - Pulled-Out Files Log"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsDeleteBorrowConfirmOpen(false);
+                setPendingDeleteBorrowIds([]);
+              }}
+              disabled={isDeletingBorrow}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleConfirmDeleteBorrowEntries}
+              loading={isDeletingBorrow}
+              disabled={isDeletingBorrow}
+            >
+              Submit for Approval
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ padding: '0.5rem 0' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem', lineHeight: '1.5' }}>
+            You are requesting deletion of <strong>{pendingDeleteBorrowIds.length}</strong> pulled-out file log entry/entries.
+          </p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginTop: '0.75rem' }}>
+            This request will be sent to a Super Admin for approval. Once approved, the selected transaction history entries will be permanently removed.
+          </p>
+        </div>
+      </Modal>
+
       {/* Report Preview Modal */}
       <Modal
         isOpen={isReportPreviewOpen}
@@ -4885,6 +5674,462 @@ function Dashboard() {
             });
           })()}
         </div>
+      </Modal>
+      {/* Borrow Report Preview Modal */}
+      <Modal
+        isOpen={isBorrowReportPreviewOpen}
+        onClose={() => setIsBorrowReportPreviewOpen(false)}
+        title="Pulled-Out Files Report Preview & Export"
+        size="xl"
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
+            <Button
+              variant="secondary"
+              onClick={() => setIsBorrowReportPreviewOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleExportBorrowLogsToExcel}
+              disabled={filteredBorrowRows.length === 0}
+            >
+              📊 Export XLSX
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                const electronApi = (window as any).electron;
+                if (electronApi && typeof electronApi.printToPdf === 'function') {
+                  showToast('Generating print preview PDF...', 'info');
+                  const res = await electronApi.printToPdf();
+                  if (!res.success) {
+                    showToast(`Failed to generate print preview: ${res.error}`, 'error');
+                  }
+                } else {
+                  window.print();
+                }
+              }}
+              disabled={filteredBorrowRows.length === 0}
+            >
+              🖨️ Print
+            </Button>
+          </div>
+        }
+      >
+        <div className="printable-report" style={{
+          fontFamily: "'Times New Roman', Times, serif",
+          color: '#000',
+          backgroundColor: '#fff',
+          padding: '1rem',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--border-color)',
+          overflowX: 'auto',
+          lineHeight: '1.3'
+        }}>
+          {(() => {
+            const tabRows = filteredBorrowRows;
+            const ROWS_PER_PAGE = 13;
+            const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));
+
+            const headerBlock = (
+              <div style={{
+                position: 'relative',
+                border: '1px solid #000',
+                borderBottom: '2px solid #000',
+                padding: '10px 12px',
+                textAlign: 'center'
+              }}>
+                <img
+                  src="/template_logo.png"
+                  alt="Logo"
+                  style={{
+                    position: 'absolute',
+                    left: '28%',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    height: '65px',
+                    width: 'auto'
+                  }}
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
+                <div style={{ display: 'inline-block', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
+                  <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
+                  <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                </div>
+              </div>
+            );
+
+            // Filter columns to only show active/visible ones
+            const activeCols = Object.entries(BORROW_COLUMN_LABELS)
+              .filter(([k]) => {
+                if (visibleBorrowColumns[k] === false) return false;
+                if (borrowStatusFilter === 'Borrowed') {
+                  const toHide = ['dateReturned', 'returnedByName', 'receivedBy', 'fileCondition', 'remarks'];
+                  if (toHide.includes(k)) return false;
+                }
+                return true;
+              });
+
+            const tableHeader = (
+              <thead>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%' }}>NO.</th>
+                  {activeCols.map(([k, label]) => (
+                    <th key={k} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold' }}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            );
+
+            if (tabRows.length === 0) {
+              return (
+                <>
+                  {headerBlock}
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '11pt',
+                    fontFamily: "'Times New Roman', Times, serif",
+                    textTransform: 'uppercase',
+                    padding: '8px 6px',
+                    borderLeft: '1px solid #000',
+                    borderRight: '1px solid #000',
+                    borderBottom: '1px solid #000',
+                    letterSpacing: '0.3px'
+                  }}>PULLED-OUT FILES REPORT</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif" }}>
+                    {tableHeader}
+                    <tbody>
+                      <tr>
+                        <td colSpan={activeCols.length + 1} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>
+                          No records found.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+
+            return Array.from({ length: pageCount }, (_, pageIdx) => {
+              const pageRows = tabRows.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
+              return (
+                <div
+                  key={pageIdx}
+                  style={{
+                    pageBreakAfter: pageIdx < pageCount - 1 ? 'always' : 'auto',
+                    marginBottom: pageIdx < pageCount - 1 ? '40px' : '0',
+                    paddingBottom: pageIdx < pageCount - 1 ? '40px' : '0',
+                    borderBottom: pageIdx < pageCount - 1 ? '3px dashed #aaa' : 'none',
+                  }}
+                >
+                  {headerBlock}
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '11pt',
+                    fontFamily: "'Times New Roman', Times, serif",
+                    textTransform: 'uppercase',
+                    padding: '8px 6px',
+                    borderLeft: '1px solid #000',
+                    borderRight: '1px solid #000',
+                    borderBottom: '1px solid #000',
+                    letterSpacing: '0.3px'
+                  }}>
+                    PULLED-OUT FILES REPORT
+                    {pageCount > 1 && (
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
+                        (Page {pageIdx + 1} of {pageCount})
+                      </span>
+                    )}
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif" }}>
+                    {tableHeader}
+                    <tbody>
+                      {pageRows.map((row, idx) => {
+                        const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
+                        const emp = row.employee;
+                        const empName = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+                        const isReturned = row.action === 'return' || !!row.dateReturned;
+
+                        return (
+                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center' }}>
+                              {globalIdx + 1}
+                            </td>
+                            {activeCols.map(([colKey]) => {
+                              let cellValue = '';
+                              if (colKey === 'employeeName') cellValue = empName;
+                              else if (colKey === 'appointmentStatus') {
+                                const status = row.employee?.status;
+                                cellValue = status ? (status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) : '—';
+                              }
+                              else if (colKey === 'position') cellValue = row.employee?.position || '—';
+                              else if (colKey === 'officeName') cellValue = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
+                              else if (colKey === 'borrowerName') cellValue = row.borrowerName || '—';
+                              else if (colKey === 'purpose') cellValue = row.purpose || '—';
+                              else if (colKey === 'dateBorrowed') cellValue = formatDateMDY(row.dateBorrowed);
+                              else if (colKey === 'releasedBy') cellValue = row.releasedBy || '—';
+                              else if (colKey === 'status') cellValue = isReturned ? 'Returned' : 'Borrowed';
+                              else if (colKey === 'dateReturned') cellValue = isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
+                              else if (colKey === 'returnedByName') cellValue = isReturned ? (row.returnedByName || '—') : '';
+                              else if (colKey === 'receivedBy') cellValue = isReturned ? (row.receivedBy || '—') : '';
+                              else if (colKey === 'fileCondition') cellValue = isReturned ? (row.fileCondition || '—') : '';
+                              else if (colKey === 'remarks') cellValue = isReturned ? (row.remarks || '—') : '';
+
+                              return (
+                                <td key={colKey} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', wordBreak: 'break-word' }}>
+                                  {cellValue}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            });
+          })()}
+        </div>
+      </Modal>
+
+      {/* Borrow Details Modal */}
+      <Modal
+        isOpen={isBorrowDetailsModalOpen}
+        onClose={() => {
+          setIsBorrowDetailsModalOpen(false);
+          setSelectedBorrowLog(null);
+        }}
+        title="201 File Transaction Details"
+        size="lg"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsBorrowDetailsModalOpen(false);
+                setSelectedBorrowLog(null);
+              }}
+            >
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {selectedBorrowLog && (() => {
+          const emp = selectedBorrowLog.employee;
+          const empName = emp ? `${emp.lastName}, ${emp.firstName} ${emp.middleName || ''}`.trim() : selectedBorrowLog.employeeId;
+          const isReturned = selectedBorrowLog.action === 'return' || !!selectedBorrowLog.dateReturned;
+
+          return (
+            <div className="borrow-details" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0.5rem 0' }}>
+              
+              {/* Top Overview Badge */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                backgroundColor: 'var(--bg-secondary)', 
+                padding: '1rem', 
+                borderRadius: 'var(--border-radius)',
+                border: '1px solid var(--border-color)'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Owner Employee File</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{empName}</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: '0.125rem' }}>ID: {selectedBorrowLog.employeeId}</div>
+                </div>
+                <span style={{ display: 'inline-block', transform: 'scale(1.1)' }}>
+                  <Badge variant={isReturned ? 'success' : 'warning'}>
+                    {isReturned ? 'Returned' : 'Currently Borrowed'}
+                  </Badge>
+                </span>
+              </div>
+
+              {/* Side-by-Side Timeline */}
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '1.5rem', 
+                position: 'relative'
+              }}>
+                
+                {/* Left Card: Check-out details */}
+                <div style={{ 
+                  flex: '1 1 280px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.04)', 
+                  border: '1px solid rgba(59, 130, 246, 0.15)', 
+                  borderRadius: 'var(--border-radius-lg)', 
+                  padding: '1.5rem',
+                  position: 'relative',
+                  zIndex: 1
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                    <div style={{ 
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)', 
+                      color: '#3b82f6', 
+                      borderRadius: '50%', 
+                      width: '32px', 
+                      height: '32px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '1.1rem'
+                    }}>
+                      📤
+                    </div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Check-Out Log</h4>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Borrowed By</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedBorrowLog.borrowerName || '—'}</div>
+                      {(selectedBorrowLog.borrowerPosition || selectedBorrowLog.borrowerOffice) && (
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
+                          {selectedBorrowLog.borrowerPosition} {selectedBorrowLog.borrowerOffice ? `(${selectedBorrowLog.borrowerOffice})` : ''}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time Borrowed</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                        {new Date(selectedBorrowLog.dateBorrowed).toLocaleString('en-US', {
+                          month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Released By (Records Officer)</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedBorrowLog.releasedBy || '—'}</div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Purpose of Borrowing</div>
+                      <div style={{ 
+                        fontWeight: 500, 
+                        color: 'var(--text-primary)', 
+                        marginTop: '0.25rem',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.4',
+                        fontStyle: selectedBorrowLog.purpose ? 'normal' : 'italic'
+                      }}>
+                        {selectedBorrowLog.purpose || 'No purpose specified'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Card: Check-in / Return details */}
+                <div style={{ 
+                  flex: '1 1 280px',
+                  backgroundColor: isReturned ? 'rgba(34, 197, 94, 0.04)' : 'rgba(245, 158, 11, 0.04)', 
+                  border: isReturned ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(245, 158, 11, 0.15)', 
+                  borderRadius: 'var(--border-radius-lg)', 
+                  padding: '1.5rem',
+                  position: 'relative',
+                  zIndex: 1
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                    <div style={{ 
+                      backgroundColor: isReturned ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)', 
+                      color: isReturned ? '#22c55e' : '#f59e0b', 
+                      borderRadius: '50%', 
+                      width: '32px', 
+                      height: '32px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '1.1rem'
+                    }}>
+                      {isReturned ? '📥' : '⏳'}
+                    </div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                      {isReturned ? 'Return Log' : 'Pending Return'}
+                    </h4>
+                  </div>
+
+                  {isReturned ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Returned By</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedBorrowLog.returnedByName || '—'}</div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Received By (Records Officer)</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedBorrowLog.receivedBy || '—'}</div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time Returned</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                          {new Date(selectedBorrowLog.dateReturned).toLocaleString('en-US', {
+                            month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>File Condition upon Return</div>
+                        <div style={{ marginTop: '0.375rem' }}>
+                          <Badge variant={
+                            selectedBorrowLog.fileCondition === 'Complete' ? 'success' :
+                            selectedBorrowLog.fileCondition === 'Incomplete' ? 'warning' : 'danger'
+                          }>
+                            {selectedBorrowLog.fileCondition || 'Complete'}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Remarks</div>
+                        <div style={{ 
+                          fontWeight: 500, 
+                          color: 'var(--text-primary)', 
+                          marginTop: '0.25rem',
+                          fontSize: '0.875rem',
+                          lineHeight: '1.4',
+                          fontStyle: selectedBorrowLog.remarks ? 'normal' : 'italic'
+                        }}>
+                          {selectedBorrowLog.remarks || 'No remarks added'}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      height: '80%', 
+                      textAlign: 'center',
+                      color: 'var(--text-secondary)',
+                      padding: '2rem 1rem'
+                    }}>
+                      <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⏳</div>
+                      <p style={{ fontWeight: 600, fontSize: '0.9375rem', margin: 0 }}>This file is currently checked out.</p>
+                      <p style={{ fontSize: '0.8125rem', marginTop: '0.5rem' }}>No return details have been recorded yet.</p>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

@@ -48,7 +48,7 @@
 .file201-modal__info-label {
   font-weight: 600;
   color: var(--text-secondary);
-  min-width: 120px;
+  min-width: 160px;
   flex-shrink: 0;
 }
 

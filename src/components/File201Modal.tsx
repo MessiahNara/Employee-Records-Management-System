@@ -54,13 +54,20 @@ function File201Modal({
   const [showReceivedSuggestions, setShowReceivedSuggestions] = useState(false);
   const receivedSuggestionRef = useRef<HTMLDivElement>(null);
 
+  const [releasedSuggestions, setReleasedSuggestions] = useState<any[]>([]);
+  const [showReleasedSuggestions, setShowReleasedSuggestions] = useState(false);
+  const releasedSuggestionRef = useRef<HTMLDivElement>(null);
+
+  const ownerEmp = allEmployees.find(e => e.id === employeeId);
+
   // Return form
   const [returnedByName, setReturnedByName] = useState('');
   const [receivedByName, setReceivedByName] = useState('');
   const [fileCondition, setFileCondition] = useState('Complete');
   const [remarks, setRemarks] = useState('');
 
-  const releasedBy = `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim().replace(/^,\s*/, '') || 'Unknown';
+  const defaultReleasedBy = `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim().replace(/^,\s*/, '') || 'Unknown';
+  const [releasedByName, setReleasedByName] = useState('');
 
   // Load all employees once for autocomplete
   useEffect(() => {
@@ -75,6 +82,7 @@ function File201Modal({
       setBorrowerPosition('');
       setBorrowerOffice('');
       setPurpose('');
+      setReleasedByName('');
       setReturnedByName('');
       setReceivedByName('');
       setFileCondition('Complete');
@@ -85,6 +93,8 @@ function File201Modal({
       setShowReturnedSuggestions(false);
       setReceivedSuggestions([]);
       setShowReceivedSuggestions(false);
+      setReleasedSuggestions([]);
+      setShowReleasedSuggestions(false);
       if (isBorrowed) {
         api.file201.getActive(employeeId).then(setActiveBorrow).catch(() => setActiveBorrow(null));
       }
@@ -102,6 +112,9 @@ function File201Modal({
       }
       if (receivedSuggestionRef.current && !receivedSuggestionRef.current.contains(e.target as Node)) {
         setShowReceivedSuggestions(false);
+      }
+      if (releasedSuggestionRef.current && !releasedSuggestionRef.current.contains(e.target as Node)) {
+        setShowReleasedSuggestions(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -164,13 +177,28 @@ function File201Modal({
     setShowReceivedSuggestions(false);
   };
 
+  const handleReleasedByInput = (value: string) => {
+    setReleasedByName(value);
+    const filtered = filterEmployees(value);
+    setReleasedSuggestions(filtered);
+    setShowReleasedSuggestions(filtered.length > 0);
+  };
+
+  const selectReleasedBy = (emp: any) => {
+    const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
+    setReleasedByName(fullName);
+    setReleasedSuggestions([]);
+    setShowReleasedSuggestions(false);
+  };
+
   const handleBorrow = async () => {
     if (!borrowerName.trim()) { setError('Borrowed By is required.'); return; }
+    if (!releasedByName.trim()) { setError('Released By is required.'); return; }
     setLoading(true); setError('');
     try {
       await api.approvals.submit({
         requestedBy: currentUser?.id || '',
-        requestedByName: releasedBy,
+        requestedByName: releasedByName.trim(),
         action: 'borrow_201',
         entityType: 'employee',
         entityId: employeeId,
@@ -183,7 +211,7 @@ function File201Modal({
           borrowerPosition: borrowerPosition.trim() || '',
           borrowerOffice: borrowerOffice.trim() || '',
           purpose: purpose.trim() || '',
-          releasedBy,
+          releasedBy: releasedByName.trim(),
         },
       });
       onClose();
@@ -275,6 +303,24 @@ function File201Modal({
             <span className="file201-modal__info-label">Employee ID:</span>
             <span className="file201-modal__info-value" style={{ fontFamily: 'monospace' }}>{employeeId}</span>
           </div>
+          {ownerEmp && (
+            <>
+              <div className="file201-modal__employee-row">
+                <span className="file201-modal__info-label">Employment Status:</span>
+                <span className="file201-modal__info-value">
+                  {ownerEmp.status ? (ownerEmp.status.charAt(0).toUpperCase() + ownerEmp.status.slice(1).toLowerCase()) : '—'}
+                </span>
+              </div>
+              <div className="file201-modal__employee-row">
+                <span className="file201-modal__info-label">Position:</span>
+                <span className="file201-modal__info-value">{ownerEmp.position || '—'}</span>
+              </div>
+              <div className="file201-modal__employee-row">
+                <span className="file201-modal__info-label">Office/Hospital:</span>
+                <span className="file201-modal__info-value">{ownerEmp.yellowBox?.office || ownerEmp.officeName || '—'}</span>
+              </div>
+            </>
+          )}
           {fileLocation && (
             <div className="file201-modal__employee-row">
               <span className="file201-modal__info-label">File Location:</span>
@@ -285,12 +331,7 @@ function File201Modal({
             <span className="file201-modal__info-label">Date &amp; Time:</span>
             <span className="file201-modal__info-value">{now}</span>
           </div>
-          {tab === 'borrow' && (
-            <div className="file201-modal__employee-row">
-              <span className="file201-modal__info-label">Released by:</span>
-              <span className="file201-modal__info-value">{releasedBy}</span>
-            </div>
-          )}
+
           {tab === 'return' && activeBorrow && (
             <div className="file201-modal__employee-row">
               <span className="file201-modal__info-label">Borrowed by:</span>
@@ -320,8 +361,11 @@ function File201Modal({
                   placeholder="Type employee name..."
                   value={borrowerName}
                   onChange={(e) => handleBorrowerInput(e.target.value)}
-                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  autoComplete="off"
+                  onFocus={(e) => {
+                    e.target.select();
+                    if (suggestions.length > 0) setShowSuggestions(true);
+                  }}
+                  autoComplete="one-time-code"
                 />
               </div>
               {showSuggestions && (
@@ -346,20 +390,45 @@ function File201Modal({
               )}
             </div>
 
-            <Input
-              label="Position / Designation"
-              placeholder="Enter position"
-              value={borrowerPosition}
-              onChange={(e) => setBorrowerPosition(e.target.value)}
-              fullWidth
-            />
-            <Input
-              label="Office / Division"
-              placeholder="Enter office or division"
-              value={borrowerOffice}
-              onChange={(e) => setBorrowerOffice(e.target.value)}
-              fullWidth
-            />
+            {/* Released By with autocomplete */}
+            <div className="file201-modal__autocomplete" ref={releasedSuggestionRef}>
+              <div className="file201-modal__form-field">
+                <label className="file201-modal__form-label">Released By *</label>
+                <input
+                  className="file201-modal__input"
+                  type="text"
+                  placeholder="Type employee name..."
+                  value={releasedByName}
+                  onChange={(e) => handleReleasedByInput(e.target.value)}
+                  onFocus={(e) => {
+                    e.target.select();
+                    if (releasedSuggestions.length > 0) setShowReleasedSuggestions(true);
+                  }}
+                  autoComplete="one-time-code"
+                />
+              </div>
+              {showReleasedSuggestions && (
+                <div className="file201-modal__suggestions">
+                  {releasedSuggestions.map((emp) => {
+                    const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
+                    return (
+                      <button
+                        key={emp.id}
+                        className="file201-modal__suggestion-item"
+                        onMouseDown={() => selectReleasedBy(emp)}
+                        type="button"
+                      >
+                        <span className="file201-modal__suggestion-name">{fullName}</span>
+                        <span className="file201-modal__suggestion-sub">
+                          {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="file201-modal__form-field">
               <label className="file201-modal__form-label">Purpose / Reason for Borrowing</label>
               <textarea
@@ -386,8 +455,11 @@ function File201Modal({
                   placeholder="Type employee name..."
                   value={returnedByName}
                   onChange={(e) => handleReturnedByInput(e.target.value)}
-                  onFocus={() => returnedSuggestions.length > 0 && setShowReturnedSuggestions(true)}
-                  autoComplete="off"
+                  onFocus={(e) => {
+                    e.target.select();
+                    if (returnedSuggestions.length > 0) setShowReturnedSuggestions(true);
+                  }}
+                  autoComplete="one-time-code"
                 />
               </div>
               {showReturnedSuggestions && (
@@ -422,8 +494,11 @@ function File201Modal({
                   placeholder="Type employee name..."
                   value={receivedByName}
                   onChange={(e) => handleReceivedByInput(e.target.value)}
-                  onFocus={() => receivedSuggestions.length > 0 && setShowReceivedSuggestions(true)}
-                  autoComplete="off"
+                  onFocus={(e) => {
+                    e.target.select();
+                    if (receivedSuggestions.length > 0) setShowReceivedSuggestions(true);
+                  }}
+                  autoComplete="one-time-code"
                 />
               </div>
               {showReceivedSuggestions && (

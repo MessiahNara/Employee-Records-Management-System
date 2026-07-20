@@ -58,6 +58,7 @@ function App() {
               <Route path="calendar" element={<Calendar />} />
               <Route path="calendar-activities" element={<CalendarActivities />} />
               <Route path="reports" element={<Dashboard />} />
+              <Route path="reports/pulled-out" element={<Dashboard />} />
               <Route path="employees/:id" element={<EmployeeDetails />} />
               <Route 
                 path="users" 

@@ -4,6 +4,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
+import SearchableDropdown from '../components/ui/SearchableDropdown';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
 import { 
@@ -162,7 +163,10 @@ function File201() {
     setLoading(true);
     try {
       const data = await api.yellowBoxes.getAll();
-      setBoxes(data);
+      const sorted = [...data].sort((a: any, b: any) => 
+        (a.boxLabel || '').localeCompare(b.boxLabel || '', undefined, { numeric: true, sensitivity: 'base' })
+      );
+      setBoxes(sorted);
     } catch (err) {
       console.error(err);
       showToast('Failed to load boxes.', 'error');
@@ -364,8 +368,10 @@ function File201() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedBoxes = filteredBoxes.slice(startIndex, startIndex + itemsPerPage);
 
-  // Unique offices for filters
+  // Unique offices and classifications for filters
   const uniqueOffices = Array.from(new Set(boxes.map(b => b.office)));
+  const uniqueTypes = Array.from(new Set(boxes.map(b => b.type)));
+  const uniqueEmployeeOffices = Array.from(new Set(allEmployees.map(e => e.officeName).filter(Boolean))).sort();
 
   return (
     <div className="file201-page">
@@ -399,23 +405,22 @@ function File201() {
           />
         </div>
         <div className="file201-toolbar__filters">
-          <div className="file201-filter-group">
-            <label>Office</label>
-            <select value={officeFilter} onChange={(e) => setOfficeFilter(e.target.value)}>
-              <option value="All">All Offices</option>
-              {uniqueOffices.map(o => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
+          <div className="file201-filter-group" style={{ minWidth: '220px' }}>
+            <label>Office/Hospital</label>
+            <SearchableDropdown
+              options={uniqueOffices}
+              value={officeFilter}
+              onChange={(val) => setOfficeFilter(val || 'All')}
+              placeholder="All Offices/Hospitals"
+            />
           </div>
           <div className="file201-filter-group">
             <label>Classification</label>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              <option value="All">All Types</option>
-              <option value="R1">Regular (R1)</option>
-              <option value="R2">Regular (R2)</option>
-              <option value="R3">Regular (R3)</option>
-              <option value="Non-Regular">Non-Regular</option>
+              <option value="All">All Classifications</option>
+              {uniqueTypes.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -596,19 +601,13 @@ function File201() {
             required
           />
           
-          <div className="file201-form-group">
-            <label className="file201-form-label">Classification / Type</label>
-            <select 
-              value={boxType} 
-              onChange={(e) => setBoxType(e.target.value)}
-              className="file201-form-select"
-            >
-              <option value="R1">Regular (R1)</option>
-              <option value="R2">Regular (R2)</option>
-              <option value="R3">Regular (R3)</option>
-              <option value="Non-Regular">Non-Regular</option>
-            </select>
-          </div>
+          <Input 
+            label="Classification / Type (e.g. Regular, Non-Regular, Co-terminus)"
+            placeholder="Enter classification"
+            value={boxType}
+            onChange={(e) => setBoxType(e.target.value)}
+            required
+          />
 
           <div className="file201-form-group">
             <label className="file201-form-label">Box Cardboard Color</label>
@@ -675,17 +674,17 @@ function File201() {
                   />
                 </div>
                 
-                <select 
-                  value={addModalOfficeFilter} 
-                  onChange={(e) => { setAddModalOfficeFilter(e.target.value); setShowSuggestions(true); }}
-                  className="dashboard__form-select"
-                  style={{ width: '200px', height: '42px', padding: '0 12px', margin: 0 }}
-                >
-                  <option value="All">All Offices</option>
-                  {uniqueOffices.map(o => (
-                    <option key={o} value={o}>{o}</option>
-                  ))}
-                </select>
+                <div style={{ width: '220px' }}>
+                  <SearchableDropdown
+                    options={uniqueEmployeeOffices}
+                    value={addModalOfficeFilter === 'All' ? '' : addModalOfficeFilter}
+                    onChange={(val) => {
+                      setAddModalOfficeFilter(val === '' ? 'All' : val);
+                      setShowSuggestions(true);
+                    }}
+                    placeholder="All Offices"
+                  />
+                </div>
               </div>
 
               {/* Suggestions dropdown */}
@@ -799,7 +798,7 @@ function File201() {
                       </div>
                       <Button 
                         variant="danger" 
-                        size="xs"
+                        size="sm"
                         onClick={() => setRemoveTarget({ boxId: assigningBox.id, employeeId: emp.id, employeeName: `${emp.firstName} ${emp.lastName}` })}
                       >
                         Remove

@@ -23,14 +23,17 @@ export default function SearchableDropdown({
   disabled = false,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(value);
+  const [searchTerm, setSearchTerm] = useState(value === 'All' ? '' : value);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const searchTermRef = useRef(value === 'All' ? '' : value);
 
   // Sync with value prop changes
   useEffect(() => {
-    setSearchTerm(value);
+    const nextVal = value === 'All' ? '' : value;
+    setSearchTerm(nextVal);
+    searchTermRef.current = nextVal;
   }, [value]);
 
   // Click outside to close
@@ -38,13 +41,16 @@ export default function SearchableDropdown({
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        if (!searchTermRef.current.trim()) {
+          onChange('All');
+        }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [onChange]);
 
   // Filter options based on search term
   const filteredOptions = options.filter((option) =>
@@ -55,7 +61,7 @@ export default function SearchableDropdown({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchTerm(val);
-    onChange(val); // Save raw text to state immediately as user types
+    searchTermRef.current = val;
     setIsOpen(true);
     setHighlightedIndex(0); // Reset highlight to first filtered item
   };
@@ -63,6 +69,7 @@ export default function SearchableDropdown({
   // Handle option select
   const selectOption = (opt: string) => {
     setSearchTerm(opt);
+    searchTermRef.current = opt;
     onChange(opt);
     setIsOpen(false);
     setHighlightedIndex(-1);
@@ -117,16 +124,20 @@ export default function SearchableDropdown({
     } else if (e.key === 'Escape') {
       setIsOpen(false);
       setHighlightedIndex(-1);
+      if (!searchTermRef.current.trim()) {
+        onChange('All');
+      }
     }
   };
 
   const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSearchTerm('');
-    onChange('');
-    setIsOpen(false);
-    setHighlightedIndex(-1);
-  };
+     e.stopPropagation();
+     setSearchTerm('');
+     searchTermRef.current = '';
+     onChange('All');
+     setIsOpen(false);
+     setHighlightedIndex(-1);
+   };
 
   return (
     <div ref={containerRef} className={`searchable-dropdown ${className}`}>
@@ -138,10 +149,22 @@ export default function SearchableDropdown({
           placeholder={placeholder}
           value={searchTerm}
           onChange={handleInputChange}
-          onFocus={() => !disabled && setIsOpen(true)}
+          onFocus={(e) => {
+            if (!disabled) {
+              setIsOpen(true);
+              e.target.select();
+            }
+          }}
+          onBlur={() => {
+            setTimeout(() => {
+              if (!searchTermRef.current.trim()) {
+                onChange('All');
+              }
+            }, 200);
+          }}
           onClick={() => !disabled && setIsOpen(true)}
           onKeyDown={handleKeyDown}
-          autoComplete="off"
+          autoComplete="one-time-code"
           disabled={disabled}
         />
         {searchTerm && !disabled && (

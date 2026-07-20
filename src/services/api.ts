@@ -852,6 +852,9 @@ export const healthCheck = () => apiRequest<{ status: string; message: string }>
 
 // 201 File Borrow/Return API
 export const file201Api = {
+  getAllLogs: () =>
+    apiRequest<any[]>('/file201/logs/all'),
+
   getHistory: (employeeId: string) =>
     apiRequest<any[]>(`/file201/${encodeURIComponent(employeeId)}/history`),
 
@@ -901,6 +904,19 @@ export const file201Api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }),
+
+  deleteLogs: (ids: string[]) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const currentUser = getAuthState();
+    if (currentUser?.id) headers['X-User-Id'] = currentUser.id;
+    if (currentUser?.lastName) headers['X-User-Name'] = `${currentUser.lastName}, ${currentUser.firstName}`;
+    
+    return apiRequest<any>('/file201/delete-logs', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ids }),
+    });
+  },
 };
 
 // Activity/Calendar API

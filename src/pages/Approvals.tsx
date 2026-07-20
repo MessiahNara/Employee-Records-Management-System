@@ -17,6 +17,7 @@ const ACTION_LABELS: Record<string, string> = {
   delete_document: 'Delete Document',
   bulk_delete_document: 'Bulk Delete Documents',
   delete_report_entry: 'Delete Report Entry',
+  delete_borrow_logs: 'Delete Checked-Out File Log',
   sync_import: 'Sync Import',
   update_user: 'Update User',
   delete_user: 'Delete User',
@@ -156,6 +157,10 @@ function Approvals() {
         const entryNames = (payload.entryNames || []).join('; ');
         return `Delete ${payload.ids?.length || 1} report entr${payload.ids?.length === 1 ? 'y' : 'ies'}${entryNames ? ': ' + entryNames : ''}`;
       }
+      case 'delete_borrow_logs': {
+        const entryNames = (payload.entryNames || []).join('; ');
+        return `Delete ${payload.ids?.length || 1} pulled-out file log${payload.ids?.length === 1 ? '' : 's'}${entryNames ? ': ' + entryNames : ''}`;
+      }
       case 'delete_document':
         return `Delete document: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}`;
       case 'bulk_delete_document': {
@@ -226,6 +231,9 @@ function Approvals() {
         break;
       case 'delete_report_entry':
         await api.employee.deleteReportEntries(payload.ids || [entityId]);
+        break;
+      case 'delete_borrow_logs':
+        await api.file201.deleteLogs(payload.ids || [entityId]);
         break;
       case 'update_user': {
         // Extract only the 'to' values from { from, to } structure

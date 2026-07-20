@@ -25,6 +25,8 @@ function AuditLogs() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<AuditActionType | 'all'>('all');
+  const [actorFilter, setActorFilter] = useState<string>('all');
+  const [specificActionFilter, setSpecificActionFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -102,7 +104,9 @@ function AuditLogs() {
         log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
         log.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesAction = actionFilter === 'all' || log.actionType === actionFilter;
+      const matchesActionType = actionFilter === 'all' || log.actionType === actionFilter;
+      const matchesActor = actorFilter === 'all' || log.userName === actorFilter;
+      const matchesSpecificAction = specificActionFilter === 'all' || log.action === specificActionFilter;
 
       // Date range filter
       let matchesDateRange = true;
@@ -120,9 +124,33 @@ function AuditLogs() {
         }
       }
 
-      return matchesSearch && matchesAction && matchesDateRange;
+      return matchesSearch && matchesActionType && matchesActor && matchesSpecificAction && matchesDateRange;
     });
-  }, [searchQuery, actionFilter, dateFrom, dateTo, auditLogs]);
+  }, [searchQuery, actionFilter, actorFilter, specificActionFilter, dateFrom, dateTo, auditLogs]);
+
+  // Extract unique actors and actions from logs
+  const uniqueActors = useMemo(() => {
+    const actors = new Set<string>();
+    auditLogs.forEach(log => {
+      if (log.userName) actors.add(log.userName);
+    });
+    return Array.from(actors).sort();
+  }, [auditLogs]);
+
+  const uniqueActions = useMemo(() => {
+    const actions = new Set<string>();
+    auditLogs.forEach(log => {
+      if (log.action) actions.add(log.action);
+    });
+    return Array.from(actions).sort();
+  }, [auditLogs]);
+
+  const formatActionLabel = (action: string) => {
+    return action
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   // Paginate logs
   const paginatedLogs = useMemo(() => {
@@ -433,6 +461,8 @@ function AuditLogs() {
     setDateError('');
     setSearchQuery('');
     setActionFilter('all');
+    setActorFilter('all');
+    setSpecificActionFilter('all');
     setCurrentPage(1);
   };
 
@@ -490,18 +520,40 @@ function AuditLogs() {
           </div>
         )}
 
-        <div className="audit-logs__filters">
-          <SearchBar
-            placeholder="Search by user, action, or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onClear={handleClearSearch}
-            fullWidth
-          />
+        <div className="audit-logs__filters" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 300px' }}>
+            <SearchBar
+              placeholder="Search by user, action, or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onClear={handleClearSearch}
+              fullWidth
+            />
+          </div>
+
+          <div className="audit-logs__filter-group">
+            <label htmlFor="actor-filter" className="audit-logs__filter-label">
+              Actor (User):
+            </label>
+            <select
+              id="actor-filter"
+              className="audit-logs__filter-select"
+              value={actorFilter}
+              onChange={(e) => {
+                setActorFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All Users</option>
+              {uniqueActors.map(actor => (
+                <option key={actor} value={actor}>{actor}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="audit-logs__filter-group">
             <label htmlFor="action-filter" className="audit-logs__filter-label">
-              Action Type:
+              Category:
             </label>
             <select
               id="action-filter"
@@ -512,12 +564,32 @@ function AuditLogs() {
                 setCurrentPage(1);
               }}
             >
-              <option value="all">All Actions</option>
+              <option value="all">All Categories</option>
               <option value="create">Create</option>
               <option value="update">Update</option>
               <option value="delete">Delete</option>
               <option value="upload">Upload</option>
               <option value="import">Import</option>
+            </select>
+          </div>
+
+          <div className="audit-logs__filter-group">
+            <label htmlFor="specific-action-filter" className="audit-logs__filter-label">
+              Specific Action:
+            </label>
+            <select
+              id="specific-action-filter"
+              className="audit-logs__filter-select"
+              value={specificActionFilter}
+              onChange={(e) => {
+                setSpecificActionFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All Actions</option>
+              {uniqueActions.map(act => (
+                <option key={act} value={act}>{formatActionLabel(act)}</option>
+              ))}
             </select>
           </div>
         </div>
