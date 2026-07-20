@@ -2187,9 +2187,14 @@ function Dashboard() {
     const title = 'PULLED-OUT FILES REPORT';
     try {
       // Fetch the template file
-      const response = await fetch('/template.xlsx');
-      if (!response.ok) throw new Error('Template file not found or failed to load');
-      const arrayBuffer = await response.arrayBuffer();
+      let arrayBuffer: ArrayBuffer;
+      if (typeof window !== 'undefined' && (window as any).electron?.getTemplateFile) {
+        arrayBuffer = await (window as any).electron.getTemplateFile();
+      } else {
+        const response = await fetch('/template.xlsx');
+        if (!response.ok) throw new Error('Template file not found or failed to load');
+        arrayBuffer = await response.arrayBuffer();
+      }
 
       // Load zip container
       const zip = await JSZip.loadAsync(arrayBuffer);
@@ -2581,9 +2586,14 @@ function Dashboard() {
     if (format === 'xlsx') {
       try {
         // Fetch the template file
-        const response = await fetch('/template.xlsx');
-        if (!response.ok) throw new Error('Template file not found or failed to load');
-        const arrayBuffer = await response.arrayBuffer();
+        let arrayBuffer: ArrayBuffer;
+        if (typeof window !== 'undefined' && (window as any).electron?.getTemplateFile) {
+          arrayBuffer = await (window as any).electron.getTemplateFile();
+        } else {
+          const response = await fetch('/template.xlsx');
+          if (!response.ok) throw new Error('Template file not found or failed to load');
+          arrayBuffer = await response.arrayBuffer();
+        }
 
         // Load zip container
         const zip = await JSZip.loadAsync(arrayBuffer);

@@ -10,7 +10,7 @@ app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-insecure-localhost');
 
 // Global server URL (set during startup)
-let GLOBAL_SERVER_URL = 'https://localhost:5000';
+let GLOBAL_SERVER_URL = 'https://127.0.0.1:5000';
 
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
@@ -58,7 +58,7 @@ function readClientConfig() {
 
 // Poll the local server health endpoint until it responds, then invoke callback.
 function waitForServer(callback) {
-  const healthUrl = 'https://localhost:5000/api/health';
+  const healthUrl = 'https://127.0.0.1:5000/api/health';
   const maxAttempts = 120; // 60 seconds (500 ms × 120) - increased for database initialization
   let attempts = 0;
   let done = false;
@@ -289,13 +289,44 @@ function createWindow() {
     console.log('[server-url] Set to', GLOBAL_SERVER_URL);
     mainWindow.loadURL(devUrl);
     // DevTools can be opened manually via Ctrl+Shift+I if needed
+  } else {
+    // Production mode
+    const clientConfig = readClientConfig();
+    if (clientConfig?.serverUrl) {
+      // Client build pointing at a remote server — load immediately.
+      loadFrontend();
+    } else {
+      // Load loading splash screen first so window opens instantly
+      console.log('[ui] Loading splash screen first...');
+      mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+    }
   }
-  // Production mode: loadFrontend() is called after the server is ready (see waitForServer)
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
+
+// IPC handler for frontend to read template.xlsx safely in production/packaged mode
+ipcMain.handle('get-template-file', async () => {
+  try {
+    const finalPath = app.isPackaged
+      ? path.join(app.getAppPath(), 'dist', 'template.xlsx')
+      : path.join(__dirname, '../public/template.xlsx');
+
+    console.log('[ipc] Reading template file from path:', finalPath);
+    if (!fs.existsSync(finalPath)) {
+      throw new Error(`Template file not found at ${finalPath}`);
+    }
+
+    const data = fs.readFileSync(finalPath);
+    // Return ArrayBuffer representation
+    return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  } catch (error) {
+    console.error('[ipc] Failed to read template file:', error);
+    throw error;
+  }
+});
 
 // IPC handler for frontend to get server URL
 ipcMain.handle('get-server-url', () => {

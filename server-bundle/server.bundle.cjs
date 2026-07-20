@@ -17977,17 +17977,17 @@ var require_router = __commonJS({
     var toString = Object.prototype.toString;
     var proto = module2.exports = function(options) {
       var opts = options || {};
-      function router9(req, res, next) {
-        router9.handle(req, res, next);
+      function router11(req, res, next) {
+        router11.handle(req, res, next);
       }
-      setPrototypeOf(router9, proto);
-      router9.params = {};
-      router9._params = [];
-      router9.caseSensitive = opts.caseSensitive;
-      router9.mergeParams = opts.mergeParams;
-      router9.strict = opts.strict;
-      router9.stack = [];
-      return router9;
+      setPrototypeOf(router11, proto);
+      router11.params = {};
+      router11._params = [];
+      router11.caseSensitive = opts.caseSensitive;
+      router11.mergeParams = opts.mergeParams;
+      router11.strict = opts.strict;
+      router11.stack = [];
+      return router11;
     };
     proto.param = function param(name, fn) {
       if (typeof name === "function") {
@@ -20579,7 +20579,7 @@ var require_application = __commonJS({
   "server/node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router9 = require_router();
+    var Router11 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query = require_query();
@@ -20644,7 +20644,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router9({
+        this._router = new Router11({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -20653,17 +20653,17 @@ var require_application = __commonJS({
       }
     };
     app2.handle = function handle(req, res, callback) {
-      var router9 = this._router;
+      var router11 = this._router;
       var done = callback || finalhandler(req, res, {
         env: this.get("env"),
         onerror: logerror.bind(this)
       });
-      if (!router9) {
+      if (!router11) {
         debug("no routes defined on app");
         done();
         return;
       }
-      router9.handle(req, res, done);
+      router11.handle(req, res, done);
     };
     app2.use = function use(fn) {
       var offset = 0;
@@ -20683,15 +20683,15 @@ var require_application = __commonJS({
         throw new TypeError("app.use() requires a middleware function");
       }
       this.lazyrouter();
-      var router9 = this._router;
+      var router11 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router9.use(path6, fn2);
+          return router11.use(path6, fn2);
         }
         debug(".use app under %s", path6);
         fn2.mountpath = path6;
         fn2.parent = this;
-        router9.use(path6, function mounted_app(req, res, next) {
+        router11.use(path6, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -22506,7 +22506,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router9 = require_router();
+    var Router11 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -22529,7 +22529,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router9;
+    exports2.Router = Router11;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -30953,7 +30953,7 @@ __export(src_exports, {
   default: () => src_default
 });
 module.exports = __toCommonJS(src_exports);
-var import_express9 = __toESM(require_express2());
+var import_express11 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_dotenv = __toESM(require_main());
 var import_path5 = __toESM(require("path"));
@@ -32952,7 +32952,7 @@ function getUserName(user) {
   }
   return user.username || user.name || "Unknown User";
 }
-async function createAuditLog(prisma4, data) {
+async function createAuditLog(prisma5, data) {
   const description = generateAuditDescription({
     action: data.action,
     entity: data.entity,
@@ -32960,7 +32960,7 @@ async function createAuditLog(prisma4, data) {
     userName: data.userName,
     details: data.details
   });
-  return await prisma4.auditLog.create({
+  return await prisma5.auditLog.create({
     data: {
       userId: data.userId,
       action: data.action,
@@ -32999,6 +32999,7 @@ router.get("/", async (req, res) => {
         // Include permissions
         lastLogin: true,
         // Include last login timestamp
+        lastActive: true,
         createdAt: true,
         updatedAt: true
         // Exclude password from response
@@ -33847,7 +33848,8 @@ router2.get("/", async (req, res) => {
     const employees = await prisma_default.employee.findMany({
       where,
       include: {
-        documents: true
+        documents: true,
+        yellowBox: true
       },
       orderBy: [
         { lastName: "asc" },
@@ -33866,7 +33868,8 @@ router2.get("/:id", async (req, res) => {
     const employee = await prisma_default.employee.findUnique({
       where: { id },
       include: {
-        documents: true
+        documents: true,
+        yellowBox: true
       }
     });
     if (!employee) {
@@ -34912,6 +34915,8 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
       detailedDivision,
       detailedFunction,
       detailedDate,
+      detailedOrderFrom,
+      detailedOrderTo,
       designatedPositionFunction,
       designatedOrderFrom,
       designatedOrderTo,
@@ -35003,6 +35008,8 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
         detailedDivision: detailedDivision || null,
         detailedFunction: detailedFunction || null,
         detailedDate: toNullableDate2(detailedDate),
+        detailedOrderFrom: toNullableDate2(detailedOrderFrom),
+        detailedOrderTo: toNullableDate2(detailedOrderTo),
         designatedPositionFunction: designatedPositionFunction || null,
         designatedOrderFrom: toNullableDate2(designatedOrderFrom),
         designatedOrderTo: toNullableDate2(designatedOrderTo),
@@ -35566,6 +35573,36 @@ var systemSettings_routes_default = router5;
 // server/src/routes/file201.routes.ts
 var import_express6 = __toESM(require_express2());
 var router6 = (0, import_express6.Router)();
+router6.get("/logs/all", async (req, res) => {
+  try {
+    const logs = await prisma_default.file201BorrowLog.findMany({
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            officeName: true,
+            position: true,
+            appointmentStatus: true,
+            status: true,
+            yellowBox: {
+              select: {
+                office: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { dateBorrowed: "desc" }
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error("Error fetching all borrow logs:", error);
+    res.status(500).json({ error: "Failed to fetch all borrow logs" });
+  }
+});
 router6.get("/:employeeId/history", async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -35742,6 +35779,37 @@ router6.delete("/:employeeId/clear", async (req, res) => {
     res.status(500).json({ error: "Failed to clear history" });
   }
 });
+router6.post("/delete-logs", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Invalid or empty IDs array" });
+    }
+    const logs = await prisma_default.file201BorrowLog.findMany({
+      where: { id: { in: ids } }
+    });
+    await prisma_default.file201BorrowLog.deleteMany({
+      where: { id: { in: ids } }
+    });
+    for (const log of logs) {
+      if (log.action === "borrow" && !log.dateReturned) {
+        const active = await prisma_default.file201BorrowLog.findFirst({
+          where: { employeeId: log.employeeId, action: "borrow", dateReturned: null }
+        });
+        if (!active) {
+          await prisma_default.employee.update({
+            where: { id: log.employeeId },
+            data: { file201Status: "Available" }
+          });
+        }
+      }
+    }
+    res.json({ success: true, count: logs.length });
+  } catch (error) {
+    console.error("Error deleting borrow logs:", error);
+    res.status(500).json({ error: "Failed to delete borrow logs", details: error.message });
+  }
+});
 var file201_routes_default = router6;
 
 // server/src/routes/approval.routes.ts
@@ -35900,7 +35968,19 @@ router7.post("/:id/approve", async (req, res) => {
 router7.post("/:id/reject", async (req, res) => {
   try {
     const { id } = req.params;
-    const { reason, approverId, approverName } = req.body;
+    const { reason } = req.body;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    let finalApproverId = userId || null;
+    let finalApproverName = "System";
+    if (userId && userId !== "system") {
+      const user = await prisma_default.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true }
+      });
+      if (user) {
+        finalApproverName = `${user.lastName}, ${user.firstName}`;
+      }
+    }
     const approvalReq = await prisma_default.approvalRequest.findUnique({ where: { id } });
     if (!approvalReq) return res.status(404).json({ error: "Approval request not found" });
     if (approvalReq.status !== "pending") return res.status(400).json({ error: "Request is no longer pending" });
@@ -35908,15 +35988,15 @@ router7.post("/:id/reject", async (req, res) => {
       where: { id },
       data: {
         status: "rejected",
-        approvedBy: approverId || null,
-        approvedByName: approverName || null,
+        approvedBy: finalApproverId,
+        approvedByName: finalApproverName,
         rejectedReason: reason || "Rejected by administrator",
         resolvedAt: /* @__PURE__ */ new Date()
       }
     });
     await createAuditLog(prisma_default, {
-      userId: approverId || "system",
-      userName: approverName || "System",
+      userId: finalApproverId || "system",
+      userName: finalApproverName,
       action: "reject_request",
       entity: approvalReq.entityType,
       entityId: approvalReq.entityId,
@@ -35926,7 +36006,7 @@ router7.post("/:id/reject", async (req, res) => {
         actionRejected: approvalReq.action,
         requestedBy: approvalReq.requestedByName,
         rejectedReason: reason || "Rejected by administrator",
-        description: `${approverName || "System"} rejected ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, " ")}: ${approvalReq.entityName || approvalReq.entityId}`
+        description: `${finalApproverName} rejected ${approvalReq.requestedByName}'s request to ${approvalReq.action.replace(/_/g, " ")}: ${approvalReq.entityName || approvalReq.entityId}`
       }
     });
     res.json({ rejected: true });
@@ -36028,6 +36108,529 @@ router8.delete("/:id", requireAdmin, async (req, res) => {
 });
 var activity_routes_default = router8;
 
+// server/src/routes/chat.routes.ts
+var import_express9 = __toESM(require_express2());
+var import_client4 = require("@prisma/client");
+var router9 = (0, import_express9.Router)();
+var prisma4 = new import_client4.PrismaClient();
+router9.get("/unread", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  try {
+    const unread = await prisma4.chatMessage.groupBy({
+      by: ["senderId"],
+      where: {
+        recipientId: userId,
+        read: false
+      },
+      _count: {
+        id: true
+      }
+    });
+    const counts = unread.reduce((acc, curr) => {
+      acc[curr.senderId] = curr._count.id;
+      return acc;
+    }, {});
+    res.json(counts);
+  } catch (error) {
+    console.error("Error fetching unread chat counts:", error);
+    res.status(500).json({ error: "Failed to fetch unread chat counts" });
+  }
+});
+router9.get("/recent", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  try {
+    const sentTo = await prisma4.chatMessage.findMany({
+      where: { senderId: userId, deletedBySender: false },
+      select: { recipientId: true },
+      distinct: ["recipientId"]
+    });
+    const receivedFrom = await prisma4.chatMessage.findMany({
+      where: { recipientId: userId, deletedByRecipient: false },
+      select: { senderId: true },
+      distinct: ["senderId"]
+    });
+    const contactIds = Array.from(/* @__PURE__ */ new Set([
+      ...sentTo.map((m) => m.recipientId),
+      ...receivedFrom.map((m) => m.senderId)
+    ]));
+    const contacts = await prisma4.user.findMany({
+      where: { id: { in: contactIds } },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        profilePicture: true,
+        lastActive: true
+      }
+    });
+    const contactsWithLastMessage = await Promise.all(
+      contacts.map(async (contact) => {
+        const lastMsg = await prisma4.chatMessage.findFirst({
+          where: {
+            OR: [
+              { senderId: userId, recipientId: contact.id, deletedBySender: false },
+              { senderId: contact.id, recipientId: userId, deletedByRecipient: false }
+            ]
+          },
+          orderBy: {
+            createdAt: "desc"
+          }
+        });
+        return {
+          ...contact,
+          lastMessage: lastMsg ? {
+            content: lastMsg.content,
+            createdAt: lastMsg.createdAt,
+            senderId: lastMsg.senderId
+          } : null
+        };
+      })
+    );
+    contactsWithLastMessage.sort((a, b) => {
+      const timeA = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const timeB = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+    res.json(contactsWithLastMessage);
+  } catch (error) {
+    console.error("Error fetching recent chat contacts:", error);
+    res.status(500).json({ error: "Failed to fetch recent chat contacts" });
+  }
+});
+router9.get("/", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const recipientId = req.query.recipientId;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  if (!recipientId) {
+    return res.status(400).json({ error: "recipientId query parameter is required" });
+  }
+  try {
+    const messages = await prisma4.chatMessage.findMany({
+      where: {
+        OR: [
+          { senderId: userId, recipientId, deletedBySender: false },
+          { senderId: recipientId, recipientId: userId, deletedByRecipient: false }
+        ]
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    });
+    await prisma4.chatMessage.updateMany({
+      where: {
+        senderId: recipientId,
+        recipientId: userId,
+        read: false
+      },
+      data: {
+        read: true
+      }
+    });
+    res.json(messages);
+  } catch (error) {
+    console.error("Error fetching chat history:", error);
+    res.status(500).json({ error: "Failed to fetch chat history" });
+  }
+});
+router9.post("/", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const { recipientId, content } = req.body;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  if (!recipientId) {
+    return res.status(400).json({ error: "recipientId is required" });
+  }
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: "Message content is required" });
+  }
+  try {
+    const sender = await prisma4.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        lastName: true
+      }
+    });
+    if (!sender) {
+      return res.status(404).json({ error: "Sender user not found" });
+    }
+    const senderName = `${sender.firstName} ${sender.lastName}`.trim() || "User";
+    const message = await prisma4.chatMessage.create({
+      data: {
+        senderId: userId,
+        senderName,
+        recipientId,
+        content: content.trim(),
+        read: false
+      }
+    });
+    res.status(201).json(message);
+  } catch (error) {
+    console.error("Error sending private message:", error);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
+router9.delete("/:recipientId", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const { recipientId } = req.params;
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  if (!recipientId) {
+    return res.status(400).json({ error: "recipientId is required" });
+  }
+  try {
+    const updateSent = await prisma4.chatMessage.updateMany({
+      where: { senderId: userId, recipientId },
+      data: { deletedBySender: true }
+    });
+    const updateReceived = await prisma4.chatMessage.updateMany({
+      where: { senderId: recipientId, recipientId: userId },
+      data: { deletedByRecipient: true }
+    });
+    await prisma4.chatMessage.deleteMany({
+      where: {
+        deletedBySender: true,
+        deletedByRecipient: true
+      }
+    });
+    res.json({ message: "Conversation deleted successfully", count: updateSent.count + updateReceived.count });
+  } catch (error) {
+    console.error("Error deleting conversation:", error);
+    res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+var chat_routes_default = router9;
+
+// server/src/routes/yellowBox.routes.ts
+var import_express10 = __toESM(require_express2());
+var router10 = (0, import_express10.Router)();
+router10.get("/", async (req, res) => {
+  try {
+    const boxes = await prisma_default.yellowBox.findMany({
+      include: {
+        employees: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            officeName: true,
+            position: true,
+            file201Status: true
+          }
+        }
+      },
+      orderBy: [
+        { office: "asc" },
+        { boxLabel: "asc" }
+      ]
+    });
+    res.json(boxes);
+  } catch (error) {
+    console.error("Error fetching yellow boxes:", error);
+    res.status(500).json({ error: "Failed to fetch yellow boxes" });
+  }
+});
+router10.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const box = await prisma_default.yellowBox.findUnique({
+      where: { id },
+      include: {
+        employees: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            officeName: true,
+            position: true,
+            file201Status: true
+          }
+        }
+      }
+    });
+    if (!box) {
+      return res.status(404).json({ error: "Yellow box not found" });
+    }
+    res.json(box);
+  } catch (error) {
+    console.error("Error fetching yellow box:", error);
+    res.status(500).json({ error: "Failed to fetch yellow box" });
+  }
+});
+router10.post("/", async (req, res) => {
+  try {
+    const { boxLabel, office, type, color } = req.body;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    if (!boxLabel || !office || !type) {
+      return res.status(400).json({ error: "boxLabel, office, and type are required" });
+    }
+    const box = await prisma_default.yellowBox.create({
+      data: {
+        boxLabel,
+        office,
+        type,
+        color: color || "#facc15"
+      }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "create_yellow_box",
+        entity: "yellow_box",
+        entityId: box.id,
+        entityName: `${box.office} - ${box.boxLabel} (${box.type})`,
+        details: {
+          description: `${userName} created Yellow Box "${box.boxLabel}" for office "${box.office}" (${box.type})`
+        }
+      });
+    }
+    res.status(201).json(box);
+  } catch (error) {
+    console.error("Error creating yellow box:", error);
+    res.status(500).json({ error: "Failed to create yellow box" });
+  }
+});
+router10.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { boxLabel, office, type, color } = req.body;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    if (!boxLabel || !office || !type) {
+      return res.status(400).json({ error: "boxLabel, office, and type are required" });
+    }
+    const updated = await prisma_default.yellowBox.update({
+      where: { id },
+      data: {
+        boxLabel,
+        office,
+        type,
+        color: color || "#facc15"
+      }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "update_yellow_box",
+        entity: "yellow_box",
+        entityId: id,
+        entityName: `${updated.office} - ${updated.boxLabel} (${updated.type})`,
+        details: {
+          description: `${userName} updated Yellow Box details to Label: "${updated.boxLabel}", Office: "${updated.office}", Type: "${updated.type}"`
+        }
+      });
+    }
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating yellow box:", error);
+    res.status(500).json({ error: "Failed to update yellow box" });
+  }
+});
+router10.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    const box = await prisma_default.yellowBox.findUnique({ where: { id } });
+    if (!box) {
+      return res.status(404).json({ error: "Yellow box not found" });
+    }
+    await prisma_default.employee.updateMany({
+      where: { yellowBoxId: id },
+      data: { yellowBoxId: null }
+    });
+    await prisma_default.yellowBox.delete({
+      where: { id }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "delete_yellow_box",
+        entity: "yellow_box",
+        entityId: id,
+        entityName: `${box.office} - ${box.boxLabel}`,
+        details: {
+          description: `${userName} deleted Yellow Box "${box.boxLabel}" for office "${box.office}"`
+        }
+      });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting yellow box:", error);
+    res.status(500).json({ error: "Failed to delete yellow box" });
+  }
+});
+router10.post("/:id/employees", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { employeeId } = req.body;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId is required" });
+    }
+    const box = await prisma_default.yellowBox.findUnique({ where: { id } });
+    if (!box) {
+      return res.status(404).json({ error: "Yellow box not found" });
+    }
+    const updatedEmployee = await prisma_default.employee.update({
+      where: { id: employeeId },
+      data: { yellowBoxId: id }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "assign_employee_to_box",
+        entity: "employee",
+        entityId: employeeId,
+        entityName: `${updatedEmployee.lastName}, ${updatedEmployee.firstName}`,
+        details: {
+          yellowBoxId: id,
+          description: `${userName} assigned employee ${updatedEmployee.firstName} ${updatedEmployee.lastName} to Yellow Box "${box.boxLabel}" (${box.office})`
+        }
+      });
+    }
+    res.json(updatedEmployee);
+  } catch (error) {
+    console.error("Error assigning employee to yellow box:", error);
+    res.status(500).json({ error: "Failed to assign employee to yellow box" });
+  }
+});
+router10.delete("/:id/employees/:employeeId", async (req, res) => {
+  try {
+    const { id, employeeId } = req.params;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    const box = await prisma_default.yellowBox.findUnique({ where: { id } });
+    if (!box) {
+      return res.status(404).json({ error: "Yellow box not found" });
+    }
+    const updatedEmployee = await prisma_default.employee.update({
+      where: { id: employeeId },
+      data: { yellowBoxId: null }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "remove_employee_from_box",
+        entity: "employee",
+        entityId: employeeId,
+        entityName: `${updatedEmployee.lastName}, ${updatedEmployee.firstName}`,
+        details: {
+          yellowBoxId: id,
+          description: `${userName} removed employee ${updatedEmployee.firstName} ${updatedEmployee.lastName} from Yellow Box "${box.boxLabel}" (${box.office})`
+        }
+      });
+    }
+    res.json(updatedEmployee);
+  } catch (error) {
+    console.error("Error removing employee from yellow box:", error);
+    res.status(500).json({ error: "Failed to remove employee from yellow box" });
+  }
+});
+router10.post("/:id/employees/bulk", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { employeeIds } = req.body;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    if (!employeeIds || !Array.isArray(employeeIds)) {
+      return res.status(400).json({ error: "employeeIds array is required" });
+    }
+    const box = await prisma_default.yellowBox.findUnique({ where: { id } });
+    if (!box) {
+      return res.status(404).json({ error: "Yellow box not found" });
+    }
+    const updatedCount = await prisma_default.employee.updateMany({
+      where: { id: { in: employeeIds } },
+      data: { yellowBoxId: id }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "bulk_assign_employees_to_box",
+        entity: "yellow_box",
+        entityId: id,
+        entityName: `${box.office} - ${box.boxLabel}`,
+        details: {
+          employeeIds,
+          description: `${userName} bulk assigned ${employeeIds.length} employees to Yellow Box "${box.boxLabel}" (${box.office})`
+        }
+      });
+    }
+    res.json({ success: true, count: updatedCount.count });
+  } catch (error) {
+    console.error("Error bulk assigning employees:", error);
+    res.status(500).json({ error: "Failed to bulk assign employees" });
+  }
+});
+router10.post("/:id/employees/bulk-remove", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { employeeIds } = req.body;
+    const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+    if (!employeeIds || !Array.isArray(employeeIds)) {
+      return res.status(400).json({ error: "employeeIds array is required" });
+    }
+    const box = await prisma_default.yellowBox.findUnique({ where: { id } });
+    if (!box) {
+      return res.status(404).json({ error: "Yellow box not found" });
+    }
+    const updatedCount = await prisma_default.employee.updateMany({
+      where: { id: { in: employeeIds }, yellowBoxId: id },
+      data: { yellowBoxId: null }
+    });
+    if (userId) {
+      const user = await prisma_default.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      const userName = user ? `${user.lastName}, ${user.firstName}` : "Administrator";
+      await createAuditLog(prisma_default, {
+        userId,
+        userName,
+        action: "bulk_remove_employees_from_box",
+        entity: "yellow_box",
+        entityId: id,
+        entityName: `${box.office} - ${box.boxLabel}`,
+        details: {
+          employeeIds,
+          description: `${userName} bulk removed ${employeeIds.length} employees from Yellow Box "${box.boxLabel}" (${box.office})`
+        }
+      });
+    }
+    res.json({ success: true, count: updatedCount.count });
+  } catch (error) {
+    console.error("Error bulk removing employees:", error);
+    res.status(500).json({ error: "Failed to bulk remove employees" });
+  }
+});
+var yellowBox_routes_default = router10;
+
 // server/src/middleware/session.ts
 async function validateSession(req, res, next) {
   const skipPaths = [
@@ -36043,6 +36646,10 @@ async function validateSession(req, res, next) {
   const sessionId = req.headers["x-session-id"];
   if (userId && userId !== "system") {
     try {
+      prisma_default.user.update({
+        where: { id: userId },
+        data: { lastActive: /* @__PURE__ */ new Date() }
+      }).catch((err) => console.error("[session] Error updating lastActive:", err));
       const user = await prisma_default.user.findUnique({
         where: { id: userId },
         select: { activeSessionId: true }
@@ -36063,7 +36670,7 @@ async function validateSession(req, res, next) {
 
 // server/src/index.ts
 import_dotenv.default.config();
-var app = (0, import_express9.default)();
+var app = (0, import_express11.default)();
 var PORT = process.env.PORT || 5e3;
 var HOST = process.env.HOST || "0.0.0.0";
 console.log("[server] Environment configuration:");
@@ -36072,10 +36679,10 @@ console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`  - UPLOADS_DIR: ${process.env.UPLOADS_DIR}`);
 console.log(`  - __dirname: ${__dirname}`);
 app.use((0, import_cors.default)());
-app.use(import_express9.default.json({ limit: "50mb" }));
-app.use(import_express9.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express11.default.json({ limit: "50mb" }));
+app.use(import_express11.default.urlencoded({ extended: true, limit: "50mb" }));
 var uploadsPath = process.env.UPLOADS_DIR || import_path5.default.join(__dirname, "../uploads");
-app.use("/uploads", import_express9.default.static(uploadsPath));
+app.use("/uploads", import_express11.default.static(uploadsPath));
 var remoteUploadsUrl = process.env.REMOTE_UPLOADS_URL;
 if (remoteUploadsUrl) {
   app.use("/uploads", (req, res) => {
@@ -36103,12 +36710,14 @@ app.use("/api/system-settings", systemSettings_routes_default);
 app.use("/api/file201", file201_routes_default);
 app.use("/api/approvals", approval_routes_default);
 app.use("/api/activities", activity_routes_default);
+app.use("/api/chats", chat_routes_default);
+app.use("/api/yellow-boxes", yellowBox_routes_default);
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
 var frontendDist = process.env.FRONTEND_DIST;
 if (frontendDist && import_fs5.default.existsSync(frontendDist)) {
-  app.use(import_express9.default.static(frontendDist));
+  app.use(import_express11.default.static(frontendDist));
   app.get("*", (_req, res) => {
     res.sendFile(import_path5.default.join(frontendDist, "index.html"));
   });
