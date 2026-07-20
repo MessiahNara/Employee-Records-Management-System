@@ -30,3 +30,4 @@ dist-electron
 out/
 electron/client-config.json
 db_backup/
+server/uploads/

@@ -638,6 +638,8 @@ export const documentApi = {
       detailedDivision?: string;
       detailedFunction?: string;
       detailedDate?: string;
+      detailedOrderFrom?: string;
+      detailedOrderTo?: string;
       designatedPositionFunction?: string;
       designatedOrderFrom?: string;
       designatedOrderTo?: string;
@@ -664,6 +666,8 @@ export const documentApi = {
     if (data.detailedDivision) formData.append('detailedDivision', data.detailedDivision);
     if (data.detailedFunction) formData.append('detailedFunction', data.detailedFunction);
     if (data.detailedDate) formData.append('detailedDate', data.detailedDate);
+    if (data.detailedOrderFrom) formData.append('detailedOrderFrom', data.detailedOrderFrom);
+    if (data.detailedOrderTo) formData.append('detailedOrderTo', data.detailedOrderTo);
     if (data.designatedPositionFunction) formData.append('designatedPositionFunction', data.designatedPositionFunction);
     if (data.designatedOrderFrom) formData.append('designatedOrderFrom', data.designatedOrderFrom);
     if (data.designatedOrderTo) formData.append('designatedOrderTo', data.designatedOrderTo);

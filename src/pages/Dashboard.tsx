@@ -207,6 +207,7 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
     return `${month}/${day}/${year}`;
   };
 
+
   const getStyles = (posInPage: number, totalInPage: number) => {
     if (posInPage === 0) return { sA: '6', sBC: '12', sD: '13', sEF: '14', sG: '15' };
     const last = totalInPage - 1;
@@ -449,6 +450,338 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
   return { xml: newXml, lastRow: globalRowNum - 1 };
 };
 
+const modifyBorrowSheetXml = (xmlStr: string, title: string, rowsData: any[]) => {
+  // Remove drawing (logo) reference if present in sheet XML
+  xmlStr = xmlStr.replace(/<drawing[^>]*\/>/g, '');
+
+  // ── Re-write column widths to accommodate 13 columns ──────────────────
+  const colsXml = `<cols>` +
+    `<col min="1" max="1" width="6.33203125" customWidth="1"/>` +
+    `<col min="2" max="2" width="25" customWidth="1"/>` +
+    `<col min="3" max="3" width="25" customWidth="1"/>` +
+    `<col min="4" max="4" width="18" customWidth="1"/>` +
+    `<col min="5" max="5" width="20" customWidth="1"/>` +
+    `<col min="6" max="6" width="13" customWidth="1"/>` +
+    `<col min="7" max="7" width="13" customWidth="1"/>` +
+    `<col min="8" max="8" width="15" customWidth="1"/>` +
+    `<col min="9" max="9" width="20" customWidth="1"/>` +
+    `<col min="10" max="10" width="13" customWidth="1"/>` +
+    `<col min="11" max="11" width="13" customWidth="1"/>` +
+    `<col min="12" max="12" width="16" customWidth="1"/>` +
+    `<col min="13" max="13" width="16" customWidth="1"/>` +
+    `</cols>`;
+  xmlStr = xmlStr.replace(/<cols>[\s\S]*?<\/cols>/, colsXml);
+
+  const BASE_ROW_HT = 19.95;
+  const ROWS_PER_PAGE = 90;
+  const DIVIDER_POS = 15;
+
+  const calcRowHt = (name: string, office: string, borrower: string, returned: string): number => {
+    const linesFor = (text: string, maxChars: number) =>
+      text.length === 0 ? 1 : Math.ceil(text.length / maxChars);
+    const LINE_HT = 13.5;
+    const lines = Math.max(
+      linesFor(name, 25),       // Employee Name
+      linesFor(office, 25),     // Office/Hospital
+      linesFor(borrower, 20),   // Borrower Name
+      linesFor(returned, 20)    // Returned Name
+    );
+    return lines <= 1 ? BASE_ROW_HT : BASE_ROW_HT + (lines - 1) * LINE_HT;
+  };
+
+  const formatDatePart = (dateVal: any) => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+
+  const formatTimePart = (dateVal: any) => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  const getStyles = (posInPage: number, totalInPage: number) => {
+    if (posInPage === 0) return { sA: '6', sMid: '12', sLast: '15' };
+    const last = totalInPage - 1;
+    const penul = totalInPage - 2;
+    if (posInPage === last) return { sA: '10', sMid: '29', sLast: '32' };
+    if (posInPage === penul) return { sA: '9', sMid: '16', sLast: '28' };
+    if (posInPage >= 58) return { sA: '8', sMid: '16', sLast: '19' };
+    return { sA: '7', sMid: '16', sLast: '19' };
+  };
+
+  const generateHeaderBlock = (start: number): string => {
+    const headerTexts = [
+      'Republic of the Philippines',
+      'Province of Pangasinan',
+      'Lingayen',
+      'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE',
+      ''
+    ];
+
+    let block = '';
+    // Row 1 (starts at start)
+    block += `<row r="${start}" spans="1:13" ht="15" customHeight="1" x14ac:dyDescent="0.25">` +
+      `<c r="A${start}" s="37" t="inlineStr"><is><t>${headerTexts[0]}</t></is></c>` +
+      Array.from({ length: 12 }, (_, colIdx) => `<c r="${String.fromCharCode(66 + colIdx)}${start}" s="37"/>`).join('') +
+      `</row>`;
+
+    // Row 2 to 5
+    for (let h = 1; h <= 4; h++) {
+      const rn = start + h;
+      const sty = '38';
+      const txt = headerTexts[h];
+      const thickBot = h === 4 ? ' thickBot="1"' : '';
+      block += `<row r="${rn}" spans="1:13" ht="15" customHeight="1"${thickBot} x14ac:dyDescent="0.25">` +
+        `<c r="A${rn}" s="${sty}" t="inlineStr"><is><t>${escapeXml(txt)}</t></is></c>` +
+        Array.from({ length: 12 }, (_, colIdx) => `<c r="${String.fromCharCode(66 + colIdx)}${rn}" s="${sty}"/>`).join('') +
+        `</row>`;
+    }
+
+    // Title Row (row 6)
+    const titleRow = start + 5;
+    block += `<row r="${titleRow}" spans="1:13" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3">` +
+      `<c r="A${titleRow}" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c>` +
+      Array.from({ length: 11 }, (_, colIdx) => `<c r="${String.fromCharCode(66 + colIdx)}${titleRow}" s="40"/>`).join('') +
+      `<c r="M${titleRow}" s="41"/>` +
+      `</row>`;
+
+    // Headers row 1 (row 7)
+    const h7 = start + 6;
+    block += `<row r="${h7}" spans="1:13" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3">` +
+      `<c r="A${h7}" s="35" t="inlineStr"><is><t>NO.</t></is></c>` +
+      `<c r="B${h7}" s="35" t="inlineStr"><is><t>EMPLOYEE NAME</t></is></c>` +
+      `<c r="C${h7}" s="35" t="inlineStr"><is><t>OFFICE/HOSPITAL</t></is></c>` +
+      `<c r="D${h7}" s="35" t="inlineStr"><is><t>EMPLOYMENT STATUS</t></is></c>` +
+      `<c r="E${h7}" s="39" t="inlineStr"><is><t>BORROWER</t></is></c>` +
+      `<c r="F${h7}" s="42"/>` +
+      `<c r="G${h7}" s="42"/>` +
+      `<c r="H${h7}" s="35" t="inlineStr"><is><t>NAME OF FILES</t></is></c>` +
+      `<c r="I${h7}" s="39" t="inlineStr"><is><t>RETURNED</t></is></c>` +
+      `<c r="J${h7}" s="42"/>` +
+      `<c r="K${h7}" s="42"/>` +
+      `<c r="L${h7}" s="35" t="inlineStr"><is><t>RECORDS CONFORMED</t></is></c>` +
+      `<c r="M${h7}" s="35" t="inlineStr"><is><t>REMARK</t></is></c>` +
+      `</row>`;
+
+    // Headers row 2 (row 8)
+    const h8 = start + 7;
+    block += `<row r="${h8}" spans="1:13" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3">` +
+      `<c r="A${h8}" s="36"/>` +
+      `<c r="B${h8}" s="36"/>` +
+      `<c r="C${h8}" s="36"/>` +
+      `<c r="D${h8}" s="36"/>` +
+      `<c r="E${h8}" s="5" t="inlineStr"><is><t>NAME</t></is></c>` +
+      `<c r="F${h8}" s="5" t="inlineStr"><is><t>DATE</t></is></c>` +
+      `<c r="G${h8}" s="5" t="inlineStr"><is><t>TIME</t></is></c>` +
+      `<c r="H${h8}" s="36"/>` +
+      `<c r="I${h8}" s="5" t="inlineStr"><is><t>NAME</t></is></c>` +
+      `<c r="J${h8}" s="5" t="inlineStr"><is><t>DATE</t></is></c>` +
+      `<c r="K${h8}" s="5" t="inlineStr"><is><t>TIME</t></is></c>` +
+      `<c r="L${h8}" s="36"/>` +
+      `<c r="M${h8}" s="36"/>` +
+      `</row>`;
+
+    return block;
+  };
+
+  const row1Start = xmlStr.indexOf('<row r="1"');
+  if (row1Start === -1) return { xml: xmlStr, lastRow: 8 };
+  const xmlBefore = xmlStr.substring(0, row1Start);
+
+  const sheetDataEnd = xmlStr.indexOf('</sheetData>');
+  if (sheetDataEnd === -1) return { xml: xmlStr, lastRow: 8 };
+  const xmlAfterSheetData = xmlStr.substring(sheetDataEnd);
+
+  const row9Start = xmlStr.indexOf('<row r="9"');
+  const originalHeaderRowsXml = row9Start !== -1
+    ? xmlStr.substring(row1Start, row9Start)
+    : xmlStr.substring(row1Start, sheetDataEnd);
+
+  let patchedHeaderRowsXml = originalHeaderRowsXml
+    .replace(
+      /<row r="6"[\s\S]*?<\/row>/,
+      `<row r="6" spans="1:13" ht="25.05" customHeight="1" thickBot="1" x14ac:dyDescent="0.3"><c r="A6" s="39" t="inlineStr"><is><t>${escapeXml(title)}</t></is></c>${Array.from({ length: 11 }, (_, colIdx) => `<c r="${String.fromCharCode(66 + colIdx)}6" s="40"/>`).join('')}<c r="M6" s="41"/></row>`
+    )
+    .replace(
+      /<row r="7"[\s\S]*?<\/row>/,
+      `<row r="7" spans="1:13" ht="12.75" customHeight="1" thickBot="1" x14ac:dyDescent="0.3">` +
+      `<c r="A7" s="35" t="inlineStr"><is><t>NO.</t></is></c>` +
+      `<c r="B7" s="35" t="inlineStr"><is><t>EMPLOYEE NAME</t></is></c>` +
+      `<c r="C7" s="35" t="inlineStr"><is><t>OFFICE/HOSPITAL</t></is></c>` +
+      `<c r="D7" s="35" t="inlineStr"><is><t>EMPLOYMENT STATUS</t></is></c>` +
+      `<c r="E7" s="39" t="inlineStr"><is><t>BORROWER</t></is></c>` +
+      `<c r="F7" s="42"/>` +
+      `<c r="G7" s="42"/>` +
+      `<c r="H7" s="35" t="inlineStr"><is><t>NAME OF FILES</t></is></c>` +
+      `<c r="I7" s="39" t="inlineStr"><is><t>RETURNED</t></is></c>` +
+      `<c r="J7" s="42"/>` +
+      `<c r="K7" s="42"/>` +
+      `<c r="L7" s="35" t="inlineStr"><is><t>RECORDS CONFORMED</t></is></c>` +
+      `<c r="M7" s="35" t="inlineStr"><is><t>REMARK</t></is></c>` +
+      `</row>`
+    )
+    .replace(
+      /<row r="8"[\s\S]*?<\/row>/,
+      `<row r="8" spans="1:13" ht="21" customHeight="1" thickBot="1" x14ac:dyDescent="0.3">` +
+      `<c r="A8" s="36"/>` +
+      `<c r="B8" s="36"/>` +
+      `<c r="C8" s="36"/>` +
+      `<c r="D8" s="36"/>` +
+      `<c r="E8" s="5" t="inlineStr"><is><t>NAME</t></is></c>` +
+      `<c r="F8" s="5" t="inlineStr"><is><t>DATE</t></is></c>` +
+      `<c r="G8" s="5" t="inlineStr"><is><t>TIME</t></is></c>` +
+      `<c r="H8" s="36"/>` +
+      `<c r="I8" s="5" t="inlineStr"><is><t>NAME</t></is></c>` +
+      `<c r="J8" s="5" t="inlineStr"><is><t>DATE</t></is></c>` +
+      `<c r="K8" s="5" t="inlineStr"><is><t>TIME</t></is></c>` +
+      `<c r="L8" s="36"/>` +
+      `<c r="M8" s="36"/>` +
+      `</row>`
+    );
+
+  let newRowsXml = '';
+  let globalRowNum = 9;
+  let dataIdx = 0;
+  let pageNum = 0;
+  const headerStartRows: number[] = [1];
+
+  while (dataIdx < rowsData.length) {
+    const pageData = rowsData.slice(dataIdx, dataIdx + ROWS_PER_PAGE);
+    const pageCount = pageData.length;
+
+    if (pageNum > 0) {
+      headerStartRows.push(globalRowNum);
+      newRowsXml += generateHeaderBlock(globalRowNum);
+      globalRowNum += 8;
+    }
+
+    let posInPage = 0;
+    for (let i = 0; i < pageCount; i++) {
+      if (posInPage === DIVIDER_POS) {
+        newRowsXml += `<row r="${globalRowNum}" spans="1:13" ht="19.95" customHeight="1" x14ac:dyDescent="0.25">` +
+          `<c r="A${globalRowNum}" s="11"/>` +
+          `<c r="B${globalRowNum}" s="22"/>` +
+          `<c r="C${globalRowNum}" s="22"/>` +
+          `<c r="D${globalRowNum}" s="22"/>` +
+          `<c r="E${globalRowNum}" s="23"/>` +
+          `<c r="F${globalRowNum}" s="22"/>` +
+          `<c r="G${globalRowNum}" s="22"/>` +
+          `<c r="H${globalRowNum}" s="22"/>` +
+          `<c r="I${globalRowNum}" s="23"/>` +
+          `<c r="J${globalRowNum}" s="22"/>` +
+          `<c r="K${globalRowNum}" s="22"/>` +
+          `<c r="L${globalRowNum}" s="24"/>` +
+          `<c r="M${globalRowNum}" s="25"/>` +
+          `</row>`;
+        globalRowNum++;
+        posInPage++;
+      }
+
+      const row = pageData[i];
+      const st = getStyles(posInPage === 0 && i === 0 ? 0 : posInPage, pageCount + (pageCount >= DIVIDER_POS ? 1 : 0));
+
+      const noVal = String(dataIdx + i + 1);
+      const emp = row.employee;
+      const nameVal = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+      const officeVal = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
+      const statusVal = row.employee?.status || '—'; // Active or Inactive
+
+      const borrowerNameVal = row.borrowerName || '';
+      const borrowerDateVal = formatDatePart(row.dateBorrowed);
+      const borrowerTimeVal = formatTimePart(row.dateBorrowed);
+
+      const filesVal = '201 File';
+
+      const isReturned = row.action === 'return' || !!row.dateReturned;
+      const returnedNameVal = isReturned ? (row.returnedByName || '') : '';
+      const returnedDateVal = isReturned ? formatDatePart(row.dateReturned) : '';
+      const returnedTimeVal = isReturned ? formatTimePart(row.dateReturned) : '';
+
+      const conformedVal = '';
+      const remarkVal = '';
+
+      const rowHt = calcRowHt(nameVal, officeVal, borrowerNameVal, returnedNameVal);
+
+      newRowsXml += `<row r="${globalRowNum}" spans="1:13" ht="${rowHt}" customHeight="1" x14ac:dyDescent="0.25">`;
+      newRowsXml += `<c r="A${globalRowNum}" s="${st.sA}" t="inlineStr"><is><t>${escapeXml(noVal)}</t></is></c>`;
+      newRowsXml += `<c r="B${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(nameVal)}</t></is></c>`;
+      newRowsXml += `<c r="C${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(officeVal)}</t></is></c>`;
+      newRowsXml += `<c r="D${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(statusVal)}</t></is></c>`;
+      newRowsXml += `<c r="E${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(borrowerNameVal)}</t></is></c>`;
+      newRowsXml += `<c r="F${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(borrowerDateVal)}</t></is></c>`;
+      newRowsXml += `<c r="G${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(borrowerTimeVal)}</t></is></c>`;
+      newRowsXml += `<c r="H${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(filesVal)}</t></is></c>`;
+      newRowsXml += `<c r="I${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(returnedNameVal)}</t></is></c>`;
+      newRowsXml += `<c r="J${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(returnedDateVal)}</t></is></c>`;
+      newRowsXml += `<c r="K${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(returnedTimeVal)}</t></is></c>`;
+      newRowsXml += `<c r="L${globalRowNum}" s="${st.sMid}" t="inlineStr"><is><t>${escapeXml(conformedVal)}</t></is></c>`;
+      newRowsXml += `<c r="M${globalRowNum}" s="${st.sLast}" t="inlineStr"><is><t>${escapeXml(remarkVal)}</t></is></c>`;
+      newRowsXml += `</row>`;
+
+      globalRowNum++;
+      posInPage++;
+    }
+
+    dataIdx += ROWS_PER_PAGE;
+    pageNum++;
+
+    for (let s = 0; s < 13; s++) {
+      newRowsXml += `<row r="${globalRowNum}" spans="1:13" ht="12.75" customHeight="1" x14ac:dyDescent="0.25">` +
+        `<c r="E${globalRowNum}" s="3"/>` +
+        `<c r="F${globalRowNum}" s="3"/>` +
+        `<c r="I${globalRowNum}" s="3"/>` +
+        `<c r="J${globalRowNum}" s="3"/>` +
+        `<c r="M${globalRowNum}" s="4"/>` +
+        `</row>`;
+      globalRowNum++;
+    }
+  }
+
+  // ── Rebuild mergeCells for all pages ─────────────────────────────────────
+  const allMerges: string[] = [];
+  for (let p = 0; p < pageNum; p++) {
+    const start = headerStartRows[p];
+    allMerges.push(
+      `A${start}:M${start}`,
+      `A${1 + start}:M${1 + start}`,
+      `A${2 + start}:M${2 + start}`,
+      `A${3 + start}:M${3 + start}`,
+      `A${4 + start}:M${4 + start}`,
+      `A${5 + start}:M${5 + start}`,
+      `A${6 + start}:A${7 + start}`,
+      `B${6 + start}:B${7 + start}`,
+      `C${6 + start}:C${7 + start}`,
+      `D${6 + start}:D${7 + start}`,
+      `E${6 + start}:G${6 + start}`,
+      `H${6 + start}:H${7 + start}`,
+      `I${6 + start}:K${6 + start}`,
+      `L${6 + start}:L${7 + start}`,
+      `M${6 + start}:M${7 + start}`
+    );
+  }
+
+  const mergeCellsXml = `<mergeCells count="${allMerges.length}">${allMerges.map(r => `<mergeCell ref="${r}"/>`).join('')}</mergeCells>`;
+
+  const newXml = xmlBefore + patchedHeaderRowsXml + newRowsXml + `</sheetData>` +
+    xmlAfterSheetData
+      .replace(/<mergeCells[\s\S]*?<\/mergeCells>/, mergeCellsXml)
+      .replace('</sheetData>', '');
+
+  return { xml: newXml, lastRow: globalRowNum - 1 };
+};
+
 function Dashboard() {
   const navigate = useNavigate();
   const { showToast, showWelcomeToast } = useToast();
@@ -517,6 +850,7 @@ function Dashboard() {
   const [isDeleteBorrowConfirmOpen, setIsDeleteBorrowConfirmOpen] = useState(false);
   const [pendingDeleteBorrowIds, setPendingDeleteBorrowIds] = useState<string[]>([]);
   const [isDeletingBorrow, setIsDeletingBorrow] = useState(false);
+  const [borrowSortPriority, setBorrowSortPriority] = useState<ReportSortConfig[]>([]);
 
   useEffect(() => {
     setSelectedReportRowIds(new Set());
@@ -864,14 +1198,22 @@ function Dashboard() {
           ...source,
           aoNumber: docSource.aoNumber || source.aoNumber,
           aoYear: docSource.aoYear || (isCurrentAo ? source.aoYear : ''),
-          aoType: docSource.aoType || (isCurrentAo ? source.aoType : ''),
+          // Prefer doc's aoType; fall back to employee when this doc matches the current AO.
+          // Also accept legacy isDetailed flag stored directly on the document.
+          aoType: docSource.aoType || (isCurrentAo ? source.aoType : '')
+                  || (docSource.isDetailed === true ? 'Detailed' : ''),
           detailedTo: docSource.detailedTo || (isCurrentAo ? source.detailedTo : ''),
           detailedDivision: docSource.detailedDivision || (isCurrentAo ? source.detailedDivision : ''),
           detailedFunction: docSource.detailedFunction || (isCurrentAo ? source.detailedFunction : ''),
           detailedDate: docSource.detailedDate || (isCurrentAo ? source.detailedDate : null),
+          // detailedOrderFrom/To: prefer doc value; always fall back to the employee record
+          // regardless of isCurrentAo — the employee is the only source when the doc has no dates.
+          detailedOrderFrom: docSource.detailedOrderFrom || docSource.appointmentFrom || source.detailedOrderFrom || null,
+          detailedOrderTo: docSource.detailedOrderTo || docSource.appointmentTo || source.detailedOrderTo || null,
           designatedPositionFunction: docSource.designatedPositionFunction || (isCurrentAo ? source.designatedPositionFunction : ''),
-          designatedOrderFrom: docSource.designatedOrderFrom || (isCurrentAo ? source.designatedOrderFrom : null),
-          designatedOrderTo: docSource.designatedOrderTo || (isCurrentAo ? source.designatedOrderTo : null),
+          // Same fallback logic for designated order dates
+          designatedOrderFrom: docSource.designatedOrderFrom || source.designatedOrderFrom || null,
+          designatedOrderTo: docSource.designatedOrderTo || source.designatedOrderTo || null,
           appointmentFrom: docSource.appointmentFrom || (isCurrentAo ? source.appointmentFrom : null),
           appointmentTo: docSource.appointmentTo || (isCurrentAo ? source.appointmentTo : null),
         }
@@ -880,16 +1222,20 @@ function Dashboard() {
       const aoType = inferAoType(activeSource);
 
       // Detailed: duration = detailedOrderFrom / detailedOrderTo
+      //           fall back to detailedDate for "from" when detailedOrderFrom is absent (legacy records)
       // Designated: duration = designatedOrderFrom / designatedOrderTo
       const durationFrom = aoType === 'Detailed'
-        ? String(activeSource.detailedOrderFrom || '').trim()
+        ? String(activeSource.detailedOrderFrom || activeSource.detailedDate || '').trim()
         : String(activeSource.designatedOrderFrom || '').trim();
       const durationTo = aoType === 'Detailed'
         ? String(activeSource.detailedOrderTo || '').trim()
         : String(activeSource.designatedOrderTo || '').trim();
 
       const aoOrderMonth = durationFrom
-        ? String(new Date(durationFrom).getMonth() + 1).padStart(2, '0')
+        ? (() => {
+            const d = new Date(durationFrom);
+            return isNaN(d.getTime()) ? '' : String(d.getMonth() + 1).padStart(2, '0');
+          })()
         : '';
 
       const dateOfBirth = birthDate ? formatDateDDMMYYYY(source.dateOfBirth) : '-';
@@ -1357,8 +1703,116 @@ function Dashboard() {
 
   // --- Pulled-Out Files columns, helpers, and filtering ---
 
+  const handleBorrowSort = (field: string) => {
+    const validSortFields = new Set([
+      'employeeName',
+      'officeName',
+      'position',
+      'appointmentStatus',
+      'borrowerName',
+      'purpose',
+      'dateBorrowed',
+      'releasedBy',
+      'status',
+      'dateReturned',
+      'returnedByName',
+      'receivedBy',
+      'fileCondition',
+      'remarks'
+    ]);
+
+    if (!validSortFields.has(field)) return;
+
+    setBorrowSortPriority((prev) => {
+      const existing = prev.findIndex((item) => item.key === field);
+      if (existing >= 0) {
+        if (prev[existing].direction === 'asc') {
+          const updated = [...prev];
+          updated[existing] = { ...updated[existing], direction: 'desc' };
+          return updated;
+        } else {
+          return prev.filter((_, i) => i !== existing);
+        }
+      }
+      return [...prev, { key: field, direction: 'asc' }];
+    });
+  };
+
+  const handleRemoveBorrowSort = (field: string) => {
+    setBorrowSortPriority((prev) => prev.filter((item) => item.key !== field));
+  };
+
+  const renderBorrowSortableHeader = (label: string, field: string) => {
+    const priorityIndex = borrowSortPriority.findIndex((item) => item.key === field) + 1;
+    const active = borrowSortPriority.some((item) => item.key === field);
+    const currentDirection = borrowSortPriority.find((item) => item.key === field)?.direction;
+
+    return (
+      <div className="reports-view__header-cell">
+        <span>{label}</span>
+        <div className="reports-view__sort-controls">
+          <button
+            type="button"
+            className={`reports-view__sort-btn${active ? ' reports-view__sort-btn--active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); handleBorrowSort(field); }}
+            title={active ? (currentDirection === 'asc' ? `Sort ${label} descending` : `Remove ${label} sort`) : `Sort by ${label}`}
+          >
+            {priorityIndex > 0 ? <span className="reports-view__sort-priority">{priorityIndex}</span> : null}
+            {active ? (currentDirection === 'asc' ? '▲' : '▼') : '⇅'}
+          </button>
+          {active && (
+            <button
+              type="button"
+              className="reports-view__sort-remove-btn"
+              onClick={(e) => { e.stopPropagation(); handleRemoveBorrowSort(field); }}
+              title={`Remove ${label} sort`}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const getBorrowSortValue = (row: any, field: string) => {
+    switch (field) {
+      case 'employeeName':
+        return row.employee ? `${row.employee.lastName}, ${row.employee.firstName}` : row.employeeId || '';
+      case 'officeName':
+        return row.employee?.yellowBox?.office || row.employee?.officeName || '';
+      case 'position':
+        return row.employee?.position || '';
+      case 'appointmentStatus':
+        return row.employee?.status || '';
+      case 'borrowerName':
+        return row.borrowerName || '';
+      case 'purpose':
+        return row.purpose || '';
+      case 'dateBorrowed':
+        return row.dateBorrowed || '';
+      case 'releasedBy':
+        return row.releasedBy || '';
+      case 'status':
+        const isReturned = row.action === 'return' || !!row.dateReturned;
+        return isReturned ? 'Returned' : 'Borrowed';
+      case 'dateReturned':
+        return row.dateReturned || '';
+      case 'returnedByName':
+        return row.returnedByName || '';
+      case 'receivedBy':
+        return row.receivedBy || '';
+      case 'fileCondition':
+        return row.fileCondition || '';
+      case 'remarks':
+        return row.remarks || '';
+      default:
+        return '';
+    }
+  };
+
   const filteredBorrowRows = useMemo(() => {
-    return borrowLogs.filter((log) => {
+    const filtered = borrowLogs.filter((log) => {
       const emp = log.employee;
       const empName = emp ? `${emp.firstName} ${emp.lastName}`.toLowerCase() : '';
       const borrower = (log.borrowerName || '').toLowerCase();
@@ -1405,7 +1859,21 @@ function Dashboard() {
 
       return matchSearch && matchStatus && matchBorrowDate && matchReturnDate;
     });
-  }, [borrowLogs, borrowSearchTerm, borrowStatusFilter, borrowDateFromFilter, borrowDateToFilter, returnDateFromFilter, returnDateToFilter]);
+
+    if (borrowSortPriority.length === 0) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      for (const sort of borrowSortPriority) {
+        const valueA = getBorrowSortValue(a, sort.key);
+        const valueB = getBorrowSortValue(b, sort.key);
+        const comparison = String(valueA || '').localeCompare(String(valueB || ''), undefined, { sensitivity: 'base' });
+        if (comparison !== 0) {
+          return sort.direction === 'asc' ? comparison : -comparison;
+        }
+      }
+      return 0;
+    });
+  }, [borrowLogs, borrowSearchTerm, borrowStatusFilter, borrowDateFromFilter, borrowDateToFilter, returnDateFromFilter, returnDateToFilter, borrowSortPriority]);
 
   const borrowTotalPages = Math.ceil(filteredBorrowRows.length / borrowItemsPerPage);
 
@@ -1472,7 +1940,7 @@ function Dashboard() {
     const cols: Column<any>[] = [
       {
         key: 'employeeName',
-        header: 'Employee Name (Owner)',
+        header: renderBorrowSortableHeader('Employee Name (Owner)', 'employeeName'),
         render: (row) => {
           const emp = row.employee;
           return emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
@@ -1480,17 +1948,17 @@ function Dashboard() {
       },
       {
         key: 'officeName',
-        header: 'Office/Hospital',
+        header: renderBorrowSortableHeader('Office/Hospital', 'officeName'),
         render: (row) => row.employee?.yellowBox?.office || row.employee?.officeName || '—'
       },
       {
         key: 'position',
-        header: 'Position / Designation',
+        header: renderBorrowSortableHeader('Position / Designation', 'position'),
         render: (row) => row.employee?.position || '—'
       },
       {
         key: 'appointmentStatus',
-        header: 'Employment Status',
+        header: renderBorrowSortableHeader('Employment Status', 'appointmentStatus'),
         render: (row) => {
           const status = row.employee?.status;
           return status ? (status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) : '—';
@@ -1498,27 +1966,27 @@ function Dashboard() {
       },
       {
         key: 'borrowerName',
-        header: 'Borrowed By',
+        header: renderBorrowSortableHeader('Borrowed By', 'borrowerName'),
         render: (row) => row.borrowerName || '—'
       },
       {
         key: 'purpose',
-        header: 'Purpose / Reason',
+        header: renderBorrowSortableHeader('Purpose / Reason', 'purpose'),
         render: (row) => row.purpose || '—'
       },
       {
         key: 'dateBorrowed',
-        header: 'Date Borrowed',
+        header: renderBorrowSortableHeader('Date Borrowed', 'dateBorrowed'),
         render: (row) => formatDateMDY(row.dateBorrowed)
       },
       {
         key: 'releasedBy',
-        header: 'Released By',
+        header: renderBorrowSortableHeader('Released By', 'releasedBy'),
         render: (row) => row.releasedBy || '—'
       },
       {
         key: 'status',
-        header: 'Status',
+        header: renderBorrowSortableHeader('Status', 'status'),
         render: (row) => {
           const isReturned = row.action === 'return' || !!row.dateReturned;
           return (
@@ -1530,7 +1998,7 @@ function Dashboard() {
       },
       {
         key: 'dateReturned',
-        header: 'Date Returned',
+        header: renderBorrowSortableHeader('Date Returned', 'dateReturned'),
         render: (row) => {
           const isReturned = row.action === 'return' || !!row.dateReturned;
           return isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
@@ -1538,7 +2006,7 @@ function Dashboard() {
       },
       {
         key: 'returnedByName',
-        header: 'Returned By',
+        header: renderBorrowSortableHeader('Returned By', 'returnedByName'),
         render: (row) => {
           const isReturned = row.action === 'return' || !!row.dateReturned;
           return isReturned ? row.returnedByName || '—' : '';
@@ -1546,7 +2014,7 @@ function Dashboard() {
       },
       {
         key: 'receivedBy',
-        header: 'Received By',
+        header: renderBorrowSortableHeader('Received By', 'receivedBy'),
         render: (row) => {
           const isReturned = row.action === 'return' || !!row.dateReturned;
           return isReturned ? row.receivedBy || '—' : '';
@@ -1554,7 +2022,7 @@ function Dashboard() {
       },
       {
         key: 'fileCondition',
-        header: 'File Condition',
+        header: renderBorrowSortableHeader('File Condition', 'fileCondition'),
         render: (row) => {
           const isReturned = row.action === 'return' || !!row.dateReturned;
           return isReturned ? row.fileCondition || '—' : '';
@@ -1562,7 +2030,7 @@ function Dashboard() {
       },
       {
         key: 'remarks',
-        header: 'Remarks',
+        header: renderBorrowSortableHeader('Remarks', 'remarks'),
         render: (row) => {
           const isReturned = row.action === 'return' || !!row.dateReturned;
           return isReturned ? row.remarks || '—' : '';
@@ -1579,7 +2047,7 @@ function Dashboard() {
       return true;
     });
     return [selectionColumn, ...activeCols];
-  }, [visibleBorrowColumns, paginatedBorrowLogs, selectedBorrowRowIds, borrowStatusFilter]);
+  }, [visibleBorrowColumns, paginatedBorrowLogs, selectedBorrowRowIds, borrowStatusFilter, borrowSortPriority]);
 
   const handleDeleteBorrowEntries = (ids: string[]) => {
     setPendingDeleteBorrowIds(ids);
@@ -1700,50 +2168,138 @@ function Dashboard() {
     printWindow.document.close();
   };
 
-  const handleExportBorrowLogsToExcel = () => {
-    const dataToExport = filteredBorrowRows.map((row, idx) => {
-      const emp = row.employee;
-      const empName = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
-      const isReturned = row.action === 'return' || !!row.dateReturned;
-      const record: any = {
-        '#': idx + 1,
-        'Employee File (Owner)': empName,
-        'Employment Status': row.employee?.appointmentStatus || '—',
-        'Position': row.employee?.position || '—',
-        'Office': row.employee?.yellowBox?.office || row.employee?.officeName || '—',
-        'Borrowed By': row.borrowerName || '—',
-        'Purpose': row.purpose || '—',
-        'Date Borrowed': formatDateMDY(row.dateBorrowed),
-        'Released By': row.releasedBy || '—',
-        'Status': isReturned ? 'Returned' : 'Borrowed',
-      };
+  const formatDateTime = (dateVal: any) => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${month}/${day}/${year} ${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  };
 
-      if (borrowStatusFilter !== 'Borrowed') {
-        record['Date Returned'] = isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
-        record['Returned By'] = isReturned ? (row.returnedByName || '—') : '';
-        record['Received By'] = isReturned ? (row.receivedBy || '—') : '';
-        record['File Condition'] = isReturned ? (row.fileCondition || '—') : '';
-        record['Remarks'] = isReturned ? (row.remarks || '—') : '';
+  const handleExportBorrowLogsToExcel = async () => {
+    const title = 'PULLED-OUT FILES REPORT';
+    try {
+      // Fetch the template file
+      const response = await fetch('/template.xlsx');
+      if (!response.ok) throw new Error('Template file not found or failed to load');
+      const arrayBuffer = await response.arrayBuffer();
+
+      // Load zip container
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      const sheetXmlPath = 'xl/worksheets/sheet1.xml';
+      const sheetXmlStr = await zip.file(sheetXmlPath)?.async('string');
+      if (!sheetXmlStr) throw new Error('Invalid excel template package: sheet1.xml missing');
+
+      // Modify sheetData XML content
+      const { xml: modifiedXml, lastRow } = modifyBorrowSheetXml(sheetXmlStr, title, filteredBorrowRows);
+
+      // Patch styles.xml: remove shrinkToFit and ensure wrapText is set on target columns
+      const stylesXmlPath = 'xl/styles.xml';
+      const stylesXmlStr = await zip.file(stylesXmlPath)?.async('string');
+      if (stylesXmlStr) {
+        const patchedStylesXml = stylesXmlStr.replace(
+          /<cellXfs\s+count="(\d+)">([\s\S]*?)<\/cellXfs>/,
+          (match: string, count: string, xfsContent: string) => {
+            const xfRegex = /<xf\s+([^>]*)>([\s\S]*?)<\/xf>/g;
+            let idx = 0;
+            const modifiedXfs = xfsContent.replace(xfRegex, (xfMatch: string, xfAttrs: string, xfBody: string) => {
+              let updatedBody = xfBody;
+              const targetIndexes = [12, 13, 15, 16, 17, 19, 22, 23, 28, 29, 30, 32];
+              if (targetIndexes.includes(idx)) {
+                if (updatedBody.includes('<alignment')) {
+                  updatedBody = updatedBody.replace(/<alignment\s+([^>]*)\/>/, (alignMatch: string, alignAttrs: string) => {
+                    const cleanedAttrs = alignAttrs
+                      .replace(/\s*shrinkToFit="[^"]*"/g, '')
+                      .replace(/\s*wrapText="[^"]*"/g, '');
+                    return `<alignment ${cleanedAttrs} wrapText="1"/>`;
+                  });
+                }
+              } else {
+                if (updatedBody.includes('<alignment')) {
+                  updatedBody = updatedBody.replace(/<alignment\s+([^>]*)\/>/, (alignMatch: string, alignAttrs: string) => {
+                    const cleanedAttrs = alignAttrs.replace(/\s*shrinkToFit="[^"]*"/g, '');
+                    return `<alignment ${cleanedAttrs}/>`;
+                  });
+                }
+              }
+              idx++;
+              return `<xf ${xfAttrs}>${updatedBody}</xf>`;
+            });
+            return `<cellXfs count="${count}">${modifiedXfs}</cellXfs>`;
+          }
+        );
+        zip.file(stylesXmlPath, patchedStylesXml);
       }
 
-      return record;
-    });
+      // Add <sheetPr fitToPage> and update pageSetup with fitToWidth=1
+      const lastColLetter = 'M'; // columns go from A to M
+      let finalXml = modifiedXml;
+      // Update sheet dimension to match the exact row count written
+      finalXml = finalXml.replace(
+        /<dimension\s+ref="[^"]*"\s*\/>/,
+        `<dimension ref="A1:${lastColLetter}${lastRow}"/>`
+      );
 
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Pulled-Out Files');
+      if (!finalXml.includes('<sheetPr')) {
+        finalXml = finalXml.replace(
+          /(<(?:dimension|sheetViews)[^>]*(?:\/>|>))/,
+          '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>$1'
+        );
+      }
+      finalXml = finalXml.replace(
+        /<pageSetup([^>]*?)\/>/,
+        (_match: string, attrs: string) => {
+          const cleaned = attrs
+            .replace(/\s*fitToWidth="[^"]*"/g, '')
+            .replace(/\s*fitToHeight="[^"]*"/g, '')
+            .replace(/\s*scale="[^"]*"/g, '')
+            .replace(/\s*r:id="[^"]*"/g, '');
+          return `<pageSetup${cleaned} fitToWidth="1" fitToHeight="0"/>`;
+        }
+      );
+      zip.file(sheetXmlPath, finalXml);
 
-    // Auto-fit column widths
-    const maxLens = Object.keys(dataToExport[0] || {}).map(key => {
-      const maxColLen = dataToExport.reduce((max, r: any) => {
-        const len = String(r[key] || '').length;
-        return len > max ? len : max;
-      }, key.length);
-      return { wch: maxColLen + 3 };
-    });
-    worksheet['!cols'] = maxLens;
+      // Remove printerSettings relationship from sheet1.xml.rels and delete printerSettings1.bin
+      const relsXmlPath = 'xl/worksheets/_rels/sheet1.xml.rels';
+      const relsXmlStr = await zip.file(relsXmlPath)?.async('string');
+      if (relsXmlStr) {
+        const patchedRelsXml = relsXmlStr.replace(
+          /<Relationship[^>]*printerSettings[^>]*\/>/,
+          ''
+        );
+        zip.file(relsXmlPath, patchedRelsXml);
+      }
+      zip.remove('xl/printerSettings/printerSettings1.bin');
 
-    XLSX.writeFile(workbook, `Pulled-Out_Files_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      // Patch workbook.xml print area to match the exact row count written
+      const workbookXmlPath = 'xl/workbook.xml';
+      const workbookXmlStr = await zip.file(workbookXmlPath)?.async('string');
+      if (workbookXmlStr) {
+        const patchedWorkbookXml = workbookXmlStr.replace(
+          /<definedName name="_xlnm\.Print_Area"([^>]*)>([^<]*)<\/definedName>/,
+          (match: string, attrs: string, val: string) => {
+            const newVal = val.replace(/\$[A-Z]\$\d+$/, `$${lastColLetter}$${lastRow}`);
+            return `<definedName name="_xlnm.Print_Area"${attrs}>${newVal}</definedName>`;
+          }
+        );
+        zip.file(workbookXmlPath, patchedWorkbookXml);
+      }
+
+      // Generate blob and download
+      const contentBlob = await zip.generateAsync({ type: 'blob' });
+      saveAs(contentBlob, `Pulled-Out_Files_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast('📊 Report exported successfully!', 'success');
+    } catch (error: any) {
+      console.error('XLSX export error:', error);
+      showToast(`Failed to export report: ${error.message}`, 'error');
+    }
   };
 
   const reportColumns = useMemo<Column<ReportRow>[]>(() => {
@@ -2851,6 +3407,13 @@ function Dashboard() {
               mimeType: aoFile.type || 'application/pdf',
               aoNumber: formData.aoNumber,
               aoYear: formData.aoYear,
+              aoType: formData.aoType,
+              detailedTo: formData.detailedTo,
+              detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
+              detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
+              designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
+              designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
+              designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
               autoRename,
             },
             currentUser?.id,
@@ -2941,6 +3504,13 @@ function Dashboard() {
                 mimeType: aoFile.type || 'application/pdf',
                 aoNumber: formData.aoNumber,
                 aoYear: formData.aoYear,
+                aoType: formData.aoType,
+                detailedTo: formData.detailedTo,
+                detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
+                detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
+                designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
+                designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
+                designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
                 autoRename,
               },
               currentUser?.id,
@@ -2978,6 +3548,13 @@ function Dashboard() {
               mimeType: aoFile.type || 'application/pdf',
               aoNumber: formData.aoNumber,
               aoYear: formData.aoYear,
+              aoType: formData.aoType,
+              detailedTo: formData.detailedTo,
+              detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
+              detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
+              designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
+              designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
+              designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
               autoRename,
             },
             currentUser?.id,
@@ -5668,7 +6245,6 @@ function Dashboard() {
                       })}
                     </tbody>
                   </table>
-
                 </div>
               );
             });
@@ -5740,19 +6316,6 @@ function Dashboard() {
                 padding: '10px 12px',
                 textAlign: 'center'
               }}>
-                <img
-                  src="/template_logo.png"
-                  alt="Logo"
-                  style={{
-                    position: 'absolute',
-                    left: '28%',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    height: '65px',
-                    width: 'auto'
-                  }}
-                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                />
                 <div style={{ display: 'inline-block', textAlign: 'center' }}>
                   <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
                   <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
@@ -5762,26 +6325,26 @@ function Dashboard() {
               </div>
             );
 
-            // Filter columns to only show active/visible ones
-            const activeCols = Object.entries(BORROW_COLUMN_LABELS)
-              .filter(([k]) => {
-                if (visibleBorrowColumns[k] === false) return false;
-                if (borrowStatusFilter === 'Borrowed') {
-                  const toHide = ['dateReturned', 'returnedByName', 'receivedBy', 'fileCondition', 'remarks'];
-                  if (toHide.includes(k)) return false;
-                }
-                return true;
-              });
-
             const tableHeader = (
               <thead>
                 <tr style={{ backgroundColor: '#ffffff' }}>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%' }}>NO.</th>
-                  {activeCols.map(([k, label]) => (
-                    <th key={k} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold' }}>
-                      {label}
-                    </th>
-                  ))}
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%' }}>NO.</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>EMPLOYEE NAME</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>OFFICE/HOSPITAL</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>EMPLOYMENT STATUS</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>BORROWER</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>NAME OF FILES</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>RETURNED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>RECORDS CONFORMED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>REMARK</th>
+                </tr>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle' }}>NAME</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>TIME</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle' }}>NAME</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>TIME</th>
                 </tr>
               </thead>
             );
@@ -5802,11 +6365,11 @@ function Dashboard() {
                     borderBottom: '1px solid #000',
                     letterSpacing: '0.3px'
                   }}>PULLED-OUT FILES REPORT</div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif" }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
                     {tableHeader}
                     <tbody>
                       <tr>
-                        <td colSpan={activeCols.length + 1} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>
+                        <td colSpan={14} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>
                           No records found.
                         </td>
                       </tr>
@@ -5848,7 +6411,7 @@ function Dashboard() {
                       </span>
                     )}
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif" }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
                     {tableHeader}
                     <tbody>
                       {pageRows.map((row, idx) => {
@@ -5859,35 +6422,55 @@ function Dashboard() {
 
                         return (
                           <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
                               {globalIdx + 1}
                             </td>
-                            {activeCols.map(([colKey]) => {
-                              let cellValue = '';
-                              if (colKey === 'employeeName') cellValue = empName;
-                              else if (colKey === 'appointmentStatus') {
-                                const status = row.employee?.status;
-                                cellValue = status ? (status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) : '—';
-                              }
-                              else if (colKey === 'position') cellValue = row.employee?.position || '—';
-                              else if (colKey === 'officeName') cellValue = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
-                              else if (colKey === 'borrowerName') cellValue = row.borrowerName || '—';
-                              else if (colKey === 'purpose') cellValue = row.purpose || '—';
-                              else if (colKey === 'dateBorrowed') cellValue = formatDateMDY(row.dateBorrowed);
-                              else if (colKey === 'releasedBy') cellValue = row.releasedBy || '—';
-                              else if (colKey === 'status') cellValue = isReturned ? 'Returned' : 'Borrowed';
-                              else if (colKey === 'dateReturned') cellValue = isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
-                              else if (colKey === 'returnedByName') cellValue = isReturned ? (row.returnedByName || '—') : '';
-                              else if (colKey === 'receivedBy') cellValue = isReturned ? (row.receivedBy || '—') : '';
-                              else if (colKey === 'fileCondition') cellValue = isReturned ? (row.fileCondition || '—') : '';
-                              else if (colKey === 'remarks') cellValue = isReturned ? (row.remarks || '—') : '';
-
-                              return (
-                                <td key={colKey} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', wordBreak: 'break-word' }}>
-                                  {cellValue}
-                                </td>
-                              );
-                            })}
+                            {/* Employee Name */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {empName}
+                            </td>
+                            {/* Office/Hospital */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {row.employee?.yellowBox?.office || row.employee?.officeName || '—'}
+                            </td>
+                            {/* Employment Status */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.employee?.status || '—'}
+                            </td>
+                            {/* Borrower Name */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {row.borrowerName || ''}
+                            </td>
+                            {/* Borrower Date */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
+                            </td>
+                            {/* Borrower Time */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </td>
+                            {/* Name of Files */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              201 File
+                            </td>
+                            {/* Returned Name */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {isReturned ? (row.returnedByName || '') : ''}
+                            </td>
+                            {/* Returned Date */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
+                            </td>
+                            {/* Returned Time */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </td>
+                            {/* Records Conformed */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            </td>
+                            {/* Remark */}
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            </td>
                           </tr>
                         );
                       })}

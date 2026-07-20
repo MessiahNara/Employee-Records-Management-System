@@ -36,7 +36,7 @@
 /* Chat Main Layout Wrapper */
 .chats-container {
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: 300px 1fr;
   gap: var(--spacing-lg);
   flex: 1;
   overflow: hidden;
@@ -294,6 +294,41 @@
 .chats-sidebar__add-btn:hover {
   background: var(--color-primary-dark, #4f46e5);
   transform: scale(1.05);
+}
+
+.chats-sidebar__search {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  position: relative;
+}
+
+.chats-sidebar__search-icon {
+  position: absolute;
+  left: 28px;
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+}
+
+.chats-sidebar__search input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.chats-sidebar__search input:focus {
+  border-color: var(--color-primary);
+  background-color: var(--bg-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
 .chats-sidebar__list {
@@ -660,4 +695,38 @@
 
 .contact-item--active .online-indicator {
   border-color: rgba(99, 102, 241, 0.08);
+}
+
+/* Date dividers in message thread */
+.chat-messages__date-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: var(--spacing-lg) 0;
+  position: relative;
+}
+
+.chat-messages__date-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background-color: var(--border-color);
+  z-index: 0;
+}
+
+.chat-messages__date-label {
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px var(--spacing-md);
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.3px;
+  text-transform: capitalize;
 }

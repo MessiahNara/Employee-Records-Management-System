@@ -379,7 +379,7 @@ function File201() {
         <div className="file201-page__header">
           <h2 className="file201-page__title">
             <MdFolderOpen className="file201-page__title-icon" />
-            <span>201 File Digital Sorting</span>
+            <span>File Locator</span>
           </h2>
           <p className="file201-page__subtitle">
             Manage physical 201 records folders stored in Boxes.

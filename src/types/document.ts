@@ -21,6 +21,8 @@ export interface EmployeeDocument {
   detailedDivision?: string;
   detailedFunction?: string;
   detailedDate?: string;
+  detailedOrderFrom?: string;
+  detailedOrderTo?: string;
   designatedPositionFunction?: string;
   designatedOrderFrom?: string;
   designatedOrderTo?: string;

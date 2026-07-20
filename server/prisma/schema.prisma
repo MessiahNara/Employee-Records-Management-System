@@ -110,6 +110,8 @@ model Document {
   detailedDivision            String?
   detailedFunction            String?
   detailedDate                DateTime?
+  detailedOrderFrom           DateTime? // start date of detailed order
+  detailedOrderTo             DateTime? // end date of detailed order
   designatedPositionFunction  String?
   designatedOrderFrom         DateTime?
   designatedOrderTo           DateTime?

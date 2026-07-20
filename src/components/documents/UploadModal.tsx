@@ -189,6 +189,8 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
         detailedDivision,
         detailedFunction,
         detailedDate: aoType === 'Detailed' ? appointmentFrom : undefined,
+        detailedOrderFrom: aoType === 'Detailed' ? appointmentFrom : undefined,
+        detailedOrderTo: aoType === 'Detailed' ? appointmentTo : undefined,
         designatedPositionFunction,
         designatedOrderFrom: aoType === 'Designated' ? designatedOrderFrom : undefined,
         designatedOrderTo: aoType === 'Designated' ? designatedOrderTo : undefined,

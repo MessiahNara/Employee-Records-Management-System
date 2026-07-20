@@ -262,9 +262,11 @@
 .calendar-day__events {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 4px;
   margin-top: auto;
   align-items: center;
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .calendar-day__dot {
@@ -348,25 +350,25 @@
 }
 
 .todo-card__title-icon {
-  color: #ec4899;
+  color: #a855f7;
 }
-
+ 
 .todo-card__badge {
   font-size: var(--font-size-sm);
   font-weight: 600;
-  background-color: rgba(236, 72, 153, 0.1);
-  color: #ec4899;
+  background-color: rgba(168, 85, 247, 0.1);
+  color: #a855f7;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: 12px;
 }
-
+ 
 .todo-form {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-lg);
 }
-
+ 
 .todo-form__input {
   width: 100%;
   box-sizing: border-box;
@@ -379,18 +381,18 @@
   font-size: var(--font-size-base);
   transition: border-color var(--transition-fast);
 }
-
+ 
 .todo-form__input:focus {
   outline: none;
-  border-color: #ec4899;
+  border-color: #a855f7;
 }
-
+ 
 .todo-form__row {
   display: flex;
   gap: var(--spacing-sm);
   width: 100%;
 }
-
+ 
 .todo-form__date-input {
   flex: 1;
   box-sizing: border-box;
@@ -404,12 +406,12 @@
   transition: border-color var(--transition-fast);
   cursor: pointer;
 }
-
+ 
 .todo-form__date-input:focus {
   outline: none;
-  border-color: #ec4899;
+  border-color: #a855f7;
 }
-
+ 
 .todo-form__btn {
   flex: 1;
   box-sizing: border-box;
@@ -418,14 +420,14 @@
   align-items: center;
   justify-content: center;
   padding: 0 var(--spacing-md) !important;
-  background-color: #ec4899 !important;
-  border-color: #ec4899 !important;
+  background-color: #a855f7 !important;
+  border-color: #a855f7 !important;
   font-weight: 600 !important;
 }
-
+ 
 .todo-form__btn:hover {
-  background-color: #db2777 !important;
-  border-color: #db2777 !important;
+  background-color: #9333ea !important;
+  border-color: #9333ea !important;
 }
 
 /* Todo List Scroll */

@@ -51,6 +51,7 @@ function Chats() {
   // UI States
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [sidebarSearchQuery, setSidebarSearchQuery] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -230,6 +231,45 @@ function Chats() {
     }
   };
 
+  const getMessageDateLabel = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (date.toDateString() === today.toDateString()) {
+        return 'Today';
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+      } else {
+        const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+        return date.toLocaleDateString([], options);
+      }
+    } catch {
+      return '';
+    }
+  };
+
+  const formatSidebarTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      if (date.toDateString() === today.toDateString()) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday';
+      } else {
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
+    } catch {
+      return '';
+    }
+  };
+
   const getInitials = (first: string, last: string) => {
     return `${first.charAt(0) || ''}${last.charAt(0) || ''}`.toUpperCase() || '?';
   };
@@ -248,6 +288,11 @@ function Chats() {
     return fullName.includes(query) || username.includes(query);
   });
 
+  const filteredRecentContacts = recentContacts.filter((contact) => {
+    const fullName = `${contact.firstName} ${contact.lastName}`.toLowerCase();
+    return fullName.includes(sidebarSearchQuery.toLowerCase().trim());
+  });
+
   return (
     <div className="chats-page">
       <div className="chats-page__header">
@@ -261,7 +306,94 @@ function Chats() {
       </div>
 
       <div className="chats-container">
-        {/* Left Side: Message Thread */}
+        {/* Left Side: Contacts / Active Chats Sidebar */}
+        <Card className="chats-sidebar">
+          <div className="chats-sidebar__header">
+            <h3>Inbox</h3>
+            <button
+              className="chats-sidebar__add-btn"
+              onClick={() => setShowAddUserModal(true)}
+              title="Start a new chat"
+            >
+              <MdAdd size={20} />
+            </button>
+          </div>
+
+          <div className="chats-sidebar__search">
+            <MdSearch className="chats-sidebar__search-icon" />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={sidebarSearchQuery}
+              onChange={(e) => setSidebarSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="chats-sidebar__list">
+            {filteredRecentContacts.length === 0 ? (
+              <div className="chats-sidebar__empty">
+                <p>{recentContacts.length === 0 ? 'No active conversations.' : 'No conversations found.'}</p>
+                {recentContacts.length === 0 && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowAddUserModal(true)}
+                    style={{ marginTop: '8px' }}
+                  >
+                    <MdAdd size={16} style={{ marginRight: '4px' }} /> Start Chat
+                  </Button>
+                )}
+              </div>
+            ) : (
+              filteredRecentContacts.map((contact) => {
+                const isActive = activeContact?.id === contact.id;
+                const unreadCount = unreadCounts[contact.id] || 0;
+                const lastMsg = contact.lastMessage;
+                const lastMsgTime = lastMsg ? formatSidebarTime(lastMsg.createdAt) : '';
+                const lastMsgText = lastMsg
+                  ? (lastMsg.senderId === currentUser?.id ? 'You: ' : '') + lastMsg.content
+                  : '';
+
+                return (
+                  <div
+                    key={contact.id}
+                     className={`contact-item ${isActive ? 'contact-item--active' : ''}`}
+                    onClick={() => setActiveContact(contact)}
+                  >
+                    <div className="contact-item__avatar-container">
+                      <div className="contact-item__avatar">
+                        {getInitials(contact.firstName, contact.lastName)}
+                      </div>
+                      {checkIsOnline(contact.lastActive) && <span className="online-indicator" />}
+                    </div>
+                    <div className="contact-item__info">
+                      <div className="contact-item__name-row">
+                        <span className="contact-item__name">
+                          {contact.firstName} {contact.lastName}
+                        </span>
+                        {lastMsgTime && (
+                          <span className="contact-item__time">
+                            {lastMsgTime}
+                          </span>
+                        )}
+                      </div>
+                      <div className="contact-item__detail-row">
+                        <span className={`contact-item__preview ${unreadCount > 0 ? 'contact-item__preview--unread' : ''}`}>
+                          {lastMsgText || formatRole(contact.role)}
+                        </span>
+                        {unreadCount > 0 && (
+                          <span className="contact-item__badge">{unreadCount}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
+
+        {/* Right Side: Message Thread */}
         <Card className="chats-main">
           {activeContact ? (
             <>
@@ -305,22 +437,36 @@ function Chats() {
                     <p>This is the start of your private chat history with {activeContact.firstName}.</p>
                   </div>
                 ) : (
-                  messages.map((msg) => {
-                    const isOwn = msg.senderId === currentUser?.id;
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`chat-message ${isOwn ? 'chat-message--own' : 'chat-message--other'}`}
-                      >
-                        <div className="chat-message__body">
-                          <div className="chat-message__bubble">
-                            <p className="chat-message__text">{msg.content}</p>
-                            <span className="chat-message__time">{formatTime(msg.createdAt)}</span>
+                  (() => {
+                    let lastDateLabel = '';
+                    return messages.map((msg) => {
+                      const isOwn = msg.senderId === currentUser?.id;
+                      const msgDateLabel = getMessageDateLabel(msg.createdAt);
+                      const showDateDivider = msgDateLabel !== lastDateLabel;
+                      if (showDateDivider) {
+                        lastDateLabel = msgDateLabel;
+                      }
+                      return (
+                        <React.Fragment key={msg.id}>
+                          {showDateDivider && (
+                            <div className="chat-messages__date-divider">
+                              <span className="chat-messages__date-label">{msgDateLabel}</span>
+                            </div>
+                          )}
+                          <div
+                            className={`chat-message ${isOwn ? 'chat-message--own' : 'chat-message--other'}`}
+                          >
+                            <div className="chat-message__body">
+                              <div className="chat-message__bubble">
+                                <p className="chat-message__text">{msg.content}</p>
+                                <span className="chat-message__time">{formatTime(msg.createdAt)}</span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                        </React.Fragment>
+                      );
+                    });
+                  })()
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -353,81 +499,6 @@ function Chats() {
               <p>Select a contact from the panel or click the plus button to start a new chat.</p>
             </div>
           )}
-        </Card>
-
-        {/* Right Side: Contacts / Active Chats Sidebar */}
-        <Card className="chats-sidebar">
-          <div className="chats-sidebar__header">
-            <h3>Inbox</h3>
-            <button
-              className="chats-sidebar__add-btn"
-              onClick={() => setShowAddUserModal(true)}
-              title="Start a new chat"
-            >
-              <MdAdd size={20} />
-            </button>
-          </div>
-
-          <div className="chats-sidebar__list">
-            {recentContacts.length === 0 ? (
-              <div className="chats-sidebar__empty">
-                <p>No active conversations.</p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowAddUserModal(true)}
-                  style={{ marginTop: '8px' }}
-                >
-                  <MdAdd size={16} style={{ marginRight: '4px' }} /> Start Chat
-                </Button>
-              </div>
-            ) : (
-              recentContacts.map((contact) => {
-                const isActive = activeContact?.id === contact.id;
-                const unreadCount = unreadCounts[contact.id] || 0;
-                const lastMsg = contact.lastMessage;
-                const lastMsgTime = lastMsg ? formatTime(lastMsg.createdAt) : '';
-                const lastMsgText = lastMsg
-                  ? (lastMsg.senderId === currentUser?.id ? 'You: ' : '') + lastMsg.content
-                  : '';
-
-                return (
-                  <div
-                    key={contact.id}
-                     className={`contact-item ${isActive ? 'contact-item--active' : ''}`}
-                    onClick={() => setActiveContact(contact)}
-                  >
-                    <div className="contact-item__avatar-container">
-                      <div className="contact-item__avatar">
-                        {getInitials(contact.firstName, contact.lastName)}
-                      </div>
-                      {checkIsOnline(contact.lastActive) && <span className="online-indicator" />}
-                    </div>
-                    <div className="contact-item__info">
-                      <div className="contact-item__name-row">
-                        <span className="contact-item__name">
-                          {contact.firstName} {contact.lastName}
-                        </span>
-                        {lastMsgTime && (
-                          <span className="contact-item__time">
-                            {lastMsgTime}
-                          </span>
-                        )}
-                      </div>
-                      <div className="contact-item__detail-row">
-                        <span className={`contact-item__preview ${unreadCount > 0 ? 'contact-item__preview--unread' : ''}`}>
-                          {lastMsgText || formatRole(contact.role)}
-                        </span>
-                        {unreadCount > 0 && (
-                          <span className="contact-item__badge">{unreadCount}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
         </Card>
       </div>
 

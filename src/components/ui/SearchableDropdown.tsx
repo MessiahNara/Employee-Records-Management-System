@@ -41,8 +41,9 @@ export default function SearchableDropdown({
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        // Only reset to empty/All when the dropdown was actively open, not on every outside click
         if (!searchTermRef.current.trim()) {
-          onChange('All');
+          onChange('');
         }
       }
     };
@@ -125,7 +126,7 @@ export default function SearchableDropdown({
       setIsOpen(false);
       setHighlightedIndex(-1);
       if (!searchTermRef.current.trim()) {
-        onChange('All');
+        onChange('');
       }
     }
   };
@@ -134,7 +135,7 @@ export default function SearchableDropdown({
      e.stopPropagation();
      setSearchTerm('');
      searchTermRef.current = '';
-     onChange('All');
+     onChange('');
      setIsOpen(false);
      setHighlightedIndex(-1);
    };
@@ -158,7 +159,7 @@ export default function SearchableDropdown({
           onBlur={() => {
             setTimeout(() => {
               if (!searchTermRef.current.trim()) {
-                onChange('All');
+                onChange('');
               }
             }, 200);
           }}
