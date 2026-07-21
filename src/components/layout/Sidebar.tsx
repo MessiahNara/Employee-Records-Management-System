@@ -4,7 +4,7 @@ import { getAuthState } from '../../utils/mockAuth';
 import {
   MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder,
   MdAssignmentTurnedIn, MdInsertChart, MdInbox, MdCalendarToday,
-  MdExpandMore, MdChevronRight, MdChat
+  MdExpandMore, MdChevronRight, MdChat, MdInventory
 } from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
@@ -59,7 +59,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     if (currentPath === '/calendar' || currentPath === '/calendar-activities') {
       setIsCalendarOpen(true);
     }
-    if (currentPath === '/reports') {
+    if (currentPath === '/reports' || currentPath === '/reports/pulled-out' || currentPath === '/inventory') {
       setIsReportsOpen(true);
     }
   }, [currentPath]);
@@ -287,6 +287,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
         }
       }
     },
+    { path: '/inventory', label: 'Inventory and Appraisal', icon: MdInventory, iconColor: '#059669' }
   ];
 
   // For non-admins (staff), put Requests under Main
@@ -343,11 +344,13 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   }
 
   const hasAccess = (item: NavItem): boolean => {
+    if (item.requiredRoles && item.requiredRoles.length > 0 && !item.requiredRoles.includes(userRole)) {
+      return false;
+    }
     if (currentUser?.permissions?.allowedTabs) {
       return currentUser.permissions.allowedTabs.includes(item.label);
     }
-    if (!item.requiredRoles || item.requiredRoles.length === 0) return true;
-    return item.requiredRoles.includes(userRole);
+    return true;
   };
 
   return (

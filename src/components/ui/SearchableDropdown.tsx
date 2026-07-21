@@ -63,6 +63,7 @@ export default function SearchableDropdown({
     const val = e.target.value;
     setSearchTerm(val);
     searchTermRef.current = val;
+    onChange(val);
     setIsOpen(true);
     setHighlightedIndex(0); // Reset highlight to first filtered item
   };

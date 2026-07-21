@@ -39,6 +39,45 @@ const requireDeveloperRole = (req: Request, res: Response, next: Function) => {
   next();
 };
 
+import fs from 'fs';
+import path from 'path';
+
+function getRecordLocationsFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'record_locations.json');
+}
+
+const DEFAULT_RECORD_LOCATIONS: string[] = [];
+
+export function getRecordLocations(): string[] {
+  try {
+    const file = getRecordLocationsFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify([], null, 2), 'utf8');
+      return [];
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecordLocations(locs: string[]): void {
+  try {
+    const file = getRecordLocationsFilePath();
+    fs.writeFileSync(file, JSON.stringify(locs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save record locations:', err);
+  }
+}
+
 // GET /api/system-settings
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -54,6 +93,7 @@ router.get('/', async (req: Request, res: Response) => {
       appointmentStatuses: (settings.appointmentStatuses as string[] | null) ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: (settings.officeNames as string[] | null) ?? [],
       positions: (settings.positions as string[] | null) ?? [],
+      recordLocations: getRecordLocations(),
       aoYears: (settings.aoYears as string[] | null) ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: (settings.reasonsForSeparation as string[] | null) ?? DEFAULT_REASONS_FOR_SEPARATION,
     });
@@ -106,13 +146,14 @@ router.put('/', requireSuperAdmin, async (req: Request, res: Response) => {
 // PUT /api/system-settings/dropdown-options - Update dropdown lists (Developer role only)
 router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: Response) => {
   try {
-    const { appointmentStatuses, officeNames, positions, aoYears, reasonsForSeparation } = req.body;
+    const { appointmentStatuses, officeNames, positions, recordLocations, aoYears, reasonsForSeparation } = req.body;
     const updateData: any = {};
     if (Array.isArray(appointmentStatuses)) updateData.appointmentStatuses = appointmentStatuses;
     if (Array.isArray(officeNames)) updateData.officeNames = officeNames;
     if (Array.isArray(positions)) updateData.positions = positions;
     if (Array.isArray(aoYears)) updateData.aoYears = aoYears;
     if (Array.isArray(reasonsForSeparation)) updateData.reasonsForSeparation = reasonsForSeparation;
+    if (Array.isArray(recordLocations)) saveRecordLocations(recordLocations);
 
     let settings = await prisma.systemSetting.findFirst();
     if (settings) {
@@ -125,6 +166,7 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
       appointmentStatuses: (settings.appointmentStatuses as string[] | null) ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: (settings.officeNames as string[] | null) ?? [],
       positions: (settings.positions as string[] | null) ?? [],
+      recordLocations: getRecordLocations(),
       aoYears: (settings.aoYears as string[] | null) ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: (settings.reasonsForSeparation as string[] | null) ?? DEFAULT_REASONS_FOR_SEPARATION,
       message: 'Dropdown options updated successfully',

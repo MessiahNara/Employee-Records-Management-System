@@ -1008,6 +1008,28 @@ export const yellowBoxesApi = {
     }),
 };
 
+// Inventory & Appraisal API
+export const inventoryApi = {
+  getAll: () => apiRequest<any[]>('/inventory'),
+  getById: (id: string) => apiRequest<any>(`/inventory/${id}`),
+  create: (data: any) =>
+    apiRequest<any>('/inventory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: any) =>
+    apiRequest<any>(`/inventory/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    apiRequest<any>(`/inventory/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
 export default {
   user: userApi,
   employee: employeeApi,
@@ -1019,5 +1041,6 @@ export default {
   activities: activityApi,
   chats: chatsApi,
   yellowBoxes: yellowBoxesApi,
+  inventory: inventoryApi,
   healthCheck,
 };

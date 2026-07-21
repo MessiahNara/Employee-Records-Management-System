@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './Modal.css';
 
 interface ModalProps {
@@ -51,8 +52,13 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
 
   if (!isOpen) return null;
 
-  return (
-    <div className={`modal-overlay ${isMaximized ? 'modal-overlay--maximized' : ''}`} role="dialog" aria-modal="true">
+  return createPortal(
+    <div
+      className={`modal-overlay ${isMaximized ? 'modal-overlay--maximized' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <div
         ref={modalRef}
         className={`modal modal--${size} ${isMaximized ? 'modal--maximized' : ''}`}
@@ -75,7 +81,8 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
         <div className="modal__body">{children}</div>
         {footer && <div className="modal__footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

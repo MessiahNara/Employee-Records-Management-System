@@ -191,18 +191,32 @@ function File201Modal({
     setShowReleasedSuggestions(false);
   };
 
+  const handleBorrow = async () => {
+    if (!borrowerName.trim()) { setError('Borrowed By is required.'); return; }
+    if (!releasedByName.trim()) { setError('Released By is required.'); return; }
+    setLoading(true); setError('');
     try {
-      await api.file201.borrow(employeeId, {
-        borrowerName: borrowerName.trim(),
-        borrowerPosition: borrowerPosition.trim() || undefined,
-        borrowerOffice: borrowerOffice.trim() || undefined,
-        purpose: purpose.trim() || undefined,
-        releasedBy: releasedByName.trim(),
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: releasedByName.trim(),
+        action: 'borrow_201',
+        entityType: 'employee',
+        entityId: employeeId,
+        entityName: employeeName,
+        payload: {
+          employeeId,
+          employeeName,
+          fileLocation: fileLocation || '',
+          borrowerName: borrowerName.trim(),
+          borrowerPosition: borrowerPosition.trim() || '',
+          borrowerOffice: borrowerOffice.trim() || '',
+          purpose: purpose.trim() || '',
+          releasedBy: releasedByName.trim(),
+        },
       });
-      onStatusChanged('Borrowed');
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to borrow file.');
+      setError(err.message || 'Failed to submit request.');
     } finally {
       setLoading(false);
     }

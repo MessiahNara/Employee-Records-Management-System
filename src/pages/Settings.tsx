@@ -53,10 +53,12 @@ function Settings() {
   const [appointmentStatuses, setAppointmentStatuses] = useState<string[]>([]);
   const [officeNames, setOfficeNames] = useState<string[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
+  const [recordLocations, setRecordLocations] = useState<string[]>([]);
   const [newAppointmentStatus, setNewAppointmentStatus] = useState('');
   const [newStatusNeedsDate, setNewStatusNeedsDate] = useState(false);
   const [newOfficeName, setNewOfficeName] = useState('');
   const [newPosition, setNewPosition] = useState('');
+  const [newRecordLocation, setNewRecordLocation] = useState('');
   const [isSavingDropdowns, setIsSavingDropdowns] = useState(false);
   const [aoYears, setAoYears] = useState<string[]>([]);
   const [newAoYear, setNewAoYear] = useState('');
@@ -111,6 +113,7 @@ function Settings() {
       setAppointmentStatuses(settings.appointmentStatuses ?? []);
       setOfficeNames(settings.officeNames ?? []);
       setPositions(settings.positions ?? []);
+      setRecordLocations((settings as any).recordLocations ?? []);
       setAoYears(settings.aoYears ?? []);
       setReasonsForSeparation(settings.reasonsForSeparation ?? []);
     } catch {
@@ -156,7 +159,7 @@ function Settings() {
     setIsSavingDropdowns(true);
     try {
       await api.systemSettings.updateDropdownOptions(
-        { appointmentStatuses, officeNames, positions, aoYears, reasonsForSeparation },
+        { appointmentStatuses, officeNames, positions, recordLocations, aoYears, reasonsForSeparation },
         currentUser?.role || ''
       );
       showToast('Dropdown options saved successfully!', 'success');
@@ -1077,6 +1080,33 @@ function Settings() {
                           </span>
                         ))}
                         {positions.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Location of Records */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Location of Records</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new record location..."
+                          value={newRecordLocation}
+                          onChange={(e) => setNewRecordLocation(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(recordLocations, setRecordLocations, newRecordLocation, setNewRecordLocation))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(recordLocations, setRecordLocations, newRecordLocation, setNewRecordLocation)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {recordLocations.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(recordLocations, setRecordLocations, item)}>×</button>
+                          </span>
+                        ))}
+                        {recordLocations.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
                       </div>
                     </div>
 

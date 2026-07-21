@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { app, BrowserWindow, session, utilityProcess, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');

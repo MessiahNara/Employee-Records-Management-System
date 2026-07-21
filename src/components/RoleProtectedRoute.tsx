@@ -11,16 +11,16 @@ interface RoleProtectedRouteProps {
   showAccessDenied?: boolean;
 }
 
-function RoleProtectedRoute({ 
-  children, 
-  allowedRoles, 
+function RoleProtectedRoute({
+  children,
+  allowedRoles,
   redirectTo = '/',
-  showAccessDenied = true 
+  showAccessDenied = true
 }: RoleProtectedRouteProps) {
   const currentUser = getAuthState();
   const location = useLocation();
   const currentPath = location.pathname;
-  
+
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
@@ -40,6 +40,7 @@ function RoleProtectedRoute({
     '/calendar-activities': 'Calendar',
     '/reports': 'Generated Reports',
     '/reports/pulled-out': 'Generated Reports',
+    '/inventory': 'Inventory and Appraisal',
     '/chats': 'Chats',
     '/settings': 'Settings'
   };
@@ -47,9 +48,9 @@ function RoleProtectedRoute({
   if (currentUser?.permissions?.allowedTabs) {
     const tabName = routeToTabMap[currentPath];
     if (tabName) {
-      hasAccess = currentUser.permissions.allowedTabs.includes(tabName);
+      hasAccess = hasAccess && currentUser.permissions.allowedTabs.includes(tabName);
     } else if (currentPath.startsWith('/employees/')) {
-      hasAccess = currentUser.permissions.allowedTabs.includes('Dashboard') || currentUser.permissions.allowedTabs.includes('File Locator');
+      hasAccess = hasAccess && (currentUser.permissions.allowedTabs.includes('Dashboard') || currentUser.permissions.allowedTabs.includes('File Locator'));
     }
   }
 
@@ -82,8 +83,8 @@ function RoleProtectedRoute({
                 Required roles: <strong>{displayAllowedRoles}</strong>
               </p>
               <div className="role-protected__actions">
-                <Button 
-                  variant="primary" 
+                <Button
+                  variant="primary"
                   onClick={() => window.location.href = redirectTo}
                 >
                   Go to Dashboard
@@ -94,7 +95,7 @@ function RoleProtectedRoute({
         </div>
       );
     }
-    
+
     return <Navigate to={redirectTo} replace />;
   }
 

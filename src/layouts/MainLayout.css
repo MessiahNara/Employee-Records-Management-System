@@ -3,7 +3,7 @@
   align-items: stretch;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow: hidden;
+  overflow: clip;
   position: relative;
 }
 
@@ -44,11 +44,15 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  margin-left: var(--sidebar-width);
   transition: margin-left var(--transition-base);
   min-width: 0;
   position: relative;
   z-index: 1;
+}
+
+.main-layout--sidebar-collapsed .main-layout__content {
+  margin-left: 80px;
 }
 
 .main-layout__main {

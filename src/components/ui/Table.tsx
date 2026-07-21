@@ -74,17 +74,22 @@ function Table<T>({
               role={onRowClick ? 'button' : undefined}
               tabIndex={onRowClick ? 0 : undefined}
             >
-              {columns.map((column) => (
-                <td
-                  key={column.key}
-                  className="table__cell"
-                  data-label={getMobileLabel(column)}
-                >
-                  {column.render
-                    ? column.render(item)
-                    : String((item as any)[column.key] ?? '')}
-                </td>
-              ))}
+              {columns.map((column) => {
+                const cellContent = column.render
+                  ? column.render(item)
+                  : String((item as any)[column.key] ?? '');
+                const titleAttr = (typeof cellContent === 'string' || typeof cellContent === 'number') && String(cellContent).trim() ? String(cellContent) : undefined;
+                return (
+                  <td
+                    key={column.key}
+                    className="table__cell"
+                    data-label={getMobileLabel(column)}
+                    title={titleAttr}
+                  >
+                    {cellContent}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

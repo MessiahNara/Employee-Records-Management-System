@@ -4,11 +4,15 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: 99999;
   padding: var(--spacing-lg);
   animation: fadeIn var(--transition-base);
 }
@@ -25,11 +29,17 @@
 .modal {
   background-color: var(--bg-primary);
   border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-lg);
-  max-height: 90vh;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  max-height: 85vh;
+  width: 100%;
+  margin: auto;
   display: flex;
   flex-direction: column;
   animation: slideUp var(--transition-base);
+  position: relative;
+  z-index: 100000;
+  overflow: hidden;
 }
 
 @keyframes slideUp {
@@ -45,17 +55,17 @@
 
 .modal--sm {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
 }
 
 .modal--md {
   width: 100%;
-  max-width: 600px;
+  max-width: 620px;
 }
 
 .modal--lg {
   width: 100%;
-  max-width: 900px;
+  max-width: 920px;
 }
 
 .modal--xl {
@@ -67,8 +77,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-lg);
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
 }
 
 .modal__title {
@@ -100,7 +111,7 @@
 .modal__body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-lg);
+  padding: 1.5rem;
 }
 
 .modal__footer {
@@ -108,7 +119,8 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--spacing-md);
-  padding: var(--spacing-lg);
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
 }
 
@@ -137,3 +149,4 @@
   border-radius: 0 !important;
   margin: 0 !important;
 }
+

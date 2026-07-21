@@ -8,6 +8,12 @@
   padding: 0 var(--spacing-lg);
   gap: var(--spacing-lg);
   min-width: 0;
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
 .navbar__left {

@@ -19,8 +19,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 
 // Remove the splash screen after React has rendered
-const splash = document.getElementById('app-splash');
-if (splash) {
-  splash.style.opacity = '0';
-  setTimeout(() => splash.remove(), 300);
-}
+const removeSplash = () => {
+  const splash = document.getElementById('app-splash');
+  if (splash) {
+    splash.style.opacity = '0';
+    setTimeout(() => {
+      if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 300);
+  }
+};
+
+removeSplash();
+setTimeout(removeSplash, 100);

@@ -2,7 +2,8 @@
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
-  overflow: visible;
+  overflow: auto;
+  max-height: 72vh;
   width: 100%;
 }
 
@@ -29,7 +30,24 @@
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border-color);
   overflow: visible;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-tertiary);
+}
+
+.table__cell--truncate {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table__cell--truncate-lg {
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table__body {

@@ -15,6 +15,7 @@ import approvalRoutes from './routes/approval.routes';
 import activityRoutes from './routes/activity.routes';
 import chatRoutes from './routes/chat.routes';
 import yellowBoxRoutes from './routes/yellowBox.routes';
+import inventoryRoutes from './routes/inventory.routes';
 import { validateSession } from './middleware/session';
 import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
 import prisma from './lib/prisma';
@@ -104,6 +105,7 @@ app.use('/api/approvals', approvalRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/yellow-boxes', yellowBoxRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {

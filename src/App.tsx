@@ -13,6 +13,7 @@ import Calendar from './pages/Calendar';
 import CalendarActivities from './pages/CalendarActivities';
 import Chats from './pages/Chats';
 import File201 from './pages/File201';
+import InventoryAppraisal from './pages/InventoryAppraisal';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
@@ -54,6 +55,7 @@ function App() {
               }
             >
               <Route index element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
+              <Route path="inventory" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><InventoryAppraisal /></RoleProtectedRoute>} />
               <Route path="chats" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Chats /></RoleProtectedRoute>} />
               <Route path="calendar" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Calendar /></RoleProtectedRoute>} />
               <Route path="calendar-activities" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><CalendarActivities /></RoleProtectedRoute>} />
