@@ -18,7 +18,6 @@ export default defineConfig(() => {
       host: false,
       port: devPort,
       strictPort: true,
-      https: true,
       proxy: {
         '/api': {
           target: 'https://localhost:5000',
@@ -36,7 +35,6 @@ export default defineConfig(() => {
       host: true,
       port: devPort,
       strictPort: true,
-      https: true,
     },
     build: {
       outDir: 'dist',

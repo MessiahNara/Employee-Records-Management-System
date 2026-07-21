@@ -11,8 +11,11 @@ node_modules
 dist
 dist-ssr
 dist-electron
-*.local
 .env
+.env.*
+*.local
+**/.env*
+server/.env
 
 
 # Editor directories and files
@@ -31,3 +34,5 @@ out/
 electron/client-config.json
 db_backup/
 server/uploads/
+uploads/
+**/uploads/**
