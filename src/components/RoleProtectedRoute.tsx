@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { getAuthState } from '../utils/mockAuth';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -18,13 +18,40 @@ function RoleProtectedRoute({
   showAccessDenied = true 
 }: RoleProtectedRouteProps) {
   const currentUser = getAuthState();
+  const location = useLocation();
+  const currentPath = location.pathname;
   
   if (!currentUser) {
     return <Navigate to="/login" replace />;
   }
 
   const userRole = currentUser.role || '';
-  const hasAccess = allowedRoles.includes(userRole);
+  let hasAccess = allowedRoles.includes(userRole);
+
+  const routeToTabMap: Record<string, string> = {
+    '/users': 'Users',
+    '/file201': 'File Locator',
+    '/audit-logs': 'Audit Logs',
+    '/requests': 'Requests',
+    '/approvals': 'Request & Approvals',
+    '/dashboard': 'Dashboard',
+    '/': 'Dashboard',
+    '/calendar': 'Calendar',
+    '/calendar-activities': 'Calendar',
+    '/reports': 'Generated Reports',
+    '/reports/pulled-out': 'Generated Reports',
+    '/chats': 'Chats',
+    '/settings': 'Settings'
+  };
+
+  if (currentUser?.permissions?.allowedTabs) {
+    const tabName = routeToTabMap[currentPath];
+    if (tabName) {
+      hasAccess = currentUser.permissions.allowedTabs.includes(tabName);
+    } else if (currentPath.startsWith('/employees/')) {
+      hasAccess = currentUser.permissions.allowedTabs.includes('Dashboard') || currentUser.permissions.allowedTabs.includes('File Locator');
+    }
+  }
 
   if (!hasAccess) {
     if (showAccessDenied) {

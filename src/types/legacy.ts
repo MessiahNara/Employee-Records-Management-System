@@ -51,6 +51,7 @@ export interface UserPermissions {
   read: boolean;
   update: boolean;
   delete: boolean;
+  allowedTabs?: string[];
 }
 
 // Record interface

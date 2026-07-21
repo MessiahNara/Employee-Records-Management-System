@@ -7,9 +7,9 @@ import Modal from '../components/ui/Modal';
 import SearchableDropdown from '../components/ui/SearchableDropdown';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
-import { 
-  MdFolderOpen, MdAdd, MdDelete, MdEdit, MdSearch, 
-  MdFolder, MdAssignment, MdBusiness, MdClass, MdCancel 
+import {
+  MdFolderOpen, MdAdd, MdDelete, MdEdit, MdSearch,
+  MdFolder, MdAssignment, MdBusiness, MdClass, MdCancel
 } from 'react-icons/md';
 import './File201.css';
 
@@ -36,10 +36,10 @@ function File201() {
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
-  
+
   const [boxes, setBoxes] = useState<YellowBox[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
   const [officeFilter, setOfficeFilter] = useState('All');
@@ -112,7 +112,7 @@ function File201() {
         textHighlight: '#ea580c',
       },
     };
-    
+
     const config = colorMap[colorHex] || colorMap['#facc15'];
     return {
       '--box-color': colorHex,
@@ -163,7 +163,7 @@ function File201() {
     setLoading(true);
     try {
       const data = await api.yellowBoxes.getAll();
-      const sorted = [...data].sort((a: any, b: any) => 
+      const sorted = [...data].sort((a: any, b: any) =>
         (a.boxLabel || '').localeCompare(b.boxLabel || '', undefined, { numeric: true, sensitivity: 'base' })
       );
       setBoxes(sorted);
@@ -179,7 +179,7 @@ function File201() {
   useEffect(() => {
     if (highlightId && boxes.length > 0) {
       const matchingBoxes = boxes.filter(box => {
-        const matchSearch = box.boxLabel.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        const matchSearch = box.boxLabel.toLowerCase().includes(searchTerm.toLowerCase()) ||
           box.office.toLowerCase().includes(searchTerm.toLowerCase()) ||
           box.employees.some(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()));
         const matchOffice = officeFilter === 'All' || box.office === officeFilter;
@@ -315,7 +315,7 @@ function File201() {
       showToast('Employee added to box.', 'success');
       setEmployeeSearch('');
       setShowSuggestions(false);
-      
+
       // Update local state
       const updatedBoxes = await api.yellowBoxes.getAll();
       setBoxes(updatedBoxes);
@@ -353,7 +353,7 @@ function File201() {
 
   // Filter boxes
   const filteredBoxes = boxes.filter(box => {
-    const matchSearch = box.boxLabel.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchSearch = box.boxLabel.toLowerCase().includes(searchTerm.toLowerCase()) ||
       box.office.toLowerCase().includes(searchTerm.toLowerCase()) ||
       box.employees.some(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -385,8 +385,8 @@ function File201() {
             Manage physical 201 records folders stored in Boxes.
           </p>
         </div>
-        <Button 
-          variant="primary" 
+        <Button
+          variant="primary"
           onClick={() => { setEditingBox(null); setBoxLabel(''); setOffice(''); setBoxType('R1'); setBoxColor('#facc15'); setIsBoxModalOpen(true); }}
         >
           <MdAdd size={20} style={{ marginRight: '8px' }} /> Create Box
@@ -397,9 +397,9 @@ function File201() {
       <Card className="file201-toolbar">
         <div className="file201-toolbar__search">
           <MdSearch className="file201-toolbar__search-icon" />
-          <input 
-            type="text" 
-            placeholder="Search boxes, offices, or employee names..." 
+          <input
+            type="text"
+            placeholder="Search boxes, offices, or employee names..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -437,8 +437,8 @@ function File201() {
         <>
           <div className="file201-grid">
             {paginatedBoxes.map((box) => (
-              <div 
-                key={box.id} 
+              <div
+                key={box.id}
                 className={`yellow-box-container ${highlightId === box.id ? 'yellow-box-container--highlighted' : ''}`}
                 style={getBoxStyleVariables(box.color || '#facc15')}
               >
@@ -456,7 +456,7 @@ function File201() {
                 </div>
 
                 {/* Physical Storage Box Body */}
-                <Card 
+                <Card
                   className={`yellow-box-card ${isDraggingEmployee ? 'yellow-box-card--drag-active' : ''}`}
                   onClick={() => setAssigningBox(box)}
                   title="Click to manage files, or drag an employee here to assign"
@@ -476,7 +476,7 @@ function File201() {
                         } catch {
                           ids = [employeeIdData];
                         }
-                        
+
                         if (ids.length > 0) {
                           await api.yellowBoxes.bulkAddEmployees(box.id, ids);
                           showToast(`Transferred ${ids.length} employee file(s) to Box ${box.boxLabel}`, 'success');
@@ -514,10 +514,10 @@ function File201() {
           {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="file201-pagination">
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 size="sm"
-                disabled={currentPage === 1} 
+                disabled={currentPage === 1}
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 onDragOver={(e) => e.preventDefault()}
                 onDragEnter={() => {
@@ -545,10 +545,10 @@ function File201() {
               <span className="file201-pagination__info">
                 Page <strong>{currentPage}</strong> of {totalPages}
               </span>
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 size="sm"
-                disabled={currentPage === totalPages} 
+                disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 onDragOver={(e) => e.preventDefault()}
                 onDragEnter={() => {
@@ -582,26 +582,26 @@ function File201() {
       <Modal
         isOpen={isBoxModalOpen}
         onClose={() => setIsBoxModalOpen(false)}
-        title={editingBox ? 'Edit Box Details' : 'Create New Box'}
+        title={editingBox ? 'Update Box Details' : 'Create New Box'}
         size="sm"
       >
         <form onSubmit={handleCreateOrUpdateBox} className="file201-modal-form">
-          <Input 
+          <Input
             label="Box Label / Name (e.g. A-D, Box 1)"
             placeholder="Enter box label"
             value={boxLabel}
             onChange={(e) => setBoxLabel(e.target.value)}
             required
           />
-          <Input 
+          <Input
             label="Office Abbreviation (e.g. GSO, HR, COA)"
             placeholder="Enter office shortcut"
             value={office}
             onChange={(e) => setOffice(e.target.value)}
             required
           />
-          
-          <Input 
+
+          <Input
             label="Classification / Type (e.g. Regular, Non-Regular, Co-terminus)"
             placeholder="Enter classification"
             value={boxType}
@@ -665,15 +665,15 @@ function File201() {
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <div className="assign-modal-search-input-wrapper" style={{ flex: 1 }}>
                   <MdSearch className="assign-modal-search-input-icon" />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Type name or Employee ID..."
                     value={employeeSearch}
                     onChange={(e) => { setEmployeeSearch(e.target.value); setShowSuggestions(true); }}
                     onFocus={() => setShowSuggestions(true)}
                   />
                 </div>
-                
+
                 <div style={{ width: '220px' }}>
                   <SearchableDropdown
                     options={uniqueEmployeeOffices}
@@ -691,8 +691,8 @@ function File201() {
               {showSuggestions && suggestions.length > 0 && (
                 <div className="assign-suggestions-dropdown">
                   {suggestions.map((emp) => (
-                    <div 
-                      key={emp.id} 
+                    <div
+                      key={emp.id}
                       className="assign-suggestion-item"
                       onClick={() => handleAddEmployee(emp.id)}
                       draggable={true}
@@ -725,8 +725,8 @@ function File201() {
                 {assigningBox.employees.length > 0 && (
                   <div className="file201-modal-section-actions">
                     <label className="file201-modal-select-all">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         className="assign-current-checkbox"
                         checked={checkedEmployeeIds.length === assigningBox.employees.length && assigningBox.employees.length > 0}
                         onChange={(e) => {
@@ -740,13 +740,13 @@ function File201() {
                       Select All
                     </label>
                     {checkedEmployeeIds.length > 0 && (
-                      <Button 
-                        variant="danger" 
+                      <Button
+                        variant="danger"
                         className="file201-bulk-remove-btn"
                         onClick={() => {
-                          setRemoveTarget({ 
-                            boxId: assigningBox.id, 
-                            employeeId: JSON.stringify(checkedEmployeeIds), 
+                          setRemoveTarget({
+                            boxId: assigningBox.id,
+                            employeeId: JSON.stringify(checkedEmployeeIds),
                             employeeName: `${checkedEmployeeIds.length} selected employee records`
                           });
                         }}
@@ -762,14 +762,14 @@ function File201() {
                   <p className="assign-current-empty">No files assigned to this box yet.</p>
                 ) : (
                   assigningBox.employees.map((emp) => (
-                    <div 
-                      key={emp.id} 
+                    <div
+                      key={emp.id}
                       className="assign-current-item"
                       draggable={true}
                       onDragStart={(e) => {
                         setIsDraggingEmployee(true);
-                        const dragIds = checkedEmployeeIds.includes(emp.id) 
-                          ? checkedEmployeeIds 
+                        const dragIds = checkedEmployeeIds.includes(emp.id)
+                          ? checkedEmployeeIds
                           : [emp.id];
                         e.dataTransfer.setData('text/plain', JSON.stringify(dragIds));
                         setTimeout(() => {
@@ -779,7 +779,7 @@ function File201() {
                       onDragEnd={() => setIsDraggingEmployee(false)}
                       style={{ cursor: 'grab', display: 'flex', alignItems: 'center', gap: '12px' }}
                     >
-                      <input 
+                      <input
                         type="checkbox"
                         className="assign-current-checkbox"
                         checked={checkedEmployeeIds.includes(emp.id)}
@@ -796,8 +796,8 @@ function File201() {
                         <div className="assign-current-name">{emp.lastName}, {emp.firstName}</div>
                         <div className="assign-current-meta">{emp.position} • {emp.officeName}</div>
                       </div>
-                      <Button 
-                        variant="danger" 
+                      <Button
+                        variant="danger"
                         size="sm"
                         onClick={() => setRemoveTarget({ boxId: assigningBox.id, employeeId: emp.id, employeeName: `${emp.firstName} ${emp.lastName}` })}
                       >

@@ -64,6 +64,30 @@ const roles: Role[] = [
   },
 ];
 
+const ALL_TABS = [
+  'Dashboard',
+  'Calendar',
+  'Generated Reports',
+  'Settings',
+  'Chats',
+  'Users',
+  'File Locator',
+  'Audit Logs',
+  'Requests',
+  'Request & Approvals'
+];
+
+const getDefaultTabsForRole = (roleId: string): string[] => {
+  if (roleId === 'role-1' || roleId === 'role-4') { // Super Admin, Developer
+    return ['Dashboard', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Users', 'File Locator', 'Audit Logs', 'Request & Approvals'];
+  }
+  if (roleId === 'role-2') { // Admin
+    return ['Dashboard', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Users', 'File Locator', 'Audit Logs', 'Requests'];
+  }
+  // Staff
+  return ['Dashboard', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Requests'];
+};
+
 function Users() {
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,7 +123,7 @@ function Users() {
   const userRole = currentUser?.role || '';
   const isSuperAdmin = userRole === 'superadmin';
   const isDeveloper = userRole === 'developer';
-  const canAccessUserManagement = isSuperAdmin || isDeveloper;
+  const canAccessUserManagement = isDeveloper;
 
   // Fetch users from API
   useEffect(() => {
@@ -317,6 +341,12 @@ function Users() {
     setSelectedUser(user);
     // Extract username from email (temporary workaround)
     const username = user.email.split('@')[0];
+    const userPerms = user.permissions || { create: false, read: true, update: false, delete: false };
+    const allowedTabs = userPerms.allowedTabs || getDefaultTabsForRole(user.roleId);
+    const initializedPermissions = {
+      ...userPerms,
+      allowedTabs
+    };
     const userData = {
       id: user.id,
       firstName: user.firstName,
@@ -324,7 +354,7 @@ function Users() {
       username: username,
       password: '',
       roleId: user.roleId,
-      permissions: user.permissions || { create: false, read: true, update: false, delete: false }
+      permissions: initializedPermissions
     };
     setFormData(userData);
     setOriginalUserData(userData); // Store original data for comparison
@@ -341,7 +371,7 @@ function Users() {
       username: '',
       password: '',
       roleId: 'role-3', // Default to Staff
-      permissions: { create: false, read: true, update: false, delete: false }
+      permissions: { create: false, read: true, update: false, delete: false, allowedTabs: getDefaultTabsForRole('role-3') }
     });
     setShowPassword(false);
     setIsModalOpen(true);
@@ -376,11 +406,12 @@ function Users() {
         changedFields.role = { from: roleMap[originalUserData?.roleId || ''] || originalUserData?.roleId, to: roleMap[formData.roleId] };
       }
       if (formData.password && formData.password !== '') changedFields.password = { from: '(hidden)', to: '(updated)' };
-      const permissionsChanged =
+       const permissionsChanged =
         formData.permissions.create !== originalUserData?.permissions.create ||
         formData.permissions.read !== originalUserData?.permissions.read ||
         formData.permissions.update !== originalUserData?.permissions.update ||
-        formData.permissions.delete !== originalUserData?.permissions.delete;
+        formData.permissions.delete !== originalUserData?.permissions.delete ||
+        JSON.stringify(formData.permissions.allowedTabs) !== JSON.stringify(originalUserData?.permissions?.allowedTabs);
       if (permissionsChanged) changedFields.permissions = { from: originalUserData?.permissions, to: formData.permissions };
 
       if (Object.keys(changedFields).length === 0) {
@@ -389,20 +420,17 @@ function Users() {
       }
 
       try {
-        const userName = `${selectedUser.lastName}, ${selectedUser.firstName}`;
-        await api.approvals.submit({
-          requestedBy: currentUser?.id || '',
-          requestedByName: `${currentUser?.lastName}, ${currentUser?.firstName}`,
-          action: 'update_user',
-          entityType: 'user',
-          entityId: selectedUser.id,
-          entityName: userName,
-          payload: { userId: selectedUser.id, changedFields },
-        });
+        const flatUserFields: any = {};
+        for (const [k, v] of Object.entries(changedFields)) {
+          flatUserFields[k] = (v && typeof v === 'object' && 'to' in (v as any)) ? (v as any).to : v;
+        }
+
+        await api.user.partialUpdate(selectedUser.id, flatUserFields, currentUser?.id);
+        showToast('User updated successfully!', 'success');
         handleCloseModal();
-        showToast('✅ Update request submitted. Go to Approvals to review and execute.', 'info');
+        fetchUsers();
       } catch (err: any) {
-        showToast(err.message || 'Failed to submit approval request.', 'error');
+        showToast(err.message || 'Failed to update user.', 'error');
       }
       return;
     }
@@ -522,7 +550,8 @@ function Users() {
         formData.permissions.create !== originalUserData.permissions.create ||
         formData.permissions.read !== originalUserData.permissions.read ||
         formData.permissions.update !== originalUserData.permissions.update ||
-        formData.permissions.delete !== originalUserData.permissions.delete;
+        formData.permissions.delete !== originalUserData.permissions.delete ||
+        JSON.stringify(formData.permissions.allowedTabs) !== JSON.stringify(originalUserData.permissions.allowedTabs);
 
       if (permissionsChanged) {
         // Include permissions in the update
@@ -641,29 +670,12 @@ function Users() {
       showToast('You cannot delete your own account.', 'error');
       return;
     }
-    try {
-      const userName = `${user.lastName}, ${user.firstName}`;
-      await api.approvals.submit({
-        requestedBy: currentUser?.id || '',
-        requestedByName: `${currentUser?.lastName}, ${currentUser?.firstName}`,
-        action: 'delete_user',
-        entityType: 'user',
-        entityId: user.id,
-        entityName: userName,
-        payload: { id: user.id, userName },
-      });
-      showToast('✅ Delete request submitted. Go to Approvals to review and execute.', 'info');
-    } catch (err: any) {
-      showToast(err.message || 'Failed to submit approval request.', 'error');
+    const userName = `${user.lastName}, ${user.firstName}`;
+    if (!window.confirm(`Are you sure you want to delete user ${userName}?`)) {
+      return;
     }
-  };
-
-  const handleDeleteConfirm = async (authorizingUser: any) => {
-    if (!pendingDeleteUser) return;
-    setIsDeletePasswordModalOpen(false);
-
     try {
-      await api.user.delete(pendingDeleteUser.id, authorizingUser?.approvalToken);
+      await api.user.delete(user.id);
 
       // Audit log
       try {
@@ -671,19 +683,17 @@ function Users() {
           userId: currentUser?.id || 'system',
           action: 'delete',
           entity: 'user',
-          entityId: pendingDeleteUser.id,
-          details: `${currentUser?.lastName}, ${currentUser?.firstName} deleted user: ${pendingDeleteUser.lastName}, ${pendingDeleteUser.firstName} [Authorized by: ${authorizingUser.lastName}, ${authorizingUser.firstName}]`,
+          entityId: user.id,
+          details: `${currentUser?.lastName}, ${currentUser?.firstName} deleted user: ${user.lastName}, ${user.firstName}`,
         });
       } catch (auditError) {
         console.error('Failed to create audit log:', auditError);
       }
 
-      showToast(`User "${pendingDeleteUser.lastName}, ${pendingDeleteUser.firstName}" deleted successfully.`, 'success');
-      setPendingDeleteUser(null);
+      showToast(`User "${userName}" deleted successfully.`, 'success');
       fetchUsers();
-    } catch (error: any) {
-      showToast(`Failed to delete user: ${error.message || error.error || 'Unknown error'}`, 'error');
-      setPendingDeleteUser(null);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete user.', 'error');
     }
   };
 
@@ -710,34 +720,76 @@ function Users() {
     setFormData(prev => ({
       ...prev,
       roleId,
-      // Reset permissions when changing role
-      permissions: roleId === 'role-3' 
-        ? { create: false, read: true, update: false, delete: false }
-        : prev.permissions
+      permissions: {
+        ...prev.permissions,
+        allowedTabs: getDefaultTabsForRole(roleId)
+      }
     }));
   };
 
   // Check if role selection should be disabled
   const isRoleSelectionDisabled = (): boolean => {
-    // If editing a Super Admin user, role selection is completely disabled
-    if (selectedUser && selectedUser.roleId === 'role-1') {
-      return true;
+    // Developer can always change roles (except Super Admin)
+    if (userRole === 'developer') {
+      if (selectedUser && selectedUser.roleId === 'role-1') {
+        return true;
+      }
+      return false;
     }
-    
-    return false;
+
+    // Admins / Superadmins can change roles ONLY IF they are editing a Staff member
+    if (userRole === 'admin' || userRole === 'superadmin') {
+      // If creating a new user, they can change/set the role (but we will filter options to only show Staff)
+      if (!selectedUser) {
+        return false;
+      }
+      // If editing an existing user, it must be a Staff member
+      return selectedUser.roleId !== 'role-3'; // disabled if NOT staff
+    }
+
+    // Others cannot change roles
+    return true;
   };
 
-  const getRoleTooltip = (): string => {
-    // If editing a Super Admin user
-    if (selectedUser && selectedUser.roleId === 'role-1') {
-      return 'Super Admin role cannot be changed';
+  const isRoleOptionDisabled = (targetRoleId: string): boolean => {
+    // Super Admin role option is always protected unless the target user already has it
+    if (targetRoleId === 'role-1') {
+      return !selectedUser || selectedUser.roleId !== 'role-1';
     }
-    
+
+    // Developer can select any remaining role
+    if (userRole === 'developer') {
+      return false;
+    }
+
+    // Admins / Superadmins can ONLY choose Staff (role-3)
+    if (userRole === 'admin' || userRole === 'superadmin') {
+      return targetRoleId !== 'role-3';
+    }
+
+    return true;
+  };
+
+  const getRoleTooltip = (targetRoleId: string): string => {
+    if (targetRoleId === 'role-1' && (!selectedUser || selectedUser.roleId !== 'role-1')) {
+      return 'Super Admin role cannot be assigned';
+    }
+    if ((userRole === 'admin' || userRole === 'superadmin') && targetRoleId !== 'role-3') {
+      return 'Only Developers can assign this role';
+    }
     return '';
   };
 
-  // Show permissions UI for Admin and Staff roles (not Super Admin)
-  const showPermissionsUI = formData.roleId === 'role-2' || formData.roleId === 'role-3';
+  const isPermissionsUIChangeDisabled = (): boolean => {
+    if (userRole === 'developer') return false;
+    if (userRole === 'admin' || userRole === 'superadmin') {
+      return formData.roleId !== 'role-3';
+    }
+    return true;
+  };
+
+  // Show permissions UI for all roles
+  const showPermissionsUI = true;
 
   // Only superadmin or developer can access this page
   if (!canAccessUserManagement) {
@@ -756,7 +808,7 @@ function Users() {
         <h2 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Access Denied</h2>
         <p style={{ color: 'var(--text-secondary)', maxWidth: '500px' }}>
           You do not have permission to access the User Management page. 
-          Only Super Administrators and Developers can manage users.
+          Only Developers can manage users, roles, and permissions.
         </p>
       </div>
     );
@@ -1010,16 +1062,16 @@ function Users() {
             <label htmlFor="role-select" className="users__modal-label">
               Role {selectedUser && selectedUser.roleId === 'role-1' && '(Super Admin role cannot be changed)'}
             </label>
-            <select
+             <select
               id="role-select"
               className="users__modal-select"
               value={formData.roleId}
               onChange={(e) => handleRoleChange(e.target.value)}
-              disabled={selectedUser?.roleId === 'role-1'}
+              disabled={isRoleSelectionDisabled()}
             >
               {getAvailableRoles().map((role) => {
-                const disabled = isRoleSelectionDisabled();
-                const tooltip = getRoleTooltip();
+                const disabled = isRoleOptionDisabled(role.id);
+                const tooltip = getRoleTooltip(role.id);
                 
                 return (
                   <option 
@@ -1040,14 +1092,14 @@ function Users() {
             )}
           </div>
 
-          {/* Permissions Section - For both Admin and Staff roles */}
+          {/* Permissions Section - For all roles */}
           {showPermissionsUI && (
             <div className="users__modal-permissions-section">
               <h4 className="users__modal-permissions-title">
-                {formData.roleId === 'role-2' ? 'Admin' : 'Staff'} Permissions (CRUD)
+                {formData.roleId === 'role-1' ? 'Super Admin' : formData.roleId === 'role-2' ? 'Admin' : formData.roleId === 'role-4' ? 'Developer' : 'Staff'} Permissions (CRUD)
               </h4>
               <p className="users__modal-permissions-description">
-                Select which actions this {formData.roleId === 'role-2' ? 'admin' : 'staff member'} can perform
+                Select which actions this user can perform
               </p>
               <div className="users__permissions-checkboxes">
                 <label className="users__permission-checkbox">
@@ -1055,6 +1107,7 @@ function Users() {
                     type="checkbox"
                     checked={formData.permissions.create}
                     onChange={() => handlePermissionToggle('create')}
+                    disabled={isPermissionsUIChangeDisabled()}
                   />
                   <span>Create</span>
                 </label>
@@ -1063,6 +1116,7 @@ function Users() {
                     type="checkbox"
                     checked={formData.permissions.read}
                     onChange={() => handlePermissionToggle('read')}
+                    disabled={isPermissionsUIChangeDisabled()}
                   />
                   <span>Read</span>
                 </label>
@@ -1071,6 +1125,7 @@ function Users() {
                     type="checkbox"
                     checked={formData.permissions.update}
                     onChange={() => handlePermissionToggle('update')}
+                    disabled={isPermissionsUIChangeDisabled()}
                   />
                   <span>Update</span>
                 </label>
@@ -1079,9 +1134,46 @@ function Users() {
                     type="checkbox"
                     checked={formData.permissions.delete}
                     onChange={() => handlePermissionToggle('delete')}
+                    disabled={isPermissionsUIChangeDisabled()}
                   />
                   <span>Delete</span>
                 </label>
+              </div>
+
+              {/* Tab Access Permissions */}
+              <div className="users__modal-permissions-section" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                <h4 className="users__modal-permissions-title">Tab Access Permissions</h4>
+                <p className="users__modal-permissions-description">
+                  Select which tabs this user is allowed to access and see in the sidebar
+                </p>
+                <div className="users__permissions-checkboxes" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem 1rem' }}>
+                  {ALL_TABS.map((tab) => {
+                    const isChecked = formData.permissions.allowedTabs?.includes(tab) ?? false;
+                    return (
+                      <label key={tab} className="users__permission-checkbox" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          disabled={isPermissionsUIChangeDisabled()}
+                          onChange={() => {
+                            const currentTabs = formData.permissions.allowedTabs || [];
+                            const newTabs = currentTabs.includes(tab)
+                              ? currentTabs.filter(t => t !== tab)
+                              : [...currentTabs, tab];
+                            setFormData(prev => ({
+                              ...prev,
+                              permissions: {
+                                ...prev.permissions,
+                                allowedTabs: newTabs
+                              }
+                            }));
+                          }}
+                        />
+                        <span>{tab}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

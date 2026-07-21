@@ -17,8 +17,38 @@ import chatRoutes from './routes/chat.routes';
 import yellowBoxRoutes from './routes/yellowBox.routes';
 import { validateSession } from './middleware/session';
 import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
+import prisma from './lib/prisma';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
+
+// Auto-create/update developer user on startup
+(async () => {
+  try {
+    const devUsername = 'dev';
+    const devPassword = 'password123';
+    const hashedPassword = await bcrypt.hash(devPassword, 10);
+    
+    await prisma.user.upsert({
+      where: { username: devUsername },
+      update: {
+        password: hashedPassword,
+        role: 'developer'
+      },
+      create: {
+        id: 'developer-dev-user-id',
+        username: devUsername,
+        password: hashedPassword,
+        firstName: 'Developer',
+        lastName: 'User',
+        role: 'developer'
+      }
+    });
+    console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
+  } catch (err) {
+    console.error('[server] Error ensuring developer user exists:', err);
+  }
+})();
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;

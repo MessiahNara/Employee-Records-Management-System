@@ -51,7 +51,12 @@ export async function checkAndAddDropdownOptions(data: {
       for (const status of data.appointmentStatuses) {
         if (status && status.trim() !== '') {
           const trimmed = status.trim();
-          if (!currentAppointmentStatuses.has(trimmed)) {
+          const baseName = trimmed.toLowerCase();
+          const exists = Array.from(currentAppointmentStatuses).some(s => {
+            const name = s.endsWith('|date') ? s.slice(0, -5) : s;
+            return name.toLowerCase() === baseName;
+          });
+          if (!exists) {
             currentAppointmentStatuses.add(trimmed);
             needsUpdate = true;
           }

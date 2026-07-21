@@ -2,6 +2,7 @@ export type DocumentCategory =
   | 'Personal Information'
   | 'Personnel Action / Appointment'
   | 'Position / Job Description'
+  | 'Assumptions of Duties / Oath of Office'
   | 'Training'
   | 'Performance / Awards & Recognition'
   | 'Employee Discipline'
@@ -79,6 +80,11 @@ export const DOCUMENT_FOLDERS: DocumentFolder[] = [
     category: 'Position / Job Description',
     icon: '💼',
     description: 'Job descriptions, position papers'
+  },
+  {
+    category: 'Assumptions of Duties / Oath of Office',
+    icon: '✍️',
+    description: 'Assumptions of duties and oath of office files'
   },
   {
     category: 'Training',

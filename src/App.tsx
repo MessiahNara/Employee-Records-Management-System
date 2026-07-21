@@ -53,17 +53,17 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Dashboard />} />
-              <Route path="chats" element={<Chats />} />
-              <Route path="calendar" element={<Calendar />} />
-              <Route path="calendar-activities" element={<CalendarActivities />} />
-              <Route path="reports" element={<Dashboard />} />
-              <Route path="reports/pulled-out" element={<Dashboard />} />
-              <Route path="employees/:id" element={<EmployeeDetails />} />
+              <Route index element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
+              <Route path="chats" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Chats /></RoleProtectedRoute>} />
+              <Route path="calendar" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Calendar /></RoleProtectedRoute>} />
+              <Route path="calendar-activities" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><CalendarActivities /></RoleProtectedRoute>} />
+              <Route path="reports" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
+              <Route path="reports/pulled-out" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
+              <Route path="employees/:id" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><EmployeeDetails /></RoleProtectedRoute>} />
               <Route 
                 path="users" 
                 element={
-                  <RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'developer']}>
+                  <RoleProtectedRoute allowedRoles={['developer']}>
                     <Users />
                   </RoleProtectedRoute>
                 } 
@@ -76,8 +76,8 @@ function App() {
                   </RoleProtectedRoute>
                 } 
               />
-              <Route path="audit-logs" element={<AuditLogs />} />
-              <Route path="settings" element={<Settings />} />
+              <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'developer']}><AuditLogs /></RoleProtectedRoute>} />
+              <Route path="settings" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Settings /></RoleProtectedRoute>} />
               <Route
                 path="requests"
                 element={

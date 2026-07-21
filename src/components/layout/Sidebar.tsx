@@ -305,7 +305,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   mainItems.push({ path: '/chats', label: 'Chats', icon: MdChat, iconColor: '#8b5cf6', badge: chatUnreadCount });
 
   const adminItems: NavItem[] = [
-    { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['superadmin', 'admin', 'developer'] },
+    { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['developer'] },
     { path: '/file201', label: 'File Locator', icon: MdFolder, iconColor: '#3b82f6', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/audit-logs', label: 'Audit Logs', icon: MdDescription, iconColor: '#f59e0b', requiredRoles: ['superadmin', 'admin', 'developer'] },
     // If admin has role 'admin', they see Requests under Admin Tools
@@ -343,6 +343,9 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   }
 
   const hasAccess = (item: NavItem): boolean => {
+    if (currentUser?.permissions?.allowedTabs) {
+      return currentUser.permissions.allowedTabs.includes(item.label);
+    }
     if (!item.requiredRoles || item.requiredRoles.length === 0) return true;
     return item.requiredRoles.includes(userRole);
   };

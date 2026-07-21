@@ -215,11 +215,21 @@ function EmployeeDetails() {
     }
   };
 
-  const STATUSES_REQUIRING_DATES = ['casual', 'consultant', 'contract of service', 'contractual', 'job order'];
+  const renewalStatusRequiresDates = (() => {
+    const selectedStatus = renewalForm.appointmentStatus.toLowerCase().trim();
+    if (!selectedStatus) return false;
 
-  const renewalStatusRequiresDates = STATUSES_REQUIRING_DATES.includes(
-    renewalForm.appointmentStatus.toLowerCase().trim()
-  );
+    const isDefaultDurational = ['casual', 'consultant', 'contract of service', 'contractual', 'job order'].includes(selectedStatus);
+    if (isDefaultDurational) return true;
+    
+    const matchedOption = dropdownOptions.appointmentStatuses.find(
+      (opt) => {
+        const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
+        return name.toLowerCase().trim() === selectedStatus;
+      }
+    );
+    return matchedOption ? matchedOption.endsWith('|date') : false;
+  })();
 
   const handleSubmitRenewal = async () => {
     if (!employee) return;
@@ -744,9 +754,12 @@ function EmployeeDetails() {
                     style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9375rem' }}
                   >
                     <option value="">Select appointment status</option>
-                    {dropdownOptions.appointmentStatuses.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
+                    {dropdownOptions.appointmentStatuses.map((status) => {
+                      const displayName = status.endsWith('|date') ? status.slice(0, -5) : status;
+                      return (
+                        <option key={status} value={displayName}>{displayName}</option>
+                      );
+                    })}
                   </select>
                   {renewalErrors.appointmentStatus && (
                     <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>

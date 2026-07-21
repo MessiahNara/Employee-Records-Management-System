@@ -240,11 +240,12 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       }
     }
 
-    // Check if a document with the same name already exists for this employee
+    // Check if a document with the same name already exists for this employee in the same category
     const duplicate = await prisma.document.findFirst({
       where: {
         employeeId,
         fileName: finalFileName,
+        category,
       },
     });
 

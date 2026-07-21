@@ -86,6 +86,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
       'Personal Information': 0,
       'Personnel Action / Appointment': 0,
       'Position / Job Description': 0,
+      'Assumptions of Duties / Oath of Office': 0,
       'Training': 0,
       'Performance / Awards & Recognition': 0,
       'Employee Discipline': 0,
@@ -213,6 +214,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
       if (parentDir.includes('performance') || parentDir.includes('awards') || parentDir.includes('recognition')) return 'Performance / Awards & Recognition';
       if (parentDir.includes('discipline')) return 'Employee Discipline';
       if (parentDir.includes('administrative') || parentDir.includes('order')) return 'Administrative Order';
+      if (parentDir.includes('assumption') || parentDir.includes('oath')) return 'Assumptions of Duties / Oath of Office';
 
       return activeCategory;
     };

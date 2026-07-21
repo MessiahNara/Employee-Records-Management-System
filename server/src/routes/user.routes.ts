@@ -94,6 +94,16 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'ID, username, password, firstName, lastName, and role are required' });
     }
 
+    // Enforce role hierarchy: only Developer can assign non-staff roles on creation
+    if (role !== 'staff') {
+      const actorId = req.headers['x-user-id'] as string;
+      const actor = actorId ? await prisma.user.findUnique({ where: { id: actorId } }) : null;
+      const actorRole = actor?.role;
+      if (actorRole !== 'developer') {
+        return res.status(403).json({ error: 'Only Developers can create users with non-Staff roles' });
+      }
+    }
+
     // Check if ID already exists
     const existingUserById = await prisma.user.findUnique({
       where: { id },
@@ -224,7 +234,7 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
 });
 
 // Partial update user (PATCH)
-router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Response) => {
+router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -265,7 +275,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       }
     }
 
-    // Check if trying to change role of a superadmin user
+    // Check if trying to change role of a user
     if (updateData.role !== undefined) {
       const existingUser = await prisma.user.findUnique({
         where: { id },
@@ -274,6 +284,25 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
 
       if (existingUser && existingUser.role === 'superadmin') {
         return res.status(403).json({ error: 'Super Admin role cannot be changed' });
+      }
+
+      // Only Developer can change roles
+      const actorId = req.headers['x-user-id'] as string;
+      const actor = actorId ? await prisma.user.findUnique({ where: { id: actorId } }) : null;
+      const actorRole = actor?.role;
+      if (actorRole !== 'developer') {
+        return res.status(403).json({ error: 'Only Developers can change user roles' });
+      }
+    }
+
+    // Enforce permission modification rules: only Developer can change permissions
+    if (updateData.permissions !== undefined) {
+      const actorId = req.headers['x-user-id'] as string;
+      const actor = actorId ? await prisma.user.findUnique({ where: { id: actorId } }) : null;
+      const actorRole = actor?.role;
+
+      if (actorRole !== 'developer') {
+        return res.status(403).json({ error: 'Only Developers can change user permissions' });
       }
     }
 
@@ -419,7 +448,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
 });
 
 // Delete user
-router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

@@ -33,6 +33,7 @@ model SystemSetting {
   id                  String   @id @default(uuid())
   idleTimeout         Int?     // Auto logout timeout in minutes (null = disabled)
   appointmentStatuses Json?    // Custom appointment status options
+  durationalStatuses  Json?    // Appointment status options that require dates/duration
   officeNames         Json?    // Custom office/hospital name options
   positions           Json?    // Custom position/function options
   aoYears             Json?    // Custom series year options

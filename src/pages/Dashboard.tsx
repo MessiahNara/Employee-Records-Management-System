@@ -1201,7 +1201,7 @@ function Dashboard() {
           // Prefer doc's aoType; fall back to employee when this doc matches the current AO.
           // Also accept legacy isDetailed flag stored directly on the document.
           aoType: docSource.aoType || (isCurrentAo ? source.aoType : '')
-                  || (docSource.isDetailed === true ? 'Detailed' : ''),
+            || (docSource.isDetailed === true ? 'Detailed' : ''),
           detailedTo: docSource.detailedTo || (isCurrentAo ? source.detailedTo : ''),
           detailedDivision: docSource.detailedDivision || (isCurrentAo ? source.detailedDivision : ''),
           detailedFunction: docSource.detailedFunction || (isCurrentAo ? source.detailedFunction : ''),
@@ -1233,9 +1233,9 @@ function Dashboard() {
 
       const aoOrderMonth = durationFrom
         ? (() => {
-            const d = new Date(durationFrom);
-            return isNaN(d.getTime()) ? '' : String(d.getMonth() + 1).padStart(2, '0');
-          })()
+          const d = new Date(durationFrom);
+          return isNaN(d.getTime()) ? '' : String(d.getMonth() + 1).padStart(2, '0');
+        })()
         : '';
 
       const dateOfBirth = birthDate ? formatDateDDMMYYYY(source.dateOfBirth) : '-';
@@ -3446,6 +3446,21 @@ function Dashboard() {
   };
 
   const handleUpdateEmployee = async () => {
+    // If aoNumber is cleared, clear all related AO fields
+    if (!formData.aoNumber || formData.aoNumber.trim() === '') {
+      formData.aoNumber = '';
+      formData.aoYear = '';
+      formData.aoType = '';
+      formData.motherUnit = '';
+      formData.detailedTo = '';
+      formData.detailedDivision = '';
+      formData.detailedOrderFrom = '';
+      formData.detailedOrderTo = '';
+      formData.designatedPositionFunction = '';
+      formData.designatedOrderFrom = '';
+      formData.designatedOrderTo = '';
+    }
+
     if (!validateForm(true) || !selectedEmployee || !originalEmployeeData) {
       return;
     }
@@ -3492,8 +3507,8 @@ function Dashboard() {
         // Check if value has changed
         if (currentValue !== originalValue) {
           const backendField = fieldMapping[key];
-          const fromValue = originalValue === '' || originalValue === undefined ? undefined : originalValue;
-          const toValue = currentValue === '' || currentValue === undefined ? undefined : currentValue;
+          const fromValue = originalValue === '' || originalValue === undefined ? null : originalValue;
+          const toValue = currentValue === '' || currentValue === undefined ? null : currentValue;
           changedFields[backendField] = { from: fromValue, to: toValue };
         }
       });
@@ -5137,9 +5152,12 @@ function Dashboard() {
               onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
             >
               <option value="">Select appointment status</option>
-              {dropdownOptions.appointmentStatuses.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+              {dropdownOptions.appointmentStatuses.map((s) => {
+                const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
+                return (
+                  <option key={s} value={displayName}>{displayName}</option>
+                );
+              })}
             </select>
             {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
           </div>
@@ -5148,13 +5166,22 @@ function Dashboard() {
           {formData.appointmentStatus && (
             (() => {
               const s = formData.appointmentStatus.toLowerCase().trim();
-              return (
+              const isDefaultDurational = (
                 s === 'consultant' ||
                 s === 'contract of service' ||
                 s === 'contractual' ||
                 s === 'casual' ||
                 s === 'job order'
               );
+              if (isDefaultDurational) return true;
+
+              const matchedOption = dropdownOptions.appointmentStatuses.find(
+                (opt) => {
+                  const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
+                  return name.toLowerCase().trim() === s;
+                }
+              );
+              return matchedOption ? matchedOption.endsWith('|date') : false;
             })()
           ) && (
               <div className="dashboard__form-row">
@@ -5424,8 +5451,8 @@ function Dashboard() {
 
           {/* Collapsible ID Update Section */}
           <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', padding: '1rem', backgroundColor: 'var(--bg-primary)' }}>
-            <div 
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }} 
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
               onClick={() => setShowIdUpdate(!showIdUpdate)}
             >
               <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -5435,7 +5462,7 @@ function Dashboard() {
                 {showIdUpdate ? 'Collapse ▲' : 'Expand ▼'}
               </span>
             </div>
-            
+
             {showIdUpdate && (
               <div className="dashboard__id-update-section" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
@@ -5631,9 +5658,12 @@ function Dashboard() {
               onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
             >
               <option value="">Select appointment status</option>
-              {dropdownOptions.appointmentStatuses.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+              {dropdownOptions.appointmentStatuses.map((s) => {
+                const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
+                return (
+                  <option key={s} value={displayName}>{displayName}</option>
+                );
+              })}
             </select>
             {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
           </div>
@@ -5642,13 +5672,22 @@ function Dashboard() {
           {formData.appointmentStatus && (
             (() => {
               const s = formData.appointmentStatus.toLowerCase().trim();
-              return (
+              const isDefaultDurational = (
                 s === 'consultant' ||
                 s === 'contract of service' ||
                 s === 'contractual' ||
                 s === 'casual' ||
                 s === 'job order'
               );
+              if (isDefaultDurational) return true;
+
+              const matchedOption = dropdownOptions.appointmentStatuses.find(
+                (opt) => {
+                  const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
+                  return name.toLowerCase().trim() === s;
+                }
+              );
+              return matchedOption ? matchedOption.endsWith('|date') : false;
             })()
           ) && (
               <div className="dashboard__form-row">
@@ -6523,14 +6562,14 @@ function Dashboard() {
 
           return (
             <div className="borrow-details" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0.5rem 0' }}>
-              
+
               {/* Top Overview Badge */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                backgroundColor: 'var(--bg-secondary)', 
-                padding: '1rem', 
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: 'var(--bg-secondary)',
+                padding: '1rem',
                 borderRadius: 'var(--border-radius)',
                 border: '1px solid var(--border-color)'
               }}>
@@ -6547,32 +6586,32 @@ function Dashboard() {
               </div>
 
               {/* Side-by-Side Timeline */}
-              <div style={{ 
-                display: 'flex', 
-                flexWrap: 'wrap', 
-                gap: '1.5rem', 
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
                 position: 'relative'
               }}>
-                
+
                 {/* Left Card: Check-out details */}
-                <div style={{ 
+                <div style={{
                   flex: '1 1 280px',
-                  backgroundColor: 'rgba(59, 130, 246, 0.04)', 
-                  border: '1px solid rgba(59, 130, 246, 0.15)', 
-                  borderRadius: 'var(--border-radius-lg)', 
+                  backgroundColor: 'rgba(59, 130, 246, 0.04)',
+                  border: '1px solid rgba(59, 130, 246, 0.15)',
+                  borderRadius: 'var(--border-radius-lg)',
                   padding: '1.5rem',
                   position: 'relative',
                   zIndex: 1
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                    <div style={{ 
-                      backgroundColor: 'rgba(59, 130, 246, 0.15)', 
-                      color: '#3b82f6', 
-                      borderRadius: '50%', 
-                      width: '32px', 
-                      height: '32px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
+                    <div style={{
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      color: '#3b82f6',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'center',
                       fontWeight: 'bold',
                       fontSize: '1.1rem'
@@ -6609,9 +6648,9 @@ function Dashboard() {
 
                     <div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Purpose of Borrowing</div>
-                      <div style={{ 
-                        fontWeight: 500, 
-                        color: 'var(--text-primary)', 
+                      <div style={{
+                        fontWeight: 500,
+                        color: 'var(--text-primary)',
                         marginTop: '0.25rem',
                         fontSize: '0.875rem',
                         lineHeight: '1.4',
@@ -6624,24 +6663,24 @@ function Dashboard() {
                 </div>
 
                 {/* Right Card: Check-in / Return details */}
-                <div style={{ 
+                <div style={{
                   flex: '1 1 280px',
-                  backgroundColor: isReturned ? 'rgba(34, 197, 94, 0.04)' : 'rgba(245, 158, 11, 0.04)', 
-                  border: isReturned ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(245, 158, 11, 0.15)', 
-                  borderRadius: 'var(--border-radius-lg)', 
+                  backgroundColor: isReturned ? 'rgba(34, 197, 94, 0.04)' : 'rgba(245, 158, 11, 0.04)',
+                  border: isReturned ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(245, 158, 11, 0.15)',
+                  borderRadius: 'var(--border-radius-lg)',
                   padding: '1.5rem',
                   position: 'relative',
                   zIndex: 1
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                    <div style={{ 
-                      backgroundColor: isReturned ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)', 
-                      color: isReturned ? '#22c55e' : '#f59e0b', 
-                      borderRadius: '50%', 
-                      width: '32px', 
-                      height: '32px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
+                    <div style={{
+                      backgroundColor: isReturned ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: isReturned ? '#22c55e' : '#f59e0b',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'center',
                       fontWeight: 'bold',
                       fontSize: '1.1rem'
@@ -6679,7 +6718,7 @@ function Dashboard() {
                         <div style={{ marginTop: '0.375rem' }}>
                           <Badge variant={
                             selectedBorrowLog.fileCondition === 'Complete' ? 'success' :
-                            selectedBorrowLog.fileCondition === 'Incomplete' ? 'warning' : 'danger'
+                              selectedBorrowLog.fileCondition === 'Incomplete' ? 'warning' : 'danger'
                           }>
                             {selectedBorrowLog.fileCondition || 'Complete'}
                           </Badge>
@@ -6688,9 +6727,9 @@ function Dashboard() {
 
                       <div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Remarks</div>
-                        <div style={{ 
-                          fontWeight: 500, 
-                          color: 'var(--text-primary)', 
+                        <div style={{
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
                           marginTop: '0.25rem',
                           fontSize: '0.875rem',
                           lineHeight: '1.4',
@@ -6701,12 +6740,12 @@ function Dashboard() {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      height: '80%', 
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '80%',
                       textAlign: 'center',
                       color: 'var(--text-secondary)',
                       padding: '2rem 1rem'

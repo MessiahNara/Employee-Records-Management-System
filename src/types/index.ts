@@ -25,6 +25,7 @@ export interface UserPermissions {
   read: boolean;
   update: boolean;
   delete: boolean;
+  allowedTabs?: string[];
 }
 
 // Role interface (used in Users.tsx)

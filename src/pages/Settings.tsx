@@ -54,6 +54,7 @@ function Settings() {
   const [officeNames, setOfficeNames] = useState<string[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
   const [newAppointmentStatus, setNewAppointmentStatus] = useState('');
+  const [newStatusNeedsDate, setNewStatusNeedsDate] = useState(false);
   const [newOfficeName, setNewOfficeName] = useState('');
   const [newPosition, setNewPosition] = useState('');
   const [isSavingDropdowns, setIsSavingDropdowns] = useState(false);
@@ -122,6 +123,28 @@ function Settings() {
     if (!trimmed || list.includes(trimmed)) return;
     setList([...list, trimmed]);
     setInput('');
+  };
+
+  const addAppointmentStatus = () => {
+    const trimmed = newAppointmentStatus.trim();
+    if (!trimmed) return;
+    
+    // Check if it already exists either with or without suffix
+    const baseName = trimmed.endsWith('|date') ? trimmed.slice(0, -5) : trimmed;
+    const exists = appointmentStatuses.some(status => {
+      const name = status.endsWith('|date') ? status.slice(0, -5) : status;
+      return name.toLowerCase() === baseName.toLowerCase();
+    });
+    
+    if (exists) {
+      showToast('This appointment status already exists.', 'warning');
+      return;
+    }
+    
+    const finalValue = newStatusNeedsDate ? `${trimmed}|date` : trimmed;
+    setAppointmentStatuses([...appointmentStatuses, finalValue]);
+    setNewAppointmentStatus('');
+    setNewStatusNeedsDate(false);
   };
 
   const removeItem = (list: string[], setList: (v: string[]) => void, item: string) => {
@@ -960,26 +983,45 @@ function Settings() {
                     {/* Appointment Status */}
                     <div className="settings__dropdown-section">
                       <h3 className="settings__dropdown-title">Appointment Status</h3>
-                      <div className="settings__dropdown-add">
-                        <input
-                          type="text"
-                          className="settings__form-input"
-                          placeholder="Add new status..."
-                          value={newAppointmentStatus}
-                          onChange={(e) => setNewAppointmentStatus(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(appointmentStatuses, setAppointmentStatuses, newAppointmentStatus, setNewAppointmentStatus))}
-                        />
-                        <Button variant="secondary" size="sm" onClick={() => addItem(appointmentStatuses, setAppointmentStatuses, newAppointmentStatus, setNewAppointmentStatus)}>
-                          + Add
-                        </Button>
+                      <div className="settings__dropdown-add" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input
+                            type="text"
+                            className="settings__form-input"
+                            placeholder="Add new status..."
+                            value={newAppointmentStatus}
+                            onChange={(e) => setNewAppointmentStatus(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addAppointmentStatus())}
+                            style={{ flex: 1 }}
+                          />
+                          <Button variant="secondary" size="sm" onClick={addAppointmentStatus}>
+                            + Add
+                          </Button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <input
+                            type="checkbox"
+                            id="status-needs-date"
+                            checked={newStatusNeedsDate}
+                            onChange={(e) => setNewStatusNeedsDate(e.target.checked)}
+                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                          />
+                          <label htmlFor="status-needs-date" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', userSelect: 'none' }}>
+                            Requires Appointment Duration Date
+                          </label>
+                        </div>
                       </div>
                       <div className="settings__dropdown-tags">
-                        {appointmentStatuses.map((item) => (
-                          <span key={item} className="settings__dropdown-tag">
-                            {item}
-                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(appointmentStatuses, setAppointmentStatuses, item)}>×</button>
-                          </span>
-                        ))}
+                        {appointmentStatuses.map((item) => {
+                          const isDurational = item.endsWith('|date');
+                          const displayName = isDurational ? item.slice(0, -5) : item;
+                          return (
+                            <span key={item} className="settings__dropdown-tag" style={{ borderLeft: isDurational ? '4px solid var(--color-primary)' : undefined }}>
+                              {displayName} {isDurational && <small style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>(requires date)</small>}
+                              <button className="settings__dropdown-tag-remove" onClick={() => removeItem(appointmentStatuses, setAppointmentStatuses, item)}>×</button>
+                            </span>
+                          );
+                        })}
                         {appointmentStatuses.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
                       </div>
                     </div>
