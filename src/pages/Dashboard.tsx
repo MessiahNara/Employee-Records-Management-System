@@ -24,7 +24,7 @@ import { generateImportTemplate } from '../utils/exportUtils';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { formatDateDDMMYYYY, convertToDateInputFormat, formatDateMDY } from '../utils/dateUtils';
-import { MdEdit, MdDelete, MdFileUpload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock } from 'react-icons/md';
+import { MdEdit, MdDelete, MdFileUpload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel } from 'react-icons/md';
 import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
 import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
@@ -4033,7 +4033,9 @@ function Dashboard() {
           <Card hoverable>
             <div className="dashboard__kpi-card">
               <div className="dashboard__kpi-header">
-                <MdPeople className="dashboard__kpi-icon" style={{ color: '#3b82f6' }} />
+                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)' }}>
+                  <MdPeople className="dashboard__kpi-icon" style={{ color: '#2563eb' }} />
+                </div>
                 <span className="dashboard__kpi-label">Total Employees</span>
               </div>
               <div className="dashboard__kpi-body">
@@ -4045,7 +4047,9 @@ function Dashboard() {
           <Card hoverable>
             <div className="dashboard__kpi-card">
               <div className="dashboard__kpi-header">
-                <MdCheckCircle className="dashboard__kpi-icon" style={{ color: '#22c55e' }} />
+                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
+                  <MdCheckCircle className="dashboard__kpi-icon" style={{ color: '#059669' }} />
+                </div>
                 <span className="dashboard__kpi-label">Active Employees</span>
               </div>
               <div className="dashboard__kpi-body">
@@ -4059,7 +4063,9 @@ function Dashboard() {
           <Card hoverable>
             <div className="dashboard__kpi-card">
               <div className="dashboard__kpi-header">
-                <MdPause className="dashboard__kpi-icon" style={{ color: '#f59e0b' }} />
+                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>
+                  <MdPause className="dashboard__kpi-icon" style={{ color: '#d97706' }} />
+                </div>
                 <span className="dashboard__kpi-label">Inactive Employees</span>
               </div>
               <div className="dashboard__kpi-body">
@@ -4073,7 +4079,9 @@ function Dashboard() {
           <Card hoverable>
             <div className="dashboard__kpi-card">
               <div className="dashboard__kpi-header">
-                <MdDescription className="dashboard__kpi-icon" style={{ color: '#8b5cf6' }} />
+                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
+                  <MdDescription className="dashboard__kpi-icon" style={{ color: '#7c3aed' }} />
+                </div>
                 <span className="dashboard__kpi-label">Total Documents</span>
               </div>
               <div className="dashboard__kpi-body">
@@ -4087,7 +4095,9 @@ function Dashboard() {
           <Card hoverable>
             <div className="dashboard__kpi-card">
               <div className="dashboard__kpi-header">
-                <MdStorage className="dashboard__kpi-icon" style={{ color: '#ec4899' }} />
+                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(236, 72, 153, 0.12)' }}>
+                  <MdStorage className="dashboard__kpi-icon" style={{ color: '#db2777' }} />
+                </div>
                 <span className="dashboard__kpi-label">Storage Used</span>
               </div>
               <div className="dashboard__kpi-body">
@@ -4252,9 +4262,9 @@ function Dashboard() {
 
               {/* Metric Cards */}
               <div className="reports-view__metrics-grid">
-                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-success)' }}>
-                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>
-                    ✔
+                <div className="reports-view__metric-card reports-view__metric-card--success">
+                  <div className="reports-view__metric-icon-wrapper reports-view__metric-icon-wrapper--success">
+                    <MdCheckCircle />
                   </div>
                   <div className="reports-view__metric-info">
                     <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size}</span>
@@ -4262,9 +4272,9 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
-                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
-                    ✖
+                <div className="reports-view__metric-card reports-view__metric-card--danger">
+                  <div className="reports-view__metric-icon-wrapper reports-view__metric-icon-wrapper--danger">
+                    <MdCancel />
                   </div>
                   <div className="reports-view__metric-info">
                     <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size}</span>
@@ -4272,9 +4282,9 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-warning)' }}>
-                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)' }}>
-                    ⚠️
+                <div className="reports-view__metric-card reports-view__metric-card--warning">
+                  <div className="reports-view__metric-icon-wrapper reports-view__metric-icon-wrapper--warning">
+                    <MdWarning />
                   </div>
                   <div className="reports-view__metric-info">
                     <span className="reports-view__metric-value">
@@ -4284,9 +4294,9 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="reports-view__metric-card" style={{ borderLeft: '4px solid var(--color-danger)' }}>
-                  <div className="reports-view__metric-icon-wrapper" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>
-                    🚫
+                <div className="reports-view__metric-card reports-view__metric-card--expired">
+                  <div className="reports-view__metric-icon-wrapper reports-view__metric-icon-wrapper--expired">
+                    <MdError />
                   </div>
                   <div className="reports-view__metric-info">
                     <span className="reports-view__metric-value">
@@ -4304,25 +4314,25 @@ function Dashboard() {
                     className={`reports-view__tab-btn${reportActiveTab === 'active' ? ' reports-view__tab-btn--active' : ''}`}
                     onClick={() => setReportActiveTab('active')}
                   >
-                    🟢 Active Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size})
+                    <MdCheckCircle style={{ color: '#10b981' }} /> Active Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size})
                   </button>
                   <button
                     className={`reports-view__tab-btn${reportActiveTab === 'inactive' ? ' reports-view__tab-btn--active' : ''}`}
                     onClick={() => setReportActiveTab('inactive')}
                   >
-                    🔴 Inactive Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size})
+                    <MdCancel style={{ color: '#ef4444' }} /> Inactive Employees ({new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size})
                   </button>
                   <button
                     className={`reports-view__tab-btn${reportActiveTab === 'expiring' ? ' reports-view__tab-btn--active' : ''}`}
                     onClick={() => setReportActiveTab('expiring')}
                   >
-                    ⚠️ Near Expiration ({filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length})
+                    <MdWarning style={{ color: '#f59e0b' }} /> Near Expiration ({filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length})
                   </button>
                   <button
                     className={`reports-view__tab-btn${reportActiveTab === 'expired' ? ' reports-view__tab-btn--active' : ''}`}
                     onClick={() => setReportActiveTab('expired')}
                   >
-                    🚫 Reached Deadline ({filteredReportRows.filter((row) => isExpired(row.durationTo)).length})
+                    <MdError style={{ color: '#dc2626' }} /> Reached Deadline ({filteredReportRows.filter((row) => isExpired(row.durationTo)).length})
                   </button>
                 </div>
 
@@ -4979,80 +4989,81 @@ function Dashboard() {
         }
       >
         <div className="dashboard__employee-form">
-          <h3 className="dashboard__form-section-title">
-            Personal Information
-          </h3>
+          <div className="dashboard__form-section">
+            <h4 className="dashboard__form-section-header">Personal Information</h4>
 
-          <Input
-            id="employee-id"
-            label="Employee ID *"
-            placeholder="Enter employee ID (e.g., EMP-001)"
-            value={formData.id}
-            onChange={(e) => handleFormChange('id', e.target.value)}
-            error={formErrors.id}
-            fullWidth
-          />
-
-          <div className="dashboard__form-row">
             <Input
-              id="last-name"
-              label="Last Name"
-              placeholder="Enter last name"
-              value={formData.lastName}
-              onChange={(e) => handleFormChange('lastName', e.target.value)}
-              error={formErrors.lastName}
+              id="employee-id"
+              label="Employee ID *"
+              placeholder="Enter employee ID (e.g., EMP-001)"
+              value={formData.id}
+              onChange={(e) => handleFormChange('id', e.target.value)}
+              error={formErrors.id}
               fullWidth
             />
+
+            <div className="dashboard__form-row">
+              <Input
+                id="last-name"
+                label="Last Name"
+                placeholder="Enter last name"
+                value={formData.lastName}
+                onChange={(e) => handleFormChange('lastName', e.target.value)}
+                error={formErrors.lastName}
+                fullWidth
+              />
+              <Input
+                id="first-name"
+                label="First Name"
+                placeholder="Enter first name"
+                value={formData.firstName}
+                onChange={(e) => handleFormChange('firstName', e.target.value)}
+                error={formErrors.firstName}
+                fullWidth
+              />
+            </div>
+
             <Input
-              id="first-name"
-              label="First Name"
-              placeholder="Enter first name"
-              value={formData.firstName}
-              onChange={(e) => handleFormChange('firstName', e.target.value)}
-              error={formErrors.firstName}
+              id="middle-name"
+              label="Middle Name"
+              placeholder="Enter middle name (optional)"
+              value={formData.middleName}
+              onChange={(e) => handleFormChange('middleName', e.target.value)}
               fullWidth
             />
+
+            <div className="dashboard__form-row">
+              <Input
+                id="date-of-birth"
+                label="Date of Birth"
+                type="date"
+                placeholder="Select date of birth (optional)"
+                value={formData.dateOfBirth}
+                onChange={(e) => handleFormChange('dateOfBirth', e.target.value)}
+                fullWidth
+              />
+
+              <div className="dashboard__form-field">
+                <label htmlFor="gender" className="dashboard__form-label">
+                  Gender <span className="dashboard__required">*</span>
+                </label>
+                <select
+                  id="gender"
+                  className="dashboard__form-select"
+                  value={formData.gender}
+                  onChange={(e) => handleFormChange('gender', e.target.value)}
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+                {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
+              </div>
+            </div>
           </div>
 
-          <Input
-            id="middle-name"
-            label="Middle Name"
-            placeholder="Enter middle name (optional)"
-            value={formData.middleName}
-            onChange={(e) => handleFormChange('middleName', e.target.value)}
-            fullWidth
-          />
-
-          <Input
-            id="date-of-birth"
-            label="Date of Birth"
-            type="date"
-            placeholder="Select date of birth (optional)"
-            value={formData.dateOfBirth}
-            onChange={(e) => handleFormChange('dateOfBirth', e.target.value)}
-            fullWidth
-          />
-
-          <div className="dashboard__form-field">
-            <label htmlFor="gender" className="dashboard__form-label">
-              Gender <span className="dashboard__required">*</span>
-            </label>
-            <select
-              id="gender"
-              className="dashboard__form-select"
-              value={formData.gender}
-              onChange={(e) => handleFormChange('gender', e.target.value)}
-            >
-              <option value="">Select gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-            {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
-          </div>
-
-          <h3 className="dashboard__form-section-title">
-            Employment Details
-          </h3>
+          <div className="dashboard__form-section">
+            <h4 className="dashboard__form-section-header">Employment Details</h4>
 
           <div className="dashboard__form-field">
             <label htmlFor="office-hospital-name" className="dashboard__form-label">
@@ -5206,215 +5217,253 @@ function Dashboard() {
               </div>
             )}
 
-          <h3 className="dashboard__form-section-title">
-            Administrative Order (AO) Details
-          </h3>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="ao-type" className="dashboard__form-label">
-              AO Status
-            </label>
-            <select
-              id="ao-type"
-              className="dashboard__form-select"
-              value={formData.aoType}
-              onChange={(e) => handleFormChange('aoType', e.target.value as any)}
-            >
-              <option value="">Select AO Type</option>
-              <option value="Detailed">Detailed</option>
-              <option value="Designated">Designated</option>
-            </select>
           </div>
 
-          <div className="dashboard__form-row">
-            <Input
-              id="ao-number"
-              label="AO Number"
-              placeholder="Enter Administrative Order number"
-              value={formData.aoNumber}
-              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
-              fullWidth
-            />
+          <div className="dashboard__form-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+              <h4 className="dashboard__form-section-header" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>Administrative Order (AO) Details</h4>
+              <button
+                type="button"
+                onClick={() => {
+                  handleFormChange('aoType', '');
+                  handleFormChange('aoNumber', '');
+                  handleFormChange('aoYear', '');
+                  handleFormChange('detailedTo', '');
+                  handleFormChange('detailedDivision', '');
+                  handleFormChange('detailedOrderFrom', '');
+                  handleFormChange('detailedOrderTo', '');
+                  handleFormChange('designatedPositionFunction', '');
+                  handleFormChange('designatedOrderFrom', '');
+                  handleFormChange('designatedOrderTo', '');
+                  setAoFile(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  padding: '3px 10px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--color-danger)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                Clear AO Inputs
+              </button>
+            </div>
+
             <div className="dashboard__form-field">
-              <label htmlFor="ao-year" className="dashboard__form-label">
-                Series
+              <label htmlFor="ao-type" className="dashboard__form-label">
+                AO Status
               </label>
               <select
-                id="ao-year"
-                className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
-                value={formData.aoYear}
-                onChange={(e) => handleFormChange('aoYear', e.target.value)}
+                id="ao-type"
+                className="dashboard__form-select"
+                value={formData.aoType}
+                onChange={(e) => handleFormChange('aoType', e.target.value as any)}
               >
-                <option value="">Select series year</option>
-                {dropdownOptions.aoYears.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
+                <option value="">Select AO Type</option>
+                <option value="Detailed">Detailed</option>
+                <option value="Designated">Designated</option>
               </select>
-              {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
             </div>
-          </div>
 
-          <div className="dashboard__form-field">
-            <label htmlFor="ao-file" className="dashboard__form-label">
-              Upload AO PDF File {formData.aoNumber.trim() ? '(Required)' : '(Optional)'}
-            </label>
-            <input
-              id="ao-file"
-              className="dashboard__form-input"
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={(e) => setAoFile(e.target.files?.[0] || null)}
-              style={{
-                padding: '0.5rem',
-                border: '1px dashed var(--border-color)',
-                borderRadius: 'var(--border-radius)',
-                backgroundColor: 'var(--bg-secondary)',
-                width: '100%'
-              }}
-            />
-            {aoFile && (
+            <div className="dashboard__form-row">
+              <Input
+                id="ao-number"
+                label="AO Number"
+                placeholder="Enter Administrative Order number"
+                value={formData.aoNumber}
+                onChange={(e) => handleFormChange('aoNumber', e.target.value)}
+                fullWidth
+              />
+              <div className="dashboard__form-field">
+                <label htmlFor="ao-year" className="dashboard__form-label">
+                  Series
+                </label>
+                <select
+                  id="ao-year"
+                  className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
+                  value={formData.aoYear}
+                  onChange={(e) => handleFormChange('aoYear', e.target.value)}
+                >
+                  <option value="">Select series year</option>
+                  {dropdownOptions.aoYears.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+                {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
+              </div>
+            </div>
+
+            <div className="dashboard__form-field">
+              <label htmlFor="ao-file" className="dashboard__form-label">
+                Upload AO PDF File {formData.aoNumber.trim() ? '(Required)' : '(Optional)'}
+              </label>
+              <input
+                id="ao-file"
+                className="dashboard__form-input"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => setAoFile(e.target.files?.[0] || null)}
+                style={{
+                  padding: '0.5rem',
+                  border: '1px dashed var(--border-color)',
+                  borderRadius: 'var(--border-radius)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  width: '100%'
+                }}
+              />
+              {aoFile && (
+                <>
+                  <p style={{
+                    fontSize: '0.8125rem',
+                    marginTop: '0.375rem',
+                    color: 'var(--color-success)',
+                    fontWeight: 500
+                  }}>
+                    ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      id="add-auto-rename"
+                      checked={autoRename}
+                      onChange={(e) => setAutoRename(e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="add-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                      Auto rename file according to AO details
+                    </label>
+                  </div>
+                </>
+              )}
+              {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
+            </div>
+
+            {formData.aoType === 'Detailed' && (
               <>
-                <p style={{
-                  fontSize: '0.8125rem',
-                  marginTop: '0.375rem',
-                  color: 'var(--color-success)',
-                  fontWeight: 500
-                }}>
-                  ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-                </p>
-                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="checkbox"
-                    id="add-auto-rename"
-                    checked={autoRename}
-                    onChange={(e) => setAutoRename(e.target.checked)}
-                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="add-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                    Auto rename file according to AO details
+                <div className="dashboard__form-field">
+                  <label htmlFor="detailedTo" className="dashboard__form-label">
+                    Detailed/Transferred Office
                   </label>
+                  <SearchableDropdown
+                    id="detailedTo"
+                    options={dropdownOptions.officeNames}
+                    value={formData.detailedTo}
+                    onChange={(val) => handleFormChange('detailedTo', val)}
+                    placeholder="Select or enter office"
+                  />
+                </div>
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="detailedDivision" className="dashboard__form-label">
+                    Division
+                  </label>
+                  <input
+                    id="detailedDivision"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter division"
+                    value={formData.detailedDivision}
+                    onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
+                  />
+                </div>
+
+                <div className="dashboard__form-row">
+                  <Input
+                    id="appointment-from-add"
+                    label="Duration of Detailed Order (From)"
+                    type="date"
+                    value={formData.detailedOrderFrom}
+                    onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
+                    fullWidth
+                  />
+                  <Input
+                    id="appointment-to-add"
+                    label="Duration of Detailed Order (To)"
+                    type="date"
+                    value={formData.detailedOrderTo}
+                    onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
+                    fullWidth
+                  />
                 </div>
               </>
             )}
-            {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
+
+            {formData.aoType === 'Designated' && (
+              <>
+                <div className="dashboard__form-field">
+                  <label htmlFor="designatedOffice" className="dashboard__form-label">
+                    Designated Office
+                  </label>
+                  <SearchableDropdown
+                    id="designatedOffice"
+                    options={dropdownOptions.officeNames}
+                    value={formData.detailedTo}
+                    onChange={(val) => handleFormChange('detailedTo', val)}
+                    placeholder="Select or enter designated office"
+                  />
+                </div>
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="designatedPositionFunction" className="dashboard__form-label">
+                    Designated Position Function
+                  </label>
+                  <SearchableDropdown
+                    id="designatedPositionFunction"
+                    options={dropdownOptions.positions}
+                    value={formData.designatedPositionFunction}
+                    onChange={(val) => handleFormChange('designatedPositionFunction', val)}
+                    placeholder="Select or enter position function"
+                  />
+                </div>
+
+                <div className="dashboard__form-row">
+                  <Input
+                    id="designated-order-from"
+                    label="Designated Order (From)"
+                    type="date"
+                    value={formData.designatedOrderFrom}
+                    onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
+                    fullWidth
+                  />
+                  <Input
+                    id="designated-order-to"
+                    label="Designated Order (To)"
+                    type="date"
+                    value={formData.designatedOrderTo}
+                    onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
+                    fullWidth
+                  />
+                </div>
+              </>
+            )}
           </div>
 
-          {formData.aoType === 'Detailed' && (
-            <>
-              <div className="dashboard__form-field">
-                <label htmlFor="detailedTo" className="dashboard__form-label">
-                  Detailed/Transferred Office
-                </label>
-                <SearchableDropdown
-                  id="detailedTo"
-                  options={dropdownOptions.officeNames}
-                  value={formData.detailedTo}
-                  onChange={(val) => handleFormChange('detailedTo', val)}
-                  placeholder="Select or enter office"
-                />
-              </div>
+          <div className="dashboard__form-section">
+            <h4 className="dashboard__form-section-header">201 File Status</h4>
 
-              <div className="dashboard__form-field">
-                <label htmlFor="detailedDivision" className="dashboard__form-label">
-                  Division
-                </label>
-                <input
-                  id="detailedDivision"
-                  className="dashboard__form-input"
-                  type="text"
-                  placeholder="Enter division"
-                  value={formData.detailedDivision}
-                  onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
-                />
-              </div>
-
-              <div className="dashboard__form-row">
-                <Input
-                  id="appointment-from-add"
-                  label="Duration of Detailed Order (From)"
-                  type="date"
-                  value={formData.detailedOrderFrom}
-                  onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
-                  fullWidth
-                />
-                <Input
-                  id="appointment-to-add"
-                  label="Duration of Detailed Order (To)"
-                  type="date"
-                  value={formData.detailedOrderTo}
-                  onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
-                  fullWidth
-                />
-              </div>
-            </>
-          )}
-
-          {formData.aoType === 'Designated' && (
-            <>
-              <div className="dashboard__form-field">
-                <label htmlFor="designatedOffice" className="dashboard__form-label">
-                  Designated Office
-                </label>
-                <SearchableDropdown
-                  id="designatedOffice"
-                  options={dropdownOptions.officeNames}
-                  value={formData.detailedTo}
-                  onChange={(val) => handleFormChange('detailedTo', val)}
-                  placeholder="Select or enter designated office"
-                />
-              </div>
-
-              <div className="dashboard__form-field">
-                <label htmlFor="designatedPositionFunction" className="dashboard__form-label">
-                  Designated Position Function
-                </label>
-                <SearchableDropdown
-                  id="designatedPositionFunction"
-                  options={dropdownOptions.positions}
-                  value={formData.designatedPositionFunction}
-                  onChange={(val) => handleFormChange('designatedPositionFunction', val)}
-                  placeholder="Select or enter position function"
-                />
-              </div>
-
-              <div className="dashboard__form-row">
-                <Input
-                  id="designated-order-from"
-                  label="Designated Order (From)"
-                  type="date"
-                  value={formData.designatedOrderFrom}
-                  onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
-                  fullWidth
-                />
-                <Input
-                  id="designated-order-to"
-                  label="Designated Order (To)"
-                  type="date"
-                  value={formData.designatedOrderTo}
-                  onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
-                  fullWidth
-                />
-              </div>
-            </>
-          )}
-
-          <h3 className="dashboard__form-section-title">
-            201 File Status
-          </h3>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="file201-status" className="dashboard__form-label">
-              201 File Status
-            </label>
-            <select
-              id="file201-status"
-              className="dashboard__form-select"
-              value={formData.file201Status}
-              onChange={(e) => handleFormChange('file201Status', e.target.value)}
-            >
-              <option value="Available">Available</option>
-              <option value="Unavailable">Unavailable</option>
-            </select>
+            <div className="dashboard__form-field">
+              <label htmlFor="file201-status" className="dashboard__form-label">
+                201 File Status
+              </label>
+              <select
+                id="file201-status"
+                className="dashboard__form-select"
+                value={formData.file201Status}
+                onChange={(e) => handleFormChange('file201Status', e.target.value)}
+              >
+                <option value="Available">Available</option>
+                <option value="Unavailable">Unavailable</option>
+              </select>
+            </div>
           </div>
         </div>
       </Modal>
@@ -5439,46 +5488,52 @@ function Dashboard() {
       >
         <div className="dashboard__employee-form">
           <p style={{
-            marginBottom: '1.5rem',
-            padding: '0.75rem',
-            backgroundColor: 'var(--bg-secondary)',
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.2)',
             borderRadius: 'var(--border-radius)',
             fontSize: '0.875rem',
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
           }}>
-            ℹ️ Update only the fields you want to change. Unchanged fields will retain their existing values.
+            <span>ℹ️</span> Update only the fields you want to change. Unchanged fields will retain their existing values.
           </p>
 
           {/* Collapsible ID Update Section */}
-          <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', padding: '1rem', backgroundColor: 'var(--bg-primary)' }}>
+          <div className="dashboard__form-section">
             <div
               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
               onClick={() => setShowIdUpdate(!showIdUpdate)}
             >
-              <span style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MdLock style={{ color: 'var(--text-secondary)' }} /> Update Employee ID (Advanced Options)
+              <span className="dashboard__form-section-header" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MdLock style={{ color: 'var(--color-primary)' }} /> Update Employee ID (Advanced Options)
               </span>
-              <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              <span style={{ fontSize: '0.875rem', color: 'var(--color-primary)', fontWeight: 600 }}>
                 {showIdUpdate ? 'Collapse ▲' : 'Expand ▼'}
               </span>
             </div>
 
             {showIdUpdate && (
-              <div className="dashboard__id-update-section" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              <div className="dashboard__id-update-section" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-warning)', marginBottom: '1rem', fontWeight: 500 }}>
                   ⚠️ Changing the Employee ID will update all references including documents and audit logs. Use with caution.
                 </p>
                 <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
                     Current Employee ID
                   </label>
                   <div style={{
                     padding: '0.75rem',
-                    backgroundColor: 'var(--bg-secondary)',
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: 'var(--border-radius)',
                     fontSize: '0.875rem',
-                    color: 'var(--text-secondary)',
-                    fontFamily: 'monospace'
+                    color: 'var(--text-primary)',
+                    fontFamily: 'monospace',
+                    fontWeight: 600
                   }}>
                     {selectedEmployee?.id}
                   </div>
@@ -5495,242 +5550,281 @@ function Dashboard() {
             )}
           </div>
 
-          <h3 className="dashboard__form-section-title">
-            Personal Information
-          </h3>
+          <div className="dashboard__form-section">
+            <h4 className="dashboard__form-section-header">Personal Information</h4>
 
-          <div className="dashboard__form-row">
-            <Input
-              id="edit-last-name"
-              label="Last Name"
-              placeholder="Enter last name"
-              value={formData.lastName}
-              onChange={(e) => handleFormChange('lastName', e.target.value)}
-              error={formErrors.lastName}
-              fullWidth
-            />
-            <Input
-              id="edit-first-name"
-              label="First Name"
-              placeholder="Enter first name"
-              value={formData.firstName}
-              onChange={(e) => handleFormChange('firstName', e.target.value)}
-              error={formErrors.firstName}
-              fullWidth
-            />
-          </div>
-
-          <Input
-            id="edit-middle-name"
-            label="Middle Name"
-            placeholder="Enter middle name (optional)"
-            value={formData.middleName}
-            onChange={(e) => handleFormChange('middleName', e.target.value)}
-            fullWidth
-          />
-
-          <Input
-            id="edit-date-of-birth"
-            label="Date of Birth"
-            type="date"
-            placeholder="Select date of birth (optional)"
-            value={formData.dateOfBirth}
-            onChange={(e) => handleFormChange('dateOfBirth', e.target.value)}
-            fullWidth
-          />
-
-          <div className="dashboard__form-field">
-            <label htmlFor="update-gender" className="dashboard__form-label">
-              Gender
-            </label>
-            <select
-              id="update-gender"
-              className="dashboard__form-select"
-              value={formData.gender}
-              onChange={(e) => handleFormChange('gender', e.target.value)}
-            >
-              <option value="">Select gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-            {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
-          </div>
-
-          <h3 className="dashboard__form-section-title">
-            Employment Details
-          </h3>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="edit-office-hospital-name" className="dashboard__form-label">
-              Office / Hospital Name
-            </label>
-            <SearchableDropdown
-              id="edit-office-hospital-name"
-              options={dropdownOptions.officeNames}
-              value={formData.officeHospitalName}
-              onChange={(val) => handleFormChange('officeHospitalName', val)}
-              placeholder="Select or enter office or hospital name"
-            />
-            {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
-          </div>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="edit-position-function" className="dashboard__form-label">
-              Position / Function
-            </label>
-            <SearchableDropdown
-              id="edit-position-function"
-              options={dropdownOptions.positions}
-              value={formData.positionFunction}
-              onChange={(val) => handleFormChange('positionFunction', val)}
-              placeholder="Select or enter position or function"
-            />
-            {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
-          </div>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="update-status" className="dashboard__form-label">
-              Status
-            </label>
-            <select
-              id="update-status"
-              className="dashboard__form-select"
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-
-          <Input
-            id="edit-date-of-employment"
-            label="Date of Employment"
-            type="date"
-            value={formData.dateOfEmployment}
-            onChange={(e) => handleFormChange('dateOfEmployment', e.target.value)}
-            error={formErrors.dateOfEmployment}
-            fullWidth
-          />
-
-          {formData.status === 'Inactive' && (
-            <>
+            <div className="dashboard__form-row">
               <Input
-                id="edit-date-of-separation"
-                label="Date of Separation"
+                id="edit-last-name"
+                label="Last Name"
+                placeholder="Enter last name"
+                value={formData.lastName}
+                onChange={(e) => handleFormChange('lastName', e.target.value)}
+                error={formErrors.lastName}
+                fullWidth
+              />
+              <Input
+                id="edit-first-name"
+                label="First Name"
+                placeholder="Enter first name"
+                value={formData.firstName}
+                onChange={(e) => handleFormChange('firstName', e.target.value)}
+                error={formErrors.firstName}
+                fullWidth
+              />
+            </div>
+
+            <Input
+              id="edit-middle-name"
+              label="Middle Name"
+              placeholder="Enter middle name (optional)"
+              value={formData.middleName}
+              onChange={(e) => handleFormChange('middleName', e.target.value)}
+              fullWidth
+            />
+
+            <div className="dashboard__form-row">
+              <Input
+                id="edit-date-of-birth"
+                label="Date of Birth"
                 type="date"
-                value={formData.dateOfSeparation}
-                onChange={(e) => handleFormChange('dateOfSeparation', e.target.value)}
-                error={formErrors.dateOfSeparation}
+                placeholder="Select date of birth (optional)"
+                value={formData.dateOfBirth}
+                onChange={(e) => handleFormChange('dateOfBirth', e.target.value)}
                 fullWidth
               />
 
               <div className="dashboard__form-field">
-                <label htmlFor="update-reasonForSeparation" className="dashboard__form-label">
-                  Reason for Separation
+                <label htmlFor="update-gender" className="dashboard__form-label">
+                  Gender
                 </label>
                 <select
-                  id="update-reasonForSeparation"
+                  id="update-gender"
                   className="dashboard__form-select"
-                  value={formData.reasonForSeparation}
-                  onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
+                  value={formData.gender}
+                  onChange={(e) => handleFormChange('gender', e.target.value)}
                 >
-                  <option value="">Select reason for separation</option>
-                  {dropdownOptions.reasonsForSeparation.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))}
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
                 </select>
-                {formErrors.reasonForSeparation && (
-                  <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
-                )}
+                {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
               </div>
-            </>
-          )}
-
-          <div className="dashboard__form-field">
-            <label htmlFor="update-appointmentStatus" className="dashboard__form-label">
-              Appointment Status
-            </label>
-            <select
-              id="update-appointmentStatus"
-              className="dashboard__form-select"
-              value={formData.appointmentStatus}
-              onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
-            >
-              <option value="">Select appointment status</option>
-              {dropdownOptions.appointmentStatuses.map((s) => {
-                const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
-                return (
-                  <option key={s} value={displayName}>{displayName}</option>
-                );
-              })}
-            </select>
-            {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
+            </div>
           </div>
 
-          {/* Durational appointment statuses conditional date inputs */}
-          {formData.appointmentStatus && (
-            (() => {
-              const s = formData.appointmentStatus.toLowerCase().trim();
-              const isDefaultDurational = (
-                s === 'consultant' ||
-                s === 'contract of service' ||
-                s === 'contractual' ||
-                s === 'casual' ||
-                s === 'job order'
-              );
-              if (isDefaultDurational) return true;
+          <div className="dashboard__form-section">
+            <h4 className="dashboard__form-section-header">Employment Details</h4>
 
-              const matchedOption = dropdownOptions.appointmentStatuses.find(
-                (opt) => {
-                  const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
-                  return name.toLowerCase().trim() === s;
-                }
-              );
-              return matchedOption ? matchedOption.endsWith('|date') : false;
-            })()
-          ) && (
+            <div className="dashboard__form-field">
+              <label htmlFor="edit-office-hospital-name" className="dashboard__form-label">
+                Office / Hospital Name
+              </label>
+              <SearchableDropdown
+                id="edit-office-hospital-name"
+                options={dropdownOptions.officeNames}
+                value={formData.officeHospitalName}
+                onChange={(val) => handleFormChange('officeHospitalName', val)}
+                placeholder="Select or enter office or hospital name"
+              />
+              {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
+            </div>
+
+            <div className="dashboard__form-field">
+              <label htmlFor="edit-position-function" className="dashboard__form-label">
+                Position / Function
+              </label>
+              <SearchableDropdown
+                id="edit-position-function"
+                options={dropdownOptions.positions}
+                value={formData.positionFunction}
+                onChange={(val) => handleFormChange('positionFunction', val)}
+                placeholder="Select or enter position or function"
+              />
+              {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
+            </div>
+
+            <div className="dashboard__form-row">
+              <div className="dashboard__form-field">
+                <label htmlFor="update-status" className="dashboard__form-label">
+                  Status
+                </label>
+                <select
+                  id="update-status"
+                  className="dashboard__form-select"
+                  value={formData.status}
+                  onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              <Input
+                id="edit-date-of-employment"
+                label="Date of Employment"
+                type="date"
+                value={formData.dateOfEmployment}
+                onChange={(e) => handleFormChange('dateOfEmployment', e.target.value)}
+                error={formErrors.dateOfEmployment}
+                fullWidth
+              />
+            </div>
+
+            {formData.status === 'Inactive' && (
               <div className="dashboard__form-row">
                 <Input
-                  id="edit-appointment-from"
-                  label="Appointment From"
+                  id="edit-date-of-separation"
+                  label="Date of Separation"
                   type="date"
-                  value={formData.appointmentFrom}
-                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
-                  error={formErrors.appointmentFrom}
+                  value={formData.dateOfSeparation}
+                  onChange={(e) => handleFormChange('dateOfSeparation', e.target.value)}
+                  error={formErrors.dateOfSeparation}
                   fullWidth
                 />
-                <Input
-                  id="edit-appointment-to"
-                  label="Appointment To"
-                  type="date"
-                  value={formData.appointmentTo}
-                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
-                  error={formErrors.appointmentTo}
-                  fullWidth
-                />
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="update-reasonForSeparation" className="dashboard__form-label">
+                    Reason for Separation
+                  </label>
+                  <select
+                    id="update-reasonForSeparation"
+                    className="dashboard__form-select"
+                    value={formData.reasonForSeparation}
+                    onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
+                  >
+                    <option value="">Select reason for separation</option>
+                    {dropdownOptions.reasonsForSeparation.map((reason) => (
+                      <option key={reason} value={reason}>{reason}</option>
+                    ))}
+                  </select>
+                  {formErrors.reasonForSeparation && (
+                    <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
+                  )}
+                </div>
               </div>
             )}
 
-          <h3 className="dashboard__form-section-title">
-            Administrative Order (AO) Details
-          </h3>
+            <div className="dashboard__form-field">
+              <label htmlFor="update-appointmentStatus" className="dashboard__form-label">
+                Appointment Status
+              </label>
+              <select
+                id="update-appointmentStatus"
+                className="dashboard__form-select"
+                value={formData.appointmentStatus}
+                onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
+              >
+                <option value="">Select appointment status</option>
+                {dropdownOptions.appointmentStatuses.map((s) => {
+                  const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
+                  return (
+                    <option key={s} value={displayName}>{displayName}</option>
+                  );
+                })}
+              </select>
+              {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
+            </div>
 
-          <div className="dashboard__form-field">
-            <label htmlFor="update-ao-type" className="dashboard__form-label">
-              Type of AO
-            </label>
-            <select
-              id="update-ao-type"
-              className="dashboard__form-select"
-              value={formData.aoType}
-              onChange={(e) => handleFormChange('aoType', e.target.value as any)}
-            >
-              <option value="">Select AO Type</option>
-              <option value="Detailed">Detailed</option>
-              <option value="Designated">Designated</option>
-            </select>
+            {/* Durational appointment statuses conditional date inputs */}
+            {formData.appointmentStatus && (
+              (() => {
+                const s = formData.appointmentStatus.toLowerCase().trim();
+                const isDefaultDurational = (
+                  s === 'consultant' ||
+                  s === 'contract of service' ||
+                  s === 'contractual' ||
+                  s === 'casual' ||
+                  s === 'job order'
+                );
+                if (isDefaultDurational) return true;
+
+                const matchedOption = dropdownOptions.appointmentStatuses.find(
+                  (opt) => {
+                    const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
+                    return name.toLowerCase().trim() === s;
+                  }
+                );
+                return matchedOption ? matchedOption.endsWith('|date') : false;
+              })()
+            ) && (
+                <div className="dashboard__form-row">
+                  <Input
+                    id="edit-appointment-from"
+                    label="Appointment From"
+                    type="date"
+                    value={formData.appointmentFrom}
+                    onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                    error={formErrors.appointmentFrom}
+                    fullWidth
+                  />
+                  <Input
+                    id="edit-appointment-to"
+                    label="Appointment To"
+                    type="date"
+                    value={formData.appointmentTo}
+                    onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                    error={formErrors.appointmentTo}
+                    fullWidth
+                  />
+                </div>
+              )}
           </div>
+
+          <div className="dashboard__form-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+              <h4 className="dashboard__form-section-header" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>Administrative Order (AO) Details</h4>
+              <button
+                type="button"
+                onClick={() => {
+                  handleFormChange('aoType', '');
+                  handleFormChange('aoNumber', '');
+                  handleFormChange('aoYear', '');
+                  handleFormChange('detailedTo', '');
+                  handleFormChange('detailedDivision', '');
+                  handleFormChange('detailedOrderFrom', '');
+                  handleFormChange('detailedOrderTo', '');
+                  handleFormChange('designatedPositionFunction', '');
+                  handleFormChange('designatedOrderFrom', '');
+                  handleFormChange('designatedOrderTo', '');
+                  setAoFile(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  padding: '3px 10px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--color-danger)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
+                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                Clear AO Inputs
+              </button>
+            </div>
+
+            <div className="dashboard__form-field">
+              <label htmlFor="update-ao-type" className="dashboard__form-label">
+                Type of AO
+              </label>
+              <select
+                id="update-ao-type"
+                className="dashboard__form-select"
+                value={formData.aoType}
+                onChange={(e) => handleFormChange('aoType', e.target.value as any)}
+              >
+                <option value="">Select AO Type</option>
+                <option value="Detailed">Detailed</option>
+                <option value="Designated">Designated</option>
+              </select>
+            </div>
 
           <div className="dashboard__form-row">
             <Input
@@ -5904,23 +5998,25 @@ function Dashboard() {
             </>
           )}
 
-          <h3 className="dashboard__form-section-title">
-            201 File Status
-          </h3>
+          </div>
 
-          <div className="dashboard__form-field">
-            <label htmlFor="edit-file201-status" className="dashboard__form-label">
-              201 File Status
-            </label>
-            <select
-              id="edit-file201-status"
-              className="dashboard__form-select"
-              value={formData.file201Status}
-              onChange={(e) => handleFormChange('file201Status', e.target.value)}
-            >
-              <option value="Available">Available</option>
-              <option value="Unavailable">Unavailable</option>
-            </select>
+          <div className="dashboard__form-section">
+            <h4 className="dashboard__form-section-header">201 File Status</h4>
+
+            <div className="dashboard__form-field">
+              <label htmlFor="edit-file201-status" className="dashboard__form-label">
+                201 File Status
+              </label>
+              <select
+                id="edit-file201-status"
+                className="dashboard__form-select"
+                value={formData.file201Status}
+                onChange={(e) => handleFormChange('file201Status', e.target.value)}
+              >
+                <option value="Available">Available</option>
+                <option value="Unavailable">Unavailable</option>
+              </select>
+            </div>
           </div>
         </div>
       </Modal>

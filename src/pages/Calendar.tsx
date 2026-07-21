@@ -11,12 +11,15 @@ import {
   MdCheckCircle,
   MdRadioButtonUnchecked,
   MdList,
-  MdWarning
+  MdWarning,
+  MdError,
+  MdInfo
 } from 'react-icons/md';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
 import './Calendar.css';
 
 interface EmployeeAlert {
@@ -64,6 +67,11 @@ export default function Calendar() {
   const [selectedRawDate, setSelectedRawDate] = useState<string | null>(null);
   const [selectedDateEmployees, setSelectedDateEmployees] = useState<EmployeeAlert[]>([]);
   const [modalTodoText, setModalTodoText] = useState('');
+
+  // Counter card click filter modal states
+  const [selectedFilterCategory, setSelectedFilterCategory] = useState<'red' | 'orange' | 'yellow' | 'blue' | null>(null);
+  const [selectedFilterCategoryTitle, setSelectedFilterCategoryTitle] = useState<string>('');
+  const [filterCategoryEmployees, setFilterCategoryEmployees] = useState<EmployeeAlert[]>([]);
 
   // Load data
   // Load data and poll for updates
@@ -420,30 +428,81 @@ export default function Calendar() {
 
       {/* Counter summary cards */}
       <div className="calendar-page__counters">
-        <div className="calendar-counter-card calendar-counter-card--red">
-          <div className="calendar-counter-card__icon">🔴</div>
-          <div>
+        <div
+          className={`calendar-counter-card calendar-counter-card--red ${selectedFilterCategory === 'red' ? 'calendar-counter-card--active' : ''}`}
+          onClick={() => {
+            const list = employeeAlerts.filter(a => a.color === 'red');
+            setSelectedFilterCategory('red');
+            setSelectedFilterCategoryTitle('Critical Expired Employees');
+            setFilterCategoryEmployees(list);
+          }}
+          title="Click to view all critical expired employees"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="calendar-counter-card__icon calendar-counter-card__icon--red">
+            <MdError />
+          </div>
+          <div className="calendar-counter-card__content">
             <div className="calendar-counter-card__value">{counters.red}</div>
             <div className="calendar-counter-card__label">Critical (Expired)</div>
           </div>
         </div>
-        <div className="calendar-counter-card calendar-counter-card--orange">
-          <div className="calendar-counter-card__icon">🟠</div>
-          <div>
+
+        <div
+          className={`calendar-counter-card calendar-counter-card--orange ${selectedFilterCategory === 'orange' ? 'calendar-counter-card--active' : ''}`}
+          onClick={() => {
+            const list = employeeAlerts.filter(a => a.color === 'orange');
+            setSelectedFilterCategory('orange');
+            setSelectedFilterCategoryTitle('Urgent Expiring Employees (≤ 7 Days)');
+            setFilterCategoryEmployees(list);
+          }}
+          title="Click to view all urgent expiring employees"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="calendar-counter-card__icon calendar-counter-card__icon--orange">
+            <MdWarning />
+          </div>
+          <div className="calendar-counter-card__content">
             <div className="calendar-counter-card__value">{counters.orange}</div>
             <div className="calendar-counter-card__label">Urgent (≤ 7 Days)</div>
           </div>
         </div>
-        <div className="calendar-counter-card calendar-counter-card--yellow">
-          <div className="calendar-counter-card__icon">🟡</div>
-          <div>
+
+        <div
+          className={`calendar-counter-card calendar-counter-card--yellow ${selectedFilterCategory === 'yellow' ? 'calendar-counter-card--active' : ''}`}
+          onClick={() => {
+            const list = employeeAlerts.filter(a => a.color === 'yellow');
+            setSelectedFilterCategory('yellow');
+            setSelectedFilterCategoryTitle('Warning Expiring Employees (≤ 30 Days)');
+            setFilterCategoryEmployees(list);
+          }}
+          title="Click to view all warning expiring employees"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="calendar-counter-card__icon calendar-counter-card__icon--yellow">
+            <MdInfo />
+          </div>
+          <div className="calendar-counter-card__content">
             <div className="calendar-counter-card__value">{counters.yellow}</div>
             <div className="calendar-counter-card__label">Warning (≤ 30 Days)</div>
           </div>
         </div>
-        <div className="calendar-counter-card calendar-counter-card--blue">
-          <div className="calendar-counter-card__icon">🔵</div>
-          <div>
+
+        <div
+          className={`calendar-counter-card calendar-counter-card--blue ${selectedFilterCategory === 'blue' ? 'calendar-counter-card--active' : ''}`}
+          onClick={() => {
+            const list = employeeAlerts.filter(a => a.color === 'blue');
+            setSelectedFilterCategory('blue');
+            setSelectedFilterCategoryTitle('Pending Renewal Employees');
+            setFilterCategoryEmployees(list);
+          }}
+          title="Click to view all pending renewal employees"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="calendar-counter-card__icon calendar-counter-card__icon--blue">
+            <MdCheckCircle />
+          </div>
+          <div className="calendar-counter-card__content">
             <div className="calendar-counter-card__value">{counters.blue}</div>
             <div className="calendar-counter-card__label">Action Taken (Pending)</div>
           </div>
@@ -770,6 +829,62 @@ export default function Calendar() {
           </div>
         </div>
       )}
+
+      {/* Filter Category Modal (Triggered by clicking counter summary cards) */}
+      <Modal
+        isOpen={selectedFilterCategory !== null}
+        onClose={() => {
+          setSelectedFilterCategory(null);
+          setFilterCategoryEmployees([]);
+        }}
+        title={selectedFilterCategoryTitle}
+        size="lg"
+      >
+        <div style={{ padding: '0.5rem 0' }}>
+          {filterCategoryEmployees.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.25rem' }}>No Employees Found</p>
+              <p style={{ fontSize: '0.875rem' }}>There are currently no employees in this expiration category.</p>
+            </div>
+          ) : (
+            <div className="expiring-list">
+              {filterCategoryEmployees.map((emp) => (
+                <div
+                  key={`${emp.id}-${emp.aoType}-${emp.expDate}`}
+                  className={`expiring-item expiring-item--border-${emp.color}`}
+                  onClick={() => {
+                    setSelectedFilterCategory(null);
+                    navigate(`/employees/${emp.id}`);
+                  }}
+                  title="Click to go directly to employee record"
+                >
+                  <div className="expiring-item__info">
+                    <div className="expiring-item__name">
+                      {emp.name}
+                      <span className={`expiring-badge expiring-badge--${emp.color}`}>
+                        {emp.color === 'red' && '🔴 Expired'}
+                        {emp.color === 'orange' && '🟠 Urgent'}
+                        {emp.color === 'yellow' && '🟡 Warning'}
+                        {emp.color === 'blue' && '🔵 Pending Renewal'}
+                      </span>
+                    </div>
+                    <div className="expiring-item__meta">{emp.position} • {emp.office}</div>
+                    <div className="expiring-item__details">
+                      Type: <strong>{emp.aoType} Order</strong> • Expiration: <strong>{emp.expDate}</strong>
+                      {emp.remainingDays < 0
+                        ? ` (${Math.abs(emp.remainingDays)} days ago)`
+                        : ` (${emp.remainingDays} days remaining)`}
+                    </div>
+                  </div>
+                  <div className="expiring-item__action-hint">
+                    View Profile &rarr;
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -2,9 +2,18 @@ export type AuditActionType = 'create' | 'update' | 'status_change' | 'delete' |
 
 export interface AuditMetadata {
   employees?: Array<{
-    first_name: string;
-    last_name: string;
+    first_name?: string;
+    last_name?: string;
+    [key: string]: any;
   }>;
+  items?: any[];
+  changedFields?: string[];
+  fields?: string[];
+  changes?: Record<string, any>;
+  boxes?: any[];
+  deletedCount?: number;
+  boxLabel?: string;
+  [key: string]: any;
 }
 
 export interface AuditLog {

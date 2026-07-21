@@ -250,50 +250,50 @@ function InventoryAppraisal() {
 
       {/* KPI Metrics */}
       <div className="inventory-page__kpi-grid">
-        <Card className="card--hoverable">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ fontSize: '2rem', padding: '0.75rem', borderRadius: '12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' }}>
+        <Card hoverable className="inventory-kpi-card inventory-kpi-card--blue">
+          <div className="inventory-kpi-card__inner">
+            <div className="inventory-kpi-card__icon-wrapper inventory-kpi-card__icon-wrapper--blue">
               <MdAssignment />
             </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Series Entries</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>{metrics.total}</div>
+            <div className="inventory-kpi-card__info">
+              <span className="inventory-kpi-card__label">Total Series Entries</span>
+              <span className="inventory-kpi-card__value">{metrics.total}</span>
             </div>
           </div>
         </Card>
 
-        <Card className="card--hoverable">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ fontSize: '2rem', padding: '0.75rem', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#059669' }}>
+        <Card hoverable className="inventory-kpi-card inventory-kpi-card--green">
+          <div className="inventory-kpi-card__inner">
+            <div className="inventory-kpi-card__icon-wrapper inventory-kpi-card__icon-wrapper--green">
               <MdCheckCircle />
             </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Safe for Disposal</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#059669' }}>{metrics.safeForDisposal}</div>
+            <div className="inventory-kpi-card__info">
+              <span className="inventory-kpi-card__label">Safe for Disposal</span>
+              <span className="inventory-kpi-card__value inventory-kpi-card__value--green">{metrics.safeForDisposal}</span>
             </div>
           </div>
         </Card>
 
-        <Card className="card--hoverable">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ fontSize: '2rem', padding: '0.75rem', borderRadius: '12px', backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#d97706' }}>
+        <Card hoverable className="inventory-kpi-card inventory-kpi-card--amber">
+          <div className="inventory-kpi-card__inner">
+            <div className="inventory-kpi-card__icon-wrapper inventory-kpi-card__icon-wrapper--amber">
               <MdHourglassTop />
             </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Under Retention</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#d97706' }}>{metrics.underRetention}</div>
+            <div className="inventory-kpi-card__info">
+              <span className="inventory-kpi-card__label">Under Retention</span>
+              <span className="inventory-kpi-card__value inventory-kpi-card__value--amber">{metrics.underRetention}</span>
             </div>
           </div>
         </Card>
 
-        <Card className="card--hoverable">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ fontSize: '2rem', padding: '0.75rem', borderRadius: '12px', backgroundColor: 'rgba(99, 102, 241, 0.1)', color: '#4f46e5' }}>
+        <Card hoverable className="inventory-kpi-card inventory-kpi-card--indigo">
+          <div className="inventory-kpi-card__inner">
+            <div className="inventory-kpi-card__icon-wrapper inventory-kpi-card__icon-wrapper--indigo">
               <MdArchive />
             </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Permanent Records</div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#4f46e5' }}>{metrics.permanent}</div>
+            <div className="inventory-kpi-card__info">
+              <span className="inventory-kpi-card__label">Permanent Records</span>
+              <span className="inventory-kpi-card__value inventory-kpi-card__value--indigo">{metrics.permanent}</span>
             </div>
           </div>
         </Card>

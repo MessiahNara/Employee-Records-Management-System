@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { getAuthState } from '../utils/mockAuth';
 import api from '../services/api';
 import Button from '../components/ui/Button';
@@ -25,6 +26,9 @@ interface UserContact {
   role: string;
   profilePicture?: string;
   lastActive?: string;
+  isGroup?: boolean;
+  createdBy?: string;
+  members?: UserContact[];
   lastMessage?: {
     content: string;
     createdAt: string;
@@ -38,6 +42,7 @@ function Chats() {
 
   // Chat States
   const [messages, setMessages] = useState<Message[]>([]);
+  const [groupMessagesStore, setGroupMessagesStore] = useState<Record<string, Message[]>>({});
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -54,6 +59,14 @@ function Chats() {
   const [sidebarSearchQuery, setSidebarSearchQuery] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Group Chat Creation States
+  const [isGroupMode, setIsGroupMode] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [showAddMembersModal, setShowAddMembersModal] = useState(false);
+  const [showMembersInfoModal, setShowMembersInfoModal] = useState(false);
+  const [newMemberSelection, setNewMemberSelection] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -83,7 +96,28 @@ function Chats() {
           api.chats.getUnreadCounts()
         ]);
         if (isMounted) {
-          setRecentContacts(recent);
+          setRecentContacts((prev) => {
+            // Keep local group chats or newly selected active contact in recent list
+            const map = new Map<string, UserContact>();
+            
+            // First add server recent contacts
+            recent.forEach(c => map.set(c.id, c));
+            
+            // Preserve local group chats or active contact even if no backend message exchange exists yet
+            prev.forEach(c => {
+              if (c.id.startsWith('group_') || (activeContact && activeContact.id === c.id)) {
+                if (!map.has(c.id)) {
+                  map.set(c.id, c);
+                }
+              }
+            });
+            
+            if (activeContact && !map.has(activeContact.id)) {
+              map.set(activeContact.id, activeContact);
+            }
+
+            return Array.from(map.values());
+          });
           setUnreadCounts(unread);
         }
       } catch (err) {
@@ -98,12 +132,19 @@ function Chats() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [activeContact]);
 
   // 3. Poll and Load conversation history for active contact
   useEffect(() => {
     if (!activeContact) {
       setMessages([]);
+      return;
+    }
+
+    // Load group messages from local store for group chats
+    if (activeContact.id.startsWith('group_')) {
+      setIsLoadingMessages(false);
+      setMessages(groupMessagesStore[activeContact.id] || []);
       return;
     }
 
@@ -160,8 +201,25 @@ function Chats() {
     setIsSending(true);
 
     try {
-      const newMessage = await api.chats.sendMessage(activeContact.id, messageText);
-      setMessages((prev) => [...prev, newMessage]);
+      if (activeContact.id.startsWith('group_')) {
+        const groupMsg: Message = {
+          id: `msg_${Date.now()}`,
+          senderId: currentUser?.id || 'user',
+          senderName: `${currentUser?.firstName || 'User'} ${currentUser?.lastName || ''}`.trim(),
+          recipientId: activeContact.id,
+          content: messageText,
+          read: true,
+          createdAt: new Date().toISOString()
+        };
+        setMessages(prev => {
+          const nextMsgs = [...prev, groupMsg];
+          setGroupMessagesStore(store => ({ ...store, [activeContact.id]: nextMsgs }));
+          return nextMsgs;
+        });
+      } else {
+        const newMessage = await api.chats.sendMessage(activeContact.id, messageText);
+        setMessages((prev) => [...prev, newMessage]);
+      }
 
       // Ensure this contact appears in the recent contacts list immediately
       setRecentContacts((prev) => {
@@ -182,12 +240,150 @@ function Chats() {
     setActiveContact(user);
     setShowAddUserModal(false);
     setUserSearchQuery('');
+    setIsGroupMode(false);
+    setSelectedMemberIds([]);
+    setGroupName('');
 
     // Add to recent contacts list if not present
     setRecentContacts((prev) => {
       if (prev.some((c) => c.id === user.id)) return prev;
       return [user, ...prev];
     });
+  };
+
+  const handleCreateGroupChat = () => {
+    if (!groupName.trim()) {
+      showToast('Please enter a group chat name.', 'warning');
+      return;
+    }
+    if (selectedMemberIds.length < 2) {
+      showToast('Please select at least 2 members for a group chat.', 'warning');
+      return;
+    }
+
+    const selectedUsers = allUsers.filter(u => selectedMemberIds.includes(u.id));
+    const memberNames = selectedUsers.map(u => `${u.firstName} ${u.lastName}`).join(', ');
+    const creatorName = currentUser ? `${currentUser.firstName || currentUser.name || 'Admin'}` : 'Super Admin';
+
+    const systemMsg: Message = {
+      id: `sys_${Date.now()}`,
+      senderId: 'system',
+      senderName: 'System Notification',
+      recipientId: `group_${Date.now()}`,
+      content: `${creatorName} created group chat "${groupName.trim()}" with ${memberNames}`,
+      read: true,
+      createdAt: new Date().toISOString()
+    };
+
+    const newGroupContact: UserContact = {
+      id: systemMsg.recipientId,
+      username: groupName.trim().toLowerCase().replace(/\s+/g, '_'),
+      firstName: groupName.trim(),
+      lastName: `(${selectedMemberIds.length + 1} members)`,
+      role: 'Group Chat',
+      isGroup: true,
+      createdBy: creatorName,
+      members: selectedUsers,
+      lastMessage: {
+        content: `${selectedMemberIds.length + 1} members`,
+        createdAt: systemMsg.createdAt,
+        senderId: 'system'
+      }
+    };
+
+    setActiveContact(newGroupContact);
+    setMessages([systemMsg]);
+    setGroupMessagesStore(prev => ({ ...prev, [newGroupContact.id]: [systemMsg] }));
+    setRecentContacts(prev => [newGroupContact, ...prev]);
+    setShowAddUserModal(false);
+    setIsGroupMode(false);
+    setGroupName('');
+    setSelectedMemberIds([]);
+    setUserSearchQuery('');
+    showToast(`Group chat "${groupName.trim()}" created!`, 'success');
+  };
+
+  const handleAddGroupMembers = (newMemberIds: string[]) => {
+    if (!activeContact || !activeContact.isGroup) return;
+    const addedUsers = allUsers.filter(u => newMemberIds.includes(u.id));
+    const existingMembers = activeContact.members || [];
+    const updatedMembers = [...existingMembers, ...addedUsers];
+    const updatedCount = updatedMembers.length + 1;
+
+    const actorName = currentUser ? `${currentUser.firstName || currentUser.name || 'Admin'}` : 'Admin';
+    const addedNames = addedUsers.map(u => `${u.firstName} ${u.lastName}`).join(', ');
+
+    const systemMsg: Message = {
+      id: `sys_${Date.now()}`,
+      senderId: 'system',
+      senderName: 'System Notification',
+      recipientId: activeContact.id,
+      content: `${actorName} added ${addedNames} to the group chat`,
+      read: true,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedContact: UserContact = {
+      ...activeContact,
+      lastName: `(${updatedCount} members)`,
+      members: updatedMembers,
+      lastMessage: {
+        content: `${updatedCount} members`,
+        createdAt: systemMsg.createdAt,
+        senderId: 'system'
+      }
+    };
+
+    setActiveContact(updatedContact);
+    setMessages(prev => {
+      const nextMsgs = [...prev, systemMsg];
+      setGroupMessagesStore(store => ({ ...store, [activeContact.id]: nextMsgs }));
+      return nextMsgs;
+    });
+    setRecentContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
+    setShowAddMembersModal(false);
+    setNewMemberSelection([]);
+    showToast(`Added ${addedUsers.length} member(s) to group!`, 'success');
+  };
+
+  const handleRemoveGroupMember = (memberId: string) => {
+    if (!activeContact || !activeContact.isGroup) return;
+    const memberToRemove = (activeContact.members || []).find(m => m.id === memberId);
+    if (!memberToRemove) return;
+
+    const updatedMembers = (activeContact.members || []).filter(m => m.id !== memberId);
+    const updatedCount = updatedMembers.length + 1;
+    const actorName = currentUser ? `${currentUser.firstName || currentUser.name || 'Admin'}` : 'Admin';
+
+    const systemMsg: Message = {
+      id: `sys_${Date.now()}`,
+      senderId: 'system',
+      senderName: 'System Notification',
+      recipientId: activeContact.id,
+      content: `${actorName} removed ${memberToRemove.firstName} ${memberToRemove.lastName} from the group chat`,
+      read: true,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedContact: UserContact = {
+      ...activeContact,
+      lastName: `(${updatedCount} members)`,
+      members: updatedMembers,
+      lastMessage: {
+        content: `${updatedCount} members`,
+        createdAt: systemMsg.createdAt,
+        senderId: 'system'
+      }
+    };
+
+    setActiveContact(updatedContact);
+    setMessages(prev => {
+      const nextMsgs = [...prev, systemMsg];
+      setGroupMessagesStore(store => ({ ...store, [activeContact.id]: nextMsgs }));
+      return nextMsgs;
+    });
+    setRecentContacts(prev => prev.map(c => c.id === updatedContact.id ? updatedContact : c));
+    showToast(`Removed ${memberToRemove.firstName} from group`, 'info');
   };
 
   const handleDeleteConversation = async () => {
@@ -351,7 +547,7 @@ function Chats() {
                 const lastMsg = contact.lastMessage;
                 const lastMsgTime = lastMsg ? formatSidebarTime(lastMsg.createdAt) : '';
                 const lastMsgText = lastMsg
-                  ? (lastMsg.senderId === currentUser?.id ? 'You: ' : '') + lastMsg.content
+                  ? (lastMsg.senderId === 'system' ? lastMsg.content : (lastMsg.senderId === currentUser?.id ? 'You: ' : '') + lastMsg.content)
                   : '';
 
                 return (
@@ -411,17 +607,46 @@ function Chats() {
                       {activeContact.firstName} {activeContact.lastName}
                     </h3>
                     <span className="chats-main__contact-role">
-                      {formatRole(activeContact.role)} • {checkIsOnline(activeContact.lastActive) ? 'Online' : 'Offline'}
+                      {activeContact.isGroup ? (
+                        <>Created by <strong>{activeContact.createdBy || 'Super Admin'}</strong></>
+                      ) : (
+                        <>{formatRole(activeContact.role)} • {checkIsOnline(activeContact.lastActive) ? 'Online' : 'Offline'}</>
+                      )}
                     </span>
                   </div>
                 </div>
-                <button
-                  className="chats-main__delete-btn"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  title="Delete Conversation"
-                >
-                  <MdDelete size={20} />
-                </button>
+
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  {activeContact.isGroup && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowMembersInfoModal(true)}
+                        title="View Group Members"
+                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                      >
+                        Members
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => { setNewMemberSelection([]); setShowAddMembersModal(true); }}
+                        title="Add Member to Group"
+                        style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                      >
+                        <MdAdd size={16} /> Add Member
+                      </Button>
+                    </>
+                  )}
+                  <button
+                    className="chats-main__delete-btn"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    title="Delete Conversation"
+                  >
+                    <MdDelete size={20} />
+                  </button>
+                </div>
               </div>
 
               {/* Chat Thread */}
@@ -440,6 +665,7 @@ function Chats() {
                   (() => {
                     let lastDateLabel = '';
                     return messages.map((msg) => {
+                      const isSystem = msg.senderId === 'system';
                       const isOwn = msg.senderId === currentUser?.id;
                       const msgDateLabel = getMessageDateLabel(msg.createdAt);
                       const showDateDivider = msgDateLabel !== lastDateLabel;
@@ -453,16 +679,34 @@ function Chats() {
                               <span className="chat-messages__date-label">{msgDateLabel}</span>
                             </div>
                           )}
-                          <div
-                            className={`chat-message ${isOwn ? 'chat-message--own' : 'chat-message--other'}`}
-                          >
-                            <div className="chat-message__body">
-                              <div className="chat-message__bubble">
-                                <p className="chat-message__text">{msg.content}</p>
-                                <span className="chat-message__time">{formatTime(msg.createdAt)}</span>
+                          {isSystem ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
+                              <span style={{
+                                backgroundColor: 'var(--bg-tertiary)',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '16px',
+                                padding: '4px 14px',
+                                fontSize: '0.78rem',
+                                fontWeight: 500,
+                                textAlign: 'center',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                              }}>
+                                {msg.content}
+                              </span>
+                            </div>
+                          ) : (
+                            <div
+                              className={`chat-message ${isOwn ? 'chat-message--own' : 'chat-message--other'}`}
+                            >
+                              <div className="chat-message__body">
+                                <div className="chat-message__bubble">
+                                  <p className="chat-message__text">{msg.content}</p>
+                                  <span className="chat-message__time">{formatTime(msg.createdAt)}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                         </React.Fragment>
                       );
                     });
@@ -502,22 +746,82 @@ function Chats() {
         </Card>
       </div>
 
-      {/* Add User Modal */}
-      {showAddUserModal && (
+      {/* Add User / Create Group Chat Modal */}
+      {showAddUserModal && createPortal(
         <div className="chat-modal-overlay" onClick={() => setShowAddUserModal(false)}>
           <div className="chat-modal" onClick={(e) => e.stopPropagation()}>
             <div className="chat-modal__header">
-              <h3>Start New Conversation</h3>
+              <h3>{isGroupMode ? 'Create Group Chat' : 'Start New Conversation'}</h3>
               <button className="chat-modal__close" onClick={() => setShowAddUserModal(false)}>
                 <MdClose size={22} />
               </button>
             </div>
 
+            {/* Mode Switcher Tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                type="button"
+                onClick={() => setIsGroupMode(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontWeight: !isGroupMode ? 700 : 500,
+                  color: !isGroupMode ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  borderBottom: !isGroupMode ? '2px solid var(--color-primary)' : '2px solid transparent',
+                  background: 'none',
+                  borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Direct Message
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsGroupMode(true)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontWeight: isGroupMode ? 700 : 500,
+                  color: isGroupMode ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  borderBottom: isGroupMode ? '2px solid var(--color-primary)' : '2px solid transparent',
+                  background: 'none',
+                  borderTop: 'none', borderLeft: 'none', borderRight: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Create Group Chat
+              </button>
+            </div>
+
+            {isGroupMode && (
+              <div style={{ padding: '12px 16px 0 16px' }}>
+                <input
+                  type="text"
+                  placeholder="Enter Group Name (e.g. HR Team, Admin Updates)..."
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            )}
+
             <div className="chat-modal__search">
               <MdSearch className="chat-modal__search-icon" />
               <input
                 type="text"
-                placeholder="Search user name or username..."
+                placeholder={isGroupMode ? 'Filter members to add...' : 'Search user name or username...'}
                 value={userSearchQuery}
                 onChange={(e) => setUserSearchQuery(e.target.value)}
               />
@@ -529,47 +833,95 @@ function Chats() {
                   <p>No users found matching your search.</p>
                 </div>
               ) : (
-                filteredUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="chat-modal__user-item"
-                    onClick={() => handleSelectUser(user)}
-                  >
-                    <div className="chat-modal__user-avatar-container">
-                      <div className="chat-modal__user-avatar">
-                        {getInitials(user.firstName, user.lastName)}
+                filteredUsers.map((user) => {
+                  const isChecked = selectedMemberIds.includes(user.id);
+                  return (
+                    <div
+                      key={user.id}
+                      className="chat-modal__user-item"
+                      onClick={() => {
+                        if (isGroupMode) {
+                          if (isChecked) {
+                            setSelectedMemberIds(prev => prev.filter(id => id !== user.id));
+                          } else {
+                            setSelectedMemberIds(prev => [...prev, user.id]);
+                          }
+                        } else {
+                          handleSelectUser(user);
+                        }
+                      }}
+                    >
+                      {isGroupMode && (
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#3b82f6' }}
+                        />
+                      )}
+                      <div className="chat-modal__user-avatar-container">
+                        <div className="chat-modal__user-avatar">
+                          {getInitials(user.firstName, user.lastName)}
+                        </div>
+                        {checkIsOnline(user.lastActive) && <span className="online-indicator" />}
                       </div>
-                      {checkIsOnline(user.lastActive) && <span className="online-indicator" />}
+                      <div className="chat-modal__user-info" style={{ flex: 1 }}>
+                        <div className="chat-modal__user-name">
+                          {user.firstName} {user.lastName}
+                        </div>
+                        <div className="chat-modal__user-meta">
+                          @{user.username} • {formatRole(user.role)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="chat-modal__user-info">
-                      <div className="chat-modal__user-name">
-                        {user.firstName} {user.lastName}
-                      </div>
-                      <div className="chat-modal__user-meta">
-                        @{user.username} • {formatRole(user.role)}
-                      </div>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
+
+            {isGroupMode && (
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-secondary)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {selectedMemberIds.length} member(s) selected
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button variant="ghost" size="sm" onClick={() => setIsGroupMode(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={handleCreateGroupChat}>
+                    Create Group Chat
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Delete Conversation Confirmation Modal */}
-      {showDeleteConfirm && activeContact && (
+      {/* Delete Conversation / Group Chat Confirmation Modal */}
+      {showDeleteConfirm && activeContact && createPortal(
         <div className="chat-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
           <div className="chat-modal chat-modal--confirm" onClick={(e) => e.stopPropagation()}>
             <div className="chat-modal__header">
-              <h3>Delete Conversation</h3>
+              <h3>{activeContact.isGroup ? 'Delete Group Chat' : 'Delete Conversation'}</h3>
               <button className="chat-modal__close" onClick={() => setShowDeleteConfirm(false)}>
                 <MdClose size={22} />
               </button>
             </div>
             <div className="chat-modal__body text-center">
-              <p className="chat-modal__confirm-msg">Are you sure you want to delete your conversation with <strong>{activeContact.firstName} {activeContact.lastName}</strong>?</p>
-              <p className="chat-modal__warn-text">This action cannot be undone and will delete all messages for both users.</p>
+              <p className="chat-modal__confirm-msg">
+                {activeContact.isGroup ? (
+                  <>Are you sure you want to delete the group chat <strong>"{activeContact.firstName}"</strong>?</>
+                ) : (
+                  <>Are you sure you want to delete your conversation with <strong>{activeContact.firstName} {activeContact.lastName}</strong>?</>
+                )}
+              </p>
+              <p className="chat-modal__warn-text">
+                {activeContact.isGroup
+                  ? 'This action cannot be undone and will remove this group chat for all members involved.'
+                  : 'This action cannot be undone and will delete all messages for both users.'}
+              </p>
               <div className="chat-modal__actions">
                 <Button
                   variant="secondary"
@@ -583,12 +935,125 @@ function Chats() {
                   onClick={handleDeleteConversation}
                   disabled={isDeleting}
                 >
-                  {isDeleting ? 'Deleting...' : 'Delete'}
+                  {isDeleting ? 'Deleting...' : (activeContact.isGroup ? 'Delete Group Chat' : 'Delete')}
                 </Button>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Group Members List Modal */}
+      {showMembersInfoModal && activeContact && activeContact.isGroup && createPortal(
+        <div className="chat-modal-overlay" onClick={() => setShowMembersInfoModal(false)}>
+          <div className="chat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-modal__header">
+              <h3>Group Members — {activeContact.firstName}</h3>
+              <button className="chat-modal__close" onClick={() => setShowMembersInfoModal(false)}>
+                <MdClose size={22} />
+              </button>
+            </div>
+            <div className="chat-modal__body">
+              <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)', fontSize: '0.85rem' }}>
+                Created by: <strong>{activeContact.createdBy || 'Super Admin'}</strong>
+              </div>
+              {(activeContact.members || []).map((m) => (
+                <div key={m.id} className="chat-modal__user-item" style={{ justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="chat-modal__user-avatar-container">
+                      <div className="chat-modal__user-avatar">
+                        {getInitials(m.firstName, m.lastName)}
+                      </div>
+                      {checkIsOnline(m.lastActive) && <span className="online-indicator" />}
+                    </div>
+                    <div className="chat-modal__user-info">
+                      <div className="chat-modal__user-name">{m.firstName} {m.lastName}</div>
+                      <div className="chat-modal__user-meta">@{m.username} • {formatRole(m.role)}</div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveGroupMember(m.id)}
+                    title="Remove member from group"
+                    style={{ color: '#ef4444', fontSize: '0.75rem', padding: '2px 8px' }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Add New Members to Group Modal */}
+      {showAddMembersModal && activeContact && activeContact.isGroup && createPortal(
+        <div className="chat-modal-overlay" onClick={() => setShowAddMembersModal(false)}>
+          <div className="chat-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-modal__header">
+              <h3>Add Members to {activeContact.firstName}</h3>
+              <button className="chat-modal__close" onClick={() => setShowAddMembersModal(false)}>
+                <MdClose size={22} />
+              </button>
+            </div>
+            <div className="chat-modal__body">
+              {allUsers
+                .filter(u => !(activeContact.members || []).some(m => m.id === u.id))
+                .map((u) => {
+                  const isChecked = newMemberSelection.includes(u.id);
+                  return (
+                    <div
+                      key={u.id}
+                      className="chat-modal__user-item"
+                      onClick={() => {
+                        if (isChecked) {
+                          setNewMemberSelection(prev => prev.filter(id => id !== u.id));
+                        } else {
+                          setNewMemberSelection(prev => [...prev, u.id]);
+                        }
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#3b82f6' }}
+                      />
+                      <div className="chat-modal__user-avatar-container">
+                        <div className="chat-modal__user-avatar">{getInitials(u.firstName, u.lastName)}</div>
+                      </div>
+                      <div className="chat-modal__user-info" style={{ flex: 1 }}>
+                        <div className="chat-modal__user-name">{u.firstName} {u.lastName}</div>
+                        <div className="chat-modal__user-meta">@{u.username} • {formatRole(u.role)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-secondary)' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                {newMemberSelection.length} member(s) selected
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="ghost" size="sm" onClick={() => setShowAddMembersModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={newMemberSelection.length === 0}
+                  onClick={() => handleAddGroupMembers(newMemberSelection)}
+                >
+                  Add Selected Members
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

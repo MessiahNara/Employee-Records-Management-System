@@ -894,154 +894,137 @@ function Users() {
           </Card>
         </div>
 
-        {/* Add/Edit User Modal */}
         <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        title={selectedUser ? 'Edit User' : 'Add New User'}
-        size="md"
-        footer={
-          <>
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSaveUser}>
-              {selectedUser ? 'Save Changes' : 'Add User'}
-            </Button>
-          </>
-        }
-      >
-        <div className="users__modal-form">
-          {selectedUser && (
-            <p style={{ 
-              marginBottom: '1.5rem', 
-              padding: '0.75rem', 
-              backgroundColor: 'var(--bg-secondary)', 
-              borderRadius: 'var(--border-radius)',
-              fontSize: '0.875rem',
-              color: 'var(--text-secondary)'
-            }}>
-              ℹ️ Update only the fields you want to change. Unchanged fields will retain their existing values.
-            </p>
-          )}
-
-          <h4 className="users__modal-section-title">Account Information</h4>
-          
-          {!selectedUser && (
-            <Input
-              id="user-id"
-              label="User ID *"
-              placeholder="Enter user ID (e.g., USR-001)"
-              value={formData.id}
-              onChange={(e) => setFormData(prev => ({ ...prev, id: e.target.value }))}
-              fullWidth
-            />
-          )}
-
-          {selectedUser && (
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.875rem' }}>
-                Current User ID
-              </label>
-              <div style={{ 
-                padding: '0.75rem', 
-                backgroundColor: 'var(--bg-secondary)', 
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title={selectedUser ? 'Edit User' : 'Add New User'}
+          size="md"
+          footer={
+            <>
+              <Button variant="secondary" onClick={handleCloseModal}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleSaveUser}>
+                {selectedUser ? 'Save Changes' : 'Add User'}
+              </Button>
+            </>
+          }
+        >
+          <div className="users__modal-form">
+            {selectedUser && (
+              <p style={{ 
+                marginBottom: '1rem', 
+                padding: '0.75rem 1rem', 
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.2)', 
                 borderRadius: 'var(--border-radius)',
                 fontSize: '0.875rem',
                 color: 'var(--text-secondary)',
-                fontFamily: 'monospace'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
               }}>
-                {selectedUser.id}
+                <span>ℹ️</span> Update only the fields you want to change. Unchanged fields will retain their existing values.
+              </p>
+            )}
+
+            <div className="users__modal-section">
+              <h4 className="users__modal-section-title">Account Information</h4>
+            
+            {!selectedUser && (
+              <Input
+                id="user-id"
+                label="User ID *"
+                placeholder="Enter user ID (e.g., USR-001)"
+                value={formData.id}
+                onChange={(e) => setFormData(prev => ({ ...prev, id: e.target.value }))}
+                fullWidth
+              />
+            )}
+
+            {selectedUser && (
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                  Current User ID
+                </label>
+                <div style={{ 
+                  padding: '0.75rem', 
+                  backgroundColor: 'var(--bg-primary)', 
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--border-radius)',
+                  fontSize: '0.875rem',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'monospace',
+                  fontWeight: 600
+                }}>
+                  {selectedUser.id}
+                </div>
               </div>
+            )}
+            
+            <div className="users__modal-row">
+              <Input
+                id="user-first-name"
+                label={selectedUser ? "First Name" : "First Name *"}
+                placeholder="Enter first name"
+                value={formData.firstName}
+                onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                fullWidth
+              />
+              <Input
+                id="user-last-name"
+                label={selectedUser ? "Last Name" : "Last Name *"}
+                placeholder="Enter last name"
+                value={formData.lastName}
+                onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                fullWidth
+              />
             </div>
-          )}
-          
-          <div className="users__modal-row">
+
             <Input
-              id="user-first-name"
-              label={selectedUser ? "First Name" : "First Name *"}
-              placeholder="Enter first name"
-              value={formData.firstName}
-              onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-              fullWidth
-            />
-            <Input
-              id="user-last-name"
-              label={selectedUser ? "Last Name" : "Last Name *"}
-              placeholder="Enter last name"
-              value={formData.lastName}
-              onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+              id="user-username"
+              label={selectedUser ? "Username" : "Username *"}
+              placeholder="Enter username"
+              value={formData.username}
+              onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
               fullWidth
             />
           </div>
 
-          <Input
-            id="user-username"
-            label={selectedUser ? "Username" : "Username *"}
-            placeholder="Enter username"
-            value={formData.username}
-            onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-            fullWidth
-          />
-
           {selectedUser && (
-            <>
-              <div className="users__id-update-section">
-                <h4 className="users__modal-section-title">Update User ID (Optional)</h4>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                  ⚠️ Changing the User ID will update all references. Use with caution.
-                </p>
-                
-                <Input
-                  id="user-new-id"
-                  label="New User ID"
-                  placeholder="Enter new user ID (e.g., USR-002)"
-                  value={formData.id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, id: e.target.value }))}
-                  fullWidth
-                />
-              </div>
-
-              <div className="users__password-section">
-                <h4 className="users__modal-section-title">Change Password (Optional)</h4>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                  Leave blank to keep current password. If changing password, current password is required.
-                </p>
-              </div>
-            </>
-          )}
-
-          {selectedUser && (
-            <div className="users__password-section">
-              <div className="users__password-field">
-                <Input
-                  id="user-new-password"
-                  label="New Password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter new password (leave blank to keep current)"
-                  value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                  fullWidth
-                />
-                <button
-                  type="button"
-                  className="users__password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? '👁️' : '👁️‍🗨️'}
-                </button>
-              </div>
+            <div className="users__modal-section">
+              <h4 className="users__modal-section-title">Update User ID (Advanced Options)</h4>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-warning)', marginBottom: '1rem', fontWeight: 500 }}>
+                ⚠️ Changing the User ID will update all references. Use with caution.
+              </p>
+              
+              <Input
+                id="user-new-id"
+                label="New User ID"
+                placeholder="Enter new user ID (e.g., USR-002)"
+                value={formData.id}
+                onChange={(e) => setFormData(prev => ({ ...prev, id: e.target.value }))}
+                fullWidth
+              />
             </div>
           )}
 
-          {!selectedUser && (
+          <div className="users__modal-section">
+            <h4 className="users__modal-section-title">
+              {selectedUser ? 'Change Password (Optional)' : 'Security'}
+            </h4>
+            {selectedUser && (
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                Leave blank to keep current password.
+              </p>
+            )}
+
             <div className="users__password-field">
               <Input
                 id="user-password"
-                label="Password *"
+                label={selectedUser ? "New Password" : "Password *"}
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter password"
+                placeholder={selectedUser ? "Enter new password (leave blank to keep current)" : "Enter password"}
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                 fullWidth
@@ -1055,42 +1038,44 @@ function Users() {
                 {showPassword ? '👁️' : '👁️‍🗨️'}
               </button>
             </div>
-          )}
+          </div>
 
-          <h4 className="users__modal-section-title">Role & Permissions</h4>
+          <div className="users__modal-section">
+            <h4 className="users__modal-section-title">Role & Permissions</h4>
 
-          <div className="users__modal-field">
-            <label htmlFor="role-select" className="users__modal-label">
-              Role {selectedUser && selectedUser.roleId === 'role-1' && '(Super Admin role cannot be changed)'}
-            </label>
-             <select
-              id="role-select"
-              className="users__modal-select"
-              value={formData.roleId}
-              onChange={(e) => handleRoleChange(e.target.value)}
-              disabled={isRoleSelectionDisabled()}
-            >
-              {getAvailableRoles().map((role) => {
-                const disabled = isRoleOptionDisabled(role.id);
-                const tooltip = getRoleTooltip(role.id);
-                
-                return (
-                  <option 
-                    key={role.id} 
-                    value={role.id}
-                    disabled={disabled}
-                    title={tooltip}
-                  >
-                    {role.name} {disabled && tooltip ? `(${tooltip})` : ''}
-                  </option>
-                );
-              })}
-            </select>
-            {selectedUser && selectedUser.roleId === 'role-1' && (
-              <p className="users__modal-hint" style={{ color: 'var(--color-warning)', marginTop: '0.5rem' }}>
-                ⚠️ Super Admin role is protected and cannot be changed
-              </p>
-            )}
+            <div className="users__modal-field">
+              <label htmlFor="role-select" className="users__modal-label">
+                Role {selectedUser && selectedUser.roleId === 'role-1' && '(Super Admin role cannot be changed)'}
+              </label>
+              <select
+                id="role-select"
+                className="users__modal-select"
+                value={formData.roleId}
+                onChange={(e) => handleRoleChange(e.target.value)}
+                disabled={isRoleSelectionDisabled()}
+              >
+                {getAvailableRoles().map((role) => {
+                  const disabled = isRoleOptionDisabled(role.id);
+                  const tooltip = getRoleTooltip(role.id);
+                  
+                  return (
+                    <option 
+                      key={role.id} 
+                      value={role.id}
+                      disabled={disabled}
+                      title={tooltip}
+                    >
+                      {role.name} {disabled && tooltip ? `(${tooltip})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              {selectedUser && selectedUser.roleId === 'role-1' && (
+                <p className="users__modal-hint" style={{ color: 'var(--color-warning)', marginTop: '0.5rem' }}>
+                  ⚠️ Super Admin role is protected and cannot be changed
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Permissions Section - For all roles */}

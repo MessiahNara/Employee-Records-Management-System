@@ -10,13 +10,17 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.5rem;
 }
 
 .inventory-page__title {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: 1.85rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 0.2rem 0;
+  letter-spacing: -0.02em;
 }
 
 .inventory-page__subtitle {
@@ -30,6 +34,79 @@
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 1.25rem;
 }
+
+.inventory-kpi-card {
+  overflow: hidden;
+  position: relative;
+}
+
+.inventory-kpi-card__inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.inventory-kpi-card__icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.inventory-kpi-card:hover .inventory-kpi-card__icon-wrapper {
+  transform: scale(1.08);
+}
+
+.inventory-kpi-card__icon-wrapper--blue {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+.inventory-kpi-card__icon-wrapper--green {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+
+.inventory-kpi-card__icon-wrapper--amber {
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
+.inventory-kpi-card__icon-wrapper--indigo {
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
+.inventory-kpi-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inventory-kpi-card__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.inventory-kpi-card__value {
+  font-size: 1.875rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.inventory-kpi-card__value--green { color: #059669; }
+.inventory-kpi-card__value--amber { color: #d97706; }
+.inventory-kpi-card__value--indigo { color: #4f46e5; }
 
 .inventory-page__controls {
   display: flex;

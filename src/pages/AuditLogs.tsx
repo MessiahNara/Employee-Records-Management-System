@@ -248,17 +248,24 @@ function AuditLogs() {
       header: 'Description',
       width: '40%',
       render: (log) => {
-        // Check if log is expandable (import or bulk delete with metadata)
-        const isExpandable = (log.actionType === 'import' || log.actionType === 'delete') && 
-                            log.metadata?.employees && 
-                            log.metadata.employees.length > 0;
-        const isExpanded = expandedRows.has(log.id);
-        const employees = log.metadata?.employees || [];
+        // Check if log is expandable (metadata with employees, changedFields, changes, or box items)
+        const hasMetadataObj = log.metadata && typeof log.metadata === 'object' && Object.keys(log.metadata).length > 0;
+        const employees = log.metadata?.employees || log.metadata?.items || [];
+        const changedFields = log.metadata?.changedFields || log.metadata?.fields || log.metadata?.changes;
+        const changes = log.metadata?.changes;
 
-        // Determine the header text based on action type
-        const headerText = log.actionType === 'import' 
-          ? `Imported Employees (${employees.length}):`
-          : `Deleted Employees (${employees.length}):`;
+        const isExpandable = Boolean(
+          hasMetadataObj && (
+            (Array.isArray(employees) && employees.length > 0) ||
+            (Array.isArray(changedFields) && changedFields.length > 0) ||
+            (typeof changes === 'object' && changes !== null && Object.keys(changes).length > 0) ||
+            log.metadata?.boxes ||
+            log.metadata?.deletedCount ||
+            log.metadata?.boxLabel
+          )
+        );
+        
+        const isExpanded = expandedRows.has(log.id);
 
         const isUpload = (log.actionType === 'upload' || log.actionType === 'create') && log.entityType === 'document' && log.entityId;
 
@@ -327,16 +334,75 @@ function AuditLogs() {
                 </button>
                 {isExpanded && (
                   <div className="audit-logs__expanded-content">
-                    <div className="audit-logs__expanded-header">
-                      {headerText}
-                    </div>
-                    <div className="audit-logs__expanded-list">
-                      {employees.map((emp, index) => (
-                        <div key={index} className="audit-logs__expanded-item">
-                          • {emp.first_name} {emp.last_name}
+                    {/* Render Changed Fields / Field Diffs */}
+                    {Array.isArray(changedFields) && changedFields.length > 0 && (
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <div className="audit-logs__expanded-header">
+                          Edited Fields ({changedFields.length}):
                         </div>
-                      ))}
-                    </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {changedFields.map((field: string, idx: number) => (
+                            <span
+                              key={idx}
+                              style={{
+                                padding: '2px 8px',
+                                backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                                color: 'var(--color-primary)',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: 600
+                              }}
+                            >
+                              {field}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Render Key-Value Changes Diff */}
+                    {typeof changes === 'object' && changes !== null && !Array.isArray(changes) && Object.keys(changes).length > 0 && (
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <div className="audit-logs__expanded-header">Field Updates:</div>
+                        <div className="audit-logs__expanded-list">
+                          {Object.entries(changes).map(([field, diff]: [string, any], idx) => (
+                            <div key={idx} className="audit-logs__expanded-item" style={{ fontSize: '0.8rem' }}>
+                              <strong>{field}</strong>: {typeof diff === 'object' ? `${diff?.old || 'none'} ➔ ${diff?.new || 'updated'}` : String(diff)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Render Employee/Item Lists (Import or Bulk Delete) */}
+                    {Array.isArray(employees) && employees.length > 0 && (
+                      <div>
+                        <div className="audit-logs__expanded-header">
+                          {log.actionType === 'import' ? `Imported Items (${employees.length}):` : `Affected Items (${employees.length}):`}
+                        </div>
+                        <div className="audit-logs__expanded-list">
+                          {employees.map((emp: any, index: number) => (
+                            <div key={index} className="audit-logs__expanded-item">
+                              • {typeof emp === 'string' ? emp : `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || emp.name || ''}`.trim() || JSON.stringify(emp)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Render Box Items / Bulk Box Delete Metadata */}
+                    {log.metadata?.boxes && Array.isArray(log.metadata.boxes) && (
+                      <div>
+                        <div className="audit-logs__expanded-header">Deleted Boxes ({log.metadata.boxes.length}):</div>
+                        <div className="audit-logs__expanded-list">
+                          {log.metadata.boxes.map((b: any, index: number) => (
+                            <div key={index} className="audit-logs__expanded-item">
+                              • Box: {typeof b === 'string' ? b : `${b.boxLabel || b.label || b.id} (${b.office || ''})`}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

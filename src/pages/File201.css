@@ -23,9 +23,10 @@
   align-items: center;
   gap: var(--spacing-md);
   color: var(--text-primary);
-  font-size: 32px;
-  font-weight: 700;
+  font-size: 1.85rem;
+  font-weight: 800;
   margin: 0 0 var(--spacing-xs) 0;
+  letter-spacing: -0.02em;
 }
 
 .file201-page__title-icon {

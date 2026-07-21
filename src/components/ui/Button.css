@@ -3,13 +3,18 @@
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
-  font-weight: 500;
+  font-weight: 600;
   border-radius: var(--border-radius);
-  transition: all var(--transition-fast);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: none;
   font-family: inherit;
   white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -77,12 +82,15 @@
 }
 
 .btn--secondary {
-  background-color: var(--color-gray-200);
+  background-color: var(--bg-tertiary, var(--color-gray-200));
   color: var(--text-primary);
+  border: 1px solid var(--border-color, transparent);
 }
 
 .btn--secondary:hover:not(:disabled) {
-  background-color: var(--color-gray-300);
+  background-color: var(--hover-bg, var(--color-gray-300));
+  border-color: var(--border-color);
+  color: var(--color-primary);
 }
 
 .btn--danger {

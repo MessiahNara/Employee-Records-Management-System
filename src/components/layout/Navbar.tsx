@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearAuthState, getAuthState } from '../../utils/mockAuth';
+import { useTheme } from '../../contexts/ThemeContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import { MdQrCodeScanner, MdLogout } from 'react-icons/md';
+import { MdQrCodeScanner, MdLogout, MdDarkMode, MdLightMode } from 'react-icons/md';
 import './Navbar.css';
 
 interface NavbarProps {
@@ -13,6 +14,7 @@ interface NavbarProps {
 
 function Navbar({ onToggleSidebar, onOpenScanner }: NavbarProps) {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [user, setUser] = useState(getAuthState());
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
@@ -106,6 +108,20 @@ function Navbar({ onToggleSidebar, onOpenScanner }: NavbarProps) {
       </div>
       
       <div className="navbar__right">
+        <button
+          className="navbar__theme-pill"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          <span className={`navbar__theme-option ${theme === 'light' ? 'navbar__theme-option--active' : ''}`}>
+            <MdLightMode className="navbar__theme-option-icon" />
+          </span>
+          <span className={`navbar__theme-option ${theme === 'dark' ? 'navbar__theme-option--active' : ''}`}>
+            <MdDarkMode className="navbar__theme-option-icon" />
+          </span>
+        </button>
+
         <button
           className="navbar__scan-btn"
           onClick={onOpenScanner}

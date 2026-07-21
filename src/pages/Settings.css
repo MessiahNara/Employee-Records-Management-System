@@ -8,13 +8,16 @@
 
 .settings__header {
   margin-bottom: var(--spacing-xl);
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .settings__title {
-  font-size: var(--font-size-3xl);
-  font-weight: 700;
+  font-size: 1.85rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 0.2rem;
+  letter-spacing: -0.02em;
 }
 
 .settings__subtitle {

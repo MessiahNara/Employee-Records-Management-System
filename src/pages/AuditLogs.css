@@ -6,17 +6,20 @@
 
 .audit-logs__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: var(--spacing-xl);
   gap: var(--spacing-lg);
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .audit-logs__title {
-  font-size: var(--font-size-3xl);
-  font-weight: 700;
+  font-size: 1.85rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 0.2rem;
+  letter-spacing: -0.02em;
 }
 
 .audit-logs__subtitle {

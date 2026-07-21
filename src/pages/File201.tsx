@@ -53,13 +53,17 @@ function File201() {
     setCurrentPage(1);
   }, [searchTerm, officeFilter, typeFilter]);
 
-  // Box Modal State
+  // Box Modal & Selection State
   const [isBoxModalOpen, setIsBoxModalOpen] = useState(false);
   const [editingBox, setEditingBox] = useState<YellowBox | null>(null);
   const [boxLabel, setBoxLabel] = useState('');
   const [office, setOffice] = useState('');
-  const [boxType, setBoxType] = useState('R1'); // R1, R2, Non-Regular, etc.
+  const [boxType, setBoxType] = useState(''); // R1, R2, Non-Regular, etc.
   const [boxColor, setBoxColor] = useState('#facc15');
+
+  // Bulk Box Selection & Delete state
+  const [checkedBoxIds, setCheckedBoxIds] = useState<string[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
 
   const getBoxStyleVariables = (colorHex: string) => {
     const colorMap: Record<string, { light: string; border: string; lidStart: string; lidEnd: string; lidBorder: string; textHighlight: string }> = {
@@ -302,9 +306,23 @@ function File201() {
     try {
       await api.yellowBoxes.remove(id);
       showToast('Box deleted successfully.', 'success');
+      setCheckedBoxIds(prev => prev.filter(boxId => boxId !== id));
       fetchData();
     } catch {
       showToast('Failed to delete Box.', 'error');
+    }
+  };
+
+  const handleBulkDeleteBoxes = async () => {
+    if (checkedBoxIds.length === 0) return;
+    try {
+      await Promise.all(checkedBoxIds.map(id => api.yellowBoxes.remove(id)));
+      showToast(`Successfully deleted ${checkedBoxIds.length} box(es).`, 'success');
+      setCheckedBoxIds([]);
+      setIsBulkDeleteModalOpen(false);
+      fetchData();
+    } catch {
+      showToast('Failed to delete selected boxes.', 'error');
     }
   };
 
@@ -385,12 +403,57 @@ function File201() {
             Manage physical 201 records folders stored in Boxes.
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => { setEditingBox(null); setBoxLabel(''); setOffice(''); setBoxType('R1'); setBoxColor('#facc15'); setIsBoxModalOpen(true); }}
-        >
-          <MdAdd size={20} style={{ marginRight: '8px' }} /> Create Box
-        </Button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {filteredBoxes.length > 0 && (
+            <label style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '0.45rem 0.85rem',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              userSelect: 'none',
+              height: '36px',
+              boxSizing: 'border-box'
+            }}>
+              <input
+                type="checkbox"
+                checked={paginatedBoxes.length > 0 && paginatedBoxes.every(b => checkedBoxIds.includes(b.id))}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    const currentIds = paginatedBoxes.map(b => b.id);
+                    setCheckedBoxIds(prev => Array.from(new Set([...prev, ...currentIds])));
+                  } else {
+                    const currentIds = paginatedBoxes.map(b => b.id);
+                    setCheckedBoxIds(prev => prev.filter(id => !currentIds.includes(id)));
+                  }
+                }}
+                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#3b82f6' }}
+              />
+              Select Page ({paginatedBoxes.length})
+            </label>
+          )}
+          {checkedBoxIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+            >
+              <MdDelete size={18} style={{ marginRight: '6px' }} />
+              Delete Selected ({checkedBoxIds.length})
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => { setEditingBox(null); setBoxLabel(''); setOffice(''); setBoxType(''); setBoxColor('#facc15'); setIsBoxModalOpen(true); }}
+          >
+            <MdAdd size={20} style={{ marginRight: '8px' }} /> Create Box
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar / Filters */}
@@ -444,7 +507,24 @@ function File201() {
               >
                 {/* Physical Storage Box Lid */}
                 <div className="yellow-box-lid">
-                  <div className="yellow-box-lid__title">201 RECORD HOLDER</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={checkedBoxIds.includes(box.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (e.target.checked) {
+                          setCheckedBoxIds(prev => [...prev, box.id]);
+                        } else {
+                          setCheckedBoxIds(prev => prev.filter(id => id !== box.id));
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Select box for bulk delete"
+                      style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: '#3b82f6' }}
+                    />
+                    <div className="yellow-box-lid__title">201 RECORD HOLDER</div>
+                  </div>
                   <div className="yellow-box-lid__actions">
                     <button className="yellow-box-action-btn" onClick={() => handleEditBoxClick(box)} title="Edit Box Info">
                       <MdEdit size={14} />
@@ -882,6 +962,32 @@ function File201() {
               }
             }}>
               Delete Box
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Delete Box Confirmation Modal */}
+      <Modal
+        isOpen={isBulkDeleteModalOpen}
+        onClose={() => setIsBulkDeleteModalOpen(false)}
+        title="Bulk Delete Boxes"
+        size="sm"
+      >
+        <div className="file201-modal-form">
+          <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', margin: '0 0 var(--spacing-md) 0', lineHeight: 1.5 }}>
+            Are you sure you want to delete <strong>{checkedBoxIds.length}</strong> selected box(es)?
+            <br /><br />
+            <span style={{ color: 'var(--color-danger)', fontSize: '12px', fontWeight: 600 }}>
+              * Employee records inside these boxes will be unassigned from boxes, but their records will remain safely intact.
+            </span>
+          </p>
+          <div className="file201-form-actions">
+            <Button variant="ghost" onClick={() => setIsBulkDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleBulkDeleteBoxes}>
+              Delete {checkedBoxIds.length} Box(es)
             </Button>
           </div>
         </div>
