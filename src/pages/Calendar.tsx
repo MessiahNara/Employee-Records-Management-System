@@ -443,8 +443,8 @@ export default function Calendar() {
             <MdError />
           </div>
           <div className="calendar-counter-card__content">
-            <div className="calendar-counter-card__value">{counters.red}</div>
             <div className="calendar-counter-card__label">Critical (Expired)</div>
+            <div className="calendar-counter-card__value">{counters.red}</div>
           </div>
         </div>
 
@@ -463,8 +463,8 @@ export default function Calendar() {
             <MdWarning />
           </div>
           <div className="calendar-counter-card__content">
-            <div className="calendar-counter-card__value">{counters.orange}</div>
             <div className="calendar-counter-card__label">Urgent (≤ 7 Days)</div>
+            <div className="calendar-counter-card__value">{counters.orange}</div>
           </div>
         </div>
 
@@ -483,8 +483,8 @@ export default function Calendar() {
             <MdInfo />
           </div>
           <div className="calendar-counter-card__content">
-            <div className="calendar-counter-card__value">{counters.yellow}</div>
             <div className="calendar-counter-card__label">Warning (≤ 30 Days)</div>
+            <div className="calendar-counter-card__value">{counters.yellow}</div>
           </div>
         </div>
 
@@ -503,8 +503,8 @@ export default function Calendar() {
             <MdCheckCircle />
           </div>
           <div className="calendar-counter-card__content">
-            <div className="calendar-counter-card__value">{counters.blue}</div>
             <div className="calendar-counter-card__label">Action Taken (Pending)</div>
+            <div className="calendar-counter-card__value">{counters.blue}</div>
           </div>
         </div>
       </div>

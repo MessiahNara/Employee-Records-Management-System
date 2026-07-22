@@ -31,6 +31,8 @@ export interface RecordSeriesFormData {
   storageYrs: number;
   totalRetention: number;
   dispositionProvision: string;
+  retentionStage?: 'Active' | 'Storage' | 'Disposed';
+  storageStartDate?: string;
 }
 
 interface CreateRecordSeriesModalProps {
@@ -61,6 +63,7 @@ const defaultFormState: RecordSeriesFormData = {
   storageYrs: 0,
   totalRetention: 0,
   dispositionProvision: '',
+  retentionStage: 'Active',
 };
 
 const parseInclusiveDates = (datesStr: string) => {

@@ -227,9 +227,9 @@ function Requests() {
     <div className="requests">
       <div className="requests__header">
         <div>
-          <h1 className="requests__title">My Requests</h1>
+          <h1 className="requests__title">Request &amp; Approvals</h1>
           <p className="requests__subtitle">
-            File access requests you have submitted
+            Review and approve pending requests from other users
             {pendingCount > 0 && (
               <span className="requests__pending-badge">{pendingCount} pending</span>
             )}
@@ -241,7 +241,8 @@ function Requests() {
               className={`requests__filter-tab ${filter === 'active' ? 'requests__filter-tab--active' : ''}`}
               onClick={() => setFilter('active')}
             >
-              Active
+              {filter === 'active' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ffffff', display: 'inline-block' }} />}
+              Pending
             </button>
             <button
               className={`requests__filter-tab ${filter === 'all' ? 'requests__filter-tab--active' : ''}`}
@@ -250,7 +251,7 @@ function Requests() {
               All
             </button>
           </div>
-          <Button variant="ghost" size="sm" onClick={fetchRequests}>
+          <Button variant="secondary" size="sm" onClick={fetchRequests} className="requests__refresh-btn">
             <MdRefresh style={{ marginRight: '0.25rem' }} /> Refresh
           </Button>
         </div>

@@ -199,6 +199,27 @@ select {
   outline-offset: 2px;
 }
 
+/* Snappy Global Theme Transition */
+body,
+#root,
+div,
+input,
+button,
+label,
+span,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;

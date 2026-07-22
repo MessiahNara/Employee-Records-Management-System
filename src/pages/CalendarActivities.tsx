@@ -489,7 +489,7 @@ export default function CalendarActivities() {
                     onClick={() => handleDeleteActivity(selectedActivity.id)}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                   >
-                    <span>🗑️ Delete Activity</span>
+                    <span>Delete Activity</span>
                   </Button>
                 </div>
               )}

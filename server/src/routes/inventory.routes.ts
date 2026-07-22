@@ -117,57 +117,14 @@ export interface InventoryRecord {
   totalRetention: number;
   dispositionProvision: string;
   disposalStatus: 'Safe for Disposal' | 'Under Retention' | 'Permanent';
+  retentionStage?: 'Active' | 'Storage' | 'Disposed';
+  storageStartDate?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 // Default initial records if file is empty
-const defaultInitialRecords: InventoryRecord[] = [
-  {
-    id: 'INV-2026-001',
-    seriesTitle: 'Leave Ledgers & Form 6 Requests',
-    classificationCategory: 'PERSONNEL',
-    scopeDescription: 'Employee application for leaves, leave credits ledger cards, and supporting medical certificates.',
-    inclusiveDates: '2015-2020',
-    volume: '0.045 cu. m.',
-    medium: 'Paper',
-    restrictions: 'None',
-    locationOfRecords: 'Filing Cabinet B, Shelf 2',
-    frequencyOfUse: 'Inactive',
-    duplication: 'Original',
-    appraisalCategory: 'Temporary (Disposal Authorized)',
-    utilityValue: 'Adm (Administrative)',
-    activeDeskYrs: 1,
-    storageYrs: 4,
-    totalRetention: 5,
-    dispositionProvision: 'Dispose after completion of COA audit',
-    disposalStatus: 'Safe for Disposal',
-    createdAt: new Date('2026-01-15').toISOString(),
-    updatedAt: new Date('2026-01-15').toISOString(),
-  },
-  {
-    id: 'INV-2026-002',
-    seriesTitle: 'PPSB Resolutions & Policy Minutes',
-    classificationCategory: 'ADMINISTRATIVE',
-    scopeDescription: 'Board resolutions, executive policy minutes, and organizational charters.',
-    inclusiveDates: '2020-present',
-    volume: '0.012 cu. m.',
-    medium: 'Paper',
-    restrictions: 'Restricted',
-    locationOfRecords: 'Vault Room 1',
-    frequencyOfUse: 'Active',
-    duplication: 'Original',
-    appraisalCategory: 'Permanent',
-    utilityValue: 'Historical',
-    activeDeskYrs: 5,
-    storageYrs: 10,
-    totalRetention: 15,
-    dispositionProvision: 'Retain permanently for historical archives',
-    disposalStatus: 'Permanent',
-    createdAt: new Date('2026-02-01').toISOString(),
-    updatedAt: new Date('2026-02-01').toISOString(),
-  },
-];
+const defaultInitialRecords: InventoryRecord[] = [];
 
 function readRecords(): InventoryRecord[] {
   try {
@@ -198,14 +155,40 @@ function calculateDisposalStatus(record: Partial<InventoryRecord>): 'Safe for Di
   if (record.appraisalCategory === 'Permanent') {
     return 'Permanent';
   }
-  
-  const isTemporary = record.appraisalCategory?.includes('Temporary') || record.appraisalCategory?.includes('Disposal');
-  const totalRet = Number(record.totalRetention || (Number(record.activeDeskYrs || 0) + Number(record.storageYrs || 0)));
 
-  // If disposition provision explicitly states safe/dispose or retention years reached
-  const prov = String(record.dispositionProvision || '').toLowerCase();
-  if (isTemporary && (prov.includes('safe') || prov.includes('dispose') || totalRet <= 2)) {
-    return 'Safe for Disposal';
+  // Must be in Storage stage to be evaluated for disposal
+  const isStorage = record.retentionStage === 'Storage' || record.frequencyOfUse === 'Inactive';
+  if (!isStorage) {
+    return 'Under Retention';
+  }
+
+  const currentYear = new Date().getFullYear();
+  const datesStr = String(record.inclusiveDates || '').trim();
+  const activeYrs = Number(record.activeDeskYrs || 0);
+  const storYrs = Number(record.storageYrs || 0);
+  const totalRet = Number(record.totalRetention || (activeYrs + storYrs));
+
+  if (!datesStr || totalRet <= 0) {
+    return 'Under Retention';
+  }
+
+  const matches = (datesStr.match(/\b\d{4}\b/g) || []).map(Number);
+  if (matches.length === 0) return 'Under Retention';
+
+  const lower = datesStr.toLowerCase();
+  if (lower.includes('present')) {
+    const ongoingStartYear = matches[matches.length - 1];
+    const elapsed = currentYear - ongoingStartYear;
+    if (elapsed >= totalRet) {
+      return 'Safe for Disposal';
+    }
+  } else {
+    // Fixed year range e.g. 2020 - 2022 or single year 2020
+    const endYear = matches.length >= 2 ? Math.max(matches[0], matches[1]) : matches[0];
+    const elapsedInStorage = currentYear - endYear;
+    if (elapsedInStorage >= storYrs) {
+      return 'Safe for Disposal';
+    }
   }
 
   return 'Under Retention';
@@ -357,6 +340,8 @@ router.post('/', (req: Request, res: Response) => {
       totalRetention,
       dispositionProvision: dispositionProvision ? dispositionProvision.trim() : 'Dispose after completion of audit',
       disposalStatus: 'Under Retention',
+      retentionStage: req.body.retentionStage || 'Active',
+      storageStartDate: req.body.storageStartDate || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -495,32 +480,7 @@ function getDisposalHistoryFilePath(): string {
   return path.join(dataDir, 'disposal_history.json');
 }
 
-const defaultDisposalHistory: DisposalLog[] = [
-  {
-    id: 'DISP-1715000000000',
-    recordId: 'INV-2026-001',
-    seriesTitle: 'Leave Ledgers & Form 6 Requests',
-    division: 'HUMAN RESOURCES',
-    classificationCategory: 'PERSONNEL',
-    disposedYears: '2010 - 2014',
-    previousInclusiveDates: '2010 - 2020',
-    newInclusiveDates: '2015 - 2020',
-    disposedAt: new Date(Date.now() - 86400000 * 30).toISOString(),
-    disposedBy: 'Records Manager',
-  },
-  {
-    id: 'DISP-1716000000000',
-    recordId: 'INV-2026-002',
-    seriesTitle: 'Attendance on Flag Raising Ceremony',
-    division: 'EMPLOYEE RELATIONS',
-    classificationCategory: 'ADMINISTRATIVE',
-    disposedYears: '2022, 2023',
-    previousInclusiveDates: '2022 - 2026',
-    newInclusiveDates: '2024 - 2026',
-    disposedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    disposedBy: 'System Admin',
-  },
-];
+const defaultDisposalHistory: DisposalLog[] = [];
 
 function readDisposalHistory(): DisposalLog[] {
   try {

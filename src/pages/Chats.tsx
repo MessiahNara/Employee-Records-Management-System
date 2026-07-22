@@ -5,7 +5,7 @@ import api from '../services/api';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { useToast } from '../contexts/ToastContext';
-import { MdSend, MdForum, MdAdd, MdClose, MdSearch, MdDelete } from 'react-icons/md';
+import { MdSend, MdForum, MdAdd, MdClose, MdSearch, MdDelete, MdWarning } from 'react-icons/md';
 import './Chats.css';
 
 interface Message {
@@ -64,6 +64,7 @@ function Chats() {
   const [isGroupMode, setIsGroupMode] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [groupWarning, setGroupWarning] = useState('');
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
   const [showMembersInfoModal, setShowMembersInfoModal] = useState(false);
   const [newMemberSelection, setNewMemberSelection] = useState<string[]>([]);
@@ -253,13 +254,15 @@ function Chats() {
 
   const handleCreateGroupChat = () => {
     if (!groupName.trim()) {
-      showToast('Please enter a group chat name.', 'warning');
+      setGroupWarning('Please enter a group chat name.');
       return;
     }
     if (selectedMemberIds.length < 2) {
-      showToast('Please select at least 2 members for a group chat.', 'warning');
+      setGroupWarning('Please select at least 2 members for a group chat.');
       return;
     }
+
+    setGroupWarning('');
 
     const selectedUsers = allUsers.filter(u => selectedMemberIds.includes(u.id));
     const memberNames = selectedUsers.map(u => `${u.firstName} ${u.lastName}`).join(', ');
@@ -801,7 +804,10 @@ function Chats() {
                   type="text"
                   placeholder="Enter Group Name (e.g. HR Team, Admin Updates)..."
                   value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
+                  onChange={(e) => {
+                    setGroupName(e.target.value);
+                    if (groupWarning) setGroupWarning('');
+                  }}
                   style={{
                     width: '100%',
                     padding: '9px 12px',
@@ -841,6 +847,7 @@ function Chats() {
                       className="chat-modal__user-item"
                       onClick={() => {
                         if (isGroupMode) {
+                          if (groupWarning) setGroupWarning('');
                           if (isChecked) {
                             setSelectedMemberIds(prev => prev.filter(id => id !== user.id));
                           } else {
@@ -880,17 +887,38 @@ function Chats() {
             </div>
 
             {isGroupMode && (
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-secondary)' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {selectedMemberIds.length} member(s) selected
-                </span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="ghost" size="sm" onClick={() => setIsGroupMode(false)}>
-                    Cancel
-                  </Button>
-                  <Button variant="primary" size="sm" onClick={handleCreateGroupChat}>
-                    Create Group Chat
-                  </Button>
+              <div style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column' }}>
+                {groupWarning && (
+                  <div style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#fef2f2',
+                    borderBottom: '1px solid #fee2e2',
+                    color: '#dc2626',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <MdWarning size={16} style={{ flexShrink: 0 }} />
+                    <span>{groupWarning}</span>
+                  </div>
+                )}
+                <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    {selectedMemberIds.length} member(s) selected
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setIsGroupMode(false);
+                      setGroupWarning('');
+                    }}>
+                      Cancel
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={handleCreateGroupChat}>
+                      Create Group Chat
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

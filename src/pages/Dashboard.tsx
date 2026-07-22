@@ -4312,8 +4312,8 @@ function Dashboard() {
                     <MdCheckCircle />
                   </div>
                   <div className="reports-view__metric-info">
-                    <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size}</span>
                     <span className="reports-view__metric-label">Active Employees</span>
+                    <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Active').map((row) => row.employeeId)).size}</span>
                   </div>
                 </div>
 
@@ -4322,8 +4322,8 @@ function Dashboard() {
                     <MdCancel />
                   </div>
                   <div className="reports-view__metric-info">
-                    <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size}</span>
                     <span className="reports-view__metric-label">Inactive Employees</span>
+                    <span className="reports-view__metric-value">{new Set(filteredReportRows.filter((row) => row.status === 'Inactive').map((row) => row.employeeId)).size}</span>
                   </div>
                 </div>
 
@@ -4332,10 +4332,10 @@ function Dashboard() {
                     <MdWarning />
                   </div>
                   <div className="reports-view__metric-info">
+                    <span className="reports-view__metric-label">Near Expiration (30 Days)</span>
                     <span className="reports-view__metric-value">
                       {filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length}
                     </span>
-                    <span className="reports-view__metric-label">Near Expiration (30 Days)</span>
                   </div>
                 </div>
 
@@ -4344,10 +4344,10 @@ function Dashboard() {
                     <MdError />
                   </div>
                   <div className="reports-view__metric-info">
+                    <span className="reports-view__metric-label">Reached Deadline (Expired)</span>
                     <span className="reports-view__metric-value">
                       {filteredReportRows.filter((row) => isExpired(row.durationTo)).length}
                     </span>
-                    <span className="reports-view__metric-label">Reached Deadline (Expired)</span>
                   </div>
                 </div>
               </div>

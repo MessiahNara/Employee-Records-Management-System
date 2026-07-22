@@ -1040,6 +1040,7 @@ export const inventoryApi = {
     seriesTitle: string;
     division?: string;
     classificationCategory?: string;
+    subCategory?: string;
     disposedYears: string;
     previousInclusiveDates: string;
     newInclusiveDates: string;

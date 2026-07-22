@@ -115,11 +115,18 @@
   text-transform: uppercase;
 }
 
-/* Card Left Accent Borders */
+/* Card Left Accent Borders & Colored Values */
 .calendar-counter-card--red { border-left: 4px solid #ef4444; }
+.calendar-counter-card--red .calendar-counter-card__value { color: #dc2626; }
+
 .calendar-counter-card--orange { border-left: 4px solid #f97316; }
+.calendar-counter-card--orange .calendar-counter-card__value { color: #ea580c; }
+
 .calendar-counter-card--yellow { border-left: 4px solid #f59e0b; }
+.calendar-counter-card--yellow .calendar-counter-card__value { color: #d97706; }
+
 .calendar-counter-card--blue { border-left: 4px solid #3b82f6; }
+.calendar-counter-card--blue .calendar-counter-card__value { color: #2563eb; }
 
 /* Main Split View */
 .calendar-page__split {

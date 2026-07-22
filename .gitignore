@@ -36,3 +36,5 @@ db_backup/
 server/uploads/
 uploads/
 **/uploads/**
+server/uploads/data/
+*.json.bak
