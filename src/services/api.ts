@@ -768,7 +768,7 @@ export const auditApi = {
 
 // System Settings API
 export const systemSettingsApi = {
-  get: () => apiRequest<{ idleTimeout: number | null; autoRename: boolean; appointmentStatuses: string[]; officeNames: string[]; positions: string[]; aoYears?: string[]; reasonsForSeparation?: string[] }>('/system-settings'),
+  get: () => apiRequest<{ idleTimeout: number | null; autoRename: boolean; appointmentStatuses: string[]; officeNames: string[]; positions: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears?: string[]; reasonsForSeparation?: string[] }>('/system-settings'),
   update: (data: { idleTimeout?: number | null; autoRename?: boolean }, userRole: string) => 
     apiRequest<{ idleTimeout: number | null; autoRename: boolean; message: string }>('/system-settings', {
       method: 'PUT',
@@ -779,10 +779,10 @@ export const systemSettingsApi = {
       body: JSON.stringify(data),
     }),
   updateDropdownOptions: (
-    options: { appointmentStatuses?: string[]; officeNames?: string[]; positions?: string[]; recordLocations?: string[]; aoYears?: string[]; reasonsForSeparation?: string[] },
+    options: { appointmentStatuses?: string[]; officeNames?: string[]; positions?: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears?: string[]; reasonsForSeparation?: string[] },
     userRole: string
   ) =>
-    apiRequest<{ appointmentStatuses: string[]; officeNames: string[]; positions: string[]; recordLocations?: string[]; aoYears: string[]; reasonsForSeparation: string[]; message: string }>(
+    apiRequest<{ appointmentStatuses: string[]; officeNames: string[]; positions: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears: string[]; reasonsForSeparation: string[]; message: string }>(
       '/system-settings/dropdown-options',
       {
         method: 'PUT',
@@ -1027,6 +1027,28 @@ export const inventoryApi = {
   delete: (id: string) =>
     apiRequest<any>(`/inventory/${id}`, {
       method: 'DELETE',
+    }),
+  bulkDelete: (ids: string[]) =>
+    apiRequest<any>('/inventory/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    }),
+  getDisposalHistory: () => apiRequest<any[]>('/inventory/disposal-history'),
+  logDisposal: (data: {
+    recordId: string;
+    seriesTitle: string;
+    division?: string;
+    classificationCategory?: string;
+    disposedYears: string;
+    previousInclusiveDates: string;
+    newInclusiveDates: string;
+    disposedBy?: string;
+  }) =>
+    apiRequest<any>('/inventory/disposal-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     }),
 };
 

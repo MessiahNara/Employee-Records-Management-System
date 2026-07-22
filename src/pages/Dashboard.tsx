@@ -1890,29 +1890,45 @@ function Dashboard() {
     const selectionColumn: Column<any> = {
       key: 'selection',
       header: (
-        <input
-          type="checkbox"
-          checked={
-            paginatedBorrowLogs.length > 0 &&
-            paginatedBorrowLogs.every((row) => selectedBorrowRowIds.has(row.id))
-          }
-          onChange={(e) => {
-            const checked = e.target.checked;
-            setSelectedBorrowRowIds((prev) => {
-              const next = new Set(prev);
-              paginatedBorrowLogs.forEach((row) => {
-                if (checked) {
-                  next.add(row.id);
-                } else {
-                  next.delete(row.id);
-                }
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            checked={
+              paginatedBorrowLogs.length > 0 &&
+              paginatedBorrowLogs.every((row) => selectedBorrowRowIds.has(row.id))
+            }
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setSelectedBorrowRowIds((prev) => {
+                const next = new Set(prev);
+                paginatedBorrowLogs.forEach((row) => {
+                  if (checked) {
+                    next.add(row.id);
+                  } else {
+                    next.delete(row.id);
+                  }
+                });
+                return next;
               });
-              return next;
-            });
-          }}
-          onClick={(e) => e.stopPropagation()}
-          style={{ cursor: 'pointer' }}
-        />
+            }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ cursor: 'pointer' }}
+            title="Select All"
+          />
+          {selectedBorrowRowIds.size > 0 && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteBorrowEntries(Array.from(selectedBorrowRowIds));
+              }}
+              style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', height: '28px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              <MdDelete style={{ fontSize: '0.85rem' }} /> Delete ({selectedBorrowRowIds.size})
+            </Button>
+          )}
+        </div>
       ),
       render: (row) => (
         <input
@@ -1934,7 +1950,7 @@ function Dashboard() {
           style={{ cursor: 'pointer' }}
         />
       ),
-      width: '50px',
+      width: selectedBorrowRowIds.size > 0 ? '160px' : '50px',
     };
 
     const cols: Column<any>[] = [
@@ -2311,29 +2327,45 @@ function Dashboard() {
     const selectionColumn: Column<ReportRow> = {
       key: 'selection',
       header: (
-        <input
-          type="checkbox"
-          checked={
-            reportsForActiveTab.length > 0 &&
-            reportsForActiveTab.every((row) => selectedReportRowIds.has(row.id))
-          }
-          onChange={(e) => {
-            const checked = e.target.checked;
-            setSelectedReportRowIds((prev) => {
-              const next = new Set(prev);
-              reportsForActiveTab.forEach((row) => {
-                if (checked) {
-                  next.add(row.id);
-                } else {
-                  next.delete(row.id);
-                }
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            checked={
+              reportsForActiveTab.length > 0 &&
+              reportsForActiveTab.every((row) => selectedReportRowIds.has(row.id))
+            }
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setSelectedReportRowIds((prev) => {
+                const next = new Set(prev);
+                reportsForActiveTab.forEach((row) => {
+                  if (checked) {
+                    next.add(row.id);
+                  } else {
+                    next.delete(row.id);
+                  }
+                });
+                return next;
               });
-              return next;
-            });
-          }}
-          onClick={(e) => e.stopPropagation()}
-          style={{ cursor: 'pointer' }}
-        />
+            }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ cursor: 'pointer' }}
+            title="Select All"
+          />
+          {selectedReportRowIds.size > 0 && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteReportEntries(Array.from(selectedReportRowIds));
+              }}
+              style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', height: '28px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              <MdDelete style={{ fontSize: '0.85rem' }} /> Delete ({selectedReportRowIds.size})
+            </Button>
+          )}
+        </div>
       ),
       render: (row: ReportRow) => (
         <input
@@ -2355,7 +2387,7 @@ function Dashboard() {
           style={{ cursor: 'pointer' }}
         />
       ),
-      width: '50px',
+      width: selectedReportRowIds.size > 0 ? '160px' : '50px',
     };
 
     let baseColumns: Column<ReportRow>[] = [];
@@ -3054,7 +3086,7 @@ function Dashboard() {
     {
       key: 'checkbox',
       header: (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
           <input
             type="checkbox"
             checked={isAllSelected}
@@ -3067,9 +3099,22 @@ function Dashboard() {
             className="dashboard__checkbox"
             aria-label="Select all employees"
           />
+          {selectedEmployeeIds.size > 0 && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsBulkDeleteModalOpen(true);
+              }}
+              style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', height: '28px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              <MdDelete style={{ fontSize: '0.85rem' }} /> Delete ({selectedEmployeeIds.size})
+            </Button>
+          )}
         </div>
       ),
-      width: '5%',
+      width: selectedEmployeeIds.size > 0 ? '160px' : '5%',
       render: (employee) => (
         <div
           className="dashboard__checkbox-cell"
@@ -4337,17 +4382,6 @@ function Dashboard() {
                 </div>
 
                 <div className="reports-view__export-actions">
-                  {selectedReportRowIds.size > 0 && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDeleteReportEntries(Array.from(selectedReportRowIds))}
-                      style={{ marginRight: 'auto' }}
-                    >
-                      🗑️ Delete Selected ({selectedReportRowIds.size})
-                    </Button>
-                  )}
-
                   <Button
                     variant="primary"
                     size="sm"
@@ -4583,15 +4617,6 @@ function Dashboard() {
                 ) : (
                   <>
                     <div className="reports-view__export-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      {selectedBorrowRowIds.size > 0 && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleDeleteBorrowEntries(Array.from(selectedBorrowRowIds))}
-                        >
-                          🗑️ Delete Selected ({selectedBorrowRowIds.size})
-                        </Button>
-                      )}
                       <Button
                         variant="primary"
                         size="sm"

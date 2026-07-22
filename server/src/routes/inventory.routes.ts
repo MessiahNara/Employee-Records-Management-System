@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-
-import { getRecordLocations, saveRecordLocations } from './systemSettings.routes';
+import { getRecordLocations, saveRecordLocations, getDispositionProvisions, saveDispositionProvisions, getItemNumbers, saveItemNumbers, getDivisions, saveDivisions, getClassificationCategories, saveClassificationCategories, getSubCategories, saveSubCategories } from './systemSettings.routes';
 
 const router = Router();
 
@@ -19,6 +18,71 @@ function syncLocationOption(locationName: string) {
   }
 }
 
+function syncDispositionProvision(provisionName: string) {
+  if (!provisionName || !provisionName.trim()) return;
+  const prov = provisionName.trim();
+  try {
+    const currentProvs = getDispositionProvisions();
+    if (!currentProvs.includes(prov)) {
+      saveDispositionProvisions([...currentProvs, prov]);
+    }
+  } catch (err) {
+    console.error('Error syncing disposition provision:', err);
+  }
+}
+
+function syncItemNumberOption(itemNo: string) {
+  if (!itemNo || !itemNo.trim()) return;
+  const item = itemNo.trim();
+  try {
+    const currentItems = getItemNumbers();
+    if (!currentItems.includes(item)) {
+      saveItemNumbers([...currentItems, item]);
+    }
+  } catch (err) {
+    console.error('Error syncing item number option:', err);
+  }
+}
+
+function syncDivisionOption(divisionName: string) {
+  if (!divisionName || !divisionName.trim()) return;
+  const div = divisionName.trim();
+  try {
+    const currentDivs = getDivisions();
+    if (!currentDivs.includes(div)) {
+      saveDivisions([...currentDivs, div]);
+    }
+  } catch (err) {
+    console.error('Error syncing division option:', err);
+  }
+}
+
+function syncClassificationCategoryOption(categoryName: string) {
+  if (!categoryName || !categoryName.trim()) return;
+  const cat = categoryName.trim();
+  try {
+    const currentCats = getClassificationCategories();
+    if (!currentCats.includes(cat)) {
+      saveClassificationCategories([...currentCats, cat]);
+    }
+  } catch (err) {
+    console.error('Error syncing classification category option:', err);
+  }
+}
+
+function syncSubCategoryOption(subCategoryName: string) {
+  if (!subCategoryName || !subCategoryName.trim()) return;
+  const sub = subCategoryName.trim();
+  try {
+    const currentSubs = getSubCategories();
+    if (!currentSubs.includes(sub)) {
+      saveSubCategories([...currentSubs, sub]);
+    }
+  } catch (err) {
+    console.error('Error syncing sub category option:', err);
+  }
+}
+
 // Persistent JSON storage file location
 function getDataFilePath(): string {
   const dataDir = process.env.UPLOADS_DIR
@@ -32,8 +96,12 @@ function getDataFilePath(): string {
 
 export interface InventoryRecord {
   id: string;
+  itemNo?: string;
+  prdsGrds?: string;
   seriesTitle: string;
+  division?: string;
   classificationCategory: string;
+  subCategory?: string;
   scopeDescription?: string;
   inclusiveDates: string;
   volume: string;
@@ -149,6 +217,81 @@ router.get('/', (req: Request, res: Response) => {
   res.json(records);
 });
 
+// GET all disposal history logs
+router.get('/disposal-history', (req: Request, res: Response) => {
+  const logs = readDisposalHistory();
+  res.json(logs);
+});
+
+// POST new disposal history log
+router.post('/disposal-history', (req: Request, res: Response) => {
+  try {
+    const logData = req.body;
+    const logs = readDisposalHistory();
+    const rawYears = String(logData.disposedYears || '').trim();
+
+    let yearList: number[] = [];
+    if (rawYears.includes('-')) {
+      const parts = rawYears.split('-').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+      if (parts.length === 2 && parts[0] <= parts[1]) {
+        for (let y = parts[0]; y <= parts[1]; y++) yearList.push(y);
+      }
+    }
+    if (yearList.length === 0) {
+      yearList = (rawYears.match(/\b\d{4}\b/g) || []).map(n => parseInt(n, 10));
+    }
+
+    if (yearList.length === 0 && rawYears) {
+      yearList = [parseInt(rawYears, 10) || 0];
+    }
+
+    const createdLogs: DisposalLog[] = [];
+    const baseTimestamp = Date.now();
+
+    if (yearList.length > 1) {
+      yearList.forEach((yr, idx) => {
+        const newLog: DisposalLog = {
+          id: `DISP-${baseTimestamp}-${idx}`,
+          recordId: logData.recordId || '',
+          seriesTitle: logData.seriesTitle || '',
+          division: logData.division || '',
+          classificationCategory: logData.classificationCategory || '',
+          subCategory: logData.subCategory || '',
+          disposedYears: String(yr),
+          previousInclusiveDates: logData.previousInclusiveDates || '',
+          newInclusiveDates: logData.newInclusiveDates || '',
+          disposedAt: new Date(baseTimestamp + idx * 100).toISOString(),
+          disposedBy: logData.disposedBy || 'System Admin',
+        };
+        logs.unshift(newLog);
+        createdLogs.push(newLog);
+      });
+    } else {
+      const newLog: DisposalLog = {
+        id: `DISP-${baseTimestamp}`,
+        recordId: logData.recordId || '',
+        seriesTitle: logData.seriesTitle || '',
+        division: logData.division || '',
+        classificationCategory: logData.classificationCategory || '',
+        subCategory: logData.subCategory || '',
+        disposedYears: yearList[0] ? String(yearList[0]) : rawYears,
+        previousInclusiveDates: logData.previousInclusiveDates || '',
+        newInclusiveDates: logData.newInclusiveDates || '',
+        disposedAt: new Date().toISOString(),
+        disposedBy: logData.disposedBy || 'System Admin',
+      };
+      logs.unshift(newLog);
+      createdLogs.push(newLog);
+    }
+
+    saveDisposalHistory(logs);
+    res.status(201).json(createdLogs.length === 1 ? createdLogs[0] : createdLogs);
+  } catch (err: any) {
+    console.error('Error logging disposal history:', err);
+    res.status(500).json({ error: 'Failed to save disposal history log' });
+  }
+});
+
 // GET inventory record by ID
 router.get('/:id', (req: Request, res: Response) => {
   const records = readRecords();
@@ -180,8 +323,8 @@ router.post('/', (req: Request, res: Response) => {
       dispositionProvision,
     } = req.body;
 
-    if (!seriesTitle || !classificationCategory || !inclusiveDates || !volume || !locationOfRecords) {
-      return res.status(400).json({ error: 'Please fill in all required fields (Series Title, Classification, Dates, Volume, Location).' });
+    if (!seriesTitle || !inclusiveDates || !volume || !locationOfRecords) {
+      return res.status(400).json({ error: 'Please fill in all required fields (Series Title, Dates, Volume, Location).' });
     }
 
     const records = readRecords();
@@ -193,8 +336,12 @@ router.post('/', (req: Request, res: Response) => {
 
     const newRecord: InventoryRecord = {
       id: newId,
+      itemNo: req.body.itemNo ? String(req.body.itemNo).trim() : '',
+      prdsGrds: req.body.prdsGrds ? String(req.body.prdsGrds).trim() : '',
       seriesTitle: seriesTitle.trim(),
-      classificationCategory: classificationCategory || 'ADMINISTRATIVE',
+      division: req.body.division ? String(req.body.division).trim() : '',
+      classificationCategory: classificationCategory ? String(classificationCategory).trim() : '',
+      subCategory: req.body.subCategory ? String(req.body.subCategory).trim() : '',
       scopeDescription: scopeDescription ? scopeDescription.trim() : '',
       inclusiveDates: inclusiveDates.trim(),
       volume: String(volume).trim(),
@@ -219,8 +366,13 @@ router.post('/', (req: Request, res: Response) => {
     records.unshift(newRecord);
     saveRecords(records);
 
-    // Auto-sync location name to system settings dropdown options
+    // Auto-sync options to system settings dropdown options
     syncLocationOption(newRecord.locationOfRecords);
+    syncDispositionProvision(newRecord.dispositionProvision);
+    if (newRecord.itemNo) syncItemNumberOption(newRecord.itemNo);
+    if (newRecord.division) syncDivisionOption(newRecord.division);
+    if (newRecord.classificationCategory) syncClassificationCategoryOption(newRecord.classificationCategory);
+    if (newRecord.subCategory) syncSubCategoryOption(newRecord.subCategory);
 
     res.status(201).json(newRecord);
   } catch (error: any) {
@@ -248,6 +400,10 @@ router.put('/:id', (req: Request, res: Response) => {
       ...records[index],
       ...req.body,
       id,
+      itemNo: req.body.itemNo !== undefined ? String(req.body.itemNo).trim() : records[index].itemNo,
+      prdsGrds: req.body.prdsGrds !== undefined ? String(req.body.prdsGrds).trim() : records[index].prdsGrds,
+      division: req.body.division !== undefined ? String(req.body.division).trim() : records[index].division,
+      subCategory: req.body.subCategory !== undefined ? String(req.body.subCategory).trim() : records[index].subCategory,
       activeDeskYrs: activeYrs,
       storageYrs: storYrs,
       totalRetention,
@@ -259,10 +415,38 @@ router.put('/:id', (req: Request, res: Response) => {
     records[index] = updatedRecord;
     saveRecords(records);
 
+    // Auto-sync options on update
+    syncLocationOption(updatedRecord.locationOfRecords);
+    syncDispositionProvision(updatedRecord.dispositionProvision);
+    if (updatedRecord.itemNo) syncItemNumberOption(updatedRecord.itemNo);
+    if (updatedRecord.division) syncDivisionOption(updatedRecord.division);
+    if (updatedRecord.classificationCategory) syncClassificationCategoryOption(updatedRecord.classificationCategory);
+    if (updatedRecord.subCategory) syncSubCategoryOption(updatedRecord.subCategory);
+
     res.json(updatedRecord);
   } catch (error: any) {
     console.error('Error updating inventory record:', error);
     res.status(500).json({ error: error.message || 'Failed to update inventory record' });
+  }
+});
+
+// POST bulk delete inventory records
+router.post('/bulk-delete', (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+
+    let records = readRecords();
+    const initialCount = records.length;
+    records = records.filter(r => !ids.includes(r.id));
+    saveRecords(records);
+
+    res.json({ message: 'Records deleted successfully', deletedCount: initialCount - records.length });
+  } catch (error: any) {
+    console.error('Error bulk deleting inventory records:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete inventory records' });
   }
 });
 
@@ -286,5 +470,85 @@ router.delete('/:id', (req: Request, res: Response) => {
     res.status(500).json({ error: error.message || 'Failed to delete inventory record' });
   }
 });
+
+export interface DisposalLog {
+  id: string;
+  recordId: string;
+  seriesTitle: string;
+  division?: string;
+  classificationCategory?: string;
+  subCategory?: string;
+  disposedYears: string;
+  previousInclusiveDates: string;
+  newInclusiveDates: string;
+  disposedAt: string;
+  disposedBy?: string;
+}
+
+function getDisposalHistoryFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'disposal_history.json');
+}
+
+const defaultDisposalHistory: DisposalLog[] = [
+  {
+    id: 'DISP-1715000000000',
+    recordId: 'INV-2026-001',
+    seriesTitle: 'Leave Ledgers & Form 6 Requests',
+    division: 'HUMAN RESOURCES',
+    classificationCategory: 'PERSONNEL',
+    disposedYears: '2010 - 2014',
+    previousInclusiveDates: '2010 - 2020',
+    newInclusiveDates: '2015 - 2020',
+    disposedAt: new Date(Date.now() - 86400000 * 30).toISOString(),
+    disposedBy: 'Records Manager',
+  },
+  {
+    id: 'DISP-1716000000000',
+    recordId: 'INV-2026-002',
+    seriesTitle: 'Attendance on Flag Raising Ceremony',
+    division: 'EMPLOYEE RELATIONS',
+    classificationCategory: 'ADMINISTRATIVE',
+    disposedYears: '2022, 2023',
+    previousInclusiveDates: '2022 - 2026',
+    newInclusiveDates: '2024 - 2026',
+    disposedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    disposedBy: 'System Admin',
+  },
+];
+
+function readDisposalHistory(): DisposalLog[] {
+  try {
+    const filePath = getDisposalHistoryFilePath();
+    if (!fs.existsSync(filePath)) {
+      saveDisposalHistory(defaultDisposalHistory);
+      return defaultDisposalHistory;
+    }
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const logs = JSON.parse(raw);
+    if (!Array.isArray(logs) || logs.length === 0) {
+      saveDisposalHistory(defaultDisposalHistory);
+      return defaultDisposalHistory;
+    }
+    return logs;
+  } catch (err) {
+    console.error('Failed to read disposal history:', err);
+    return defaultDisposalHistory;
+  }
+}
+
+function saveDisposalHistory(logs: DisposalLog[]): void {
+  try {
+    const filePath = getDisposalHistoryFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(logs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save disposal history:', err);
+  }
+}
 
 export default router;

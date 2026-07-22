@@ -78,6 +78,229 @@ export function saveRecordLocations(locs: string[]): void {
   }
 }
 
+function getDispositionProvisionsFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'disposition_provisions.json');
+}
+
+function getItemNumbersFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'item_numbers.json');
+}
+
+function getDivisionsFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'divisions.json');
+}
+
+function getClassificationCategoriesFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'classification_categories.json');
+}
+
+function getSubCategoriesFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'sub_categories.json');
+}
+
+const DEFAULT_DISPOSITION_PROVISIONS = [
+  'Dispose after completion of audit',
+  'Permanent',
+  'Dispose after 5 years',
+  'Dispose after 10 years'
+];
+
+const DEFAULT_ITEM_NUMBERS = [
+  'Item 1',
+  'Item 2',
+  'Item 3',
+  'Item 4',
+  'Item 5'
+];
+
+const DEFAULT_DIVISIONS = [
+  'ADMINISTRATIVE',
+  'FINANCE',
+  'LEGAL',
+  'RECORDS DIVISION',
+  'HUMAN RESOURCE',
+  'OPERATIONS',
+  'LOGISTICS & SUPPLY'
+];
+
+const DEFAULT_CLASSIFICATION_CATEGORIES = [
+  'ADMINISTRATIVE',
+  'CSC GENERATED RECORDS',
+  'EMPLOYEE WELFARE, WELLNESS AND REWARDS',
+  'LEAVE RECORDS',
+  'LOGBOOK',
+  'ORDERS',
+  'PAYROLL DRAFT ATTACHMENTS',
+  'QUALITY MANAGEMENT SYSTEM',
+  'RECRUITMENT AND PLACEMENT',
+  'TRAINING AND EMPLOYEE DEVELOPMENT',
+  'FINANCE',
+  'LEGAL',
+  'ARCHIVAL',
+  'ISO GENERATED RECORDS',
+  'ISO DOCUMENTS'
+];
+
+const DEFAULT_SUB_CATEGORIES = [
+  'General Administration',
+  'Personnel Records',
+  'Financial Documents',
+  'Legal Files',
+  'Reports & Minutes',
+  'Policies & Directives',
+  'Certificates & Permits'
+];
+
+export function getDispositionProvisions(): string[] {
+  try {
+    const file = getDispositionProvisionsFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify(DEFAULT_DISPOSITION_PROVISIONS, null, 2), 'utf8');
+      return DEFAULT_DISPOSITION_PROVISIONS;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_DISPOSITION_PROVISIONS;
+  } catch {
+    return DEFAULT_DISPOSITION_PROVISIONS;
+  }
+}
+
+export function saveDispositionProvisions(provs: string[]): void {
+  try {
+    const file = getDispositionProvisionsFilePath();
+    fs.writeFileSync(file, JSON.stringify(provs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save disposition provisions:', err);
+  }
+}
+
+export function getItemNumbers(): string[] {
+  try {
+    const file = getItemNumbersFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify(DEFAULT_ITEM_NUMBERS, null, 2), 'utf8');
+      return DEFAULT_ITEM_NUMBERS;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_ITEM_NUMBERS;
+  } catch {
+    return DEFAULT_ITEM_NUMBERS;
+  }
+}
+
+export function saveItemNumbers(items: string[]): void {
+  try {
+    const file = getItemNumbersFilePath();
+    fs.writeFileSync(file, JSON.stringify(items, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save item numbers:', err);
+  }
+}
+
+export function getDivisions(): string[] {
+  try {
+    const file = getDivisionsFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify(DEFAULT_DIVISIONS, null, 2), 'utf8');
+      return DEFAULT_DIVISIONS;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_DIVISIONS;
+  } catch {
+    return DEFAULT_DIVISIONS;
+  }
+}
+
+export function saveDivisions(divs: string[]): void {
+  try {
+    const file = getDivisionsFilePath();
+    fs.writeFileSync(file, JSON.stringify(divs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save divisions:', err);
+  }
+}
+
+export function getClassificationCategories(): string[] {
+  try {
+    const file = getClassificationCategoriesFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify(DEFAULT_CLASSIFICATION_CATEGORIES, null, 2), 'utf8');
+      return DEFAULT_CLASSIFICATION_CATEGORIES;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_CLASSIFICATION_CATEGORIES;
+  } catch {
+    return DEFAULT_CLASSIFICATION_CATEGORIES;
+  }
+}
+
+export function saveClassificationCategories(cats: string[]): void {
+  try {
+    const file = getClassificationCategoriesFilePath();
+    fs.writeFileSync(file, JSON.stringify(cats, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save classification categories:', err);
+  }
+}
+
+export function getSubCategories(): string[] {
+  try {
+    const file = getSubCategoriesFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify(DEFAULT_SUB_CATEGORIES, null, 2), 'utf8');
+      return DEFAULT_SUB_CATEGORIES;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_SUB_CATEGORIES;
+  } catch {
+    return DEFAULT_SUB_CATEGORIES;
+  }
+}
+
+export function saveSubCategories(subs: string[]): void {
+  try {
+    const file = getSubCategoriesFilePath();
+    fs.writeFileSync(file, JSON.stringify(subs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save sub categories:', err);
+  }
+}
+
 // GET /api/system-settings
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -94,6 +317,11 @@ router.get('/', async (req: Request, res: Response) => {
       officeNames: (settings.officeNames as string[] | null) ?? [],
       positions: (settings.positions as string[] | null) ?? [],
       recordLocations: getRecordLocations(),
+      dispositionProvisions: getDispositionProvisions(),
+      itemNumbers: getItemNumbers(),
+      divisions: getDivisions(),
+      classificationCategories: getClassificationCategories(),
+      subCategories: getSubCategories(),
       aoYears: (settings.aoYears as string[] | null) ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: (settings.reasonsForSeparation as string[] | null) ?? DEFAULT_REASONS_FOR_SEPARATION,
     });
@@ -146,7 +374,7 @@ router.put('/', requireSuperAdmin, async (req: Request, res: Response) => {
 // PUT /api/system-settings/dropdown-options - Update dropdown lists (Developer role only)
 router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: Response) => {
   try {
-    const { appointmentStatuses, officeNames, positions, recordLocations, aoYears, reasonsForSeparation } = req.body;
+    const { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation } = req.body;
     const updateData: any = {};
     if (Array.isArray(appointmentStatuses)) updateData.appointmentStatuses = appointmentStatuses;
     if (Array.isArray(officeNames)) updateData.officeNames = officeNames;
@@ -154,6 +382,11 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
     if (Array.isArray(aoYears)) updateData.aoYears = aoYears;
     if (Array.isArray(reasonsForSeparation)) updateData.reasonsForSeparation = reasonsForSeparation;
     if (Array.isArray(recordLocations)) saveRecordLocations(recordLocations);
+    if (Array.isArray(dispositionProvisions)) saveDispositionProvisions(dispositionProvisions);
+    if (Array.isArray(itemNumbers)) saveItemNumbers(itemNumbers);
+    if (Array.isArray(divisions)) saveDivisions(divisions);
+    if (Array.isArray(classificationCategories)) saveClassificationCategories(classificationCategories);
+    if (Array.isArray(subCategories)) saveSubCategories(subCategories);
 
     let settings = await prisma.systemSetting.findFirst();
     if (settings) {
@@ -167,6 +400,11 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
       officeNames: (settings.officeNames as string[] | null) ?? [],
       positions: (settings.positions as string[] | null) ?? [],
       recordLocations: getRecordLocations(),
+      dispositionProvisions: getDispositionProvisions(),
+      itemNumbers: getItemNumbers(),
+      divisions: getDivisions(),
+      classificationCategories: getClassificationCategories(),
+      subCategories: getSubCategories(),
       aoYears: (settings.aoYears as string[] | null) ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: (settings.reasonsForSeparation as string[] | null) ?? DEFAULT_REASONS_FOR_SEPARATION,
       message: 'Dropdown options updated successfully',

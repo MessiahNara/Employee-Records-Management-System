@@ -38,18 +38,20 @@ export default function SearchableDropdown({
 
   // Click outside to close
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        // Only reset to empty/All when the dropdown was actively open, not on every outside click
+        setHighlightedIndex(-1);
         if (!searchTermRef.current.trim()) {
           onChange('');
         }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [onChange]);
 
@@ -157,12 +159,14 @@ export default function SearchableDropdown({
               e.target.select();
             }
           }}
-          onBlur={() => {
-            setTimeout(() => {
+          onBlur={(e) => {
+            if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+              setIsOpen(false);
+              setHighlightedIndex(-1);
               if (!searchTermRef.current.trim()) {
                 onChange('');
               }
-            }, 200);
+            }
           }}
           onClick={() => !disabled && setIsOpen(true)}
           onKeyDown={handleKeyDown}
@@ -190,7 +194,10 @@ export default function SearchableDropdown({
                   className={`searchable-dropdown__item ${
                     idx === highlightedIndex ? 'searchable-dropdown__item--highlighted' : ''
                   }`}
-                  onClick={() => selectOption(option)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectOption(option);
+                  }}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                 >
                   {option}

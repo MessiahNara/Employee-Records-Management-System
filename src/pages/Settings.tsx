@@ -54,11 +54,21 @@ function Settings() {
   const [officeNames, setOfficeNames] = useState<string[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
   const [recordLocations, setRecordLocations] = useState<string[]>([]);
+  const [dispositionProvisions, setDispositionProvisions] = useState<string[]>([]);
+  const [itemNumbers, setItemNumbers] = useState<string[]>([]);
+  const [divisions, setDivisions] = useState<string[]>([]);
+  const [classificationCategories, setClassificationCategories] = useState<string[]>([]);
+  const [subCategories, setSubCategories] = useState<string[]>([]);
   const [newAppointmentStatus, setNewAppointmentStatus] = useState('');
   const [newStatusNeedsDate, setNewStatusNeedsDate] = useState(false);
   const [newOfficeName, setNewOfficeName] = useState('');
   const [newPosition, setNewPosition] = useState('');
   const [newRecordLocation, setNewRecordLocation] = useState('');
+  const [newDispositionProvision, setNewDispositionProvision] = useState('');
+  const [newItemNumber, setNewItemNumber] = useState('');
+  const [newDivision, setNewDivision] = useState('');
+  const [newClassificationCategory, setNewClassificationCategory] = useState('');
+  const [newSubCategory, setNewSubCategory] = useState('');
   const [isSavingDropdowns, setIsSavingDropdowns] = useState(false);
   const [aoYears, setAoYears] = useState<string[]>([]);
   const [newAoYear, setNewAoYear] = useState('');
@@ -114,6 +124,11 @@ function Settings() {
       setOfficeNames(settings.officeNames ?? []);
       setPositions(settings.positions ?? []);
       setRecordLocations((settings as any).recordLocations ?? []);
+      setDispositionProvisions((settings as any).dispositionProvisions ?? []);
+      setItemNumbers((settings as any).itemNumbers ?? []);
+      setDivisions((settings as any).divisions ?? []);
+      setClassificationCategories((settings as any).classificationCategories ?? []);
+      setSubCategories((settings as any).subCategories ?? []);
       setAoYears(settings.aoYears ?? []);
       setReasonsForSeparation(settings.reasonsForSeparation ?? []);
     } catch {
@@ -159,7 +174,7 @@ function Settings() {
     setIsSavingDropdowns(true);
     try {
       await api.systemSettings.updateDropdownOptions(
-        { appointmentStatuses, officeNames, positions, recordLocations, aoYears, reasonsForSeparation },
+        { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation },
         currentUser?.role || ''
       );
       showToast('Dropdown options saved successfully!', 'success');
@@ -1107,6 +1122,141 @@ function Settings() {
                           </span>
                         ))}
                         {recordLocations.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Disposition Provisions */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Disposition Provisions</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new disposition instruction..."
+                          value={newDispositionProvision}
+                          onChange={(e) => setNewDispositionProvision(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(dispositionProvisions, setDispositionProvisions, newDispositionProvision, setNewDispositionProvision))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(dispositionProvisions, setDispositionProvisions, newDispositionProvision, setNewDispositionProvision)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {dispositionProvisions.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(dispositionProvisions, setDispositionProvisions, item)}>×</button>
+                          </span>
+                        ))}
+                        {dispositionProvisions.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Item Numbers (ITEM NO.) */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Item Numbers (ITEM NO.)</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new Item No. option..."
+                          value={newItemNumber}
+                          onChange={(e) => setNewItemNumber(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(itemNumbers, setItemNumbers, newItemNumber, setNewItemNumber))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(itemNumbers, setItemNumbers, newItemNumber, setNewItemNumber)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {itemNumbers.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(itemNumbers, setItemNumbers, item)}>×</button>
+                          </span>
+                        ))}
+                        {itemNumbers.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Divisions (DIVISION) */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Divisions (DIVISION)</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new division..."
+                          value={newDivision}
+                          onChange={(e) => setNewDivision(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(divisions, setDivisions, newDivision, setNewDivision))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(divisions, setDivisions, newDivision, setNewDivision)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {divisions.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(divisions, setDivisions, item)}>×</button>
+                          </span>
+                        ))}
+                        {divisions.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Classification Categories (MAIN CATEGORY) */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Classification Categories (MAIN CATEGORY)</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new classification category..."
+                          value={newClassificationCategory}
+                          onChange={(e) => setNewClassificationCategory(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(classificationCategories, setClassificationCategories, newClassificationCategory, setNewClassificationCategory))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(classificationCategories, setClassificationCategories, newClassificationCategory, setNewClassificationCategory)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {classificationCategories.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(classificationCategories, setClassificationCategories, item)}>×</button>
+                          </span>
+                        ))}
+                        {classificationCategories.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* Sub Categories (SUB CATEGORY) */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">Sub Categories (SUB CATEGORY)</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new sub category..."
+                          value={newSubCategory}
+                          onChange={(e) => setNewSubCategory(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(subCategories, setSubCategories, newSubCategory, setNewSubCategory))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(subCategories, setSubCategories, newSubCategory, setNewSubCategory)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {subCategories.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(subCategories, setSubCategories, item)}>×</button>
+                          </span>
+                        ))}
+                        {subCategories.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
                       </div>
                     </div>
 
