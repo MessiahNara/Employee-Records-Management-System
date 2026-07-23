@@ -1,9 +1,33 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import prisma from '../lib/prisma';
+import { createAuditLog } from '../utils/auditHelper';
 import { getRecordLocations, saveRecordLocations, getDispositionProvisions, saveDispositionProvisions, getItemNumbers, saveItemNumbers, getDivisions, saveDivisions, getClassificationCategories, saveClassificationCategories, getSubCategories, saveSubCategories } from './systemSettings.routes';
 
 const router = Router();
+
+async function getUserInfo(req: Request) {
+  const userId = (req.headers['x-logged-in-user-id'] || req.headers['x-user-id'] || req.body?.userId) as string;
+  if (!userId || userId === 'system') {
+    return { userId: 'system', userName: 'System' };
+  }
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, username: true, role: true },
+    });
+    if (user) {
+      const userName = (user.firstName && user.lastName)
+        ? `${user.firstName} ${user.lastName}`
+        : user.username || 'System User';
+      return { userId, userName };
+    }
+  } catch (err) {
+    console.error('Error fetching user for audit in inventory routes:', err);
+  }
+  return { userId, userName: 'System User' };
+}
 
 function syncLocationOption(locationName: string) {
   if (!locationName || !locationName.trim()) return;
@@ -207,7 +231,7 @@ router.get('/disposal-history', (req: Request, res: Response) => {
 });
 
 // POST new disposal history log
-router.post('/disposal-history', (req: Request, res: Response) => {
+router.post('/disposal-history', async (req: Request, res: Response) => {
   try {
     const logData = req.body;
     const logs = readDisposalHistory();
@@ -268,6 +292,31 @@ router.post('/disposal-history', (req: Request, res: Response) => {
     }
 
     saveDisposalHistory(logs);
+
+    try {
+      const { userId, userName } = await getUserInfo(req);
+      const seriesTitle = logData.seriesTitle || 'Inventory Record';
+      const disposedYears = logData.disposedYears || '';
+
+      await createAuditLog(prisma, {
+        userId,
+        userName,
+        action: 'status_change',
+        entity: 'inventory',
+        entityId: logData.recordId || 'disposal',
+        entityName: seriesTitle,
+        details: {
+          description: `${userName} disposed inventory record: ${seriesTitle}${disposedYears ? ` (Years: ${disposedYears})` : ''}`,
+          disposedYears,
+          seriesTitle,
+          previousInclusiveDates: logData.previousInclusiveDates,
+          newInclusiveDates: logData.newInclusiveDates,
+        },
+      });
+    } catch (auditErr) {
+      console.error('Error logging audit for disposal history:', auditErr);
+    }
+
     res.status(201).json(createdLogs.length === 1 ? createdLogs[0] : createdLogs);
   } catch (err: any) {
     console.error('Error logging disposal history:', err);
@@ -286,7 +335,7 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST create new inventory record series entry
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const {
       seriesTitle,
@@ -359,6 +408,28 @@ router.post('/', (req: Request, res: Response) => {
     if (newRecord.classificationCategory) syncClassificationCategoryOption(newRecord.classificationCategory);
     if (newRecord.subCategory) syncSubCategoryOption(newRecord.subCategory);
 
+    try {
+      const { userId, userName } = await getUserInfo(req);
+      await createAuditLog(prisma, {
+        userId,
+        userName,
+        action: 'create',
+        entity: 'inventory',
+        entityId: newRecord.id,
+        entityName: newRecord.seriesTitle,
+        details: {
+          description: `${userName} created inventory record: ${newRecord.seriesTitle} (${newRecord.id})`,
+          seriesTitle: newRecord.seriesTitle,
+          classificationCategory: newRecord.classificationCategory,
+          division: newRecord.division,
+          locationOfRecords: newRecord.locationOfRecords,
+          appraisalCategory: newRecord.appraisalCategory,
+        },
+      });
+    } catch (auditErr) {
+      console.error('Error creating audit log for inventory creation:', auditErr);
+    }
+
     res.status(201).json(newRecord);
   } catch (error: any) {
     console.error('Error creating inventory record:', error);
@@ -367,7 +438,7 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT update inventory record
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const records = readRecords();
@@ -376,6 +447,8 @@ router.put('/:id', (req: Request, res: Response) => {
     if (index === -1) {
       return res.status(404).json({ error: 'Record not found' });
     }
+
+    const oldRecord = records[index];
 
     const activeYrs = Number(req.body.activeDeskYrs ?? records[index].activeDeskYrs) || 0;
     const storYrs = Number(req.body.storageYrs ?? records[index].storageYrs) || 0;
@@ -408,6 +481,34 @@ router.put('/:id', (req: Request, res: Response) => {
     if (updatedRecord.classificationCategory) syncClassificationCategoryOption(updatedRecord.classificationCategory);
     if (updatedRecord.subCategory) syncSubCategoryOption(updatedRecord.subCategory);
 
+    try {
+      const { userId, userName } = await getUserInfo(req);
+      const changedFields: string[] = [];
+      Object.keys(req.body).forEach((key) => {
+        if (JSON.stringify((oldRecord as any)[key]) !== JSON.stringify((updatedRecord as any)[key])) {
+          changedFields.push(key);
+        }
+      });
+
+      await createAuditLog(prisma, {
+        userId,
+        userName,
+        action: 'update',
+        entity: 'inventory',
+        entityId: updatedRecord.id,
+        entityName: updatedRecord.seriesTitle,
+        details: {
+          changedFields,
+          description: changedFields.length > 0
+            ? `${userName} updated ${changedFields.length} field(s) of inventory record: ${updatedRecord.seriesTitle}`
+            : `${userName} updated inventory record: ${updatedRecord.seriesTitle}`,
+          seriesTitle: updatedRecord.seriesTitle,
+        },
+      });
+    } catch (auditErr) {
+      console.error('Error creating audit log for inventory update:', auditErr);
+    }
+
     res.json(updatedRecord);
   } catch (error: any) {
     console.error('Error updating inventory record:', error);
@@ -416,7 +517,7 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // POST bulk delete inventory records
-router.post('/bulk-delete', (req: Request, res: Response) => {
+router.post('/bulk-delete', async (req: Request, res: Response) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -425,10 +526,32 @@ router.post('/bulk-delete', (req: Request, res: Response) => {
 
     let records = readRecords();
     const initialCount = records.length;
+    const deletedRecords = records.filter(r => ids.includes(r.id));
     records = records.filter(r => !ids.includes(r.id));
     saveRecords(records);
 
-    res.json({ message: 'Records deleted successfully', deletedCount: initialCount - records.length });
+    const deletedCount = initialCount - records.length;
+
+    try {
+      const { userId, userName } = await getUserInfo(req);
+      await createAuditLog(prisma, {
+        userId,
+        userName,
+        action: 'delete',
+        entity: 'inventory',
+        entityId: 'bulk',
+        entityName: `${deletedCount} inventory records`,
+        details: {
+          deletedCount,
+          description: `${userName} bulk deleted ${deletedCount} inventory record${deletedCount !== 1 ? 's' : ''}`,
+          items: deletedRecords.map(r => ({ id: r.id, seriesTitle: r.seriesTitle })),
+        },
+      });
+    } catch (auditErr) {
+      console.error('Error creating audit log for inventory bulk delete:', auditErr);
+    }
+
+    res.json({ message: 'Records deleted successfully', deletedCount });
   } catch (error: any) {
     console.error('Error bulk deleting inventory records:', error);
     res.status(500).json({ error: error.message || 'Failed to delete inventory records' });
@@ -436,10 +559,11 @@ router.post('/bulk-delete', (req: Request, res: Response) => {
 });
 
 // DELETE inventory record
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     let records = readRecords();
+    const existingRecord = records.find(r => r.id === id);
     const initialCount = records.length;
 
     records = records.filter(r => r.id !== id);
@@ -449,6 +573,27 @@ router.delete('/:id', (req: Request, res: Response) => {
     }
 
     saveRecords(records);
+
+    if (existingRecord) {
+      try {
+        const { userId, userName } = await getUserInfo(req);
+        await createAuditLog(prisma, {
+          userId,
+          userName,
+          action: 'delete',
+          entity: 'inventory',
+          entityId: id,
+          entityName: existingRecord.seriesTitle,
+          details: {
+            description: `${userName} deleted inventory record: ${existingRecord.seriesTitle} (${id})`,
+            seriesTitle: existingRecord.seriesTitle,
+          },
+        });
+      } catch (auditErr) {
+        console.error('Error creating audit log for inventory delete:', auditErr);
+      }
+    }
+
     res.json({ message: 'Record deleted successfully' });
   } catch (error: any) {
     console.error('Error deleting inventory record:', error);

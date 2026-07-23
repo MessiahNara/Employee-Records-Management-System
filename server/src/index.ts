@@ -60,7 +60,33 @@ console.log('[server] Environment configuration:');
 console.log(`  - PORT: ${PORT}`);
 console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`  - UPLOADS_DIR: ${process.env.UPLOADS_DIR}`);
-console.log(`  - __dirname: ${__dirname}`);
+try {
+  const srcF = 'c:\\Employee Records Management System\\NAP FORM 1 (Sample Format).xlsx';
+  const dest1 = 'c:\\Employee Records Management System\\public\\nap_template.xlsx';
+  const dest2 = 'c:\\Employee Records Management System\\public\\template.xlsx';
+  const dest3 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (FORMAT).xlsx';
+  const dest4 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (Sample Format).xlsx';
+  if (fs.existsSync(srcF)) {
+    fs.copyFileSync(srcF, dest1);
+    fs.copyFileSync(srcF, dest2);
+    fs.copyFileSync(srcF, dest3);
+    fs.copyFileSync(srcF, dest4);
+    console.log('[server] Copied 174KB master template file to public/ directory');
+  }
+} catch (e) {
+  console.error('[server] Copy template error:', e);
+}
+
+// Serve root NAP FORM 1 (Sample Format).xlsx directly
+app.get('/api/nap-template', (req: Request, res: Response) => {
+  const filePath = path.resolve('c:/Employee Records Management System/NAP FORM 1 (Sample Format).xlsx');
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ message: 'Template file not found' });
+  }
+});
 
 // Middleware
 app.use(cors());
@@ -127,25 +153,33 @@ const certPath = process.env.SSL_CERT_PATH || path.join(__dirname, '../certs/ser
 const keyPath = process.env.SSL_KEY_PATH || path.join(__dirname, '../certs/server-key.pem');
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-  const httpsOptions = {
-    cert: fs.readFileSync(certPath),
-    key: fs.readFileSync(keyPath),
-  };
+  try {
+    const httpsOptions = {
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath),
+    };
 
-  https.createServer(httpsOptions, app).listen(Number(PORT), HOST, () => {
-    console.log(`🚀 Server is running on https://localhost:${PORT}`);
-    console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
-    console.log(`🔒 Using HTTPS with self-signed certificate`);
-    // Seed existing database values into dynamic dropdown lists on start
+    https.createServer(httpsOptions, app).listen(Number(PORT), HOST, () => {
+      console.log(`🚀 Server is running on https://localhost:${PORT}`);
+      console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
+      console.log(`🔒 Using HTTPS with self-signed certificate`);
+      syncExistingRecordsToDropdownOptions();
+    });
+  } catch (err) {
+    console.error('⚠️ Failed to start HTTPS server, falling back to HTTP:', err);
+    app.listen(Number(PORT), HOST, () => {
+      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
+      syncExistingRecordsToDropdownOptions();
+    });
+  }
+} else {
+  console.log('ℹ️ SSL certificates not found or incomplete, starting HTTP server...');
+  app.listen(Number(PORT), HOST, () => {
+    console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
     syncExistingRecordsToDropdownOptions();
   });
-} else {
-  console.error('❌ SSL certificates not found!');
-  console.log('Please run: node scripts/generate-ssl-cert-node.js');
-  console.log('Expected files:');
-  console.log(`  - ${certPath}`);
-  console.log(`  - ${keyPath}`);
-  process.exit(1);
 }
 
 export default app;

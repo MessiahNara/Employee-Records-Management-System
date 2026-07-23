@@ -29,7 +29,13 @@ function UpdateConditionModal({ isOpen, onClose, employeeId, employeeName, onUpd
   const receivedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.employee.getAll().then((emps: any[]) => setAllEmployees(emps)).catch(() => {});
+    api.employee.getAll()
+      .then((emps: any[]) => {
+        if (Array.isArray(emps)) {
+          setAllEmployees(emps);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -54,9 +60,14 @@ function UpdateConditionModal({ isOpen, onClose, employeeId, employeeName, onUpd
   const filterEmployees = (value: string) => {
     if (!value.trim()) return [];
     const q = value.toLowerCase();
-    return allEmployees.filter((e) => {
-      const full = `${e.firstName} ${e.middleName || ''} ${e.lastName}`.toLowerCase();
-      return full.includes(q) || `${e.lastName} ${e.firstName}`.toLowerCase().includes(q);
+    return (allEmployees || []).filter((e) => {
+      if (!e) return false;
+      const firstName = e.firstName || '';
+      const middleName = e.middleName || '';
+      const lastName = e.lastName || '';
+      const full = `${firstName} ${middleName} ${lastName}`.toLowerCase();
+      const reverseFull = `${lastName} ${firstName}`.toLowerCase();
+      return full.includes(q) || reverseFull.includes(q);
     }).slice(0, 8);
   };
 
@@ -140,17 +151,18 @@ function UpdateConditionModal({ isOpen, onClose, employeeId, employeeName, onUpd
             </div>
             {showReturnedSuggestions && (
               <div className="file201-modal__suggestions">
-                {returnedSuggestions.map((emp) => {
+                {returnedSuggestions.map((emp, idx) => {
                   const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
+                  const pos = emp.position || emp.positionFunction || '';
+                  const office = emp.officeName || emp.officeHospitalName || '';
+                  const subText = [pos, office].filter(Boolean).join(' — ');
                   return (
-                    <button key={emp.id} className="file201-modal__suggestion-item"
+                    <button key={emp.id || `returned-${idx}`} className="file201-modal__suggestion-item"
                       onMouseDown={() => { setReturnedByName(fullName); setReturnedSuggestions([]); setShowReturnedSuggestions(false); }}
                       type="button"
                     >
                       <span className="file201-modal__suggestion-name">{fullName}</span>
-                      <span className="file201-modal__suggestion-sub">
-                        {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
-                      </span>
+                      {subText && <span className="file201-modal__suggestion-sub">{subText}</span>}
                     </button>
                   );
                 })}
@@ -179,17 +191,18 @@ function UpdateConditionModal({ isOpen, onClose, employeeId, employeeName, onUpd
             </div>
             {showReceivedSuggestions && (
               <div className="file201-modal__suggestions">
-                {receivedSuggestions.map((emp) => {
+                {receivedSuggestions.map((emp, idx) => {
                   const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
+                  const pos = emp.position || emp.positionFunction || '';
+                  const office = emp.officeName || emp.officeHospitalName || '';
+                  const subText = [pos, office].filter(Boolean).join(' — ');
                   return (
-                    <button key={emp.id} className="file201-modal__suggestion-item"
+                    <button key={emp.id || `received-${idx}`} className="file201-modal__suggestion-item"
                       onMouseDown={() => { setReceivedByName(fullName); setReceivedSuggestions([]); setShowReceivedSuggestions(false); }}
                       type="button"
                     >
                       <span className="file201-modal__suggestion-name">{fullName}</span>
-                      <span className="file201-modal__suggestion-sub">
-                        {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
-                      </span>
+                      {subText && <span className="file201-modal__suggestion-sub">{subText}</span>}
                     </button>
                   );
                 })}

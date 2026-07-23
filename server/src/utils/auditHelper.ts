@@ -17,6 +17,10 @@ interface AuditLogData {
 export function generateAuditDescription(data: AuditLogData): string {
   const { action, entity, entityName, userName, details } = data;
   
+  if (details?.description && typeof details.description === 'string') {
+    return details.description;
+  }
+  
   const user = userName || 'System';
   const entityType = formatEntityType(entity);
   const name = entityName || 'Unknown';
@@ -132,6 +136,9 @@ function formatEntityType(entity: string): string {
     'user': 'user',
     'document': 'document',
     'record': 'record',
+    'inventory': 'inventory record',
+    'inventory_record': 'inventory record',
+    'appraisal': 'inventory & appraisal record',
   };
   
   return entityMap[entity.toLowerCase()] || entity;

@@ -1,0 +1,377 @@
+{
+  "merges": [
+    {
+      "s": {
+        "c": 0,
+        "r": 11
+      },
+      "e": {
+        "c": 2,
+        "r": 11
+      }
+    },
+    {
+      "s": {
+        "c": 1,
+        "r": 21
+      },
+      "e": {
+        "c": 2,
+        "r": 21
+      }
+    },
+    {
+      "s": {
+        "c": 2,
+        "r": 41
+      },
+      "e": {
+        "c": 3,
+        "r": 41
+      }
+    },
+    {
+      "s": {
+        "c": 7,
+        "r": 41
+      },
+      "e": {
+        "c": 8,
+        "r": 41
+      }
+    },
+    {
+      "s": {
+        "c": 11,
+        "r": 41
+      },
+      "e": {
+        "c": 14,
+        "r": 41
+      }
+    },
+    {
+      "s": {
+        "c": 8,
+        "r": 8
+      },
+      "e": {
+        "c": 8,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 8
+      },
+      "e": {
+        "c": 9,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 10,
+        "r": 8
+      },
+      "e": {
+        "c": 10,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 11,
+        "r": 8
+      },
+      "e": {
+        "c": 11,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 12,
+        "r": 8
+      },
+      "e": {
+        "c": 14,
+        "r": 9
+      }
+    },
+    {
+      "s": {
+        "c": 15,
+        "r": 8
+      },
+      "e": {
+        "c": 15,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 0,
+        "r": 8
+      },
+      "e": {
+        "c": 2,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 3,
+        "r": 8
+      },
+      "e": {
+        "c": 3,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 4,
+        "r": 8
+      },
+      "e": {
+        "c": 4,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 5,
+        "r": 8
+      },
+      "e": {
+        "c": 5,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 6,
+        "r": 8
+      },
+      "e": {
+        "c": 6,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 7,
+        "r": 8
+      },
+      "e": {
+        "c": 7,
+        "r": 10
+      }
+    },
+    {
+      "s": {
+        "c": 5,
+        "r": 6
+      },
+      "e": {
+        "c": 8,
+        "r": 6
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 6
+      },
+      "e": {
+        "c": 12,
+        "r": 6
+      }
+    },
+    {
+      "s": {
+        "c": 13,
+        "r": 6
+      },
+      "e": {
+        "c": 15,
+        "r": 6
+      }
+    },
+    {
+      "s": {
+        "c": 5,
+        "r": 7
+      },
+      "e": {
+        "c": 8,
+        "r": 7
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 7
+      },
+      "e": {
+        "c": 12,
+        "r": 7
+      }
+    },
+    {
+      "s": {
+        "c": 13,
+        "r": 7
+      },
+      "e": {
+        "c": 15,
+        "r": 7
+      }
+    },
+    {
+      "s": {
+        "c": 5,
+        "r": 2
+      },
+      "e": {
+        "c": 8,
+        "r": 2
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 2
+      },
+      "e": {
+        "c": 12,
+        "r": 2
+      }
+    },
+    {
+      "s": {
+        "c": 13,
+        "r": 2
+      },
+      "e": {
+        "c": 15,
+        "r": 2
+      }
+    },
+    {
+      "s": {
+        "c": 5,
+        "r": 3
+      },
+      "e": {
+        "c": 8,
+        "r": 5
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 3
+      },
+      "e": {
+        "c": 12,
+        "r": 3
+      }
+    },
+    {
+      "s": {
+        "c": 13,
+        "r": 3
+      },
+      "e": {
+        "c": 15,
+        "r": 3
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 4
+      },
+      "e": {
+        "c": 12,
+        "r": 4
+      }
+    },
+    {
+      "s": {
+        "c": 13,
+        "r": 4
+      },
+      "e": {
+        "c": 15,
+        "r": 4
+      }
+    },
+    {
+      "s": {
+        "c": 9,
+        "r": 5
+      },
+      "e": {
+        "c": 12,
+        "r": 5
+      }
+    },
+    {
+      "s": {
+        "c": 13,
+        "r": 5
+      },
+      "e": {
+        "c": 15,
+        "r": 5
+      }
+    }
+  ],
+  "cells": {
+    "F3": "1. NAME OF OFFICE:",
+    "J3": "2. DEPARTMENT/DIVISION:",
+    "N3": "4. TELEPHONE NO.:",
+    "F4": "PROVINCIAL GOVERNMENT OF PANGASINAN ",
+    "J4": "Human Resource Management and Development Office (HRMDO)",
+    "J5": "3. SECTION/UNIT:",
+    "N5": "5. EMAIL ADDRESS.:",
+    "F7": "6. ADDRESS:",
+    "J7": "7. PERSON-IN-CHARGE OF FILES:",
+    "N7": "8. DATE PREPARED:",
+    "F8": "Provincial Capitol Complex Lingayen, Pangasinan",
+    "A9": "9. RECORDS SERIES TITLE AND DESCRIPTION",
+    "D9": "10. PERIOD COVERED / INCLUSIVE DATES ",
+    "E9": "11. VOLUME",
+    "F9": "12. RECORDS MEDIUM",
+    "G9": "13. RESTRICTION/S",
+    "H9": "14. LOCATION OF RECORDS",
+    "I9": "15. FREQUENCY OF USE",
+    "J9": "16. DUPLICATION",
+    "K9": "17. TIME VALUE (T/P)",
+    "L9": "18. UTILITY VALUE      Adm/F/L/Arc",
+    "M9": "19. RETENTION PERIOD",
+    "P9": "20. DISPOSITION PROVISION",
+    "M11": "Active",
+    "N11": "Storage",
+    "O11": "Total",
+    "A34": "LEGEND:",
+    "A35": "TIME VALUE:",
+    "D35": "T  -  Temporary",
+    "F35": "P  -  Permanent",
+    "A36": "UTILITY VALUE:",
+    "D36": "Adm  -  Administrative",
+    "F36": "F  -  Fiscal",
+    "G36": "L  -  Legal",
+    "H36": "Arc  -  Archival",
+    "A39": "PREPARED BY:",
+    "G39": "ASSISTED BY:",
+    "K39": "APPROVED BY:",
+    "C42": "Name and Position",
+    "H42": "NAP Records Management Analyst",
+    "L42": "Chief of the Division/Department"
+  }
+}

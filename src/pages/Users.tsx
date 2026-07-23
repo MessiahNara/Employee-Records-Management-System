@@ -126,10 +126,23 @@ function Users() {
   const isDeveloper = userRole === 'developer';
   const canAccessUserManagement = isDeveloper;
 
+  const [availableDivisions, setAvailableDivisions] = useState<string[]>([
+    'Employee Relations',
+    'Administrative Division',
+    'Finance & Accounting',
+    'Human Resource Development',
+    'Medical & Nursing Services'
+  ]);
+
   // Fetch users from API
   useEffect(() => {
     if (canAccessUserManagement) {
       fetchUsers();
+      api.systemSettings.get().then(res => {
+        if (res?.divisions && Array.isArray(res.divisions) && res.divisions.length > 0) {
+          setAvailableDivisions(res.divisions);
+        }
+      }).catch(err => console.error('Failed to load divisions setting:', err));
     }
   }, [canAccessUserManagement]);
 
@@ -344,9 +357,11 @@ function Users() {
     const username = user.email.split('@')[0];
     const userPerms = user.permissions || { create: false, read: true, update: false, delete: false };
     const allowedTabs = userPerms.allowedTabs || getDefaultTabsForRole(user.roleId);
+    const allowedDivisions = userPerms.allowedDivisions || (user.roleId === 'role-1' || user.roleId === 'role-4' ? ['ALL'] : ['ALL']);
     const initializedPermissions = {
       ...userPerms,
-      allowedTabs
+      allowedTabs,
+      allowedDivisions
     };
     const userData = {
       id: user.id,
@@ -372,7 +387,14 @@ function Users() {
       username: '',
       password: '',
       roleId: 'role-3', // Default to Staff
-      permissions: { create: false, read: true, update: false, delete: false, allowedTabs: getDefaultTabsForRole('role-3') }
+      permissions: {
+        create: false,
+        read: true,
+        update: false,
+        delete: false,
+        allowedTabs: getDefaultTabsForRole('role-3'),
+        allowedDivisions: ['ALL']
+      }
     });
     setShowPassword(false);
     setIsModalOpen(true);
@@ -412,7 +434,8 @@ function Users() {
         formData.permissions.read !== originalUserData?.permissions.read ||
         formData.permissions.update !== originalUserData?.permissions.update ||
         formData.permissions.delete !== originalUserData?.permissions.delete ||
-        JSON.stringify(formData.permissions.allowedTabs) !== JSON.stringify(originalUserData?.permissions?.allowedTabs);
+        JSON.stringify(formData.permissions.allowedTabs) !== JSON.stringify(originalUserData?.permissions?.allowedTabs) ||
+        JSON.stringify(formData.permissions.allowedDivisions) !== JSON.stringify(originalUserData?.permissions?.allowedDivisions);
       if (permissionsChanged) changedFields.permissions = { from: originalUserData?.permissions, to: formData.permissions };
 
       if (Object.keys(changedFields).length === 0) {
@@ -1161,8 +1184,65 @@ function Users() {
                   })}
                 </div>
               </div>
-            </div>
-          )}
+
+              {/* Division Access Permissions */}
+              <div className="users__modal-permissions-section" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                <h4 className="users__modal-permissions-title">Inventory Division Access Scope</h4>
+                <p className="users__modal-permissions-description">
+                  Select which division records this user is authorized to manage in Inventory & Appraisal
+                </p>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <label className="users__permission-checkbox" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.permissions.allowedDivisions?.includes('ALL') ?? true}
+                      disabled={isPermissionsUIChangeDisabled()}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        setFormData(prev => ({
+                          ...prev,
+                          permissions: {
+                            ...prev.permissions,
+                            allowedDivisions: isChecked ? ['ALL'] : availableDivisions.slice(0, 1)
+                          }
+                        }));
+                      }}
+                    />
+                    <span>All Divisions (Full Access)</span>
+                  </label>
+                </div>
+                
+                {!(formData.permissions.allowedDivisions?.includes('ALL')) && (
+                  <div className="users__permissions-checkboxes" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem 1rem', marginTop: '0.5rem', paddingLeft: '0.5rem' }}>
+                    {availableDivisions.map((divName) => {
+                      const isChecked = formData.permissions.allowedDivisions?.includes(divName) ?? false;
+                      return (
+                        <label key={divName} className="users__permission-checkbox" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isPermissionsUIChangeDisabled()}
+                            onChange={() => {
+                              const currentDivs = (formData.permissions.allowedDivisions || []).filter(d => d !== 'ALL');
+                              const newDivs = currentDivs.includes(divName)
+                                ? currentDivs.filter(d => d !== divName)
+                                : [...currentDivs, divName];
+                              setFormData(prev => ({
+                                ...prev,
+                                permissions: {
+                                  ...prev.permissions,
+                                  allowedDivisions: newDivs.length === 0 ? ['ALL'] : newDivs
+                                }
+                              }));
+                            }}
+                          />
+                          <span>{divName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
           {selectedUser && (
             <div className="users__modal-info">

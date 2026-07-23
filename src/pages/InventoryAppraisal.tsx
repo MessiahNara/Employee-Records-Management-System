@@ -7,7 +7,11 @@ import Modal from '../components/ui/Modal';
 import CreateRecordSeriesModal, { RecordSeriesFormData } from '../components/CreateRecordSeriesModal';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
-import { MdAdd, MdDelete, MdDeleteOutline, MdEdit, MdAssignment, MdCheckCircle, MdHourglassTop, MdArchive, MdWarning, MdHistory, MdInventory, MdDeleteSweep } from 'react-icons/md';
+import { MdAdd, MdDelete, MdDeleteOutline, MdEdit, MdAssignment, MdCheckCircle, MdHourglassTop, MdArchive, MdWarning, MdHistory, MdInventory, MdDeleteSweep, MdPrint, MdFileDownload } from 'react-icons/md';
+import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import { getAuthState } from '../utils/mockAuth';
 import './InventoryAppraisal.css';
 
 export interface InventoryRecord {
@@ -41,8 +45,13 @@ export interface InventoryRecord {
 
 export function formatDynamicDates(datesStr: string): string {
   if (!datesStr) return '-';
-  const currentYear = new Date().getFullYear();
-  return datesStr.replace(/Present/gi, String(currentYear));
+  const currYr = new Date().getFullYear();
+  const replaced = datesStr.replace(/Present/gi, String(currYr)).trim();
+  const match = replaced.match(/^(\d{4})\s*-\s*(\d{4})$/);
+  if (match && match[1] === match[2]) {
+    return match[1];
+  }
+  return replaced;
 }
 
 export function extractCoveredYears(datesStr: string): { years: number[]; isOngoing: boolean } {
@@ -197,18 +206,61 @@ function InventoryAppraisal() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showNapFormPreview, setShowNapFormPreview] = useState(false);
+  const [previewViewMode, setPreviewViewMode] = useState<'excel' | 'form'>('excel');
+  const [napFormHeader, setNapFormHeader] = useState({
+    personInCharge: '',
+    sectionUnit: '',
+    telephoneNo: '',
+    emailAddress: '',
+    preparedBy: '',
+    assistedBy: '',
+    approvedBy: '',
+  });
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [disposalLogs, setDisposalLogs] = useState<any[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
 
   const { showToast } = useToast();
 
+  const currentUser = getAuthState();
+  const allowedDivisions = useMemo(() => {
+    if (!currentUser) return ['ALL'];
+    if (currentUser.role === 'superadmin' || currentUser.role === 'developer') return ['ALL'];
+    const divs = currentUser.permissions?.allowedDivisions;
+    if (!divs || divs.length === 0 || divs.includes('ALL')) return ['ALL'];
+    return divs;
+  }, [currentUser]);
+
+  const hasFullDivisionAccess = allowedDivisions.includes('ALL');
+
+  // Filter raw records based on user's authorized division scope
+  const authorizedRecords = useMemo(() => {
+    if (hasFullDivisionAccess) return records;
+    return records.filter((r) => {
+      const recDiv = (r.division || 'General').trim().toLowerCase();
+      return allowedDivisions.some((d: string) => d.trim().toLowerCase() === recDiv);
+    });
+  }, [records, allowedDivisions, hasFullDivisionAccess]);
+
+  // Set default division tab if user has a single allowed division
+  useEffect(() => {
+    if (!hasFullDivisionAccess && allowedDivisions.length > 0) {
+      setDivisionTab(allowedDivisions[0]);
+    }
+  }, [allowedDivisions, hasFullDivisionAccess]);
+
   // Dynamic division tabs options from records
   const divisionTabs = useMemo(() => {
-    const presentDivs = records.map((r) => r.division).filter(Boolean) as string[];
+    const presentDivs = authorizedRecords.map((r) => r.division).filter(Boolean) as string[];
     const uniqueDivs = Array.from(new Set(presentDivs)).sort((a, b) => a.localeCompare(b));
+    if (!hasFullDivisionAccess) {
+      // Include all user's allowed divisions even if currently 0 records
+      const merged = Array.from(new Set([...allowedDivisions, ...uniqueDivs])).sort((a, b) => a.localeCompare(b));
+      return merged;
+    }
     return ['ALL', ...uniqueDivs];
-  }, [records]);
+  }, [authorizedRecords, allowedDivisions, hasFullDivisionAccess]);
 
   const [showActiveDeskModal, setShowActiveDeskModal] = useState(false);
   const [showAnnualNoticeModal, setShowAnnualNoticeModal] = useState(false);
@@ -409,6 +461,1017 @@ function InventoryAppraisal() {
     fetchRecords();
   };
 
+  // Dynamic active division records based on selected division tab
+  const activeDivisionRecords = useMemo(() => {
+    if (divisionTab === 'ALL') return authorizedRecords;
+    return authorizedRecords.filter(r => (r.division || 'General').trim().toLowerCase() === divisionTab.trim().toLowerCase());
+  }, [authorizedRecords, divisionTab]);
+
+  // ── Helper to group records by Division, Category & Sub-Category ──────────
+  interface NapRowItem {
+    type: 'category' | 'subCategory' | 'record';
+    title: string;
+    record?: InventoryRecord;
+  }
+
+  const getGroupedNapItems = (list: InventoryRecord[]): NapRowItem[] => {
+    const items: NapRowItem[] = [];
+    // Category -> SubCategory -> Array of records
+    const catMap = new Map<string, Map<string, InventoryRecord[]>>();
+
+    list.forEach(r => {
+      const cat = (r.classificationCategory || r.appraisalCategory || 'GENERAL').toUpperCase().trim();
+      const sub = (r.subCategory || '').trim();
+
+      if (!catMap.has(cat)) {
+        catMap.set(cat, new Map());
+      }
+      const subMap = catMap.get(cat)!;
+      if (!subMap.has(sub)) {
+        subMap.set(sub, []);
+      }
+      subMap.get(sub)!.push(r);
+    });
+
+    const sortedCatKeys = Array.from(catMap.keys()).sort((a, b) => a.localeCompare(b));
+
+    sortedCatKeys.forEach((catName) => {
+      if (catName && catName !== 'GENERAL') {
+        items.push({
+          type: 'category',
+          title: catName
+        });
+      }
+
+      const subMap = catMap.get(catName)!;
+      const sortedSubKeys = Array.from(subMap.keys()).sort((a, b) => a.localeCompare(b));
+
+      sortedSubKeys.forEach((subName) => {
+        if (subName) {
+          items.push({
+            type: 'subCategory',
+            title: subName
+          });
+        }
+
+        const recordsList = subMap.get(subName)!;
+        recordsList.sort((a, b) => (a.seriesTitle || '').localeCompare(b.seriesTitle || ''));
+
+        recordsList.forEach(r => {
+          items.push({
+            type: 'record',
+            title: r.seriesTitle,
+            record: r
+          });
+        });
+      });
+    });
+
+    if (items.length === 0 && list.length > 0) {
+      const sortedList = [...list].sort((a, b) => (a.seriesTitle || '').localeCompare(b.seriesTitle || ''));
+      sortedList.forEach(r => {
+        items.push({ type: 'record', title: r.seriesTitle, record: r });
+      });
+    }
+
+    return items;
+  };
+
+  // ── Shared NAP Form 1 row builder ───────────────────────────────────────────
+  const buildNapRows = (list: InventoryRecord[], _startNum: number, minRows: number = 15): string => {
+    const items = getGroupedNapItems(list);
+    const rows: string[] = [];
+
+    items.forEach((item) => {
+      if (item.type === 'category') {
+        rows.push(`
+          <tr style="height:24px; background:#fff;">
+            <td colspan="14" style="border:1px solid #000; padding:4px 6px; font-weight:bold; font-size:9.5pt; font-family:Arial, sans-serif; text-transform:uppercase; text-align:left;">
+              ${item.title}
+            </td>
+          </tr>
+        `);
+      } else if (item.type === 'subCategory') {
+        rows.push(`
+          <tr style="height:24px; background:#fff;">
+            <td colspan="14" style="border:1px solid #000; padding:4px 6px 4px 20px; font-weight:bold; font-size:9pt; font-family:Arial, sans-serif; text-align:left;">
+              ${item.title}
+            </td>
+          </tr>
+        `);
+      } else if (item.type === 'record' && item.record) {
+        const r = item.record;
+        const perm = r.appraisalCategory === 'Permanent';
+        const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+
+        rows.push(`
+          <tr style="height:24px; background:#fff;">
+            <td style="border:1px solid #000; padding:3px 6px 3px 36px; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
+              <div style="font-weight:normal; color:#000;">${r.seriesTitle || ''}</div>
+              ${r.scopeDescription ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
+            </td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top; white-space:nowrap;">${formatDynamicDates(r.inclusiveDates)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.volume || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.medium || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.locationOfRecords || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.frequencyOfUse || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.duplication || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.appraisalCategory || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${util}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.activeDeskYrs}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.storageYrs}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.totalRetention}</td>
+            <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${r.dispositionProvision || ''}</td>
+          </tr>
+        `);
+      }
+    });
+
+    const remaining = Math.max(0, minRows - items.length);
+    for (let k = 0; k < remaining; k++) {
+      rows.push(`
+        <tr style="height:24px; background:#fff;">
+          <td style="border:1px solid #000;padding:3px 5px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 4px;">&nbsp;</td>
+          <td style="border:1px solid #000;padding:3px 5px;">&nbsp;</td>
+        </tr>
+      `);
+    }
+
+    return rows.join('');
+  };
+
+  const buildNapForm1Html = (
+    list: InventoryRecord[],
+    divisionLabel?: string,
+    header?: { personInCharge?: string; telephoneNo?: string; emailAddress?: string; preparedBy?: string; assistedBy?: string; approvedBy?: string }
+  ): string => {
+    const ROWS_PER_PAGE = 15;
+    const items = getGroupedNapItems(list);
+    const pageCount = Math.max(1, Math.ceil(items.length / ROWS_PER_PAGE));
+    const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const deptLabel = 'Human Resource Management and Development Office (HRMDO)';
+    const sectionLabel = divisionLabel && divisionLabel !== 'ALL' ? divisionLabel : '';
+
+    return Array.from({ length: pageCount }, (_, pi) => {
+      const sliceItems = items.slice(pi * ROWS_PER_PAGE, (pi + 1) * ROWS_PER_PAGE);
+      const isLast = pi === pageCount - 1;
+      const pb = !isLast ? 'page-break-after:always;margin-bottom:20px;' : '';
+      return `
+        <div style="${pb} font-family: Arial, sans-serif; font-size: 8pt; color: #000; background: #fff; padding: 12px;">
+          <!-- Small Top Identifier Tag -->
+          <div style="font-size: 6.5pt; color: #333; margin-bottom: 4px; font-family: Arial, sans-serif; line-height: 1.2;">
+            <div>NAP Records Inventory and Appraisal Form</div>
+            <div>2024</div>
+          </div>
+
+          <!-- Official Top Header Grid Box matching reference image -->
+          <table style="width: 100%; min-width: 1050px; border-collapse: collapse; border: 1.5px solid #000; font-size: 8pt; table-layout: fixed; font-family: Arial, sans-serif;">
+            <tr>
+              <td rowSpan="3" style="border: 1px solid #000; width: 33%; text-align: center; vertical-align: middle; padding: 10px 8px; background: #fff;">
+                <div style="font-size: 9.5pt; font-weight: bold; letter-spacing: 0.2px;">NATIONAL ARCHIVES OF THE PHILIPPINES</div>
+                <div style="font-size: 8.5pt; font-style: italic; margin-top: 1px;">Pambansang Sinupan ng Pilipinas</div>
+                <div style="font-size: 10pt; font-weight: bold; margin-top: 14px; letter-spacing: 0.4px;">RECORDS INVENTORY AND APPRAISAL</div>
+              </td>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top; width: 33%;">
+                <div style="font-weight: bold; font-size: 7.5pt;">1. NAME OF OFFICE:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 4px;">PROVINCIAL GOVERNMENT OF PANGASINAN</div>
+              </td>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top; width: 22%;">
+                <div style="font-weight: bold; font-size: 7.5pt;">2. DEPARTMENT/DIVISION:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px;">${deptLabel}</div>
+              </td>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top; width: 12%;">
+                <div style="font-weight: bold; font-size: 7.5pt;">4. TELEPHONE NO.:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px;">${header?.telephoneNo || ''}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 7.5pt;">6. ADDRESS:</div>
+                <div style="text-align: center; font-size: 8pt; margin-top: 2px;">Provincial Capitol Complex Lingayen, Pangasinan</div>
+              </td>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 7.5pt;">3. SECTION/UNIT:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px;">${sectionLabel}</div>
+              </td>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 7.5pt;">5. EMAIL ADDRESS.:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px;">${header?.emailAddress || ''}</div>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan="2" style="border: 1px solid #000; padding: 4px 6px; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 7.5pt;">7. PERSON-IN-CHARGE OF FILES:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px;">${header?.personInCharge || ''}</div>
+              </td>
+              <td style="border: 1px solid #000; padding: 4px 6px; vertical-align: top;">
+                <div style="font-weight: bold; font-size: 7.5pt;">8. DATE PREPARED:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px;">${datePrepared}</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Official Table Column Headers matching NAP Form 1 (Cols 9 to 20) -->
+          <table style="width: 100%; min-width: 1050px; border-collapse: collapse; border: 1.5px solid #000; border-top: none; font-size: 7.5pt; table-layout: fixed; font-family: Arial, sans-serif; margin-top: -1px;">
+            <thead>
+              <tr style="background: #fff; height: 26px;">
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 25%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  9. RECORDS SERIES TITLE AND DESCRIPTION
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 8.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  10. PERIOD COVERED / INCLUSIVE DATES
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  11. VOLUME
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  12. RECORDS MEDIUM
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 5.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  13. RESTRICTION/S
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 7.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  14. LOCATION OF RECORDS
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 5.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  15. FREQUENCY OF USE
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 5.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  16. DUPLICATION
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 4.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  17. TIME VALUE (T/P)
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  18. UTILITY VALUE Adm/F/L/Arc
+                </th>
+                <th colSpan="3" style="border: 1px solid #000; padding: 2px; font-weight: bold; text-align: center; vertical-align: middle;">
+                  19. RETENTION PERIOD
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; width: 17.5%; font-weight: bold; text-align: center; vertical-align: middle;">
+                  20. DISPOSITION PROVISION
+                </th>
+              </tr>
+              <tr style="background: #fff; height: 18px;">
+                <th style="border: 1px solid #000; padding: 2px; width: 3.5%; font-weight: bold; text-align: center;">Active</th>
+                <th style="border: 1px solid #000; padding: 2px; width: 3.5%; font-weight: bold; text-align: center;">Storage</th>
+                <th style="border: 1px solid #000; padding: 2px; width: 3.5%; font-weight: bold; text-align: center;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sliceItems.map((item) => {
+                if (item.type === 'category') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px; font-weight:bold; font-size:9.5pt; font-family:Arial, sans-serif; text-transform:uppercase; text-align:left;">${item.title}</td></tr>`;
+                if (item.type === 'subCategory') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px 4px 20px; font-weight:bold; font-size:9pt; font-family:Arial, sans-serif; text-align:left;">${item.title}</td></tr>`;
+                const r = item.record!;
+                const perm = r.appraisalCategory === 'Permanent';
+                const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+                return `<tr style="height:24px; background:#fff;">
+                  <td style="border:1px solid #000; padding:3px 6px 3px 36px; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
+                    <div style="font-weight:normal; color:#000;">${r.seriesTitle || ''}</div>
+                    ${r.scopeDescription ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
+                  </td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top; white-space:nowrap;">${formatDynamicDates(r.inclusiveDates)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.volume || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.medium || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.locationOfRecords || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.frequencyOfUse || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.duplication || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.appraisalCategory || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${util}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.activeDeskYrs}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.storageYrs}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.totalRetention}</td>
+                  <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${r.dispositionProvision || ''}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <!-- Official Legend Block matching reference image -->
+          <div style="border: 1px solid #000; border-top: none; padding: 4px 6px; font-size: 7.5pt; font-family: Arial, sans-serif; background: #fff; min-width: 1050px; box-sizing: border-box;">
+            <div style="font-weight: bold; text-decoration: underline;">LEGEND:</div>
+            <div style="display: flex; gap: 40px; margin-top: 2px;">
+              <div><strong>TIME VALUE:</strong> T &nbsp; - &nbsp; Temporary &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; P &nbsp; - &nbsp; Permanent</div>
+              <div><strong>UTILITY VALUE:</strong> Adm &nbsp; - &nbsp; Administrative &nbsp;&nbsp;&nbsp;&nbsp; F &nbsp; - &nbsp; Fiscal &nbsp;&nbsp;&nbsp;&nbsp; L &nbsp; - &nbsp; Legal &nbsp;&nbsp;&nbsp;&nbsp; Arc &nbsp; - &nbsp; Archival</div>
+            </div>
+          </div>
+
+          <!-- Official Signature Block matching reference image -->
+          <table style="width: 100%; min-width: 1050px; border-collapse: collapse; border: 1.5px solid #000; border-top: none; font-size: 8pt; table-layout: fixed; font-family: Arial, sans-serif; background: #fff;">
+            <tr style="height: 55px; vertical-align: bottom;">
+              <td style="border-right: 1px solid #000; padding: 6px; width: 33%;">
+                <div style="font-weight: bold; font-size: 7.5pt; margin-bottom: 8px;">PREPARED BY:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 10pt; min-height: 18px;">${header?.preparedBy || ''}</div>
+                <div style="border-bottom: 1px solid #000; width: 85%; margin: 2px auto 0 auto;"></div>
+                <div style="text-align: center; font-size: 7.5pt; margin-top: 2px; font-style: italic;">Name and Position</div>
+              </td>
+              <td style="border-right: 1px solid #000; padding: 6px; width: 33%;">
+                <div style="font-weight: bold; font-size: 7.5pt; margin-bottom: 8px;">ASSISTED BY:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 10pt; min-height: 18px;">${header?.assistedBy || ''}</div>
+                <div style="border-bottom: 1px solid #000; width: 85%; margin: 2px auto 0 auto;"></div>
+                <div style="text-align: center; font-size: 7.5pt; margin-top: 2px; font-style: italic;">NAP Records Management Analyst</div>
+              </td>
+              <td style="padding: 6px; width: 34%;">
+                <div style="font-weight: bold; font-size: 7.5pt; margin-bottom: 8px;">APPROVED BY:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 10pt; min-height: 18px;">${header?.approvedBy || ''}</div>
+                <div style="border-bottom: 1px solid #000; width: 85%; margin: 2px auto 0 auto;"></div>
+                <div style="text-align: center; font-size: 7.5pt; margin-top: 2px; font-style: italic;">Chief of the Division/Department</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Dynamic Page Footer matching reference image -->
+          <div style="display: flex; justify-content: space-between; font-size: 7.5pt; color: #444; margin-top: 4px; font-family: Arial, sans-serif;">
+            <div>NAP Records Inventory and Appraisal Form 2024</div>
+            <div>Page ${pi + 1} of ${pageCount} Pages</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const buildNapForm1ExcelHtml = (
+    list: InventoryRecord[],
+    divisionLabel?: string,
+    header?: { personInCharge?: string; telephoneNo?: string; emailAddress?: string; preparedBy?: string; assistedBy?: string; approvedBy?: string }
+  ): string => {
+    const items = getGroupedNapItems(list);
+    const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const deptLabel = 'Human Resource Management and Development Office (HRMDO)';
+    const sectionLabel = divisionLabel && divisionLabel !== 'ALL' ? divisionLabel : '';
+
+    return `
+      <div style="font-family: Arial, sans-serif; font-size: 9pt; color: #000; background: #fff; border: 1px solid #d4d4d4; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-radius: 6px; overflow: hidden;">
+        <!-- Excel Sheet Top Header Bar -->
+        <div style="background: #f8f9fa; border-bottom: 1px solid #d4d4d4; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 8.5pt; color: #333;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: #107c41; color: #fff; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 8pt; letter-spacing: 0.5px;">XLSX</span>
+            <strong>NAP FORM 1 (FORMAT).xlsx</strong> &nbsp;—&nbsp; <span style="color: #666;">Sheet1 (Worksheet Grid)</span>
+          </div>
+          <div style="color: #666; font-size: 8pt; display: flex; align-items: center; gap: 14px;">
+            <span>✓ Gridlines</span>
+            <span>✓ Merged A:C Columns</span>
+            <span>✓ Auto Height</span>
+          </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; min-width: 1200px; border-collapse: collapse; table-layout: fixed; font-family: Arial, sans-serif; font-size: 9pt; background: #fff;">
+            <thead>
+              <tr style="background: #f3f3f3; color: #555; font-size: 8pt; text-align: center; height: 22px;">
+                <th style="width: 32px; border: 1px solid #d4d4d4; font-weight: bold; background: #e8e8e8;"></th>
+                <th style="width: 8.5%; border: 1px solid #d4d4d4; font-weight: bold;">A</th>
+                <th style="width: 8.5%; border: 1px solid #d4d4d4; font-weight: bold;">B</th>
+                <th style="width: 8.5%; border: 1px solid #d4d4d4; font-weight: bold;">C</th>
+                <th style="width: 10%; border: 1px solid #d4d4d4; font-weight: bold;">D</th>
+                <th style="width: 4.5%; border: 1px solid #d4d4d4; font-weight: bold;">E</th>
+                <th style="width: 5%; border: 1px solid #d4d4d4; font-weight: bold;">F</th>
+                <th style="width: 6%; border: 1px solid #d4d4d4; font-weight: bold;">G</th>
+                <th style="width: 7.5%; border: 1px solid #d4d4d4; font-weight: bold;">H</th>
+                <th style="width: 5.5%; border: 1px solid #d4d4d4; font-weight: bold;">I</th>
+                <th style="width: 5.5%; border: 1px solid #d4d4d4; font-weight: bold;">J</th>
+                <th style="width: 4.5%; border: 1px solid #d4d4d4; font-weight: bold;">K</th>
+                <th style="width: 6.5%; border: 1px solid #d4d4d4; font-weight: bold;">L</th>
+                <th style="width: 3.5%; border: 1px solid #d4d4d4; font-weight: bold;">M</th>
+                <th style="width: 3.5%; border: 1px solid #d4d4d4; font-weight: bold;">N</th>
+                <th style="width: 3.5%; border: 1px solid #d4d4d4; font-weight: bold;">O</th>
+                <th style="width: 14%; border: 1px solid #d4d4d4; font-weight: bold;">P</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Row 1 to 3: Header Grid Box -->
+              <tr>
+                <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">1</td>
+                <td colSpan="3" rowSpan="3" style="border: 1.5px solid #000; text-align: center; vertical-align: middle; padding: 6px 8px; background: #fff;">
+                  <div style="font-size: 9.5pt; font-weight: bold; line-height: 1.2;">NATIONAL ARCHIVES OF THE PHILIPPINES</div>
+                  <div style="font-size: 8.5pt; font-style: italic; margin-top: 2px;">Pambansang Sinupan ng Pilipinas</div>
+                  <div style="font-size: 10pt; font-weight: bold; margin-top: 10px; line-height: 1.2;">RECORDS INVENTORY AND APPRAISAL</div>
+                </td>
+                <td colSpan="6" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">1. NAME OF OFFICE:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">PROVINCIAL GOVERNMENT OF PANGASINAN</div>
+                </td>
+                <td colSpan="4" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">2. DEPARTMENT/DIVISION:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">${deptLabel}</div>
+                </td>
+                <td colSpan="3" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">4. TELEPHONE NO.:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">${header?.telephoneNo || ''}</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">2</td>
+                <td colSpan="6" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">6. ADDRESS:</div>
+                  <div style="text-align: center; font-size: 8pt; margin-top: 2px; line-height: 1.2;">Provincial Capitol Complex Lingayen, Pangasinan</div>
+                </td>
+                <td colSpan="4" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">3. SECTION/UNIT:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">${sectionLabel}</div>
+                </td>
+                <td colSpan="3" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">5. EMAIL ADDRESS.:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">${header?.emailAddress || ''}</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">3</td>
+                <td colSpan="10" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">7. PERSON-IN-CHARGE OF FILES:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">${header?.personInCharge || ''}</div>
+                </td>
+                <td colSpan="3" style="border: 1.5px solid #000; padding: 5px 8px; vertical-align: top;">
+                  <div style="font-weight: bold; font-size: 7pt; color: #000;">8. DATE PREPARED:</div>
+                  <div style="text-align: center; font-weight: bold; font-size: 8.5pt; margin-top: 2px; line-height: 1.2;">${datePrepared}</div>
+                </td>
+              </tr>
+
+              <!-- Table Headers (Rows 9-11 in Excel) -->
+              <tr style="height: 28px;">
+                <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">9</td>
+                <th colSpan="3" rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  9. RECORDS SERIES TITLE AND DESCRIPTION
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  10. PERIOD COVERED / INCLUSIVE DATES
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  11. VOLUME
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  12. RECORDS MEDIUM
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  13. RESTRICTION/S
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  14. LOCATION OF RECORDS
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  15. FREQUENCY OF USE
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  16. DUPLICATION
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  17. TIME VALUE (T/P)
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  18. UTILITY VALUE
+                  <div style="font-weight: normal; font-size: 6.5pt; margin-top: 2px;">Adm/F/L/Arc</div>
+                </th>
+                <th colSpan="3" style="border: 1px solid #000; padding: 2px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt;">
+                  19. RETENTION PERIOD
+                </th>
+                <th rowSpan="2" style="border: 1px solid #000; padding: 4px; font-weight: bold; text-align: center; vertical-align: middle; font-size: 7.5pt; line-height: 1.2;">
+                  20. DISPOSITION PROVISION
+                </th>
+              </tr>
+              <tr style="height: 18px;">
+                <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">10</td>
+                <th style="border: 1px solid #000; padding: 2px; font-weight: bold; text-align: center; font-size: 7pt;">Active</th>
+                <th style="border: 1px solid #000; padding: 2px; font-weight: bold; text-align: center; font-size: 7pt;">Storage</th>
+                <th style="border: 1px solid #000; padding: 2px; font-weight: bold; text-align: center; font-size: 7pt;">Total</th>
+              </tr>
+
+              <!-- Data Rows starting at Row 12 in Excel -->
+              ${items.map((item, index) => {
+                const excelRowNum = 12 + index;
+                if (item.type === 'category') {
+                  return `
+                    <tr style="height: 24px;">
+                      <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">${excelRowNum}</td>
+                      <td colSpan="16" style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; font-size: 9.5pt; text-transform: uppercase;">
+                        ${item.title}
+                      </td>
+                    </tr>
+                  `;
+                }
+                if (item.type === 'subCategory') {
+                  return `
+                    <tr style="height: 24px;">
+                      <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">${excelRowNum}</td>
+                      <td colSpan="16" style="border: 1px solid #000; padding: 4px 6px 4px 20px; font-weight: bold; font-size: 9pt;">
+                        ${item.title}
+                      </td>
+                    </tr>
+                  `;
+                }
+                const r = item.record!;
+                const perm = r.appraisalCategory === 'Permanent';
+                const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+                return `
+                  <tr style="height: 24px;">
+                    <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">${excelRowNum}</td>
+                    <td colSpan="3" style="border: 1px solid #000; padding: 3px 6px 3px 36px; font-size: 9pt; vertical-align: top; word-break: break-word;">
+                      <div style="font-weight: normal; color: #000;">${r.seriesTitle || ''}</div>
+                      ${r.scopeDescription ? `<div style="font-size: 7.5pt; color: #555; margin-top: 1px;">${r.scopeDescription}</div>` : ''}
+                    </td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top; white-space: nowrap;">${formatDynamicDates(r.inclusiveDates)}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.volume || ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.medium || ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.locationOfRecords || ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.frequencyOfUse || ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.duplication || ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${r.appraisalCategory || ''}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${util}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${perm ? '-' : r.activeDeskYrs}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${perm ? '-' : r.storageYrs}</td>
+                    <td style="border: 1px solid #000; padding: 3px 4px; font-size: 9pt; text-align: center; vertical-align: top;">${perm ? '-' : r.totalRetention}</td>
+                    <td style="border: 1px solid #000; padding: 3px 5px; font-size: 9pt; vertical-align: top; word-break: break-word;">${r.dispositionProvision || ''}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <!-- Official Signature Block matching Excel Format -->
+          <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #000; border-top: none; font-size: 8pt; table-layout: fixed; font-family: Arial, sans-serif; background: #fff;">
+            <tr style="height: 55px; vertical-align: bottom;">
+              <td style="border-right: 1px solid #000; padding: 6px; width: 33%;">
+                <div style="font-weight: bold; font-size: 7.5pt; margin-bottom: 8px;">PREPARED BY:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 10pt; min-height: 18px;">${header?.preparedBy || ''}</div>
+                <div style="border-bottom: 1px solid #000; width: 85%; margin: 2px auto 0 auto;"></div>
+                <div style="text-align: center; font-size: 7.5pt; margin-top: 2px; font-style: italic;">Name and Position</div>
+              </td>
+              <td style="border-right: 1px solid #000; padding: 6px; width: 33%;">
+                <div style="font-weight: bold; font-size: 7.5pt; margin-bottom: 8px;">ASSISTED BY:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 10pt; min-height: 18px;">${header?.assistedBy || ''}</div>
+                <div style="border-bottom: 1px solid #000; width: 85%; margin: 2px auto 0 auto;"></div>
+                <div style="text-align: center; font-size: 7.5pt; margin-top: 2px; font-style: italic;">NAP Records Management Analyst</div>
+              </td>
+              <td style="padding: 6px; width: 34%;">
+                <div style="font-weight: bold; font-size: 7.5pt; margin-bottom: 8px;">APPROVED BY:</div>
+                <div style="text-align: center; font-weight: bold; font-size: 10pt; min-height: 18px;">${header?.approvedBy || ''}</div>
+                <div style="border-bottom: 1px solid #000; width: 85%; margin: 2px auto 0 auto;"></div>
+                <div style="text-align: center; font-size: 7.5pt; margin-top: 2px; font-style: italic;">Chief of the Division/Department</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Dynamic Page Footer matching reference image -->
+          <div style="display: flex; justify-content: space-between; font-size: 7.5pt; color: #444; padding: 6px 12px; background: #fff; font-family: Arial, sans-serif;">
+            <div>NAP Records Inventory and Appraisal Form 2024</div>
+            <div>Page 1 of 1 Pages</div>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  const handlePrintNapForm1 = (printRecords?: InventoryRecord[], divisionLabel?: string) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showToast('Pop-up blocked. Please allow pop-ups to print the report.', 'error');
+      return;
+    }
+    const list = printRecords ?? activeDivisionRecords;
+    const label = divisionLabel ?? (divisionTab === 'ALL' ? undefined : divisionTab);
+    const contentHtml = previewViewMode === 'excel'
+      ? buildNapForm1ExcelHtml(list, label, napFormHeader)
+      : buildNapForm1Html(list, label, napFormHeader);
+
+    const html = `<html><head><title>NAP FORM 1${label ? ` - ${label}` : ''}</title><style>
+      @media print {
+        @page { size: 8.5in 13in landscape; margin: 0.35in; }
+        body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+      body { font-family: Arial, sans-serif; color: #000; margin: 12px; padding: 0; }
+    </style></head><body>${contentHtml}
+    <script>window.print();window.onafterprint=function(){window.close();};setTimeout(function(){window.close();},15000);<\/script>
+    </body></html>`;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+  // ── NAP Form 1 per-division XLSX export (preserves 100% official template styles & borders) ──
+  const handleExportNapForm1 = async () => {
+    try {
+      showToast('Preparing NAP Form 1 Excel export...', 'info');
+      let templateBuffer: ArrayBuffer | null = null;
+      // Check Electron IPC first if running inside desktop app
+      if ((window as any).electronAPI && typeof (window as any).electronAPI.getTemplateFile === 'function') {
+        try {
+          templateBuffer = await (window as any).electronAPI.getTemplateFile();
+        } catch (e) {
+          console.warn('Electron IPC template fetch failed, falling back to HTTP fetch:', e);
+        }
+      }
+
+      if (!templateBuffer) {
+        const t = Date.now();
+        const urlsToTry = [
+          `/api/nap-template?t=${t}`,
+          `${encodeURI('/NAP FORM 1 (Sample Format).xlsx')}?t=${t}`,
+          `/NAP%20FORM%201%20(Sample%20Format).xlsx?t=${t}`,
+          `${encodeURI('/NAP FORM 1 (FORMAT).xlsx')}?t=${t}`,
+          `/nap_template.xlsx?t=${t}`,
+          `/template.xlsx?t=${t}`
+        ];
+        for (const url of urlsToTry) {
+          try {
+            const res = await fetch(url);
+            if (res.ok) {
+              templateBuffer = await res.arrayBuffer();
+              break;
+            }
+          } catch {
+            // ignore and retry next url
+          }
+        }
+      }
+
+      if (!templateBuffer) {
+        throw new Error('Official NAP FORM 1 (FORMAT).xlsx template file could not be loaded.');
+      }
+
+      const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateStr = new Date().toISOString().slice(0, 10);
+
+      const processZipSheet = async (list: InventoryRecord[], divName: string): Promise<Blob> => {
+        const zip = await JSZip.loadAsync(templateBuffer!);
+        const sheetPath = 'xl/worksheets/sheet1.xml';
+        const xmlText = await zip.file(sheetPath)!.async('text');
+
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+
+        const deptLabel = (divName && divName !== 'ALL')
+          ? `Human Resource Management and Development Office (HRMDO) - ${divName}`
+          : 'Human Resource Management and Development Office (HRMDO)';
+        const sectionLabel = napFormHeader.sectionUnit || (divName && divName !== 'ALL' ? divName : '');
+
+        const colIndex = (col: string) => {
+          let num = 0;
+          for (let i = 0; i < col.length; i++) {
+            num = num * 26 + (col.charCodeAt(i) - 64);
+          }
+          return num;
+        };
+
+        const sortRowCells = (rowNode: Element) => {
+          const cells = Array.from(rowNode.getElementsByTagNameNS('*', 'c'));
+          cells.sort((a, b) => {
+            const rA = a.getAttribute('r') || '';
+            const rB = b.getAttribute('r') || '';
+            const cA = colIndex(rA.replace(/[0-9]/g, ''));
+            const cB = colIndex(rB.replace(/[0-9]/g, ''));
+            return cA - cB;
+          });
+          cells.forEach(c => rowNode.appendChild(c));
+        };
+
+        const findCellNode = (parent: Element | Document, cellRef: string): Element | null => {
+          const cells = Array.from(parent.getElementsByTagNameNS('*', 'c'));
+          return cells.find(c => c.getAttribute('r') === cellRef) || null;
+        };
+
+        // Capture template table cell border styles and row height from Row 20 (or Row 15) for all columns A..P
+        const templateColStyles: { [colName: string]: string } = {};
+        const dataTemplateRow = Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === '20')
+          || Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === '15')
+          || Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === '33');
+
+        const templateRowHeight = dataTemplateRow?.getAttribute('ht') || '20';
+
+        if (dataTemplateRow) {
+          const cells = Array.from(dataTemplateRow.getElementsByTagNameNS('*', 'c'));
+          cells.forEach(c => {
+            const rRef = c.getAttribute('r') || '';
+            const colName = rRef.replace(/[0-9]/g, '');
+            const sStyle = c.getAttribute('s');
+            if (colName && sStyle) {
+              templateColStyles[colName] = sStyle;
+            }
+          });
+        }
+
+        const setCellVal = (cellRef: string, val: string, isBold: boolean = false, fontSz: string = '9') => {
+          const colName = cellRef.replace(/[0-9]/g, '');
+          const rowNum = parseInt(cellRef.replace(/[^0-9]/g, ''), 10);
+
+          let rowNode = xmlDoc.querySelector(`row[r="${rowNum}"]`);
+          if (!rowNode) {
+            const rows = Array.from(xmlDoc.getElementsByTagNameNS('*', 'row'));
+            rowNode = rows.find(r => r.getAttribute('r') === String(rowNum)) || null;
+          }
+
+          if (!rowNode) {
+            const sheetData = xmlDoc.getElementsByTagNameNS('*', 'sheetData')[0];
+            if (!sheetData) return;
+            rowNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'row');
+            rowNode.setAttribute('r', String(rowNum));
+            rowNode.setAttribute('ht', templateRowHeight);
+            rowNode.setAttribute('customHeight', '1');
+            sheetData.appendChild(rowNode);
+          }
+
+          if (templateRowHeight && !rowNode.getAttribute('ht')) {
+            rowNode.setAttribute('ht', templateRowHeight);
+            rowNode.setAttribute('customHeight', '1');
+          }
+
+          let cellNode = findCellNode(rowNode, cellRef);
+          if (!cellNode) {
+            cellNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'c');
+            cellNode.setAttribute('r', cellRef);
+            rowNode.appendChild(cellNode);
+          }
+
+          if (!cellNode.getAttribute('s') && templateColStyles[colName]) {
+            cellNode.setAttribute('s', templateColStyles[colName]);
+          }
+
+          cellNode.removeAttribute('t');
+          while (cellNode.firstChild) {
+            cellNode.removeChild(cellNode.firstChild);
+          }
+
+          if (val !== undefined && val !== null && val !== '') {
+            const strVal = String(val).trim();
+            if (/^\d+$/.test(strVal)) {
+              cellNode.setAttribute('t', 'n');
+              const vNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'v');
+              vNode.textContent = strVal;
+              cellNode.appendChild(vNode);
+            } else {
+              cellNode.setAttribute('t', 'inlineStr');
+              const isNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'is');
+              const tNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 't');
+              tNode.setAttribute('xml:space', 'preserve');
+              tNode.textContent = val;
+              isNode.appendChild(tNode);
+              cellNode.appendChild(isNode);
+            }
+          }
+
+          sortRowCells(rowNode);
+        };
+
+        const clearCellVal = (cellRef: string) => {
+          const rowNum = parseInt(cellRef.replace(/[^0-9]/g, ''), 10);
+          const rowNode = Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === String(rowNum));
+          if (rowNode) {
+            const cellNode = findCellNode(rowNode, cellRef);
+            if (cellNode) {
+              while (cellNode.firstChild) {
+                cellNode.removeChild(cellNode.firstChild);
+              }
+              cellNode.removeAttribute('t');
+            }
+          }
+        };
+
+        // Set Top Header block (A1:C8 merged area)
+        setCellVal('A1', 'NATIONAL ARCHIVES OF THE PHILIPPINES\nPambansang Sinupan ng Pilipinas\n\nRECORDS INVENTORY AND APPRAISAL', true, '10');
+
+        // Header info
+        setCellVal('J4', deptLabel, true, '8.5');
+        setCellVal('J6', sectionLabel, true, '8.5');
+        setCellVal('N4', napFormHeader.telephoneNo || '', true, '8.5');
+        setCellVal('N6', napFormHeader.emailAddress || '', true, '8.5');
+        setCellVal('J8', napFormHeader.personInCharge || '', true, '8.5');
+        setCellVal('N8', datePrepared, true, '8.5');
+
+        const items = getGroupedNapItems(list);
+
+        let mergeCellsNode = xmlDoc.getElementsByTagNameNS('*', 'mergeCells')[0];
+        if (!mergeCellsNode) {
+          mergeCellsNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'mergeCells');
+          const pageMarginsNode = xmlDoc.getElementsByTagNameNS('*', 'pageMargins')[0];
+          if (pageMarginsNode && pageMarginsNode.parentNode) {
+            pageMarginsNode.parentNode.insertBefore(mergeCellsNode, pageMarginsNode);
+          } else {
+            xmlDoc.getElementsByTagNameNS('*', 'worksheet')[0]?.appendChild(mergeCellsNode);
+          }
+        }
+
+        const extraRows = Math.max(0, items.length - 22);
+
+        if (extraRows > 0) {
+          if (mergeCellsNode) {
+            const allMerges = Array.from(mergeCellsNode.getElementsByTagNameNS('*', 'mergeCell'));
+            allMerges.forEach(mc => {
+              const ref = (mc.getAttribute('ref') || '').trim();
+              const match = ref.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
+              if (match) {
+                const startCol = match[1].toUpperCase();
+                const startRow = parseInt(match[2], 10);
+                const endCol = (match[3] || startCol).toUpperCase();
+                const endRow = parseInt(match[4] || match[2], 10);
+
+                if (startRow >= 34) {
+                  const newRef = `${startCol}${startRow + extraRows}:${endCol}${endRow + extraRows}`;
+                  mc.setAttribute('ref', newRef);
+                }
+              }
+            });
+          }
+
+          const sheetData = xmlDoc.getElementsByTagNameNS('*', 'sheetData')[0];
+          if (sheetData) {
+            const rows = Array.from(sheetData.getElementsByTagNameNS('*', 'row'));
+            const templateBottomRows = rows
+              .filter(r => parseInt(r.getAttribute('r') || '0', 10) >= 34)
+              .sort((a, b) => parseInt(b.getAttribute('r') || '0', 10) - parseInt(a.getAttribute('r') || '0', 10));
+
+            templateBottomRows.forEach(row => {
+              const rNum = parseInt(row.getAttribute('r') || '0', 10);
+              const newRNum = rNum + extraRows;
+              row.setAttribute('r', String(newRNum));
+
+              const cells = Array.from(row.getElementsByTagNameNS('*', 'c'));
+              cells.forEach(cell => {
+                const oldRef = cell.getAttribute('r') || '';
+                const colName = oldRef.replace(/[0-9]/g, '');
+                cell.setAttribute('r', `${colName}${newRNum}`);
+              });
+            });
+          }
+        }
+
+        const existingMerges = new Set<string>();
+        if (mergeCellsNode) {
+          const mcs = Array.from(mergeCellsNode.getElementsByTagNameNS('*', 'mergeCell'));
+          mcs.forEach(mc => {
+            const r = mc.getAttribute('ref');
+            if (r) existingMerges.add(r.toUpperCase().trim());
+          });
+        }
+
+        items.forEach((item, i) => {
+          const rNum = 12 + i;
+
+          if (rNum > 33) {
+            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'].forEach(col => {
+              setCellVal(`${col}${rNum}`, '');
+            });
+          }
+
+          if (mergeCellsNode) {
+            const ref = `A${rNum}:C${rNum}`;
+            if (!existingMerges.has(ref)) {
+              const mc = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'mergeCell');
+              mc.setAttribute('ref', ref);
+              mergeCellsNode.appendChild(mc);
+              existingMerges.add(ref);
+            }
+          }
+
+          if (item.type === 'category') {
+            setCellVal(`A${rNum}`, item.title, true, '9.5');
+          } else if (item.type === 'subCategory') {
+            setCellVal(`A${rNum}`, `    ${item.title}`, true, '9');
+          } else if (item.type === 'record' && item.record) {
+            const r = item.record;
+            const perm = r.appraisalCategory === 'Permanent';
+            const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+
+            setCellVal(`A${rNum}`, `        ${r.seriesTitle || ''}`, false, '9');
+            setCellVal(`D${rNum}`, formatDynamicDates(r.inclusiveDates), false, '9');
+            setCellVal(`E${rNum}`, r.volume || '', false, '9');
+            setCellVal(`F${rNum}`, r.medium || '', false, '9');
+            setCellVal(`G${rNum}`, r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : '', false, '9');
+            setCellVal(`H${rNum}`, r.locationOfRecords || '', false, '9');
+            setCellVal(`I${rNum}`, r.frequencyOfUse || '', false, '9');
+            setCellVal(`J${rNum}`, r.duplication || '', false, '9');
+            setCellVal(`K${rNum}`, r.appraisalCategory || '', false, '9');
+            setCellVal(`L${rNum}`, util, false, '9');
+            setCellVal(`M${rNum}`, perm ? '-' : String(r.activeDeskYrs), false, '9');
+            setCellVal(`N${rNum}`, perm ? '-' : String(r.storageYrs), false, '9');
+            setCellVal(`O${rNum}`, perm ? '-' : String(r.totalRetention), false, '9');
+            setCellVal(`P${rNum}`, r.dispositionProvision || '', false, '9');
+          }
+        });
+
+        clearCellVal(`P${43 + extraRows}`);
+        clearCellVal(`P${44 + extraRows}`);
+
+        // Populate signature block values on shifted signature row (41 + extraRows)
+        const pVal = napFormHeader.preparedBy || '';
+        const aVal = napFormHeader.assistedBy || '';
+        const vVal = napFormHeader.approvedBy || '';
+        const sigRow = 41 + extraRows;
+
+        setCellVal(`C${sigRow}`, pVal, true, '10');
+        setCellVal(`H${sigRow}`, aVal, true, '10');
+        setCellVal(`L${sigRow}`, vVal, true, '10');
+        setCellVal(`M${sigRow}`, vVal, true, '10');
+        setCellVal(`N${sigRow}`, vVal, true, '10');
+
+        const rowSig = xmlDoc.querySelector(`row[r="${sigRow}"]`) || xmlDoc;
+        const cellHSig = findCellNode(rowSig, `H${sigRow}`);
+        const centerStyle = cellHSig?.getAttribute('s');
+
+        [`A${40 + extraRows}`, `A${sigRow}`, `B${40 + extraRows}`, `B${sigRow}`, `D${sigRow}`, `E${sigRow}`, `F${40 + extraRows}`, `F${sigRow}`, `G${sigRow}`, `I${sigRow}`, `J${sigRow}`, `K${40 + extraRows}`, `K${sigRow}`, `O${sigRow}`, `P${sigRow}`].forEach(ref => {
+          clearCellVal(ref);
+        });
+
+        if (centerStyle) {
+          [`C${sigRow}`, `H${sigRow}`, `L${sigRow}`, `M${sigRow}`, `N${sigRow}`].forEach(ref => {
+            const node = findCellNode(rowSig, ref);
+            if (node) node.setAttribute('s', centerStyle);
+          });
+        }
+
+        const maxRow = 44 + extraRows;
+        const dimensionNode = xmlDoc.getElementsByTagNameNS('*', 'dimension')[0];
+        if (dimensionNode) {
+          dimensionNode.setAttribute('ref', `A1:P${maxRow}`);
+        }
+
+        if (mergeCellsNode) {
+          const seenMerges = new Set<string>();
+          const allMerges = Array.from(mergeCellsNode.getElementsByTagNameNS('*', 'mergeCell'));
+          allMerges.forEach(mc => {
+            const ref = (mc.getAttribute('ref') || '').toUpperCase().trim();
+            if (seenMerges.has(ref)) {
+              mc.parentNode?.removeChild(mc);
+            } else {
+              seenMerges.add(ref);
+            }
+          });
+          mergeCellsNode.setAttribute('count', String(seenMerges.size));
+
+          const targetNode = xmlDoc.getElementsByTagNameNS('*', 'printOptions')[0]
+            || xmlDoc.getElementsByTagNameNS('*', 'pageMargins')[0]
+            || xmlDoc.getElementsByTagNameNS('*', 'pageSetup')[0]
+            || xmlDoc.getElementsByTagNameNS('*', 'drawing')[0];
+
+          if (targetNode && targetNode.parentNode && mergeCellsNode.nextSibling !== targetNode) {
+            targetNode.parentNode.insertBefore(mergeCellsNode, targetNode);
+          }
+        }
+
+        // Set Legal 8.5 x 13 in / Folio paperSize 5 in landscape
+        let pageSetupNode = xmlDoc.getElementsByTagNameNS('*', 'pageSetup')[0];
+        if (!pageSetupNode) {
+          pageSetupNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'pageSetup');
+          const worksheetNode = xmlDoc.getElementsByTagNameNS('*', 'worksheet')[0];
+          worksheetNode?.appendChild(pageSetupNode);
+        }
+        pageSetupNode.setAttribute('paperSize', '5');
+        pageSetupNode.setAttribute('orientation', 'landscape');
+        pageSetupNode.setAttribute('fitToWidth', '1');
+        pageSetupNode.setAttribute('fitToHeight', '0');
+
+        const sortSheetRows = () => {
+          const sheetData = xmlDoc.getElementsByTagNameNS('*', 'sheetData')[0];
+          if (!sheetData) return;
+          const rows = Array.from(sheetData.getElementsByTagNameNS('*', 'row'));
+          rows.sort((a, b) => {
+            const rA = parseInt(a.getAttribute('r') || '0', 10);
+            const rB = parseInt(b.getAttribute('r') || '0', 10);
+            return rA - rB;
+          });
+          rows.forEach(r => sheetData.appendChild(r));
+        };
+
+        sortSheetRows();
+
+        const serializer = new XMLSerializer();
+        const newXmlText = serializer.serializeToString(xmlDoc);
+
+        zip.file(sheetPath, newXmlText);
+        return await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      };
+
+      if (divisionTab !== 'ALL') {
+        const blob = await processZipSheet(activeDivisionRecords, divisionTab);
+        const sName = divisionTab.replace(/[:\\/?*[\]]/g, '').slice(0, 31);
+        saveAs(blob, `NAP-Form-1-${sName}-${dateStr}.xlsx`);
+        showToast(`NAP Form 1 exported for ${divisionTab} using official template.`, 'success');
+      } else {
+        const blob = await processZipSheet(authorizedRecords, 'ALL');
+        saveAs(blob, `NAP-Form-1-All-Divisions-${dateStr}.xlsx`);
+        showToast(`NAP Form 1 exported for All Divisions using official template.`, 'success');
+      }
+    } catch (err: any) {
+      console.error('JSZip Export Error:', err);
+      showToast(`Export failed: ${err?.message || 'Template error'}`, 'error');
+    }
+  };
+
+
+
+
+
   // Analytics Metrics Calculation
   const analytics = useMemo(() => {
     const total = records.length;
@@ -492,7 +1555,7 @@ function InventoryAppraisal() {
 
   // Group and sort records
   const groupedAndSortedRecords = useMemo(() => {
-    const filtered = records.filter((r) => {
+    const filtered = authorizedRecords.filter((r) => {
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         query === '' ||
@@ -583,18 +1646,7 @@ function InventoryAppraisal() {
     });
 
     return result;
-  }, [records, searchQuery, divisionTab, categoryFilter, mediumFilter, retentionFilter, frequencyFilter, utilityFilter, locationFilter]);
-
-  const formatDynamicDates = (str: string) => {
-    if (!str) return str;
-    const currYr = new Date().getFullYear();
-    const replaced = str.replace(/Present/gi, String(currYr)).trim();
-    const match = replaced.match(/^(\d{4})\s*-\s*(\d{4})$/);
-    if (match && match[1] === match[2]) {
-      return match[1];
-    }
-    return replaced;
-  };
+  }, [authorizedRecords, searchQuery, divisionTab, categoryFilter, mediumFilter, retentionFilter, frequencyFilter, utilityFilter, locationFilter]);
 
   return (
     <div className="inventory-page">
@@ -1027,6 +2079,17 @@ function InventoryAppraisal() {
 
       {/* Official Form Grid Table View */}
       <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Records Series Inventory Table</span>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Button variant="secondary" onClick={handleExportNapForm1}>
+              <MdFileDownload style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> Export to Excel
+            </Button>
+            <Button variant="secondary" onClick={() => setShowNapFormPreview(true)}>
+              <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print NAP Form 1
+            </Button>
+          </div>
+        </div>
         <div className="official-table-wrapper">
           <table className="official-table">
             <thead>
@@ -1714,46 +2777,44 @@ function InventoryAppraisal() {
             sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
             setShowAnnualNoticeModal(false);
           }}
-          title={`Annual System Retention Notice (${new Date().getFullYear()})`}
-          size="md"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', background: 'rgba(245, 158, 11, 0.1)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-              <MdWarning style={{ fontSize: '2rem', color: '#d97706', flexShrink: 0 }} />
-              <div style={{ fontSize: '0.925rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                <strong>Annual Schedule Notice ({new Date().getFullYear()}):</strong> There are record series in the system requiring your evaluation for retention storage transitions or disposal.
-              </div>
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span>Annual System Retention Audit ({new Date().getFullYear()})</span>
+              <span style={{
+                background: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
+                padding: '0.2rem 0.65rem',
+                borderRadius: '9999px',
+                fontSize: '0.725rem',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}>
+                <span style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: '#dc2626',
+                  boxShadow: '0 0 0 3px rgba(220, 38, 38, 0.25)'
+                }} />
+                Action Required
+              </span>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
-                    <MdArchive style={{ color: '#d97706', fontSize: '1.1rem' }} /> Pending Storage Transition
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Records that completed active desk period</div>
-                </div>
-                <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.6rem', borderRadius: '99px', fontWeight: 800, fontSize: '0.85rem' }}>
-                  {activeDeskEligibleRecords.length}
-                </span>
+          }
+          size="lg"
+          footer={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ fontSize: '1rem' }}>ℹ️</span> Retention notices persist until evaluated or reviewed in Inventory.
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
-                    <MdDeleteSweep style={{ color: '#dc2626', fontSize: '1.1rem' }} /> Eligible for Disposal Evaluation
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Storage records that completed total retention</div>
-                </div>
-                <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '0.2rem 0.6rem', borderRadius: '99px', fontWeight: 800, fontSize: '0.85rem' }}>
-                  {disposalEligibleRecords.length}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', marginTop: '0.5rem' }}>
               <Button
                 variant="secondary"
+                style={{ fontWeight: 600, padding: '0.5rem 1.25rem' }}
                 onClick={() => {
                   const currentYear = new Date().getFullYear();
                   sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
@@ -1762,33 +2823,221 @@ function InventoryAppraisal() {
               >
                 Dismiss Notice
               </Button>
-              {activeDeskEligibleRecords.length > 0 && (
-                <Button
-                  variant="primary"
-                  style={{ background: '#d97706', borderColor: '#d97706' }}
-                  onClick={() => {
-                    const currentYear = new Date().getFullYear();
-                    sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
-                    setShowAnnualNoticeModal(false);
-                    setShowActiveDeskModal(true);
-                  }}
-                >
-                  Evaluate Storage ({activeDeskEligibleRecords.length})
-                </Button>
-              )}
-              {disposalEligibleRecords.length > 0 && (
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    const currentYear = new Date().getFullYear();
-                    sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
-                    setShowAnnualNoticeModal(false);
-                    setShowEvaluateModal(true);
-                  }}
-                >
-                  Evaluate Disposal ({disposalEligibleRecords.length})
-                </Button>
-              )}
+            </div>
+          }
+        >
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Urgent Warning Header Callout */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '1rem',
+              background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.6) 0%, rgba(254, 226, 226, 0.6) 100%)',
+              padding: '1.1rem 1.25rem',
+              borderRadius: '12px',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)'
+            }}>
+              <div style={{
+                background: '#f59e0b',
+                color: '#ffffff',
+                padding: '0.65rem',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.3)'
+              }}>
+                <MdWarning style={{ fontSize: '1.65rem' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ fontSize: '1rem', fontWeight: 800, color: '#92400e', letterSpacing: '-0.01em' }}>
+                  Retention Schedule & Compliance Notice ({new Date().getFullYear()})
+                </div>
+                <div style={{ fontSize: '0.875rem', color: '#78350f', lineHeight: 1.55 }}>
+                  Under <strong>NAP Form 1 / GRDS</strong> guidelines, several record series entries have completed their required active desk period or total retention lifecycle. <strong>Immediate action is required</strong> to transition or dispose of these records to maintain compliance and keep storage records up-to-date.
+                </div>
+              </div>
+            </div>
+
+            {/* Action Sections Container */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              {/* Card 1: Storage Transition */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, rgba(245, 158, 11, 0.02) 100%)',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: activeDeskEligibleRecords.length > 0 ? '1.5px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)',
+                position: 'relative',
+                boxShadow: activeDeskEligibleRecords.length > 0 ? '0 4px 12px rgba(245, 158, 11, 0.08)' : 'none'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: '#b45309',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      fontWeight: 800
+                    }}>
+                      <MdArchive style={{ fontSize: '1.1rem', color: '#d97706' }} />
+                      1. Transfer to Storage
+                    </div>
+                    <span style={{
+                      background: activeDeskEligibleRecords.length > 0 ? '#d97706' : '#9ca3af',
+                      color: '#ffffff',
+                      padding: '0.2rem 0.65rem',
+                      borderRadius: '9999px',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      boxShadow: activeDeskEligibleRecords.length > 0 ? '0 2px 4px rgba(217, 119, 6, 0.3)' : 'none'
+                    }}>
+                      {activeDeskEligibleRecords.length} Due
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '0.925rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                    Pending Storage Transition
+                  </div>
+                  <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+                    Active desk retention period is complete. These records must be moved from active office desks into secondary storage files.
+                  </div>
+                </div>
+
+                {activeDeskEligibleRecords.length > 0 ? (
+                  <Button
+                    variant="primary"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+                      borderColor: '#b45309',
+                      fontWeight: 700,
+                      padding: '0.65rem 1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      boxShadow: '0 3px 8px rgba(217, 119, 6, 0.25)'
+                    }}
+                    onClick={() => {
+                      const currentYear = new Date().getFullYear();
+                      sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
+                      setShowAnnualNoticeModal(false);
+                      setShowActiveDeskModal(true);
+                    }}
+                  >
+                    Evaluate Storage ({activeDeskEligibleRecords.length}) &rarr;
+                  </Button>
+                ) : (
+                  <div style={{
+                    fontSize: '0.8rem',
+                    color: '#10b981',
+                    fontWeight: 700,
+                    padding: '0.5rem',
+                    textAlign: 'center',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    borderRadius: '8px'
+                  }}>
+                    ✓ All Active Desk Storage Up to Date
+                  </div>
+                )}
+              </div>
+
+              {/* Card 2: Disposal Evaluation */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, rgba(239, 68, 68, 0.02) 100%)',
+                padding: '1.25rem',
+                borderRadius: '12px',
+                border: disposalEligibleRecords.length > 0 ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-color)',
+                position: 'relative',
+                boxShadow: disposalEligibleRecords.length > 0 ? '0 4px 12px rgba(239, 68, 68, 0.08)' : 'none'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      color: '#b91c1c',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      fontWeight: 800
+                    }}>
+                      <MdDeleteSweep style={{ fontSize: '1.1rem', color: '#dc2626' }} />
+                      2. Formal Disposal
+                    </div>
+                    <span style={{
+                      background: disposalEligibleRecords.length > 0 ? '#dc2626' : '#9ca3af',
+                      color: '#ffffff',
+                      padding: '0.2rem 0.65rem',
+                      borderRadius: '9999px',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      boxShadow: disposalEligibleRecords.length > 0 ? '0 2px 4px rgba(220, 38, 38, 0.3)' : 'none'
+                    }}>
+                      {disposalEligibleRecords.length} Eligible
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '0.925rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                    Eligible for Disposal Evaluation
+                  </div>
+                  <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
+                    Total retention schedule has expired. Records are now eligible for formal appraisal, disposal authorization, or permanent archiving.
+                  </div>
+                </div>
+
+                {disposalEligibleRecords.length > 0 ? (
+                  <Button
+                    variant="danger"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                      borderColor: '#991b1b',
+                      fontWeight: 700,
+                      padding: '0.65rem 1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      boxShadow: '0 3px 8px rgba(220, 38, 38, 0.25)'
+                    }}
+                    onClick={() => {
+                      const currentYear = new Date().getFullYear();
+                      sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
+                      setShowAnnualNoticeModal(false);
+                      setShowEvaluateModal(true);
+                    }}
+                  >
+                    Evaluate Disposal ({disposalEligibleRecords.length}) &rarr;
+                  </Button>
+                ) : (
+                  <div style={{
+                    fontSize: '0.8rem',
+                    color: '#10b981',
+                    fontWeight: 700,
+                    padding: '0.5rem',
+                    textAlign: 'center',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    borderRadius: '8px'
+                  }}>
+                    ✓ All Disposal Schedules Up to Date
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Modal>
@@ -1873,6 +3122,153 @@ function InventoryAppraisal() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
               <Button variant="secondary" onClick={() => setShowActiveDeskModal(false)}>
                 Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* NAP Form 1 View Modal */}
+      {showNapFormPreview && (
+        <Modal
+          isOpen={showNapFormPreview}
+          onClose={() => setShowNapFormPreview(false)}
+          title={`NAP FORM 1 — Inventory and Appraisal of Records ${divisionTab !== 'ALL' ? `(${divisionTab})` : ''}`}
+          size="xl"
+        >
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                Showing <strong>{activeDivisionRecords.length}</strong> record series entries {divisionTab === 'ALL' ? '(All Divisions)' : `for ${divisionTab}`}.
+              </p>
+
+              {/* View Format Selector */}
+              <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewMode('excel')}
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: previewViewMode === 'excel' ? '#107c41' : 'transparent',
+                    color: previewViewMode === 'excel' ? '#fff' : 'var(--text-secondary)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  📊 Excel Sheet View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewViewMode('form')}
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: previewViewMode === 'form' ? 'var(--color-primary)' : 'transparent',
+                    color: previewViewMode === 'form' ? '#fff' : 'var(--text-secondary)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  📄 Printable Form View
+                </button>
+              </div>
+            </div>
+
+            {/* Real-Time Form Inputs Panel */}
+            <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem 1.15rem', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span>✏️ Real-Time Form Details & Signatures Editor</span>
+                <span style={{ fontSize: '0.775rem', fontWeight: 500, color: 'var(--text-secondary)' }}>(Updates Preview, Print & Excel Export)</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.775rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>7. Person-In-Charge of Files</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Juan Dela Cruz"
+                    value={napFormHeader.personInCharge}
+                    onChange={(e) => setNapFormHeader(prev => ({ ...prev, personInCharge: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 700, borderRadius: '6px', border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.775rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>4. Telephone No.</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. (075) 522-1234"
+                    value={napFormHeader.telephoneNo}
+                    onChange={(e) => setNapFormHeader(prev => ({ ...prev, telephoneNo: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 700, borderRadius: '6px', border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.775rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>5. Email Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. hrmdo@pangasinan.gov.ph"
+                    value={napFormHeader.emailAddress}
+                    onChange={(e) => setNapFormHeader(prev => ({ ...prev, emailAddress: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 700, borderRadius: '6px', border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.775rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>Prepared By (Name & Position)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Maria Santos / Admin Aide"
+                    value={napFormHeader.preparedBy}
+                    onChange={(e) => setNapFormHeader(prev => ({ ...prev, preparedBy: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 700, borderRadius: '6px', border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.775rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>Assisted By</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pedro Reyes / Analyst"
+                    value={napFormHeader.assistedBy}
+                    onChange={(e) => setNapFormHeader(prev => ({ ...prev, assistedBy: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 700, borderRadius: '6px', border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.775rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>Approved By</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dr. Ana Lim / Department Head"
+                    value={napFormHeader.approvedBy}
+                    onChange={(e) => setNapFormHeader(prev => ({ ...prev, approvedBy: e.target.value }))}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.875rem', fontWeight: 700, borderRadius: '6px', border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              dangerouslySetInnerHTML={{
+                __html: previewViewMode === 'excel'
+                  ? buildNapForm1ExcelHtml(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab, napFormHeader)
+                  : buildNapForm1Html(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab, napFormHeader)
+              }}
+              style={{ overflowX: 'auto', border: previewViewMode === 'excel' ? 'none' : '1.5px solid #000', borderRadius: '4px' }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <Button variant="secondary" onClick={() => setShowNapFormPreview(false)}>
+                Close
+              </Button>
+              <Button variant="secondary" onClick={handleExportNapForm1}>
+                <MdFileDownload style={{ marginRight: '0.35rem' }} /> Export to Excel (.xlsx)
+              </Button>
+              <Button variant="primary" onClick={() => handlePrintNapForm1(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab)}>
+                <MdPrint style={{ marginRight: '0.35rem' }} /> Print NAP Form 1
               </Button>
             </div>
           </div>
