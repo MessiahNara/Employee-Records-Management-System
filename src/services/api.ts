@@ -643,6 +643,10 @@ export const documentApi = {
       designatedPositionFunction?: string;
       designatedOrderFrom?: string;
       designatedOrderTo?: string;
+      recalledFrom?: string;
+      recalledTo?: string;
+      recalledOrderFrom?: string;
+      recalledOrderTo?: string;
       appointmentFrom?: string;
       appointmentTo?: string;
       autoRename?: boolean;
@@ -671,6 +675,10 @@ export const documentApi = {
     if (data.designatedPositionFunction) formData.append('designatedPositionFunction', data.designatedPositionFunction);
     if (data.designatedOrderFrom) formData.append('designatedOrderFrom', data.designatedOrderFrom);
     if (data.designatedOrderTo) formData.append('designatedOrderTo', data.designatedOrderTo);
+    if (data.recalledFrom) formData.append('recalledFrom', data.recalledFrom);
+    if (data.recalledTo) formData.append('recalledTo', data.recalledTo);
+    if (data.recalledOrderFrom) formData.append('recalledOrderFrom', data.recalledOrderFrom);
+    if (data.recalledOrderTo) formData.append('recalledOrderTo', data.recalledOrderTo);
     if (data.appointmentFrom) formData.append('appointmentFrom', data.appointmentFrom);
     if (data.appointmentTo) formData.append('appointmentTo', data.appointmentTo);
     if (data.autoRename !== undefined) formData.append('autoRename', String(data.autoRename));
@@ -1050,6 +1058,34 @@ export const inventoryApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+    }),
+  uploadAttachment: async (file: File): Promise<{ attachmentUrl: string; attachmentName: string }> => {
+    const formData = new FormData();
+    formData.append('attachment', file);
+    const url = `${getApiBaseUrl()}/inventory/upload-attachment`;
+    const response = await fetch(url, { method: 'POST', body: formData });
+    if (!response.ok) throw new Error('Failed to upload proof document');
+    const result = await response.json();
+    return { ...result, attachmentUrl: getAbsoluteUrl(result.attachmentUrl) || result.attachmentUrl };
+  },
+  getRequests: () => apiRequest<any[]>('/inventory/requests'),
+  createRequest: (data: { requestType: 'Storage' | 'Disposal'; recordIds: string[]; recordsSummary?: any[]; reason: string; attachmentUrl?: string; attachmentName?: string }) =>
+    apiRequest<any>('/inventory/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  confirmRequest: (id: string, adminReason?: string) =>
+    apiRequest<any>(`/inventory/requests/${id}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminReason }),
+    }),
+  rejectRequest: (id: string, rejectionReason?: string) =>
+    apiRequest<any>(`/inventory/requests/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejectionReason }),
     }),
 };
 

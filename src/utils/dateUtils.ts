@@ -9,6 +9,9 @@
  */
 export function formatDateDDMMYYYY(dateString: string | Date | null | undefined): string {
   if (!dateString) return '—';
+  if (typeof dateString === 'string' && dateString.trim().toLowerCase() === 'until revoked') {
+    return 'Until revoked';
+  }
 
   try {
     const date = new Date(dateString);
@@ -32,6 +35,9 @@ export function formatDateDDMMYYYY(dateString: string | Date | null | undefined)
  */
 export function formatDateMDY(dateString: string | Date | null | undefined): string {
   if (!dateString) return '—';
+  if (typeof dateString === 'string' && dateString.trim().toLowerCase() === 'until revoked') {
+    return 'Until revoked';
+  }
 
   try {
     const date = new Date(dateString);

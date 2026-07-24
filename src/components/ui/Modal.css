@@ -69,8 +69,8 @@
 }
 
 .modal--xl {
-  width: 100%;
-  max-width: 1400px;
+  width: 95vw;
+  max-width: 1550px;
 }
 
 .modal__header {

@@ -52,6 +52,10 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
         designatedPositionFunction: doc.designatedPositionFunction || undefined,
         designatedOrderFrom: doc.designatedOrderFrom || undefined,
         designatedOrderTo: doc.designatedOrderTo || undefined,
+        recalledFrom: doc.recalledFrom || undefined,
+        recalledTo: doc.recalledTo || undefined,
+        recalledOrderFrom: doc.recalledOrderFrom || undefined,
+        recalledOrderTo: doc.recalledOrderTo || undefined,
         appointmentFrom: doc.appointmentFrom || undefined,
         appointmentTo: doc.appointmentTo || undefined,
       }));

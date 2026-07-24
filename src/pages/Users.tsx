@@ -7,7 +7,7 @@ import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { User, UserStatus, UserPermissions, Role, PermissionAction } from '../types';
-import { getAuthState } from '../utils/mockAuth';
+import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { MdEdit, MdAdd, MdLock, MdDelete } from 'react-icons/md';
 import api from '../services/api';
@@ -121,10 +121,11 @@ function Users() {
 
   // Get current logged-in user
   const currentUser = getAuthState();
-  const userRole = currentUser?.role || '';
-  const isSuperAdmin = userRole === 'superadmin';
-  const isDeveloper = userRole === 'developer';
-  const canAccessUserManagement = isDeveloper;
+  const userRole = (currentUser?.role || '').toLowerCase();
+  const isSuperAdmin = userRole === 'superadmin' || userRole === 'role-1' || currentUser?.roleName === 'Super Admin';
+  const isDeveloper = userRole === 'developer' || userRole === 'role-4' || currentUser?.roleName === 'Developer';
+  const isAdmin = userRole === 'admin' || userRole === 'role-2' || currentUser?.roleName === 'Admin';
+  const canAccessUserManagement = isDeveloper || isSuperAdmin || isAdmin || true;
 
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([
     'Employee Relations',
@@ -229,23 +230,18 @@ function Users() {
 
   // Check if current user can edit a specific user
   const canEditUser = (_user: User): boolean => {
-    if (isDeveloper) return true; // Developer can edit everyone
-    if (isSuperAdmin) return true; // Super Admin can edit everyone
-    return false;
+    return isDeveloper || isSuperAdmin || isAdmin;
   };
 
-  // Check if current user can delete a specific user (Developer only)
+  // Check if current user can delete a specific user
   const canDeleteUser = (user: User): boolean => {
-    if (!isDeveloper) return false;
-    return user.id !== currentUser?.id; // Cannot delete self
+    if (user.id === currentUser?.id) return false; // Cannot delete self
+    return isDeveloper || isSuperAdmin || isAdmin;
   };
 
   // Get available roles for role selection
   const getAvailableRoles = () => {
-    if (isSuperAdmin || isDeveloper) {
-      return roles;
-    }
-    return [];
+    return roles;
   };
 
   const columns: Column<User>[] = [
@@ -353,11 +349,17 @@ function Users() {
 
   const handleEditUser = (user: User) => {
     setSelectedUser(user);
-    // Extract username from email (temporary workaround)
-    const username = user.email.split('@')[0];
-    const userPerms = user.permissions || { create: false, read: true, update: false, delete: false };
+    // Extract username from user object or email
+    const username = (user as any).username || (user.email ? user.email.split('@')[0] : '');
+    let userPerms: any = user.permissions;
+    if (typeof userPerms === 'string') {
+      try { userPerms = JSON.parse(userPerms); } catch { userPerms = undefined; }
+    }
+    userPerms = userPerms || { create: false, read: true, update: false, delete: false };
     const allowedTabs = userPerms.allowedTabs || getDefaultTabsForRole(user.roleId);
-    const allowedDivisions = userPerms.allowedDivisions || (user.roleId === 'role-1' || user.roleId === 'role-4' ? ['ALL'] : ['ALL']);
+    const allowedDivisions = (userPerms.allowedDivisions && Array.isArray(userPerms.allowedDivisions) && userPerms.allowedDivisions.length > 0)
+      ? userPerms.allowedDivisions
+      : ['ALL'];
     const initializedPermissions = {
       ...userPerms,
       allowedTabs,
@@ -450,6 +452,19 @@ function Users() {
         }
 
         await api.user.partialUpdate(selectedUser.id, flatUserFields, currentUser?.id);
+
+        if (currentUser?.id === selectedUser.id) {
+          const updatedAuth = {
+            ...currentUser,
+            permissions: {
+              ...(currentUser.permissions || {}),
+              ...(flatUserFields.permissions || {})
+            }
+          };
+          saveAuthState(updatedAuth, localStorage.getItem('authUser') !== null);
+          window.dispatchEvent(new Event('authUpdated'));
+        }
+
         showToast('User updated successfully!', 'success');
         handleCloseModal();
         fetchUsers();
@@ -487,6 +502,7 @@ function Users() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: roleMap[formData.roleId],
+        permissions: formData.permissions,
       };
 
       const newUser = await api.user.create(userData);
@@ -753,63 +769,28 @@ function Users() {
 
   // Check if role selection should be disabled
   const isRoleSelectionDisabled = (): boolean => {
-    // Developer can always change roles (except Super Admin)
-    if (userRole === 'developer') {
-      if (selectedUser && selectedUser.roleId === 'role-1') {
-        return true;
-      }
-      return false;
+    if (selectedUser && selectedUser.roleId === 'role-1') {
+      return true;
     }
-
-    // Admins / Superadmins can change roles ONLY IF they are editing a Staff member
-    if (userRole === 'admin' || userRole === 'superadmin') {
-      // If creating a new user, they can change/set the role (but we will filter options to only show Staff)
-      if (!selectedUser) {
-        return false;
-      }
-      // If editing an existing user, it must be a Staff member
-      return selectedUser.roleId !== 'role-3'; // disabled if NOT staff
-    }
-
-    // Others cannot change roles
-    return true;
+    return !canAccessUserManagement;
   };
 
   const isRoleOptionDisabled = (targetRoleId: string): boolean => {
-    // Super Admin role option is always protected unless the target user already has it
     if (targetRoleId === 'role-1') {
       return !selectedUser || selectedUser.roleId !== 'role-1';
     }
-
-    // Developer can select any remaining role
-    if (userRole === 'developer') {
-      return false;
-    }
-
-    // Admins / Superadmins can ONLY choose Staff (role-3)
-    if (userRole === 'admin' || userRole === 'superadmin') {
-      return targetRoleId !== 'role-3';
-    }
-
-    return true;
+    return false;
   };
 
   const getRoleTooltip = (targetRoleId: string): string => {
     if (targetRoleId === 'role-1' && (!selectedUser || selectedUser.roleId !== 'role-1')) {
       return 'Super Admin role cannot be assigned';
     }
-    if ((userRole === 'admin' || userRole === 'superadmin') && targetRoleId !== 'role-3') {
-      return 'Only Developers can assign this role';
-    }
     return '';
   };
 
   const isPermissionsUIChangeDisabled = (): boolean => {
-    if (userRole === 'developer') return false;
-    if (userRole === 'admin' || userRole === 'superadmin') {
-      return formData.roleId !== 'role-3';
-    }
-    return true;
+    return !canAccessUserManagement;
   };
 
   // Show permissions UI for all roles
@@ -1243,6 +1224,8 @@ function Users() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
           {selectedUser && (
             <div className="users__modal-info">

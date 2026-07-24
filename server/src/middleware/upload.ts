@@ -119,3 +119,23 @@ export const uploadDocumentFile = multer({
   storage: documentStorage,
   fileFilter: documentFileFilter,
 });
+
+const inventoryStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const destDir = path.join(uploadsDir, 'inventory');
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    cb(null, destDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[/\\?%*:|"<>]/g, '-');
+    cb(null, `${base}-${Date.now()}${ext}`);
+  },
+});
+
+export const uploadInventoryAttachment = multer({
+  storage: inventoryStorage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+});

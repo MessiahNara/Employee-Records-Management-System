@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import prisma from '../lib/prisma';
 import { createAuditLog } from '../utils/auditHelper';
+import { uploadInventoryAttachment } from '../middleware/upload';
 import { getRecordLocations, saveRecordLocations, getDispositionProvisions, saveDispositionProvisions, getItemNumbers, saveItemNumbers, getDivisions, saveDivisions, getClassificationCategories, saveClassificationCategories, getSubCategories, saveSubCategories } from './systemSettings.routes';
 
 const router = Router();
@@ -321,6 +322,377 @@ router.post('/disposal-history', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Error logging disposal history:', err);
     res.status(500).json({ error: 'Failed to save disposal history log' });
+  }
+});
+
+// ── Inventory Storage & Disposal Requests ──────────────────────────────────
+export interface InventoryRequest {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  requestType: 'Storage' | 'Disposal';
+  recordIds: string[];
+  recordsSummary: { id: string; seriesTitle: string; division?: string; classificationCategory?: string; inclusiveDates?: string }[];
+  reason: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  adminReason?: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+function getInventoryRequestsFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'inventory_requests.json');
+}
+
+function readInventoryRequests(): InventoryRequest[] {
+  try {
+    const filePath = getInventoryRequestsFilePath();
+    if (!fs.existsSync(filePath)) {
+      saveInventoryRequests([]);
+      return [];
+    }
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const reqs = JSON.parse(raw);
+    return Array.isArray(reqs) ? reqs : [];
+  } catch (err) {
+    console.error('Failed to read inventory requests:', err);
+    return [];
+  }
+}
+
+function saveInventoryRequests(reqs: InventoryRequest[]): void {
+  try {
+    const filePath = getInventoryRequestsFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(reqs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save inventory requests:', err);
+  }
+}
+
+// Upload proof attachment for storage or disposal request
+router.post('/upload-attachment', uploadInventoryAttachment.single('attachment'), (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const relativeUrl = `/uploads/inventory/${req.file.filename}`;
+    res.json({
+      attachmentUrl: relativeUrl,
+      attachmentName: req.file.originalname,
+    });
+  } catch (err: any) {
+    console.error('Error uploading inventory attachment:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload file' });
+  }
+});
+
+// GET all inventory requests
+router.get('/requests', (_req: Request, res: Response) => {
+  const requests = readInventoryRequests();
+  res.json(requests);
+});
+
+// POST submit a storage or disposal request
+router.post('/requests', async (req: Request, res: Response) => {
+  try {
+    const { requestType, recordIds, recordsSummary: clientSummary, reason, attachmentUrl, attachmentName } = req.body;
+    if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
+      return res.status(400).json({ error: 'At least one record series must be selected' });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'A reason for storage/disposal is required' });
+    }
+
+    const { userId, userName } = await getUserInfo(req);
+    const records = readRecords();
+    const targetRecords: any[] = [];
+    (recordIds || []).forEach((id: string) => {
+      const clientItem = Array.isArray(clientSummary) ? clientSummary.find((s: any) => s.id === id) : null;
+      const baseRecord = records.find((r: InventoryRecord) => r.id === id || id.startsWith(`${r.id}-`) || id.startsWith(`${r.id}_`));
+
+      if (clientItem) {
+        targetRecords.push({
+          id: id,
+          seriesTitle: clientItem.seriesTitle || (baseRecord ? baseRecord.seriesTitle : id),
+          division: clientItem.division || (baseRecord ? baseRecord.division : 'General'),
+          classificationCategory: clientItem.classificationCategory || (baseRecord ? baseRecord.classificationCategory : 'General'),
+          inclusiveDates: clientItem.inclusiveDates || (baseRecord ? baseRecord.inclusiveDates : 'N/A'),
+        });
+      } else if (baseRecord) {
+        const yearMatch = id.match(/-yr-(\d{4})/);
+        const year = yearMatch ? yearMatch[1] : null;
+        targetRecords.push({
+          id: id,
+          seriesTitle: year ? `${baseRecord.seriesTitle} (${year})` : baseRecord.seriesTitle,
+          division: baseRecord.division,
+          classificationCategory: baseRecord.classificationCategory,
+          inclusiveDates: year || baseRecord.inclusiveDates,
+        });
+      } else {
+        targetRecords.push({
+          id: id,
+          seriesTitle: id,
+          division: 'General',
+          classificationCategory: 'General',
+          inclusiveDates: 'N/A',
+        });
+      }
+    });
+
+    const newRequest: InventoryRequest = {
+      id: `REQ-${Date.now()}`,
+      requesterId: userId,
+      requesterName: userName,
+      requestType: requestType === 'Disposal' ? 'Disposal' : 'Storage',
+      recordIds,
+      recordsSummary: targetRecords.map((r: any) => ({
+        id: r.id,
+        seriesTitle: r.seriesTitle,
+        division: r.division,
+        classificationCategory: r.classificationCategory || 'General',
+        inclusiveDates: r.inclusiveDates,
+      })),
+      reason: reason.trim(),
+      attachmentUrl,
+      attachmentName,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    const requests = readInventoryRequests();
+    requests.unshift(newRequest);
+    saveInventoryRequests(requests);
+
+    res.status(201).json(newRequest);
+  } catch (err: any) {
+    console.error('Error submitting inventory request:', err);
+    res.status(500).json({ error: err.message || 'Failed to submit request' });
+  }
+});
+
+// POST confirm / approve an inventory request (Admin action)
+router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { adminReason } = req.body;
+    const { userId, userName } = await getUserInfo(req);
+
+    const requests = readInventoryRequests();
+    const reqItem = requests.find((r: InventoryRequest) => r.id === id);
+    if (!reqItem) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+    if (reqItem.status !== 'pending') {
+      return res.status(400).json({ error: 'Request has already been processed' });
+    }
+
+    const records = readRecords();
+    const targetStage = reqItem.requestType === 'Storage' ? 'Storage' : 'Disposed';
+    const logs = readDisposalHistory();
+    const baseTimestamp = Date.now();
+
+    const cleanSeriesTitle = (t?: string) => t ? t.replace(/\s*\(\s*\d{4}(?:\s*-\s*\d{4})?\s*\)$/i, '').trim().toLowerCase() : '';
+
+    // Update retention stage, inclusive dates, and create history logs
+    records.forEach((r: InventoryRecord) => {
+      const isMatched = reqItem.recordIds.some((id: string) => id === r.id || id.startsWith(`${r.id}-`) || id.startsWith(`${r.id}_`)) ||
+        (reqItem.recordsSummary && reqItem.recordsSummary.some((s: any) => cleanSeriesTitle(s.seriesTitle) === cleanSeriesTitle(r.seriesTitle)));
+
+      if (isMatched) {
+        const previousInclusiveDates = r.inclusiveDates || 'N/A';
+
+        if (targetStage === 'Storage') {
+          r.retentionStage = 'Storage';
+          r.storageStartDate = new Date().toISOString();
+          r.frequencyOfUse = 'Inactive';
+
+          logs.unshift({
+            id: `DISP-${baseTimestamp}-${logs.length}`,
+            recordId: r.id,
+            seriesTitle: r.seriesTitle,
+            division: r.division || 'General',
+            classificationCategory: r.classificationCategory || 'General',
+            subCategory: r.subCategory || '',
+            disposedYears: 'Moved to Storage',
+            previousInclusiveDates: previousInclusiveDates,
+            newInclusiveDates: r.inclusiveDates || 'N/A',
+            disposedAt: new Date().toISOString(),
+            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+            reason: reqItem.reason,
+            attachmentUrl: reqItem.attachmentUrl,
+            attachmentName: reqItem.attachmentName,
+          } as any);
+        } else if (targetStage === 'Disposed') {
+          const targetYears: number[] = [];
+
+          reqItem.recordIds.forEach((id: string) => {
+            const yearMatch = id.match(/-yr-(\d{4})/);
+            if (yearMatch) targetYears.push(parseInt(yearMatch[1], 10));
+          });
+
+          if (reqItem.recordsSummary) {
+            reqItem.recordsSummary.forEach((s: any) => {
+              if (s.inclusiveDates && /^\d{4}$/.test(String(s.inclusiveDates).trim())) {
+                targetYears.push(parseInt(String(s.inclusiveDates).trim(), 10));
+              }
+              const titleYearMatch = s.seriesTitle ? s.seriesTitle.match(/\((20\d{2})\)$/) : null;
+              if (titleYearMatch) {
+                targetYears.push(parseInt(titleYearMatch[1], 10));
+              }
+            });
+          }
+
+          let newInclusiveDates = previousInclusiveDates;
+          const uniqueTargetYears = [...new Set(targetYears)].filter((y) => !isNaN(y));
+          const currentYear = new Date().getFullYear();
+
+          if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
+            const yearsStr = String(r.inclusiveDates).trim();
+            const hasPresent = /present/i.test(yearsStr);
+            let allYears: number[] = [];
+
+            // Split on commas first to handle non-contiguous ranges like "2020 - 2021, 2024 - Present"
+            const segments = yearsStr.split(',').map((s) => s.trim());
+            segments.forEach((seg) => {
+              if (seg.includes('-')) {
+                const rangeParts = seg.split('-').map((p) => p.trim());
+                const rangeStart = parseInt(rangeParts[0], 10);
+                let rangeEnd: number;
+                if (/present/i.test(rangeParts[rangeParts.length - 1])) {
+                  rangeEnd = currentYear;
+                } else {
+                  rangeEnd = parseInt(rangeParts[rangeParts.length - 1], 10);
+                }
+                if (!isNaN(rangeStart) && !isNaN(rangeEnd)) {
+                  for (let y = rangeStart; y <= rangeEnd; y++) {
+                    allYears.push(y);
+                  }
+                }
+              } else {
+                const singleYear = parseInt(seg, 10);
+                if (!isNaN(singleYear)) {
+                  allYears.push(singleYear);
+                }
+              }
+            });
+
+            const remainingYears = allYears.filter((y) => !uniqueTargetYears.includes(y)).sort((a, b) => a - b);
+            if (remainingYears.length === 0) {
+              r.retentionStage = 'Disposed';
+              r.inclusiveDates = 'Disposed';
+              newInclusiveDates = 'Disposed';
+            } else {
+              // Group consecutive years into ranges
+              const groups: number[][] = [];
+              let currentGroup: number[] = [remainingYears[0]];
+              for (let i = 1; i < remainingYears.length; i++) {
+                if (remainingYears[i] === remainingYears[i - 1] + 1) {
+                  currentGroup.push(remainingYears[i]);
+                } else {
+                  groups.push(currentGroup);
+                  currentGroup = [remainingYears[i]];
+                }
+              }
+              groups.push(currentGroup);
+
+              // Format each group, applying "Present" to the last group if original had Present
+              const formatted = groups.map((g, idx) => {
+                const isLastGroup = idx === groups.length - 1;
+                const gStart = g[0];
+                const gEnd = g[g.length - 1];
+                if (g.length === 1) {
+                  return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
+                } else {
+                  return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
+                }
+              });
+
+              r.inclusiveDates = formatted.join(', ');
+              newInclusiveDates = r.inclusiveDates;
+            }
+          } else {
+            r.retentionStage = 'Disposed';
+            newInclusiveDates = 'Disposed';
+          }
+
+          const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
+          const disposedYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(', ') : (previousInclusiveDates || 'Disposed');
+
+          logs.unshift({
+            id: `DISP-${baseTimestamp}-${logs.length}`,
+            recordId: r.id,
+            seriesTitle: r.seriesTitle,
+            division: r.division || 'General',
+            classificationCategory: r.classificationCategory || 'General',
+            subCategory: r.subCategory || '',
+            disposedYears: disposedYearsDisplay,
+            previousInclusiveDates: previousInclusiveDates,
+            newInclusiveDates: newInclusiveDates,
+            disposedAt: new Date().toISOString(),
+            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+            reason: reqItem.reason,
+            attachmentUrl: reqItem.attachmentUrl,
+            attachmentName: reqItem.attachmentName,
+          } as any);
+        }
+      }
+    });
+
+    saveRecords(records);
+    saveDisposalHistory(logs);
+
+    reqItem.status = 'approved';
+    reqItem.approvedBy = userId;
+    reqItem.approvedByName = userName;
+    reqItem.adminReason = adminReason || '';
+    reqItem.resolvedAt = new Date().toISOString();
+    saveInventoryRequests(requests);
+
+    res.json(reqItem);
+  } catch (err: any) {
+    console.error('Error confirming inventory request:', err);
+    res.status(500).json({ error: err.message || 'Failed to confirm request' });
+  }
+});
+
+// POST reject an inventory request (Admin action)
+router.post('/requests/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { rejectionReason } = req.body;
+    const { userId, userName } = await getUserInfo(req);
+
+    const requests = readInventoryRequests();
+    const reqItem = requests.find(r => r.id === id);
+    if (!reqItem) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+    if (reqItem.status !== 'pending') {
+      return res.status(400).json({ error: 'Request has already been processed' });
+    }
+
+    reqItem.status = 'rejected';
+    reqItem.approvedBy = userId;
+    reqItem.approvedByName = userName;
+    reqItem.rejectionReason = rejectionReason?.trim() || 'Request rejected by admin';
+    reqItem.resolvedAt = new Date().toISOString();
+    saveInventoryRequests(requests);
+
+    res.json(reqItem);
+  } catch (err: any) {
+    console.error('Error rejecting inventory request:', err);
+    res.status(500).json({ error: err.message || 'Failed to reject request' });
   }
 });
 

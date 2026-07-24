@@ -592,7 +592,7 @@ function EmployeeDetails() {
                 <div className="employee-details__detailed-field">
                   <label className="employee-details__detailed-label">Duration To</label>
                   <p className="employee-details__detailed-value">
-                    {employee.detailedOrderTo ? formatDateMDY(employee.detailedOrderTo) : '—'}
+                    {employee.detailedOrderTo === 'Until revoked' ? 'Until revoked' : (employee.detailedOrderTo ? formatDateMDY(employee.detailedOrderTo) : '—')}
                   </p>
                 </div>
               </div>
@@ -620,7 +620,35 @@ function EmployeeDetails() {
                 <div className="employee-details__detailed-field">
                   <label className="employee-details__detailed-label">Duration To</label>
                   <p className="employee-details__detailed-value">
-                    {(employee as any).designatedOrderTo ? formatDateMDY((employee as any).designatedOrderTo) : '—'}
+                    {(employee as any).designatedOrderTo === 'Until revoked' ? 'Until revoked' : ((employee as any).designatedOrderTo ? formatDateMDY((employee as any).designatedOrderTo) : '—')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Recalled Section (AO Type = Recalled) */}
+          {(employee as any).aoType === 'Recalled' && (
+            <div className="employee-details__detailed-section">
+              <div className="employee-details__detailed-grid">
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Recalled from</label>
+                  <p className="employee-details__detailed-value">{(employee as any).recalledFrom || '—'}</p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Recalled to</label>
+                  <p className="employee-details__detailed-value">{(employee as any).recalledTo || '—'}</p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Duration From</label>
+                  <p className="employee-details__detailed-value">
+                    {(employee as any).recalledOrderFrom ? formatDateMDY((employee as any).recalledOrderFrom) : '—'}
+                  </p>
+                </div>
+                <div className="employee-details__detailed-field">
+                  <label className="employee-details__detailed-label">Duration To</label>
+                  <p className="employee-details__detailed-value">
+                    {(employee as any).recalledOrderTo === 'Until revoked' ? 'Until revoked' : ((employee as any).recalledOrderTo ? formatDateMDY((employee as any).recalledOrderTo) : '—')}
                   </p>
                 </div>
               </div>

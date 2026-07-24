@@ -61,30 +61,51 @@ console.log(`  - PORT: ${PORT}`);
 console.log(`  - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`  - UPLOADS_DIR: ${process.env.UPLOADS_DIR}`);
 try {
-  const srcF = 'c:\\Employee Records Management System\\NAP FORM 1 (Sample Format).xlsx';
+  const srcF_sample = 'c:\\Employee Records Management System\\NAP FORM 1 (Sample Format).xlsx';
+  const srcF_format = 'c:\\Employee Records Management System\\NAP FORM 1 (FORMAT).xlsx';
+  
   const dest1 = 'c:\\Employee Records Management System\\public\\nap_template.xlsx';
   const dest2 = 'c:\\Employee Records Management System\\public\\template.xlsx';
   const dest3 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (FORMAT).xlsx';
   const dest4 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (Sample Format).xlsx';
-  if (fs.existsSync(srcF)) {
-    fs.copyFileSync(srcF, dest1);
-    fs.copyFileSync(srcF, dest2);
-    fs.copyFileSync(srcF, dest3);
-    fs.copyFileSync(srcF, dest4);
-    console.log('[server] Copied 174KB master template file to public/ directory');
+  
+  if (fs.existsSync(srcF_sample)) {
+    fs.copyFileSync(srcF_sample, dest2); // Keep dashboard reports using sample format
+    fs.copyFileSync(srcF_sample, dest4);
+  }
+  if (fs.existsSync(srcF_format)) {
+    fs.copyFileSync(srcF_format, dest1); // Inventory apprasial uses FORMAT
+    fs.copyFileSync(srcF_format, dest3); 
+    console.log('[server] Copied templates to public/ directory');
   }
 } catch (e) {
   console.error('[server] Copy template error:', e);
 }
 
-// Serve root NAP FORM 1 (Sample Format).xlsx directly
+// Serve root NAP FORM 1 (FORMAT).xlsx directly
 app.get('/api/nap-template', (req: Request, res: Response) => {
-  const filePath = path.resolve('c:/Employee Records Management System/NAP FORM 1 (Sample Format).xlsx');
+  const filePath = path.resolve('c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx');
   if (fs.existsSync(filePath)) {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.sendFile(filePath);
   } else {
     res.status(404).json({ message: 'Template file not found' });
+  }
+});
+
+app.get('/api/dump-template', async (req: Request, res: Response) => {
+  try {
+    const fs = require('fs');
+    const JSZip = require('jszip');
+    const data = fs.readFileSync('c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx');
+    const zip = await JSZip.loadAsync(data);
+    const sheet = await zip.file('xl/worksheets/sheet1.xml').async('text');
+    let strings = '';
+    const sf = zip.file('xl/sharedStrings.xml');
+    if (sf) strings = await sf.async('text');
+    res.json({ sheet, strings });
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

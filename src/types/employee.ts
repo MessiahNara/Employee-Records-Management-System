@@ -15,7 +15,7 @@ export interface Employee {
   appointmentTo?: string;
   aoNumber?: string;
   aoYear?: string;
-  aoType?: 'Detailed' | 'Designated';
+  aoType?: 'Detailed' | 'Designated' | 'Recalled';
   status: EmployeeStatus;
   positionFunction: string;
   dateOfEmployment: string;
@@ -29,6 +29,10 @@ export interface Employee {
   designatedPositionFunction?: string;
   designatedOrderFrom?: string;
   designatedOrderTo?: string;
+  recalledFrom?: string;
+  recalledTo?: string;
+  recalledOrderFrom?: string;
+  recalledOrderTo?: string;
   fileboxLocation?: string;
   file201Status?: string;
   profilePicture?: string;
@@ -56,7 +60,7 @@ export interface EmployeeFormData {
   appointmentTo: string;
   aoNumber: string;
   aoYear: string;
-  aoType: 'Detailed' | 'Designated' | '';
+  aoType: 'Detailed' | 'Designated' | 'Recalled' | '';
   status: EmployeeStatus;
   positionFunction: string;
   dateOfEmployment: string;
@@ -70,6 +74,10 @@ export interface EmployeeFormData {
   designatedPositionFunction: string;
   designatedOrderFrom: string;
   designatedOrderTo: string;
+  recalledFrom: string;
+  recalledTo: string;
+  recalledOrderFrom: string;
+  recalledOrderTo: string;
   fileboxLocation: string;
   file201Status: string;
 }

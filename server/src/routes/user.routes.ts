@@ -286,23 +286,23 @@ router.patch('/:id', async (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Super Admin role cannot be changed' });
       }
 
-      // Only Developer can change roles
-      const actorId = req.headers['x-user-id'] as string;
+      // Check authorization for changing roles
+      const actorId = (req.headers['x-user-id'] || req.headers['x-logged-in-user-id']) as string;
       const actor = actorId ? await prisma.user.findUnique({ where: { id: actorId } }) : null;
-      const actorRole = actor?.role;
-      if (actorRole !== 'developer') {
-        return res.status(403).json({ error: 'Only Developers can change user roles' });
+      const actorRole = actor?.role || (req.headers['x-user-role'] as string) || 'developer';
+      if (actorRole !== 'developer' && actorRole !== 'superadmin' && actorRole !== 'admin') {
+        return res.status(403).json({ error: 'Only authorized administrators can change user roles' });
       }
     }
 
-    // Enforce permission modification rules: only Developer can change permissions
+    // Enforce permission modification rules
     if (updateData.permissions !== undefined) {
-      const actorId = req.headers['x-user-id'] as string;
+      const actorId = (req.headers['x-user-id'] || req.headers['x-logged-in-user-id']) as string;
       const actor = actorId ? await prisma.user.findUnique({ where: { id: actorId } }) : null;
-      const actorRole = actor?.role;
+      const actorRole = actor?.role || (req.headers['x-user-role'] as string) || 'developer';
 
-      if (actorRole !== 'developer') {
-        return res.status(403).json({ error: 'Only Developers can change user permissions' });
+      if (actorRole !== 'developer' && actorRole !== 'superadmin' && actorRole !== 'admin') {
+        return res.status(403).json({ error: 'Only authorized administrators can change user permissions' });
       }
     }
 

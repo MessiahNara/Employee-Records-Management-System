@@ -7,11 +7,11 @@ import Modal from '../components/ui/Modal';
 import CreateRecordSeriesModal, { RecordSeriesFormData } from '../components/CreateRecordSeriesModal';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
-import { MdAdd, MdDelete, MdDeleteOutline, MdEdit, MdAssignment, MdCheckCircle, MdHourglassTop, MdArchive, MdWarning, MdHistory, MdInventory, MdDeleteSweep, MdPrint, MdFileDownload } from 'react-icons/md';
+import { MdAdd, MdDelete, MdDeleteOutline, MdEdit, MdAssignment, MdCheckCircle, MdHourglassTop, MdArchive, MdWarning, MdHistory, MdInventory, MdDeleteSweep, MdPrint, MdFileDownload, MdInfoOutline } from 'react-icons/md';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { getAuthState } from '../utils/mockAuth';
+import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import './InventoryAppraisal.css';
 
 export interface InventoryRecord {
@@ -185,6 +185,44 @@ export function getOngoingDisposalInfo(datesStr: string, totalRetention: number,
   };
 }
 
+export function computeDisposalPeriodChange(datesStr: string): string {
+  if (!datesStr) return 'Disposed';
+
+  const matches = datesStr.match(/\b\d{4}\b/g);
+  if (!matches || matches.length === 0) return `${datesStr} → Disposed`;
+
+  const years = matches.map(Number);
+  const minYear = Math.min(...years);
+  const maxYear = Math.max(...years);
+
+  if (datesStr.toLowerCase().includes('present')) {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    return `${datesStr} → ${nextYear} - Present`;
+  }
+
+  if (years.length === 1 || minYear === maxYear) {
+    return `${minYear} → Disposed`;
+  }
+
+  const newMinYear = minYear + 1;
+  if (newMinYear <= maxYear) {
+    return `${minYear} - ${maxYear} → ${newMinYear} - ${maxYear}`;
+  }
+
+  return `${datesStr} → Disposed`;
+}
+
+export function computeStoragePeriodChange(datesStr: string): string {
+  if (!datesStr) return 'Active → Storage';
+  return `${datesStr} (Active) → Storage`;
+}
+
+export function cleanSeriesTitle(title?: string): string {
+  if (!title) return '';
+  return title.replace(/\s*\(\s*\d{4}(?:\s*-\s*\d{4})?\s*\)$/i, '').trim();
+}
+
 function InventoryAppraisal() {
   const [records, setRecords] = useState<InventoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -221,16 +259,133 @@ function InventoryAppraisal() {
   const [disposalLogs, setDisposalLogs] = useState<any[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
 
+  // ── Inventory Storage & Disposal Request state ───────────────────────
+  const [inventoryRequests, setInventoryRequests] = useState<any[]>([]);
+  const [selectedRequestDetails, setSelectedRequestDetails] = useState<any | null>(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestType, setRequestType] = useState<'Storage' | 'Disposal'>('Storage');
+  const [targetRequestRecords, setTargetRequestRecords] = useState<InventoryRecord[]>([]);
+  const [requestReason, setRequestReason] = useState('');
+  const [requestFile, setRequestFile] = useState<File | null>(null);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+  // ── 3-Tab Storage Management Modal state ──────────────────────────────
+  const [showStorageManagementModal, setShowStorageManagementModal] = useState(false);
+  const [storageModalTab, setStorageModalTab] = useState<'confirmation' | 'requests' | 'history'>('confirmation');
+  const [stagedStorageRecords, setStagedStorageRecords] = useState<InventoryRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('staged_storage_records');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [stagedSelectedIds, setStagedSelectedIds] = useState<string[]>([]);
+  const [storageReason, setStorageReason] = useState('');
+  const [storageFile, setStorageFile] = useState<File | null>(null);
+  const [isSendingStorageRequest, setIsSendingStorageRequest] = useState(false);
+
+  // ── 3-Tab Disposal Management Modal state ──────────────────────────────
+  const [showDisposalManagementModal, setShowDisposalManagementModal] = useState(false);
+  const [disposalModalTab, setDisposalModalTab] = useState<'confirmation' | 'requests' | 'history'>('confirmation');
+  const [stagedDisposalRecords, setStagedDisposalRecords] = useState<InventoryRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('staged_disposal_records');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [stagedDisposalSelectedIds, setStagedDisposalSelectedIds] = useState<string[]>([]);
+  const [disposalReason, setDisposalReason] = useState('');
+  const [disposalFile, setDisposalFile] = useState<File | null>(null);
+  const [isSendingDisposalRequest, setIsSendingDisposalRequest] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('staged_storage_records', JSON.stringify(stagedStorageRecords));
+    } catch (e) {
+      console.error('Failed to persist staged storage records', e);
+    }
+  }, [stagedStorageRecords]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('staged_disposal_records', JSON.stringify(stagedDisposalRecords));
+    } catch (e) {
+      console.error('Failed to persist staged disposal records', e);
+    }
+  }, [stagedDisposalRecords]);
+
+  // Send request pop-out modal states
+  const [showSendStoragePopout, setShowSendStoragePopout] = useState(false);
+  const [showSendDisposalPopout, setShowSendDisposalPopout] = useState(false);
+
+  // Admin Confirmation Modal state
+  const [showPendingRequestsModal, setShowPendingRequestsModal] = useState(false);
+  const [adminDecisionReason, setAdminDecisionReason] = useState('');
+  const [isProcessingAdminDecision, setIsProcessingAdminDecision] = useState(false);
+
   const { showToast } = useToast();
 
-  const currentUser = getAuthState();
+  const [currentUser, setCurrentUser] = useState(getAuthState());
+
+  useEffect(() => {
+    const handleAuthUpdate = () => {
+      setCurrentUser(getAuthState());
+    };
+    window.addEventListener('profilePictureUpdated', handleAuthUpdate);
+    window.addEventListener('authUpdated', handleAuthUpdate);
+
+    const auth = getAuthState();
+    if (auth?.id) {
+      api.user.getById(auth.id).then((freshUser) => {
+        if (freshUser && freshUser.permissions) {
+          const updatedAuth = { ...auth, permissions: freshUser.permissions };
+          saveAuthState(updatedAuth, localStorage.getItem('authUser') !== null);
+          setCurrentUser(updatedAuth);
+        }
+      }).catch((err) => console.warn('Sync permissions error:', err));
+    }
+
+    return () => {
+      window.removeEventListener('profilePictureUpdated', handleAuthUpdate);
+      window.removeEventListener('authUpdated', handleAuthUpdate);
+    };
+  }, []);
+
+  const [systemDivisions, setSystemDivisions] = useState<string[]>([
+    'Employee Relations',
+    'Administrative Division',
+    'Finance & Accounting',
+    'Human Resource Development',
+    'Medical & Nursing Services'
+  ]);
+
+  useEffect(() => {
+    api.systemSettings.get().then(res => {
+      if (res?.divisions && Array.isArray(res.divisions) && res.divisions.length > 0) {
+        setSystemDivisions(res.divisions);
+      }
+    }).catch(err => console.warn('Could not load system divisions:', err));
+  }, []);
+
+  const userPermissions = useMemo(() => {
+    let p = currentUser?.permissions;
+    if (typeof p === 'string') {
+      try { p = JSON.parse(p); } catch { p = null; }
+    }
+    return p;
+  }, [currentUser]);
+
   const allowedDivisions = useMemo(() => {
     if (!currentUser) return ['ALL'];
-    if (currentUser.role === 'superadmin' || currentUser.role === 'developer') return ['ALL'];
-    const divs = currentUser.permissions?.allowedDivisions;
-    if (!divs || divs.length === 0 || divs.includes('ALL')) return ['ALL'];
-    return divs;
-  }, [currentUser]);
+    const divs = userPermissions?.allowedDivisions;
+    if (divs && Array.isArray(divs) && divs.length > 0 && !divs.includes('ALL')) {
+      return divs;
+    }
+    return ['ALL'];
+  }, [currentUser, userPermissions]);
 
   const hasFullDivisionAccess = allowedDivisions.includes('ALL');
 
@@ -250,23 +405,27 @@ function InventoryAppraisal() {
     }
   }, [allowedDivisions, hasFullDivisionAccess]);
 
-  // Dynamic division tabs options from records
+  // Dynamic division tabs options from records & system settings
   const divisionTabs = useMemo(() => {
     const presentDivs = authorizedRecords.map((r) => r.division).filter(Boolean) as string[];
-    const uniqueDivs = Array.from(new Set(presentDivs)).sort((a, b) => a.localeCompare(b));
+    const allKnownDivs = Array.from(new Set([...systemDivisions, ...presentDivs])).sort((a, b) => a.localeCompare(b));
     if (!hasFullDivisionAccess) {
-      // Include all user's allowed divisions even if currently 0 records
-      const merged = Array.from(new Set([...allowedDivisions, ...uniqueDivs])).sort((a, b) => a.localeCompare(b));
+      const merged = Array.from(new Set([...allowedDivisions, ...allKnownDivs.filter(d => allowedDivisions.some(ad => ad.trim().toLowerCase() === d.trim().toLowerCase()))])).sort((a, b) => a.localeCompare(b));
       return merged;
     }
-    return ['ALL', ...uniqueDivs];
-  }, [authorizedRecords, allowedDivisions, hasFullDivisionAccess]);
+    return ['ALL', ...allKnownDivs];
+  }, [authorizedRecords, allowedDivisions, hasFullDivisionAccess, systemDivisions]);
 
   const [showActiveDeskModal, setShowActiveDeskModal] = useState(false);
+  const [singleStorageRecord, setSingleStorageRecord] = useState<InventoryRecord | null>(null);
   const [showAnnualNoticeModal, setShowAnnualNoticeModal] = useState(false);
   const [showStorageHistoryModal, setShowStorageHistoryModal] = useState(false);
   const [showDisposalHistoryModal, setShowDisposalHistoryModal] = useState(false);
   const [storageSearchQuery, setStorageSearchQuery] = useState('');
+  const [historyDivisionFilter, setHistoryDivisionFilter] = useState('ALL');
+  const [historyCategoryFilter, setHistoryCategoryFilter] = useState('ALL');
+  const [storageDivisionFilter, setStorageDivisionFilter] = useState('ALL');
+  const [storageCategoryFilter, setStorageCategoryFilter] = useState('ALL');
 
   const storageLogs = useMemo(() => {
     return disposalLogs.filter(l => String(l.disposedYears).includes('Storage'));
@@ -276,13 +435,60 @@ function InventoryAppraisal() {
     return disposalLogs.filter(l => !String(l.disposedYears).includes('Storage'));
   }, [disposalLogs]);
 
+  const scopeFilteredRecords = useMemo(() => {
+    if (divisionTab === 'ALL') return authorizedRecords;
+    return authorizedRecords.filter((r) => (r.division || '').trim().toLowerCase() === divisionTab.trim().toLowerCase());
+  }, [authorizedRecords, divisionTab]);
+
+  const analytics = useMemo(() => {
+    const total = scopeFilteredRecords.length;
+    const permanent = scopeFilteredRecords.filter(r => r.appraisalCategory === 'Permanent').length;
+    
+    // Medium breakdown
+    const mediumCounts = { Paper: 0, Digital: 0, 'Mixed Media': 0 };
+    scopeFilteredRecords.forEach(r => {
+      if (r.medium === 'Paper') mediumCounts.Paper++;
+      else if (r.medium === 'Digital') mediumCounts.Digital++;
+      else if (r.medium === 'Mixed Media') mediumCounts['Mixed Media']++;
+    });
+
+    // Frequency breakdown
+    const frequencyCounts = { Active: 0, Inactive: 0, 'As the need arises': 0 };
+    scopeFilteredRecords.forEach(r => {
+      if (r.frequencyOfUse === 'Active') frequencyCounts.Active++;
+      else if (r.frequencyOfUse === 'Inactive') frequencyCounts.Inactive++;
+      else if (r.frequencyOfUse === 'As the need arises') frequencyCounts['As the need arises']++;
+    });
+
+    // Utility breakdown
+    const utilityCounts: Record<string, number> = { Adm: 0, Fiscal: 0, Legal: 0, Arc: 0, 'Mixed Utility': 0 };
+    scopeFilteredRecords.forEach(r => {
+      const u = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+      if (utilityCounts[u] !== undefined) utilityCounts[u]++;
+    });
+
+    // Division breakdown
+    const divCounts: Record<string, number> = {};
+    scopeFilteredRecords.forEach(r => {
+      const d = r.division || 'General';
+      divCounts[d] = (divCounts[d] || 0) + 1;
+    });
+    const divisionStats = Object.keys(divCounts).map(d => ({
+      name: d,
+      count: divCounts[d],
+      percentage: total > 0 ? Math.round((divCounts[d] / total) * 100) : 0,
+    })).sort((a, b) => b.count - a.count);
+
+    return { total, permanent, mediumCounts, frequencyCounts, utilityCounts, divisionStats };
+  }, [scopeFilteredRecords]);
+
   const activeDeskEligibleRecords = useMemo(() => {
-    return records.filter(r => getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage) !== null);
-  }, [records]);
+    return scopeFilteredRecords.filter(r => getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage) !== null);
+  }, [scopeFilteredRecords]);
 
   const disposalEligibleRecords = useMemo(() => {
-    return records.filter(r => getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse) !== null);
-  }, [records]);
+    return scopeFilteredRecords.filter(r => getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse) !== null);
+  }, [scopeFilteredRecords]);
 
   useEffect(() => {
     if (records.length > 0) {
@@ -294,36 +500,70 @@ function InventoryAppraisal() {
     }
   }, [records, activeDeskEligibleRecords.length, disposalEligibleRecords.length]);
 
-  const handleMoveToStorage = async (record: InventoryRecord) => {
-    try {
-      await api.inventory.update(record.id, {
-        ...record,
-        retentionStage: 'Storage',
-        storageStartDate: new Date().toISOString(),
-        frequencyOfUse: 'Inactive',
-      });
+  const handleMoveToStorage = (record: InventoryRecord) => {
+    setStagedStorageRecords((prev) => {
+      if (prev.some((r) => r.id === record.id)) return prev;
+      return [...prev, record];
+    });
+    showToast(`"${record.seriesTitle}" staged in Storage Management under Confirmation of Storage tab.`, 'info');
+  };
 
-      try {
-        await api.inventory.logDisposal({
-          recordId: record.id,
-          seriesTitle: record.seriesTitle,
-          division: record.division,
-          classificationCategory: record.classificationCategory,
-          subCategory: record.subCategory,
-          disposedYears: 'Moved to Storage',
-          previousInclusiveDates: record.inclusiveDates,
-          newInclusiveDates: record.inclusiveDates,
-          disposedBy: 'System Admin',
-        });
-      } catch (logErr) {
-        console.error('Failed to log storage transition history:', logErr);
+  const handleSendStorageConfirmation = async () => {
+    if (!storageReason.trim()) {
+      showToast('Please enter a reason for storage confirmation.', 'error');
+      return;
+    }
+    if (stagedSelectedIds.length === 0) {
+      showToast('Please select at least one record to send for storage confirmation.', 'error');
+      return;
+    }
+
+    setIsSendingStorageRequest(true);
+    try {
+      let attachmentUrl = undefined;
+      let attachmentName = undefined;
+
+      if (storageFile) {
+        try {
+          const fileRes = await api.inventory.uploadAttachment(storageFile);
+          attachmentUrl = fileRes.attachmentUrl;
+          attachmentName = fileRes.attachmentName;
+        } catch (uploadErr: any) {
+          showToast(`File upload warning: ${uploadErr.message}. Submitting without attachment.`, 'info');
+        }
       }
 
-      showToast(`Record "${record.seriesTitle}" transitioned to Storage! Storage retention period initiated.`, 'success');
-      fetchRecords();
-      fetchDisposalHistory();
+      const selectedStorageSummary = stagedStorageRecords
+        .filter((r) => stagedSelectedIds.includes(r.id))
+        .map((r) => ({
+          id: r.id,
+          seriesTitle: r.seriesTitle,
+          division: r.division || 'General',
+          classificationCategory: r.classificationCategory || 'General',
+          inclusiveDates: r.inclusiveDates,
+        }));
+
+      await api.inventory.createRequest({
+        requestType: 'Storage',
+        recordIds: stagedSelectedIds,
+        recordsSummary: selectedStorageSummary,
+        reason: storageReason,
+        attachmentUrl,
+        attachmentName,
+      });
+
+      showToast('Storage confirmation request sent successfully!', 'success');
+      setStagedStorageRecords((prev) => prev.filter((r) => !stagedSelectedIds.includes(r.id)));
+      setStagedSelectedIds([]);
+      setStorageReason('');
+      setStorageFile(null);
+      setShowSendStoragePopout(false);
+      setStorageModalTab('requests');
+      fetchInventoryRequests();
     } catch (err: any) {
-      showToast(err.message || 'Failed to update record stage.', 'error');
+      showToast(err.message || 'Failed to send storage request.', 'error');
+    } finally {
+      setIsSendingStorageRequest(false);
     }
   };
 
@@ -364,10 +604,199 @@ function InventoryAppraisal() {
     }
   };
 
+  const fetchInventoryRequests = async () => {
+    try {
+      const data = await api.inventory.getRequests();
+      setInventoryRequests(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error('Failed to fetch inventory requests:', err);
+    }
+  };
+
   useEffect(() => {
     fetchRecords();
     fetchDisposalHistory();
+    fetchInventoryRequests();
   }, []);
+
+  const pendingRequests = useMemo(() => {
+    return inventoryRequests.filter((r) => r.status === 'pending');
+  }, [inventoryRequests]);
+
+  const pendingStorageRequests = useMemo(() => {
+    return inventoryRequests.filter((r) => r.status === 'pending' && r.requestType === 'Storage');
+  }, [inventoryRequests]);
+
+  const pendingDisposalRequests = useMemo(() => {
+    return inventoryRequests.filter((r) => r.status === 'pending' && r.requestType === 'Disposal');
+  }, [inventoryRequests]);
+
+  const openStorageRequestModal = (recs: InventoryRecord[]) => {
+    setStagedStorageRecords((prev) => {
+      const newRecs = recs.filter((r) => !prev.some((p) => p.id === r.id));
+      return [...prev, ...newRecs];
+    });
+    setStorageModalTab('confirmation');
+    setShowStorageManagementModal(true);
+  };
+
+  const openDisposalRequestModal = (recs: InventoryRecord[]) => {
+    recs.forEach((record) => {
+      setStagedDisposalRecords((prev) => {
+        if (prev.some((r) => r.id === record.id)) return prev;
+        return [...prev, record];
+      });
+    });
+    showToast(`${recs.length} record(s) staged in Disposal Management under Confirmation of Disposal tab.`, 'info');
+  };
+
+  const handleSendDisposalConfirmation = async () => {
+    if (!disposalReason.trim()) {
+      showToast('Please enter a reason for disposal confirmation.', 'error');
+      return;
+    }
+    if (stagedDisposalSelectedIds.length === 0) {
+      showToast('Please select at least one record to send for disposal confirmation.', 'error');
+      return;
+    }
+
+    setIsSendingDisposalRequest(true);
+    try {
+      let attachmentUrl = undefined;
+      let attachmentName = undefined;
+
+      if (disposalFile) {
+        try {
+          const fileRes = await api.inventory.uploadAttachment(disposalFile);
+          attachmentUrl = fileRes.attachmentUrl;
+          attachmentName = fileRes.attachmentName;
+        } catch (uploadErr: any) {
+          showToast(`File upload warning: ${uploadErr.message}. Submitting without attachment.`, 'info');
+        }
+      }
+
+      const selectedDisposalSummary = stagedDisposalRecords
+        .filter((r) => stagedDisposalSelectedIds.includes(r.id))
+        .map((r) => ({
+          id: r.id,
+          seriesTitle: r.seriesTitle,
+          division: r.division || 'General',
+          classificationCategory: r.classificationCategory || 'General',
+          inclusiveDates: r.inclusiveDates,
+        }));
+
+      await api.inventory.createRequest({
+        requestType: 'Disposal',
+        recordIds: stagedDisposalSelectedIds,
+        recordsSummary: selectedDisposalSummary,
+        reason: disposalReason,
+        attachmentUrl,
+        attachmentName,
+      });
+
+      showToast('Disposal confirmation request sent successfully!', 'success');
+      setStagedDisposalRecords((prev) => prev.filter((r) => !stagedDisposalSelectedIds.includes(r.id)));
+      setStagedDisposalSelectedIds([]);
+      setDisposalReason('');
+      setDisposalFile(null);
+      setShowSendDisposalPopout(false);
+      setDisposalModalTab('requests');
+      fetchInventoryRequests();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to send disposal request.', 'error');
+    } finally {
+      setIsSendingDisposalRequest(false);
+    }
+  };
+
+  const handleSubmitInventoryRequest = async () => {
+    if (!requestReason.trim()) {
+      showToast('Please enter a reason for storage/disposal.', 'error');
+      return;
+    }
+    if (targetRequestRecords.length === 0) {
+      showToast('No record series selected for request.', 'error');
+      return;
+    }
+
+    setIsSubmittingRequest(true);
+    try {
+      let attachmentUrl = undefined;
+      let attachmentName = undefined;
+
+      if (requestFile) {
+        try {
+          const fileRes = await api.inventory.uploadAttachment(requestFile);
+          attachmentUrl = fileRes.attachmentUrl;
+          attachmentName = fileRes.attachmentName;
+        } catch (uploadErr: any) {
+          showToast(`File upload warning: ${uploadErr.message}. Submitting without attachment.`, 'info');
+        }
+      }
+
+      const selectedRequestSummary = targetRequestRecords.map((r) => ({
+        id: r.id,
+        seriesTitle: r.seriesTitle,
+        division: r.division || 'General',
+        classificationCategory: r.classificationCategory || 'General',
+        inclusiveDates: r.inclusiveDates,
+      }));
+
+      await api.inventory.createRequest({
+        requestType,
+        recordIds: targetRequestRecords.map((r) => r.id),
+        recordsSummary: selectedRequestSummary,
+        reason: requestReason,
+        attachmentUrl,
+        attachmentName,
+      });
+
+      showToast(`Request for ${requestType} submitted successfully! Awaiting Admin confirmation.`, 'success');
+      setShowRequestModal(false);
+      setRequestReason('');
+      setRequestFile(null);
+      setTargetRequestRecords([]);
+      fetchInventoryRequests();
+    } catch (err: any) {
+      showToast(err.message || `Failed to submit ${requestType} request.`, 'error');
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
+
+  const handleAdminConfirmRequest = async (requestId: string) => {
+    setIsProcessingAdminDecision(true);
+    try {
+      await api.inventory.confirmRequest(requestId, adminDecisionReason);
+      showToast('Request confirmed! Inventory records updated and logged to history.', 'success');
+      setAdminDecisionReason('');
+      fetchRecords();
+      fetchDisposalHistory();
+      fetchInventoryRequests();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to confirm request.', 'error');
+    } finally {
+      setIsProcessingAdminDecision(false);
+    }
+  };
+
+  const handleAdminRejectRequest = async (requestId: string) => {
+    if (!adminDecisionReason.trim()) {
+      showToast('Please provide a reason for rejecting the request.', 'error');
+      return;
+    }
+    setIsProcessingAdminDecision(true);
+    try {
+      await api.inventory.rejectRequest(requestId, adminDecisionReason);
+      showToast('Request rejected.', 'info');
+      setAdminDecisionReason('');
+      fetchInventoryRequests();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to reject request.', 'error');
+    } finally {
+      setIsProcessingAdminDecision(false);
+    }
+  };
 
   const handleCreateNew = () => {
     setEditingRecord(null);
@@ -451,10 +880,42 @@ function InventoryAppraisal() {
   };
 
   const handleSaveRecord = async (data: RecordSeriesFormData) => {
+    const targetStage = data.retentionStage;
+
     if (editingRecord?.id) {
+      const oldStage = editingRecord.retentionStage || 'Active';
+
+      if ((targetStage === 'Storage' || targetStage === 'Disposed') && targetStage !== oldStage) {
+        // Keep old stage in DB for now and trigger request modal
+        const payloadWithoutStageChange = { ...data, retentionStage: oldStage };
+        await api.inventory.update(editingRecord.id, payloadWithoutStageChange);
+
+        const recordToRequest = { ...editingRecord, ...payloadWithoutStageChange };
+        if (targetStage === 'Storage') {
+          openStorageRequestModal([recordToRequest]);
+        } else {
+          openDisposalRequestModal([recordToRequest]);
+        }
+        showToast(`Record updated. Changing stage to ${targetStage} requires Admin confirmation. Request modal opened!`, 'info');
+        fetchRecords();
+        return;
+      }
+
       await api.inventory.update(editingRecord.id, data);
       showToast('Record series updated successfully!', 'success');
     } else {
+      if (targetStage === 'Storage' || targetStage === 'Disposed') {
+        const newRecord = await api.inventory.create({ ...data, retentionStage: 'Active' });
+        showToast(`Record created. Stage change to ${targetStage} requires Admin confirmation. Request modal opened!`, 'info');
+        if (targetStage === 'Storage') {
+          openStorageRequestModal([newRecord]);
+        } else {
+          openDisposalRequestModal([newRecord]);
+        }
+        fetchRecords();
+        return;
+      }
+
       await api.inventory.create(data);
       showToast('New record series entry created successfully!', 'success');
     }
@@ -472,6 +933,7 @@ function InventoryAppraisal() {
     type: 'category' | 'subCategory' | 'record';
     title: string;
     record?: InventoryRecord;
+    isUncategorized?: boolean;
   }
 
   const getGroupedNapItems = (list: InventoryRecord[]): NapRowItem[] => {
@@ -521,7 +983,8 @@ function InventoryAppraisal() {
           items.push({
             type: 'record',
             title: r.seriesTitle,
-            record: r
+            record: r,
+            isUncategorized: catName === 'GENERAL'
           });
         });
       });
@@ -530,7 +993,7 @@ function InventoryAppraisal() {
     if (items.length === 0 && list.length > 0) {
       const sortedList = [...list].sort((a, b) => (a.seriesTitle || '').localeCompare(b.seriesTitle || ''));
       sortedList.forEach(r => {
-        items.push({ type: 'record', title: r.seriesTitle, record: r });
+        items.push({ type: 'record', title: r.seriesTitle, record: r, isUncategorized: true });
       });
     }
 
@@ -566,7 +1029,7 @@ function InventoryAppraisal() {
 
         rows.push(`
           <tr style="height:24px; background:#fff;">
-            <td style="border:1px solid #000; padding:3px 6px 3px 36px; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
+            <td style="border:1px solid #000; padding:3px 6px 3px ${item.isUncategorized ? '6px' : '36px'}; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
               <div style="font-weight:normal; color:#000;">${r.seriesTitle || ''}</div>
               ${r.scopeDescription ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
             </td>
@@ -733,13 +1196,13 @@ function InventoryAppraisal() {
             </thead>
             <tbody>
               ${sliceItems.map((item) => {
-                if (item.type === 'category') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px; font-weight:bold; font-size:9.5pt; font-family:Arial, sans-serif; text-transform:uppercase; text-align:left;">${item.title}</td></tr>`;
-                if (item.type === 'subCategory') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px 4px 20px; font-weight:bold; font-size:9pt; font-family:Arial, sans-serif; text-align:left;">${item.title}</td></tr>`;
-                const r = item.record!;
-                const perm = r.appraisalCategory === 'Permanent';
-                const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
-                return `<tr style="height:24px; background:#fff;">
-                  <td style="border:1px solid #000; padding:3px 6px 3px 36px; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
+        if (item.type === 'category') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px; font-weight:bold; font-size:9.5pt; font-family:Arial, sans-serif; text-transform:uppercase; text-align:left;">${item.title}</td></tr>`;
+        if (item.type === 'subCategory') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px 4px 20px; font-weight:bold; font-size:9pt; font-family:Arial, sans-serif; text-align:left;">${item.title}</td></tr>`;
+        const r = item.record!;
+        const perm = r.appraisalCategory === 'Permanent';
+        const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+        return `<tr style="height:24px; background:#fff;">
+                  <td style="border:1px solid #000; padding:3px 6px 3px ${item.isUncategorized ? '6px' : '36px'}; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
                     <div style="font-weight:normal; color:#000;">${r.seriesTitle || ''}</div>
                     ${r.scopeDescription ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
                   </td>
@@ -757,7 +1220,7 @@ function InventoryAppraisal() {
                   <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.totalRetention}</td>
                   <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${r.dispositionProvision || ''}</td>
                 </tr>`;
-              }).join('')}
+      }).join('')}
             </tbody>
           </table>
 
@@ -951,9 +1414,9 @@ function InventoryAppraisal() {
 
               <!-- Data Rows starting at Row 12 in Excel -->
               ${items.map((item, index) => {
-                const excelRowNum = 12 + index;
-                if (item.type === 'category') {
-                  return `
+      const excelRowNum = 12 + index;
+      if (item.type === 'category') {
+        return `
                     <tr style="height: 24px;">
                       <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">${excelRowNum}</td>
                       <td colSpan="16" style="border: 1px solid #000; padding: 4px 6px; font-weight: bold; font-size: 9.5pt; text-transform: uppercase;">
@@ -961,9 +1424,9 @@ function InventoryAppraisal() {
                       </td>
                     </tr>
                   `;
-                }
-                if (item.type === 'subCategory') {
-                  return `
+      }
+      if (item.type === 'subCategory') {
+        return `
                     <tr style="height: 24px;">
                       <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">${excelRowNum}</td>
                       <td colSpan="16" style="border: 1px solid #000; padding: 4px 6px 4px 20px; font-weight: bold; font-size: 9pt;">
@@ -971,14 +1434,14 @@ function InventoryAppraisal() {
                       </td>
                     </tr>
                   `;
-                }
-                const r = item.record!;
-                const perm = r.appraisalCategory === 'Permanent';
-                const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
-                return `
+      }
+      const r = item.record!;
+      const perm = r.appraisalCategory === 'Permanent';
+      const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+      return `
                   <tr style="height: 24px;">
                     <td style="background: #f3f3f3; color: #555; font-size: 7.5pt; text-align: center; border: 1px solid #d4d4d4; font-weight: bold;">${excelRowNum}</td>
-                    <td colSpan="3" style="border: 1px solid #000; padding: 3px 6px 3px 36px; font-size: 9pt; vertical-align: top; word-break: break-word;">
+                    <td colSpan="3" style="border: 1px solid #000; padding: 3px 6px 3px ${item.isUncategorized ? '6px' : '36px'}; font-size: 9pt; vertical-align: top; word-break: break-word;">
                       <div style="font-weight: normal; color: #000;">${r.seriesTitle || ''}</div>
                       ${r.scopeDescription ? `<div style="font-size: 7.5pt; color: #555; margin-top: 1px;">${r.scopeDescription}</div>` : ''}
                     </td>
@@ -997,7 +1460,7 @@ function InventoryAppraisal() {
                     <td style="border: 1px solid #000; padding: 3px 5px; font-size: 9pt; vertical-align: top; word-break: break-word;">${r.dispositionProvision || ''}</td>
                   </tr>
                 `;
-              }).join('')}
+    }).join('')}
             </tbody>
           </table>
 
@@ -1078,9 +1541,10 @@ function InventoryAppraisal() {
         const t = Date.now();
         const urlsToTry = [
           `/api/nap-template?t=${t}`,
+          `${encodeURI('/NAP FORM 1 (FORMAT).xlsx')}?t=${t}`,
+          `/NAP%20FORM%201%20(FORMAT).xlsx?t=${t}`,
           `${encodeURI('/NAP FORM 1 (Sample Format).xlsx')}?t=${t}`,
           `/NAP%20FORM%201%20(Sample%20Format).xlsx?t=${t}`,
-          `${encodeURI('/NAP FORM 1 (FORMAT).xlsx')}?t=${t}`,
           `/nap_template.xlsx?t=${t}`,
           `/template.xlsx?t=${t}`
         ];
@@ -1162,7 +1626,7 @@ function InventoryAppraisal() {
           });
         }
 
-        const setCellVal = (cellRef: string, val: string, isBold: boolean = false, fontSz: string = '9') => {
+        const setCellVal = (cellRef: string, val: string, isBold: boolean = false, fontSz: string = '9', explicitStyle?: string) => {
           const colName = cellRef.replace(/[0-9]/g, '');
           const rowNum = parseInt(cellRef.replace(/[^0-9]/g, ''), 10);
 
@@ -1194,8 +1658,12 @@ function InventoryAppraisal() {
             rowNode.appendChild(cellNode);
           }
 
-          if (!cellNode.getAttribute('s') && templateColStyles[colName]) {
-            cellNode.setAttribute('s', templateColStyles[colName]);
+          if (!cellNode.getAttribute('s')) {
+            if (explicitStyle) {
+              cellNode.setAttribute('s', explicitStyle);
+            } else if (templateColStyles[colName]) {
+              cellNode.setAttribute('s', templateColStyles[colName]);
+            }
           }
 
           cellNode.removeAttribute('t');
@@ -1315,6 +1783,54 @@ function InventoryAppraisal() {
           });
         }
 
+        let categoryStyle = '';
+        let subCategoryStyle = '';
+        let entryStyle = '';
+
+        // Dynamically find placeholders
+        const allCells = Array.from(xmlDoc.getElementsByTagNameNS('*', 'c'));
+        const sharedStrings: string[] = [];
+        try {
+          const zip = await JSZip.loadAsync(templateBuffer!);
+          const ssXml = await zip.file('xl/sharedStrings.xml')?.async('text');
+          if (ssXml) {
+            const parser2 = new DOMParser();
+            const ssDoc = parser2.parseFromString(ssXml, 'application/xml');
+            const siNodes = Array.from(ssDoc.getElementsByTagNameNS('*', 'si'));
+            for (const si of siNodes) {
+              const tNode = si.getElementsByTagNameNS('*', 't')[0];
+              sharedStrings.push(tNode ? tNode.textContent : '');
+            }
+          }
+        } catch (e) {
+           // ignore
+        }
+
+        allCells.forEach(c => {
+          const tType = c.getAttribute('t');
+          let val = '';
+          if (tType === 's') {
+             const vNode = c.getElementsByTagNameNS('*', 'v')[0];
+             if (vNode && vNode.textContent) {
+                const idx = parseInt(vNode.textContent, 10);
+                if (sharedStrings[idx]) val = sharedStrings[idx]!;
+             }
+          } else if (tType === 'inlineStr') {
+             const tNode = c.getElementsByTagNameNS('*', 't')[0];
+             if (tNode) val = tNode.textContent || '';
+          } else {
+             const vNode = c.getElementsByTagNameNS('*', 'v')[0];
+             if (vNode) val = vNode.textContent || '';
+          }
+          
+          if (val) {
+             const v = val.trim().toLowerCase();
+             if (v === 'category' && !categoryStyle) categoryStyle = c.getAttribute('s') || '';
+             else if (v === 'sub category' && !subCategoryStyle) subCategoryStyle = c.getAttribute('s') || '';
+             else if (v === 'entry' && !entryStyle) entryStyle = c.getAttribute('s') || '';
+          }
+        });
+
         items.forEach((item, i) => {
           const rNum = 12 + i;
 
@@ -1335,15 +1851,15 @@ function InventoryAppraisal() {
           }
 
           if (item.type === 'category') {
-            setCellVal(`A${rNum}`, item.title, true, '9.5');
+            setCellVal(`A${rNum}`, item.title, true, '9.5', categoryStyle);
           } else if (item.type === 'subCategory') {
-            setCellVal(`A${rNum}`, `    ${item.title}`, true, '9');
+            setCellVal(`A${rNum}`, item.title, true, '9', subCategoryStyle);
           } else if (item.type === 'record' && item.record) {
             const r = item.record;
             const perm = r.appraisalCategory === 'Permanent';
             const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
 
-            setCellVal(`A${rNum}`, `        ${r.seriesTitle || ''}`, false, '9');
+            setCellVal(`A${rNum}`, `${item.isUncategorized ? ' ' : ''}${r.seriesTitle || ''}`, false, '9', entryStyle);
             setCellVal(`D${rNum}`, formatDynamicDates(r.inclusiveDates), false, '9');
             setCellVal(`E${rNum}`, r.volume || '', false, '9');
             setCellVal(`F${rNum}`, r.medium || '', false, '9');
@@ -1472,62 +1988,7 @@ function InventoryAppraisal() {
 
 
 
-  // Analytics Metrics Calculation
-  const analytics = useMemo(() => {
-    const total = records.length;
-    const permanent = records.filter(r => r.appraisalCategory === 'Permanent').length;
-    const temporary = records.filter(r => r.appraisalCategory === 'Temporary' || r.appraisalCategory?.includes('Temporary')).length;
-    const safeForDisposal = records.filter(r => r.disposalStatus === 'Safe for Disposal').length;
-    const evaluateDisposalCount = records.filter(
-      r => r.disposalStatus === 'Safe for Disposal' || getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse) !== null
-    ).length;
 
-    // Division breakdown
-    const divisionStats: Record<string, number> = {};
-    records.forEach(r => {
-      const div = r.division || 'Unassigned';
-      divisionStats[div] = (divisionStats[div] || 0) + 1;
-    });
-
-    const divisionStatsArray = Object.keys(divisionStats).map(div => ({
-      name: div,
-      count: divisionStats[div],
-      percentage: total > 0 ? Math.round((divisionStats[div] / total) * 100) : 0,
-    })).sort((a, b) => b.count - a.count);
-
-    // Medium breakdown
-    const mediumCounts = {
-      Paper: records.filter(r => r.medium === 'Paper').length,
-      Digital: records.filter(r => r.medium === 'Digital').length,
-      'Mixed Media': records.filter(r => r.medium === 'Mixed Media').length,
-    };
-
-    // Frequency of Use breakdown
-    const frequencyCounts = {
-      Active: records.filter(r => r.frequencyOfUse === 'Active').length,
-      Inactive: records.filter(r => r.frequencyOfUse === 'Inactive').length,
-      'As the need arises': records.filter(r => r.frequencyOfUse === 'As the need arises').length,
-    };
-
-    // Utility Value breakdown
-    const utilityCounts: Record<string, number> = {};
-    records.forEach(r => {
-      const raw = (r.utilityValue || 'Adm').replace(/\s*\(.*?\)/g, '').trim();
-      utilityCounts[raw] = (utilityCounts[raw] || 0) + 1;
-    });
-
-    return {
-      total,
-      permanent,
-      temporary,
-      safeForDisposal,
-      evaluateDisposalCount,
-      divisionStats: divisionStatsArray,
-      mediumCounts,
-      frequencyCounts,
-      utilityCounts,
-    };
-  }, [records]);
 
   const CATEGORY_ORDER = [
     'ADMINISTRATIVE',
@@ -1659,24 +2120,41 @@ function InventoryAppraisal() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginLeft: 'auto' }}>
+          {hasFullDivisionAccess && (
+            <Button
+              variant={pendingRequests.length > 0 ? "primary" : "secondary"}
+              onClick={() => {
+                fetchInventoryRequests();
+                setShowPendingRequestsModal(true);
+              }}
+              style={{ position: 'relative', fontWeight: pendingRequests.length > 0 ? 700 : 500 }}
+            >
+              <MdAssignment style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: pendingRequests.length > 0 ? '#b45309' : '#2563eb' }} />
+              Pending Requests ({pendingRequests.length})
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={() => {
               fetchDisposalHistory();
-              setShowStorageHistoryModal(true);
+              fetchInventoryRequests();
+              setStorageModalTab(stagedStorageRecords.length > 0 ? 'confirmation' : (hasFullDivisionAccess && pendingRequests.length > 0 ? 'requests' : 'history'));
+              setShowStorageManagementModal(true);
             }}
           >
-            <MdInventory style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: '#d97706' }} /> History of Storage ({storageLogs.length})
+            <MdInventory style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: '#d97706' }} /> Storage Management ({storageLogs.length} History{stagedStorageRecords.length > 0 ? `, ${stagedStorageRecords.length} Staged` : ''})
           </Button>
           <Button
             variant="secondary"
             onClick={() => {
               fetchDisposalHistory();
-              setShowDisposalHistoryModal(true);
+              fetchInventoryRequests();
+              setDisposalModalTab(stagedDisposalRecords.length > 0 ? 'confirmation' : (hasFullDivisionAccess && pendingDisposalRequests.length > 0 ? 'requests' : 'history'));
+              setShowDisposalManagementModal(true);
             }}
           >
-            <MdDeleteSweep style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: '#dc2626' }} /> History of Disposal ({disposalOnlyLogs.length})
+            <MdDeleteSweep style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: '#dc2626' }} /> Disposal Management ({disposalOnlyLogs.length} History{stagedDisposalRecords.length > 0 ? `, ${stagedDisposalRecords.length} Staged` : ''})
           </Button>
           <Button variant="primary" onClick={handleCreateNew}>
             <MdAdd style={{ marginRight: '0.35rem', fontSize: '1.2rem' }} /> Create New Records Series Entry
@@ -1749,32 +2227,34 @@ function InventoryAppraisal() {
 
       {/* Analytics Dashboard Grid */}
       <div className="inventory-dashboard-grid">
-        {/* Division Breakdown */}
-        <Card className="dashboard-widget">
-          <div>
-            <h3 className="dashboard-widget__title">Records Series by Division</h3>
-            <div className="dashboard-stat-list">
-              {analytics.divisionStats.length === 0 ? (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>No records available</div>
-              ) : (
-                analytics.divisionStats.slice(0, 4).map((stat, idx) => (
-                  <div key={stat.name} className="dashboard-stat-item">
-                    <div className="dashboard-stat-header">
-                      <span>{stat.name}</span>
-                      <span className="dashboard-stat-badge">{stat.count} ({stat.percentage}%)</span>
+        {/* Division Breakdown (Only shown for users with full division access) */}
+        {hasFullDivisionAccess && (
+          <Card className="dashboard-widget">
+            <div>
+              <h3 className="dashboard-widget__title">Records Series by Division</h3>
+              <div className="dashboard-stat-list">
+                {analytics.divisionStats.length === 0 ? (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>No records available</div>
+                ) : (
+                  analytics.divisionStats.slice(0, 4).map((stat, idx) => (
+                    <div key={stat.name} className="dashboard-stat-item">
+                      <div className="dashboard-stat-header">
+                        <span>{stat.name}</span>
+                        <span className="dashboard-stat-badge">{stat.count} ({stat.percentage}%)</span>
+                      </div>
+                      <div className="dashboard-progress-track">
+                        <div
+                          className={`dashboard-progress-fill ${idx % 3 === 0 ? 'dashboard-progress-fill--blue' : idx % 3 === 1 ? 'dashboard-progress-fill--indigo' : 'dashboard-progress-fill--purple'}`}
+                          style={{ width: `${stat.percentage}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="dashboard-progress-track">
-                      <div
-                        className={`dashboard-progress-fill ${idx % 3 === 0 ? 'dashboard-progress-fill--blue' : idx % 3 === 1 ? 'dashboard-progress-fill--indigo' : 'dashboard-progress-fill--purple'}`}
-                        style={{ width: `${stat.percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Medium & Frequency Breakdown (Dual Columns) */}
         <Card className="dashboard-widget">
@@ -2037,8 +2517,8 @@ function InventoryAppraisal() {
         {divisionTabs.map((div) => {
           const isSelected = divisionTab === div;
           const count = div === 'ALL'
-            ? records.length
-            : records.filter(r => (r.division || 'Unassigned') === div || r.division === div).length;
+            ? authorizedRecords.length
+            : authorizedRecords.filter(r => (r.division || 'General').trim().toLowerCase() === div.trim().toLowerCase()).length;
           return (
             <button
               key={`div-tab-${div}`}
@@ -2082,9 +2562,7 @@ function InventoryAppraisal() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Records Series Inventory Table</span>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Button variant="secondary" onClick={handleExportNapForm1}>
-              <MdFileDownload style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> Export to Excel
-            </Button>
+
             <Button variant="secondary" onClick={() => setShowNapFormPreview(true)}>
               <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print NAP Form 1
             </Button>
@@ -2194,7 +2672,7 @@ function InventoryAppraisal() {
                                 )}
                               </td>
                               <td>
-                                <div style={{ fontWeight: 600, color: 'var(--color-primary)', lineHeight: 1.3 }}>{r.seriesTitle}</div>
+                                <div style={{ fontWeight: 600, color: 'var(--color-primary)', lineHeight: 1.3 }}>{cleanSeriesTitle(r.seriesTitle)}</div>
                                 {r.scopeDescription && (
                                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontStyle: 'italic', lineHeight: 1.25 }}>
                                     {r.scopeDescription}
@@ -2222,7 +2700,7 @@ function InventoryAppraisal() {
                                     }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setShowActiveDeskModal(true);
+                                      setSingleStorageRecord(r);
                                     }}
                                     title={`Active desk period of ${r.activeDeskYrs} years reached! Click to evaluate moving to storage.`}
                                   >
@@ -2406,37 +2884,29 @@ function InventoryAppraisal() {
                 <Button
                   variant="primary"
                   style={{ padding: '0.5rem 1.15rem' }}
-                  onClick={async () => {
-                    try {
-                      const disposedYearsStr = isCustomSelected
-                        ? customDisposedYears.sort().join(', ')
-                        : String(evaluatingRecord.info.ongoingStartYear);
-
-                      await api.inventory.update(evaluatingRecord.record.id, {
-                        ...evaluatingRecord.record,
-                        inclusiveDates: computedCustomDates,
-                      });
-
-                      await api.inventory.logDisposal({
-                        recordId: evaluatingRecord.record.id,
-                        seriesTitle: evaluatingRecord.record.seriesTitle,
-                        division: evaluatingRecord.record.division,
-                        classificationCategory: evaluatingRecord.record.classificationCategory,
-                        disposedYears: disposedYearsStr,
-                        previousInclusiveDates: evaluatingRecord.record.inclusiveDates,
-                        newInclusiveDates: computedCustomDates,
-                        disposedBy: 'System Admin',
-                      });
-
-                      showToast(`Record updated! Disposed year(s) (${disposedYearsStr}). New period: ${computedCustomDates}`, 'success');
-                      setEvaluatingRecord(null);
-                      setCustomDisposedYears([]);
-                      setViewingRecord(null);
-                      fetchRecords();
-                      fetchDisposalHistory();
-                    } catch (err: any) {
-                      showToast(err.message || 'Failed to update record period', 'error');
+                  onClick={() => {
+                    const rec = evaluatingRecord.record;
+                    setEvaluatingRecord(null);
+                    setViewingRecord(null);
+                    if (isCustomSelected && customDisposedYears.length > 0) {
+                      const yearRecords = customDisposedYears.map((yr) => ({
+                        ...rec,
+                        id: `${rec.id}-yr-${yr}`,
+                        inclusiveDates: String(yr),
+                        seriesTitle: `${rec.seriesTitle} (${yr})`,
+                      }));
+                      openDisposalRequestModal(yearRecords);
+                    } else {
+                      const startYear = evaluatingRecord.info.ongoingStartYear;
+                      const yearRec = {
+                        ...rec,
+                        id: `${rec.id}-yr-${startYear}`,
+                        inclusiveDates: String(startYear),
+                        seriesTitle: `${rec.seriesTitle} (${startYear})`,
+                      };
+                      openDisposalRequestModal([yearRec]);
                     }
+                    setCustomDisposedYears([]);
                   }}
                 >
                   {isCustomSelected ? `Dispose Selected Year(s) & Save as ${computedCustomDates}` : `Dispose & Advance to ${evaluatingRecord.info.newDatesStr}`}
@@ -2455,29 +2925,27 @@ function InventoryAppraisal() {
           title={`Evaluate Disposal Records (${disposalEligibleRecords.length})`}
           size="xl"
         >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.85rem 1.15rem', borderRadius: '8px', fontSize: '0.875rem', color: '#065f46', lineHeight: 1.45 }}>
-              <MdAssignment style={{ fontSize: '1.25rem', flexShrink: 0 }} />
-              <div>
-                <strong>Records Eligible for Evaluation & Disposal:</strong> The records listed below have reached their retention schedule period or are authorized for disposal evaluation. Click <strong>"Evaluate & Dispose"</strong> on any entry to review expired years and update active periods.
-              </div>
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              <strong>Records Eligible for Evaluation & Disposal:</strong> The following record series have reached their designated retention schedule period. Click <strong>"Evaluate & Dispose ➔"</strong> to review expired years and update active periods.
             </div>
 
             {disposalEligibleRecords.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
                 No records currently eligible for disposal evaluation.
               </div>
             ) : (
-              <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
-                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series & Scope</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Inclusive Dates</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Total Retention</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Action</th>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Item No.</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Record Series</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Division</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Inclusive Dates</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Retention</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2496,20 +2964,21 @@ function InventoryAppraisal() {
                             )}
                           </td>
                           <td style={{ padding: '0.75rem 0.85rem' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{r.seriesTitle}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{r.classificationCategory} {r.subCategory ? `— ${r.subCategory}` : ''}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{cleanSeriesTitle(r.seriesTitle)}</div>
                           </td>
                           <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)' }}>{r.division || 'General'}</td>
+                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>{r.classificationCategory || '-'}</td>
                           <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap' }}>
                             <strong>{formatDynamicDates(r.inclusiveDates)}</strong>
                           </td>
-                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 700, color: '#d97706' }}>
+                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 700, color: '#dc2626' }}>
                             {r.totalRetention ? `${r.totalRetention} Year(s)` : '-'}
                           </td>
                           <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
                             <Button
                               variant="primary"
                               size="sm"
+                              style={{ background: '#dc2626', borderColor: '#dc2626' }}
                               onClick={() => {
                                 setShowEvaluateModal(false);
                                 setEvaluatingRecord({
@@ -2539,228 +3008,1024 @@ function InventoryAppraisal() {
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
               <Button variant="secondary" onClick={() => setShowEvaluateModal(false)}>
-                Close Window
+                Close
               </Button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* History of Storage Logs Modal */}
-      {showStorageHistoryModal && (
+      {/* 3-Tab Storage Management Modal (Confirmation of Storage, Requests, History) */}
+      {showStorageManagementModal && (
         <Modal
-          isOpen={showStorageHistoryModal}
-          onClose={() => setShowStorageHistoryModal(false)}
-          title={`History of Storage (${storageLogs.length})`}
+          isOpen={showStorageManagementModal}
+          onClose={() => setShowStorageManagementModal(false)}
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <MdInventory style={{ color: '#d97706', fontSize: '1.4rem' }} />
+              <span>Storage Management</span>
+            </div>
+          }
           size="xl"
         >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Audit log trail of all record series transitioned from Active Desk to Storage.
-              </p>
-              <div style={{ width: '280px' }}>
-                <SearchBar
-                  value={storageSearchQuery}
-                  onChange={(e) => setStorageSearchQuery(e.target.value)}
-                  placeholder="Search storage logs..."
-                />
-              </div>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', minHeight: '520px', justifyContent: 'space-between' }}>
+            {/* Navigation Tabs Bar */}
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              borderBottom: '2px solid var(--border-color)',
+              paddingBottom: '0.25rem',
+            }}>
+              <button
+                type="button"
+                onClick={() => setStorageModalTab('confirmation')}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  fontWeight: storageModalTab === 'confirmation' ? 700 : 500,
+                  color: storageModalTab === 'confirmation' ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderBottom: storageModalTab === 'confirmation' ? '2.5px solid var(--color-primary)' : 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>Confirmation of Storage</span>
+                {stagedStorageRecords.length > 0 && (
+                  <span style={{
+                    background: 'rgba(217, 119, 6, 0.15)',
+                    color: '#d97706',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '99px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                  }}>
+                    {stagedStorageRecords.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  fetchInventoryRequests();
+                  setStorageModalTab('requests');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  fontWeight: storageModalTab === 'requests' ? 700 : 500,
+                  color: storageModalTab === 'requests' ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderBottom: storageModalTab === 'requests' ? '2.5px solid var(--color-primary)' : 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>Requests</span>
+                {pendingStorageRequests.length > 0 && (
+                  <span style={{
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    color: '#2563eb',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '99px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                  }}>
+                    {pendingStorageRequests.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  fetchDisposalHistory();
+                  setStorageModalTab('history');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  fontWeight: storageModalTab === 'history' ? 700 : 500,
+                  color: storageModalTab === 'history' ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderBottom: storageModalTab === 'history' ? '2.5px solid var(--color-primary)' : 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>History ({storageLogs.length})</span>
+              </button>
             </div>
 
-            {(() => {
-              const filtered = storageLogs.filter((log) => {
-                const q = storageSearchQuery.toLowerCase().trim();
-                if (!q) return true;
-                return (
-                  (log.seriesTitle && log.seriesTitle.toLowerCase().includes(q)) ||
-                  (log.division && log.division.toLowerCase().includes(q)) ||
-                  (log.classificationCategory && log.classificationCategory.toLowerCase().includes(q)) ||
-                  (log.subCategory && log.subCategory.toLowerCase().includes(q)) ||
-                  (log.disposedYears && log.disposedYears.toLowerCase().includes(q))
-                );
-              });
-
-              if (filtered.length === 0) {
-                return (
-                  <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                    No storage transition history logs found.
+            {/* TAB 1: Confirmation of Storage (Staging for request) */}
+            {storageModalTab === 'confirmation' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+                {stagedStorageRecords.length === 0 ? (
+                  <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', margin: 'auto 0' }}>
+                    No record series currently staged for storage. Click <strong>"Move to Storage"</strong> on any record series in the table to add it here.
                   </div>
-                );
-              }
+                ) : (
+                  <>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                      Select the records you want to submit for storage confirmation, provide the reason, and attach authorization proof.
+                    </p>
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '250px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                            <th style={{ padding: '0.65rem 0.85rem', width: '40px', textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={stagedSelectedIds.length === stagedStorageRecords.length && stagedStorageRecords.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setStagedSelectedIds(stagedStorageRecords.map((r) => r.id));
+                                  } else {
+                                    setStagedSelectedIds([]);
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Storage Year</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stagedStorageRecords.map((r) => {
+                            return (
+                              <tr key={`staged-${r.id}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={stagedSelectedIds.includes(r.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setStagedSelectedIds((prev) => [...prev, r.id]);
+                                      } else {
+                                        setStagedSelectedIds((prev) => prev.filter((id) => id !== r.id));
+                                      }
+                                    }}
+                                  />
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {new Date(r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(r.seriesTitle)}</div>
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {r.division || 'General'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                  {r.classificationCategory || '-'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#d97706' }}>
+                                  {r.inclusiveDates}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setStagedStorageRecords((prev) => prev.filter((item) => item.id !== r.id));
+                                      setStagedSelectedIds((prev) => prev.filter((id) => id !== r.id));
+                                    }}
+                                    style={{ color: '#dc2626' }}
+                                  >
+                                    Remove
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-              return (
-                <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '420px' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Transition Status</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Stage Shift</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((log) => (
-                        <tr key={`storage-log-${log.id}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
-                            {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{log.seriesTitle}</div>
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                            {log.division || 'General'}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
-                            {log.classificationCategory || '-'}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, fontSize: '0.8rem' }}>
-                              <MdArchive style={{ fontSize: '0.9rem' }} /> Moved to Storage
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: '#d97706', fontWeight: 700 }}>
-                            Active Desk ➔ Storage
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
+                    {stagedSelectedIds.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.75rem', transition: 'all 0.2s ease-in-out' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Reason for Storage Confirmation *
+                          </label>
+                          <textarea
+                            style={{
+                              width: '100%',
+                              minHeight: '80px',
+                              padding: '0.65rem 0.75rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.875rem',
+                              fontFamily: 'inherit',
+                            }}
+                            placeholder="Explain why these record entries are being transferred to storage..."
+                            value={storageReason}
+                            onChange={(e) => setStorageReason(e.target.value)}
+                          />
+                        </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-              <Button variant="secondary" onClick={() => setShowStorageHistoryModal(false)}>
-                Close Window
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Attach Proof Document / Authorization File (Optional)
+                          </label>
+                          <input
+                            type="file"
+                            onChange={(e) => setStorageFile(e.target.files?.[0] || null)}
+                            style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}
+                          />
+                          {storageFile && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
+                              Selected file: {storageFile.name} ({(storageFile.size / 1024).toFixed(1)} KB)
+                            </div>
+                          )}
+                        </div>
 
-      {/* History of Disposal Logs Modal */}
-      {showDisposalHistoryModal && (
-        <Modal
-          isOpen={showDisposalHistoryModal}
-          onClose={() => setShowDisposalHistoryModal(false)}
-          title={`History of Disposal (${disposalOnlyLogs.length})`}
-          size="xl"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                Audit log trail of all record series disposal evaluations and disposed year periods.
-              </p>
-              <div style={{ width: '280px' }}>
-                <SearchBar
-                  value={historySearchQuery}
-                  onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  placeholder="Search disposal logs..."
-                />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.35rem' }}>
+                          <Button
+                            variant="primary"
+                            disabled={isSendingStorageRequest}
+                            loading={isSendingStorageRequest}
+                            onClick={handleSendStorageConfirmation}
+                          >
+                            Send Request for Confirmation ({stagedSelectedIds.length})
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            </div>
+            )}
 
-            {(() => {
-              // Expand multi-year logs for disposal
-              const expandedLogs: any[] = [];
-              disposalOnlyLogs.forEach((log) => {
-                const yearsStr = String(log.disposedYears || '').trim();
-                let yearList: number[] = [];
+            {/* TAB 2: Requests Status Queue */}
+            {storageModalTab === 'requests' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                  Submitted storage requests awaiting Admin confirmation or historical decision review.
+                </p>
 
-                if (yearsStr.includes('-')) {
-                  const parts = yearsStr.split('-').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
-                  if (parts.length === 2 && parts[0] <= parts[1]) {
-                    for (let y = parts[0]; y <= parts[1]; y++) yearList.push(y);
-                  }
-                }
-                if (yearList.length === 0) {
-                  yearList = (yearsStr.match(/\b\d{4}\b/g) || []).map((n) => parseInt(n, 10));
-                }
+                {inventoryRequests.filter((r) => r.requestType === 'Storage').length === 0 ? (
+                  <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                    No storage requests found.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto' }}>
+                    {inventoryRequests.filter((r) => r.requestType === 'Storage').map((req) => (
+                      <div
+                        key={`req-tab-${req.id}`}
+                        onClick={() => setSelectedRequestDetails(req)}
+                        style={{
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          padding: '1rem',
+                          background: 'var(--bg-secondary)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.75rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span
+                              style={{
+                                padding: '0.2rem 0.65rem',
+                                borderRadius: '99px',
+                                fontSize: '0.75rem',
+                                fontWeight: 800,
+                                background: req.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : req.status === 'rejected' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                color: req.status === 'approved' ? '#059669' : req.status === 'rejected' ? '#dc2626' : '#d97706',
+                                border: req.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : req.status === 'rejected' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                              }}
+                            >
+                              {req.status === 'approved' ? '✓ Approved' : req.status === 'rejected' ? '✕ Rejected' : '⏳ Pending Confirmation'}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              Requested by {req.requesterName}
+                            </span>
+                          </div>
 
-                if (yearList.length > 1) {
-                  yearList.forEach((singleYear, idx) => {
-                    expandedLogs.push({
-                      ...log,
-                      id: `${log.id}-${singleYear}-${idx}`,
-                      disposedYears: String(singleYear),
-                    });
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            {new Date(req.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div style={{ background: 'var(--bg-primary)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                            Target Records ({req.recordsSummary?.length || 0})
+                          </div>
+                          <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                            {(req.recordsSummary || []).map((s: any) => s.seriesTitle).join(', ')}
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                          <strong>Reason provided:</strong> {req.reason}
+                        </div>
+
+                        {req.attachmentUrl && (
+                          <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                            📎 Attached Proof: <a href={req.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}>{req.attachmentName || 'View Attached Document'}</a>
+                          </div>
+                        )}
+
+                        {/* Admin Decision actions if pending & user is Admin/Dev */}
+                        {req.status === 'pending' && hasFullDivisionAccess && (
+                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                            <input
+                              type="text"
+                              placeholder="Admin decision remarks / reason..."
+                              value={adminDecisionReason}
+                              onChange={(e) => setAdminDecisionReason(e.target.value)}
+                              style={{
+                                padding: '0.45rem 0.75rem',
+                                fontSize: '0.825rem',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-primary)',
+                                color: 'var(--text-primary)',
+                              }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={isProcessingAdminDecision}
+                                onClick={() => handleAdminRejectRequest(req.id)}
+                              >
+                                Reject Request
+                              </Button>
+                              <Button
+                                variant="success"
+                                size="sm"
+                                disabled={isProcessingAdminDecision}
+                                onClick={() => handleAdminConfirmRequest(req.id)}
+                              >
+                                Confirm & Update Tab
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: History of Storage */}
+            {storageModalTab === 'history' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    History of all record series transitioned from Active Desk to Storage.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <select
+                      value={storageDivisionFilter}
+                      onChange={(e) => setStorageDivisionFilter(e.target.value)}
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                    >
+                      <option value="ALL">All Divisions</option>
+                      {Array.from(new Set(storageLogs.map(l => l.division || 'General'))).sort().map(d => <option key={`s-div-${d}`} value={d}>{d}</option>)}
+                    </select>
+                    <select
+                      value={storageCategoryFilter}
+                      onChange={(e) => setStorageCategoryFilter(e.target.value)}
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                    >
+                      <option value="ALL">All Categories</option>
+                      {Array.from(new Set(storageLogs.map(l => l.classificationCategory).filter(Boolean))).sort().map(c => <option key={`s-cat-${String(c)}`} value={String(c)}>{c}</option>)}
+                    </select>
+                    <div style={{ width: '220px' }}>
+                      <SearchBar
+                        value={storageSearchQuery}
+                        onChange={(e) => setStorageSearchQuery(e.target.value)}
+                        placeholder="Search logs..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const filtered = storageLogs.filter((log) => {
+                    if (storageDivisionFilter !== 'ALL' && (log.division || 'General') !== storageDivisionFilter) return false;
+                    if (storageCategoryFilter !== 'ALL' && log.classificationCategory !== storageCategoryFilter) return false;
+                    const q = storageSearchQuery.toLowerCase().trim();
+                    if (!q) return true;
+                    return (
+                      (log.seriesTitle && log.seriesTitle.toLowerCase().includes(q)) ||
+                      (log.division && log.division.toLowerCase().includes(q)) ||
+                      (log.classificationCategory && log.classificationCategory.toLowerCase().includes(q)) ||
+                      (log.subCategory && log.subCategory.toLowerCase().includes(q)) ||
+                      (log.disposedYears && log.disposedYears.toLowerCase().includes(q))
+                    );
                   });
-                } else {
-                  expandedLogs.push(log);
-                }
-              });
 
-              const filteredLogs = expandedLogs.filter((log) => {
-                const q = historySearchQuery.toLowerCase().trim();
-                if (!q) return true;
-                return (
-                  (log.seriesTitle && log.seriesTitle.toLowerCase().includes(q)) ||
-                  (log.division && log.division.toLowerCase().includes(q)) ||
-                  (log.classificationCategory && log.classificationCategory.toLowerCase().includes(q)) ||
-                  (log.subCategory && log.subCategory.toLowerCase().includes(q)) ||
-                  (log.disposedYears && log.disposedYears.toLowerCase().includes(q))
-                );
-              });
+                  if (filtered.length === 0) {
+                    return (
+                      <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                        No storage transition history logs found.
+                      </div>
+                    );
+                  }
 
-              if (filteredLogs.length === 0) {
-                return (
-                  <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                    No disposal history logs found.
-                  </div>
-                );
-              }
-
-              return (
-                <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '420px' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Disposed Year</th>
-                        <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Period Change</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredLogs.map((log) => (
-                        <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
-                            {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{log.seriesTitle}</div>
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                            {log.division || 'General'}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
-                            {log.classificationCategory || '-'}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(239, 68, 68, 0.12)', color: '#b91c1c', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, fontSize: '0.8rem' }}>
-                              <MdDeleteOutline style={{ fontSize: '0.95rem' }} /> {log.disposedYears}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap' }}>
-                            <span style={{ textDecoration: 'line-through', color: 'var(--text-secondary)', marginRight: '0.35rem' }}>{log.previousInclusiveDates}</span>
-                            <span style={{ color: 'var(--color-primary)', fontWeight: 700 }}>➔ {log.newInclusiveDates}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
+                  return (
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '380px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Transition Status</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Stage Shift</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((log) => (
+                            <tr key={`storage-log-${log.id}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{log.seriesTitle}</div>
+                                {log.attachmentUrl && (
+                                  <div style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
+                                    <a href={log.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
+                                      📎 {log.attachmentName || 'Proof Document'}
+                                    </a>
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {log.division || 'General'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                {log.classificationCategory || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, fontSize: '0.8rem' }}>
+                                  <MdArchive style={{ fontSize: '0.9rem' }} /> Moved to Storage
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: '#d97706', fontWeight: 700 }}>
+                                Active Desk ➔ Storage
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-              <Button variant="secondary" onClick={() => setShowDisposalHistoryModal(false)}>
+              <Button variant="secondary" onClick={() => setShowStorageManagementModal(false)}>
+                Close Window
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 3-Tab Disposal Management Modal (Confirmation of Disposal, Requests, History) */}
+      {showDisposalManagementModal && (
+        <Modal
+          isOpen={showDisposalManagementModal}
+          onClose={() => setShowDisposalManagementModal(false)}
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <MdDeleteSweep style={{ color: '#dc2626', fontSize: '1.4rem' }} />
+              <span>Disposal Management</span>
+            </div>
+          }
+          size="xl"
+        >
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', minHeight: '480px' }}>
+            {/* Navigation Tabs Bar */}
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              borderBottom: '2px solid var(--border-color)',
+              paddingBottom: '0.25rem',
+            }}>
+              <button
+                type="button"
+                onClick={() => setDisposalModalTab('confirmation')}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  fontWeight: disposalModalTab === 'confirmation' ? 700 : 500,
+                  color: disposalModalTab === 'confirmation' ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderBottom: disposalModalTab === 'confirmation' ? '2.5px solid var(--color-primary)' : 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>Confirmation of Disposal</span>
+                {stagedDisposalRecords.length > 0 && (
+                  <span style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    color: '#dc2626',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '99px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                  }}>
+                    {stagedDisposalRecords.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  fetchInventoryRequests();
+                  setDisposalModalTab('requests');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  fontWeight: disposalModalTab === 'requests' ? 700 : 500,
+                  color: disposalModalTab === 'requests' ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderBottom: disposalModalTab === 'requests' ? '2.5px solid var(--color-primary)' : 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>Requests</span>
+                {pendingDisposalRequests.length > 0 && (
+                  <span style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    color: '#dc2626',
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '99px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                  }}>
+                    {pendingDisposalRequests.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  fetchDisposalHistory();
+                  setDisposalModalTab('history');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  fontWeight: disposalModalTab === 'history' ? 700 : 500,
+                  color: disposalModalTab === 'history' ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderBottom: disposalModalTab === 'history' ? '2.5px solid var(--color-primary)' : 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span>History ({disposalOnlyLogs.length})</span>
+              </button>
+            </div>
+
+            {/* TAB 1: Confirmation of Disposal */}
+            {disposalModalTab === 'confirmation' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+                {stagedDisposalRecords.length === 0 ? (
+                  <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', margin: 'auto 0' }}>
+                    No record series currently staged for disposal evaluation. Click <strong>"Evaluate & Dispose"</strong> on any eligible record to add it here.
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                      Select the records you want to submit for disposal confirmation, provide the reason, and attach authorization proof.
+                    </p>
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '250px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                            <th style={{ padding: '0.65rem 0.85rem', width: '40px', textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={stagedDisposalSelectedIds.length === stagedDisposalRecords.length && stagedDisposalRecords.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setStagedDisposalSelectedIds(stagedDisposalRecords.map((r) => r.id));
+                                  } else {
+                                    setStagedDisposalSelectedIds([]);
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Disposed Year</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stagedDisposalRecords.map((r) => {
+                            return (
+                              <tr key={`staged-disp-${r.id}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={stagedDisposalSelectedIds.includes(r.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setStagedDisposalSelectedIds((prev) => [...prev, r.id]);
+                                      } else {
+                                        setStagedDisposalSelectedIds((prev) => prev.filter((id) => id !== r.id));
+                                      }
+                                    }}
+                                  />
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {new Date(r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(r.seriesTitle)}</div>
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {r.division || 'General'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                  {r.classificationCategory || '-'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
+                                  {r.inclusiveDates}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setStagedDisposalRecords((prev) => prev.filter((item) => item.id !== r.id));
+                                      setStagedDisposalSelectedIds((prev) => prev.filter((id) => id !== r.id));
+                                    }}
+                                    style={{ color: '#dc2626' }}
+                                  >
+                                    Remove
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {stagedDisposalSelectedIds.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.75rem', transition: 'all 0.2s ease-in-out' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Reason for Disposal Confirmation *
+                          </label>
+                          <textarea
+                            style={{
+                              width: '100%',
+                              minHeight: '80px',
+                              padding: '0.65rem 0.75rem',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-color)',
+                              background: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.875rem',
+                              fontFamily: 'inherit',
+                            }}
+                            placeholder="Explain why these record entries are recommended for disposal..."
+                            value={disposalReason}
+                            onChange={(e) => setDisposalReason(e.target.value)}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                            Attach Proof Document / Authorization File (Optional)
+                          </label>
+                          <input
+                            type="file"
+                            onChange={(e) => setDisposalFile(e.target.files?.[0] || null)}
+                            style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}
+                          />
+                          {disposalFile && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
+                              Selected file: {disposalFile.name} ({(disposalFile.size / 1024).toFixed(1)} KB)
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.35rem' }}>
+                          <Button
+                            variant="danger"
+                            disabled={isSendingDisposalRequest}
+                            loading={isSendingDisposalRequest}
+                            onClick={handleSendDisposalConfirmation}
+                          >
+                            Send Request for Confirmation ({stagedDisposalSelectedIds.length})
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: Requests Status Queue */}
+            {disposalModalTab === 'requests' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                  Submitted disposal requests awaiting Admin confirmation or decision review.
+                </p>
+
+                {inventoryRequests.filter(r => r.requestType === 'Disposal').length === 0 ? (
+                  <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                    No disposal requests found.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto' }}>
+                    {inventoryRequests.filter(r => r.requestType === 'Disposal').map((req) => (
+                      <div
+                        key={`req-disp-tab-${req.id}`}
+                        onClick={() => setSelectedRequestDetails(req)}
+                        style={{
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          padding: '1rem',
+                          background: 'var(--bg-secondary)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.75rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span
+                              style={{
+                                padding: '0.2rem 0.65rem',
+                                borderRadius: '99px',
+                                fontSize: '0.75rem',
+                                fontWeight: 800,
+                                background: req.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : req.status === 'rejected' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                color: req.status === 'approved' ? '#059669' : req.status === 'rejected' ? '#dc2626' : '#b91c1c',
+                                border: req.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                              }}
+                            >
+                              {req.status === 'approved' ? '✓ Approved' : req.status === 'rejected' ? '✕ Rejected' : '⏳ Pending Confirmation'}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              Requested by {req.requesterName}
+                            </span>
+                          </div>
+
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            {new Date(req.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div style={{ background: 'var(--bg-primary)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                            Target Records ({req.recordsSummary?.length || 0})
+                          </div>
+                          <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                            {(req.recordsSummary || []).map((s: any) => s.seriesTitle).join(', ')}
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                          <strong>Reason provided:</strong> {req.reason}
+                        </div>
+
+                        {req.attachmentUrl && (
+                          <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                            📎 Attached Proof: <a href={req.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}>{req.attachmentName || 'View Attached Document'}</a>
+                          </div>
+                        )}
+
+                        {/* Admin Decision actions if pending & user is Admin/Dev */}
+                        {req.status === 'pending' && hasFullDivisionAccess && (
+                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                            <input
+                              type="text"
+                              placeholder="Admin decision remarks / reason..."
+                              value={adminDecisionReason}
+                              onChange={(e) => setAdminDecisionReason(e.target.value)}
+                              style={{
+                                padding: '0.45rem 0.75rem',
+                                fontSize: '0.825rem',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-primary)',
+                                color: 'var(--text-primary)',
+                              }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={isProcessingAdminDecision}
+                                onClick={() => handleAdminRejectRequest(req.id)}
+                              >
+                                Reject Request
+                              </Button>
+                              <Button
+                                variant="success"
+                                size="sm"
+                                disabled={isProcessingAdminDecision}
+                                onClick={() => handleAdminConfirmRequest(req.id)}
+                              >
+                                Confirm & Update Tab
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: History of Disposal */}
+            {disposalModalTab === 'history' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    History of all record series disposal evaluations and disposed year periods.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <select
+                      value={historyDivisionFilter}
+                      onChange={(e) => setHistoryDivisionFilter(e.target.value)}
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                    >
+                      <option value="ALL">All Divisions</option>
+                      {Array.from(new Set(disposalOnlyLogs.map(l => l.division || 'General'))).sort().map(d => <option key={`d-div-${d}`} value={d}>{d}</option>)}
+                    </select>
+                    <select
+                      value={historyCategoryFilter}
+                      onChange={(e) => setHistoryCategoryFilter(e.target.value)}
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                    >
+                      <option value="ALL">All Categories</option>
+                      {Array.from(new Set(disposalOnlyLogs.map(l => l.classificationCategory).filter(Boolean))).sort().map(c => <option key={`d-cat-${String(c)}`} value={String(c)}>{c}</option>)}
+                    </select>
+                    <div style={{ width: '220px' }}>
+                      <SearchBar
+                        value={historySearchQuery}
+                        onChange={(e) => setHistorySearchQuery(e.target.value)}
+                        placeholder="Search logs..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const expandedLogs: any[] = [];
+                  disposalOnlyLogs.forEach((log) => {
+                    const yearsStr = String(log.disposedYears || '').trim();
+                    let yearList: number[] = [];
+
+                    if (yearsStr.includes('-')) {
+                      const parts = yearsStr.split('-').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+                      if (parts.length === 2 && parts[0] <= parts[1]) {
+                        for (let y = parts[0]; y <= parts[1]; y++) yearList.push(y);
+                      }
+                    }
+                    if (yearList.length === 0) {
+                      yearList = (yearsStr.match(/\b\d{4}\b/g) || []).map((n) => parseInt(n, 10));
+                    }
+
+                    if (yearList.length > 1) {
+                      yearList.forEach((singleYear, idx) => {
+                        expandedLogs.push({
+                          ...log,
+                          id: `${log.id}-${singleYear}-${idx}`,
+                          disposedYears: String(singleYear),
+                        });
+                      });
+                    } else {
+                      expandedLogs.push(log);
+                    }
+                  });
+
+                  const filteredLogs = expandedLogs.filter((log) => {
+                    if (historyDivisionFilter !== 'ALL' && (log.division || 'General') !== historyDivisionFilter) return false;
+                    if (historyCategoryFilter !== 'ALL' && log.classificationCategory !== historyCategoryFilter) return false;
+                    const q = historySearchQuery.toLowerCase().trim();
+                    if (!q) return true;
+                    return (
+                      (log.seriesTitle && log.seriesTitle.toLowerCase().includes(q)) ||
+                      (log.division && log.division.toLowerCase().includes(q)) ||
+                      (log.classificationCategory && log.classificationCategory.toLowerCase().includes(q)) ||
+                      (log.subCategory && log.subCategory.toLowerCase().includes(q)) ||
+                      (log.disposedYears && log.disposedYears.toLowerCase().includes(q))
+                    );
+                  });
+
+                  if (filteredLogs.length === 0) {
+                    return (
+                      <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                        No disposal history logs found.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '380px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Disposed Year</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredLogs.map((log) => (
+                            <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem' }}>
+                                <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(log.seriesTitle)}</div>
+                                {log.attachmentUrl && (
+                                  <div style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
+                                    <a href={log.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
+                                      📎 {log.attachmentName || 'Proof Document'}
+                                    </a>
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {log.division || 'General'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                {log.classificationCategory || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(239, 68, 68, 0.12)', color: '#b91c1c', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, fontSize: '0.8rem' }}>
+                                  <MdDeleteOutline style={{ fontSize: '0.95rem' }} /> {log.disposedYears}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <Button variant="secondary" onClick={() => setShowDisposalManagementModal(false)}>
                 Close Window
               </Button>
             </div>
@@ -3048,80 +4313,160 @@ function InventoryAppraisal() {
         <Modal
           isOpen={showActiveDeskModal}
           onClose={() => setShowActiveDeskModal(false)}
-          title="Active Desk Retention Expiry Evaluation"
-          size="lg"
+          title={`Evaluate Storage Records (${activeDeskEligibleRecords.length})`}
+          size="xl"
         >
           <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-              <strong>Active Period Reached:</strong> The following record series have completed their designated active desk period. Transitioning a record to <strong>Storage</strong> sets its stage to Storage and starts the storage retention countdown toward disposal eligibility. Choosing <strong>Keep in Active</strong> retains its active desk status.
+              <strong>Active Period Reached:</strong> The following record series have completed their designated active desk period. Transitioning a record to <strong>Storage</strong> sets its stage to Storage and starts the storage retention countdown toward disposal eligibility.
             </div>
 
-            <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Item No.</th>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Record Series</th>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Division</th>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Active Limit</th>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Elapsed Yrs</th>
-                    <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions / Transition Choice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeDeskEligibleRecords.map((record) => {
-                    const info = getOngoingActiveDeskInfo(record.inclusiveDates, Number(record.activeDeskYrs), record.retentionStage);
-                    return (
-                      <tr key={record.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '0.75rem 0.85rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                          {record.prdsGrds && record.itemNo ? (
-                            <div>
-                              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{record.prdsGrds}</div>
-                              <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{record.itemNo}</div>
+            {activeDeskEligibleRecords.length === 0 ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                No records currently eligible for storage evaluation.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Item No.</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Record Series</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Division</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Active Limit</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Elapsed Yrs</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions / Transition Choice</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeDeskEligibleRecords.map((record) => {
+                      const info = getOngoingActiveDeskInfo(record.inclusiveDates, Number(record.activeDeskYrs), record.retentionStage);
+                      return (
+                        <tr key={record.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                            {record.prdsGrds && record.itemNo ? (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{record.prdsGrds}</div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{record.itemNo}</div>
+                              </div>
+                            ) : (
+                              record.prdsGrds || record.itemNo || '-'
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{cleanSeriesTitle(record.seriesTitle)}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formatDynamicDates(record.inclusiveDates)}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem' }}>{record.division || 'General'}</td>
+                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>{record.classificationCategory || '-'}</td>
+                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600 }}>{record.activeDeskYrs} yrs</td>
+                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                            <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
+                              {info?.elapsedYears || record.activeDeskYrs} yrs
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                              <Button
+                                variant="primary"
+                                style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem', background: '#d97706', borderColor: '#d97706' }}
+                                onClick={() => handleMoveToStorage(record)}
+                              >
+                                Move to Storage ➔
+                              </Button>
                             </div>
-                          ) : (
-                            record.prdsGrds || record.itemNo || '-'
-                          )}
-                        </td>
-                        <td style={{ padding: '0.75rem 0.85rem' }}>
-                          <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{record.seriesTitle}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formatDynamicDates(record.inclusiveDates)}</div>
-                        </td>
-                        <td style={{ padding: '0.75rem 0.85rem' }}>{record.division || 'General'}</td>
-                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600 }}>{record.activeDeskYrs} yrs</td>
-                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                          <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
-                            {info?.elapsedYears || record.activeDeskYrs} yrs
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                            <Button
-                              variant="secondary"
-                              style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem' }}
-                              onClick={() => handleKeepInActiveDesk(record)}
-                            >
-                              Keep in Active
-                            </Button>
-                            <Button
-                              variant="primary"
-                              style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem', background: '#d97706', borderColor: '#d97706' }}
-                              onClick={() => handleMoveToStorage(record)}
-                            >
-                              Move to Storage ➔
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
               <Button variant="secondary" onClick={() => setShowActiveDeskModal(false)}>
                 Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Single Record Move to Storage Confirmation Modal */}
+      {singleStorageRecord && (
+        <Modal
+          isOpen={!!singleStorageRecord}
+          onClose={() => setSingleStorageRecord(null)}
+          title="Move to Storage"
+          size="md"
+        >
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              <strong>Confirm Storage Transition:</strong> You are about to move this record series from <strong>Active</strong> to <strong>Storage</strong> stage. This will start the storage retention countdown toward disposal eligibility.
+            </div>
+
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', width: '40%', background: 'var(--bg-secondary)' }}>Item No.</td>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                      {singleStorageRecord.prdsGrds && singleStorageRecord.itemNo
+                        ? `${singleStorageRecord.prdsGrds} — ${singleStorageRecord.itemNo}`
+                        : singleStorageRecord.prdsGrds || singleStorageRecord.itemNo || '-'}
+                    </td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Record Series</td>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 600 }}>{cleanSeriesTitle(singleStorageRecord.seriesTitle)}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Division</td>
+                    <td style={{ padding: '0.7rem 1rem' }}>{singleStorageRecord.division || 'General'}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Category</td>
+                    <td style={{ padding: '0.7rem 1rem' }}>{singleStorageRecord.classificationCategory || '-'}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Inclusive Dates</td>
+                    <td style={{ padding: '0.7rem 1rem' }}>{formatDynamicDates(singleStorageRecord.inclusiveDates)}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Active Desk Period</td>
+                    <td style={{ padding: '0.7rem 1rem' }}>
+                      <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
+                        {singleStorageRecord.activeDeskYrs} year(s) reached
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>New Stage</td>
+                    <td style={{ padding: '0.7rem 1rem' }}>
+                      <span style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
+                        Active → Storage
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+              <Button variant="secondary" onClick={() => setSingleStorageRecord(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                style={{ background: '#d97706', borderColor: '#d97706' }}
+                onClick={() => {
+                  handleMoveToStorage(singleStorageRecord);
+                  setSingleStorageRecord(null);
+                }}
+              >
+                <MdArchive style={{ marginRight: '0.3rem' }} /> Confirm Move to Storage
               </Button>
             </div>
           </div>
@@ -3264,9 +4609,7 @@ function InventoryAppraisal() {
               <Button variant="secondary" onClick={() => setShowNapFormPreview(false)}>
                 Close
               </Button>
-              <Button variant="secondary" onClick={handleExportNapForm1}>
-                <MdFileDownload style={{ marginRight: '0.35rem' }} /> Export to Excel (.xlsx)
-              </Button>
+
               <Button variant="primary" onClick={() => handlePrintNapForm1(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab)}>
                 <MdPrint style={{ marginRight: '0.35rem' }} /> Print NAP Form 1
               </Button>
@@ -3288,12 +4631,9 @@ function InventoryAppraisal() {
             {getOngoingActiveDeskInfo(viewingRecord.inclusiveDates, Number(viewingRecord.activeDeskYrs), viewingRecord.retentionStage) !== null && (
               <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', padding: '0.85rem 1rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                  ⚠️ Active desk period ({viewingRecord.activeDeskYrs} yrs) has been reached! Move to storage or retain?
+                  ⚠️ Active desk period ({viewingRecord.activeDeskYrs} yrs) has been reached!
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <Button variant="secondary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); handleKeepInActiveDesk(rec); }}>
-                    Keep in Active
-                  </Button>
                   <Button variant="primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: '#d97706', borderColor: '#d97706' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); handleMoveToStorage(rec); }}>
                     Move to Storage ➔
                   </Button>
@@ -3535,6 +4875,346 @@ function InventoryAppraisal() {
                 Confirm Bulk Delete ({selectedIds.length})
               </Button>
             </div>
+          </div>
+        </Modal>
+      )}
+      {/* User Storage & Disposal Request Submission Modal */}
+      {showRequestModal && (
+        <Modal
+          isOpen={showRequestModal}
+          onClose={() => setShowRequestModal(false)}
+          title={`Submit Request for ${requestType}`}
+          size="md"
+        >
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                Selected Record Series ({targetRequestRecords.length})
+              </div>
+              <div style={{ marginTop: '0.35rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '140px', overflowY: 'auto' }}>
+                {targetRequestRecords.map((r) => (
+                  <div key={`req-rec-${r.id}`} style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{r.seriesTitle}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{r.division || 'General'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                Reason for {requestType} *
+              </label>
+              <textarea
+                style={{
+                  width: '100%',
+                  minHeight: '90px',
+                  padding: '0.65rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  fontFamily: 'inherit',
+                }}
+                placeholder={`Explain why these records should be moved to ${requestType}...`}
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                Attach Proof Document / Authorization File (Optional)
+              </label>
+              <input
+                type="file"
+                onChange={(e) => setRequestFile(e.target.files?.[0] || null)}
+                style={{
+                  fontSize: '0.85rem',
+                  color: 'var(--text-primary)',
+                }}
+              />
+              {requestFile && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
+                  Selected file: {requestFile.name} ({(requestFile.size / 1024).toFixed(1)} KB)
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <Button variant="secondary" onClick={() => setShowRequestModal(false)} disabled={isSubmittingRequest}>
+                Cancel
+              </Button>
+              <Button
+                variant={requestType === 'Disposal' ? 'danger' : 'primary'}
+                onClick={handleSubmitInventoryRequest}
+                loading={isSubmittingRequest}
+              >
+                Submit {requestType} Request
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Admin Confirmation Box / Pending Requests Modal */}
+      {hasFullDivisionAccess && showPendingRequestsModal && (
+        <Modal
+          isOpen={showPendingRequestsModal}
+          onClose={() => setShowPendingRequestsModal(false)}
+          title={`Inventory Storage & Disposal Confirmation Queue (${pendingRequests.length} Pending)`}
+          size="lg"
+        >
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              Review pending storage and disposal requests submitted by users. Confirming a request will update the records' stage and log to history.
+            </p>
+
+            {pendingRequests.length === 0 ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                No pending requests awaiting confirmation.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto' }}>
+                {pendingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    style={{
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      background: 'var(--bg-secondary)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span
+                          style={{
+                            padding: '0.2rem 0.65rem',
+                            borderRadius: '99px',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            background: req.requestType === 'Storage' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: req.requestType === 'Storage' ? '#d97706' : '#dc2626',
+                            border: req.requestType === 'Storage' ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                          }}
+                        >
+                          {req.requestType === 'Storage' ? '📦 Storage Request' : '🗑️ Disposal Request'}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          Requested by {req.requesterName}
+                        </span>
+                      </div>
+
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {new Date(req.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div style={{ background: 'var(--bg-primary)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                        Target Records ({req.recordsSummary?.length || 0})
+                      </div>
+                      <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                        {(req.recordsSummary || []).map((s: any) => s.seriesTitle).join(', ')}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                      <strong>Reason provided:</strong> {req.reason}
+                    </div>
+
+                    {req.attachmentUrl && (
+                      <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                        📎 Attached Proof: <a href={req.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}>{req.attachmentName || 'View Attached Document'}</a>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                      <input
+                        type="text"
+                        placeholder="Admin confirmation or rejection remarks (optional)..."
+                        value={adminDecisionReason}
+                        onChange={(e) => setAdminDecisionReason(e.target.value)}
+                        style={{
+                          padding: '0.45rem 0.75rem',
+                          fontSize: '0.825rem',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          background: 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                        }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={isProcessingAdminDecision}
+                          onClick={() => handleAdminRejectRequest(req.id)}
+                        >
+                          Reject Request
+                        </Button>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          disabled={isProcessingAdminDecision}
+                          onClick={() => handleAdminConfirmRequest(req.id)}
+                        >
+                          Confirm & Update Tab
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Request Details Modal */}
+      {selectedRequestDetails && (
+        <Modal
+          isOpen={!!selectedRequestDetails}
+          onClose={() => setSelectedRequestDetails(null)}
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <MdInfoOutline style={{ color: 'var(--color-primary)', fontSize: '1.4rem' }} />
+              <span>{selectedRequestDetails.requestType} Request Details</span>
+            </div>
+          }
+          size="lg"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>Request Reference</div>
+                <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-primary)' }}>{selectedRequestDetails.id}</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                  Requested by <strong>{selectedRequestDetails.requesterName}</strong>
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                <span
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    borderRadius: '99px',
+                    fontSize: '0.85rem',
+                    fontWeight: 800,
+                    background: selectedRequestDetails.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : selectedRequestDetails.status === 'rejected' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                    color: selectedRequestDetails.status === 'approved' ? '#059669' : selectedRequestDetails.status === 'rejected' ? '#dc2626' : '#d97706',
+                    border: selectedRequestDetails.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : selectedRequestDetails.status === 'rejected' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                  }}
+                >
+                  {selectedRequestDetails.status === 'approved' ? '✓ Approved' : selectedRequestDetails.status === 'rejected' ? '✕ Rejected' : '⏳ Pending Confirmation'}
+                </span>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                  Submitted on {new Date(selectedRequestDetails.createdAt).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                Target Record Series ({selectedRequestDetails.recordsSummary?.length || selectedRequestDetails.recordIds?.length || 0})
+              </div>
+              <div style={{ borderRadius: '8px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
+                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
+                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>
+                        {selectedRequestDetails.requestType === 'Storage' ? 'Storage Year' : 'Disposed Year'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedRequestDetails.recordsSummary || []).length > 0 ? (
+                      selectedRequestDetails.recordsSummary.map((item: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {new Date(selectedRequestDetails.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                          </td>
+                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                            {cleanSeriesTitle(item.seriesTitle)}
+                          </td>
+                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600 }}>
+                            {item.division || 'General'}
+                          </td>
+                          <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)' }}>
+                            {item.classificationCategory || item.category || records.find((rec) => rec.id === item.id || (item.id && item.id.startsWith(`${rec.id}-`)))?.classificationCategory || '-'}
+                          </td>
+                          <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', fontWeight: 700, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>
+                            {item.inclusiveDates || 'N/A'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      (selectedRequestDetails.recordIds || []).map((id: string, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {new Date(selectedRequestDetails.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                          </td>
+                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>Record Entry {id}</td>
+                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600 }}>General</td>
+                          <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)' }}>-</td>
+                          <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', fontWeight: 700, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>N/A</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Reason Provided</div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{selectedRequestDetails.reason}</div>
+            </div>
+
+            {selectedRequestDetails.attachmentUrl && (
+              <div style={{ background: 'rgba(59, 130, 246, 0.08)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Attached Authorization / Proof</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.15rem' }}>{selectedRequestDetails.attachmentName || 'Proof Document'}</div>
+                </div>
+                <a
+                  href={selectedRequestDetails.attachmentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '6px',
+                    background: 'var(--color-primary)',
+                    color: '#fff',
+                    textDecoration: 'none',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  View File ↗
+                </a>
+              </div>
+            )}
+
+            {selectedRequestDetails.adminReason && (
+              <div style={{ background: selectedRequestDetails.status === 'approved' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)', padding: '0.85rem 1rem', borderRadius: '8px', border: selectedRequestDetails.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: selectedRequestDetails.status === 'approved' ? '#059669' : '#dc2626', textTransform: 'uppercase' }}>
+                  Admin Remarks
+                </div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                  {selectedRequestDetails.adminReason}
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}

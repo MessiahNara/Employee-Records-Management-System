@@ -39,7 +39,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
   });
 
   // AO specific form fields
-  const [aoType, setAoType] = useState<'Detailed' | 'Designated' | ''>('');
+  const [aoType, setAoType] = useState<'Detailed' | 'Designated' | 'Recalled' | ''>('');
   const [aoNumber, setAoNumber] = useState('');
   const [aoYear, setAoYear] = useState('');
   const [detailedTo, setDetailedTo] = useState('');
@@ -48,6 +48,10 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
   const [designatedPositionFunction, setDesignatedPositionFunction] = useState('');
   const [designatedOrderFrom, setDesignatedOrderFrom] = useState('');
   const [designatedOrderTo, setDesignatedOrderTo] = useState('');
+  const [recalledFrom, setRecalledFrom] = useState('');
+  const [recalledTo, setRecalledTo] = useState('');
+  const [recalledOrderFrom, setRecalledOrderFrom] = useState('');
+  const [recalledOrderTo, setRecalledOrderTo] = useState('');
   const [appointmentFrom, setAppointmentFrom] = useState('');
   const [appointmentTo, setAppointmentTo] = useState('');
   const [autoRename, setAutoRename] = useState(false);
@@ -73,6 +77,10 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
       setDesignatedPositionFunction('');
       setDesignatedOrderFrom('');
       setDesignatedOrderTo('');
+      setRecalledFrom('');
+      setRecalledTo('');
+      setRecalledOrderFrom('');
+      setRecalledOrderTo('');
       setAppointmentFrom('');
       setAppointmentTo('');
       setAutoRename(false);
@@ -159,6 +167,21 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
           errors.designatedOrderTo = 'Duration To is required';
         }
       }
+
+      if (aoType === 'Recalled') {
+        if (!recalledFrom) {
+          errors.recalledFrom = 'Recalled from is required';
+        }
+        if (!recalledTo) {
+          errors.recalledTo = 'Recalled to is required';
+        }
+        if (!recalledOrderFrom) {
+          errors.recalledOrderFrom = 'Duration From is required';
+        }
+        if (!recalledOrderTo) {
+          errors.recalledOrderTo = 'Duration To is required';
+        }
+      }
     }
 
     setFieldErrors(errors);
@@ -194,6 +217,10 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
         designatedPositionFunction,
         designatedOrderFrom: aoType === 'Designated' ? designatedOrderFrom : undefined,
         designatedOrderTo: aoType === 'Designated' ? designatedOrderTo : undefined,
+        recalledFrom: aoType === 'Recalled' ? recalledFrom : undefined,
+        recalledTo: aoType === 'Recalled' ? recalledTo : undefined,
+        recalledOrderFrom: aoType === 'Recalled' ? recalledOrderFrom : undefined,
+        recalledOrderTo: aoType === 'Recalled' ? recalledOrderTo : undefined,
         appointmentFrom: aoType === 'Detailed' ? appointmentFrom : undefined,
         appointmentTo: aoType === 'Detailed' ? appointmentTo : undefined,
         autoRename,
@@ -260,6 +287,10 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
                     setDesignatedPositionFunction('');
                     setDesignatedOrderFrom('');
                     setDesignatedOrderTo('');
+                    setRecalledFrom('');
+                    setRecalledTo('');
+                    setRecalledOrderFrom('');
+                    setRecalledOrderTo('');
                     setAppointmentFrom('');
                     setAppointmentTo('');
                   }}
@@ -268,6 +299,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
                   <option value="">Select AO Type</option>
                   <option value="Detailed">Detailed</option>
                   <option value="Designated">Designated</option>
+                  <option value="Recalled">Recalled</option>
                 </select>
                 {fieldErrors.aoType && <span className="upload-modal__field-error">⚠️ {fieldErrors.aoType}</span>}
               </div>
@@ -349,16 +381,28 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
                     disabled={isUploading}
                     fullWidth
                   />
-                  <Input
-                    id="appointment-to"
-                    label="Duration of Detailed Order (To)"
-                    type="date"
-                    value={appointmentTo}
-                    onChange={(e) => setAppointmentTo(e.target.value)}
-                    error={fieldErrors.appointmentTo}
-                    disabled={isUploading}
-                    fullWidth
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="appointment-to"
+                      label="Duration of Detailed Order (To)"
+                      type={appointmentTo === 'Until revoked' ? 'text' : 'date'}
+                      value={appointmentTo}
+                      onChange={(e) => setAppointmentTo(e.target.value)}
+                      error={fieldErrors.appointmentTo}
+                      disabled={isUploading || appointmentTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="detailed-until-revoked-upload"
+                        checked={appointmentTo === 'Until revoked'}
+                        onChange={(e) => setAppointmentTo(e.target.checked ? 'Until revoked' : '')}
+                        disabled={isUploading}
+                      />
+                      <label htmlFor="detailed-until-revoked-upload" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -408,20 +452,102 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
                     disabled={isUploading}
                     fullWidth
                   />
-                  <Input
-                    id="designated-order-to"
-                    label="Designated Order (To)"
-                    type="date"
-                    value={designatedOrderTo}
-                    onChange={(e) => setDesignatedOrderTo(e.target.value)}
-                    error={fieldErrors.designatedOrderTo}
-                    disabled={isUploading}
-                    fullWidth
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="designated-order-to"
+                      label="Designated Order (To)"
+                      type={designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={designatedOrderTo}
+                      onChange={(e) => setDesignatedOrderTo(e.target.value)}
+                      error={fieldErrors.designatedOrderTo}
+                      disabled={isUploading || designatedOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="designated-until-revoked-upload"
+                        checked={designatedOrderTo === 'Until revoked'}
+                        onChange={(e) => setDesignatedOrderTo(e.target.checked ? 'Until revoked' : '')}
+                        disabled={isUploading}
+                      />
+                      <label htmlFor="designated-until-revoked-upload" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
 
+            {aoType === 'Recalled' && (
+              <>
+                <div className="upload-modal__field">
+                  <label htmlFor="recalledFrom" className="upload-modal__label">
+                    Recalled from
+                  </label>
+                  <SearchableDropdown
+                    id="recalledFrom"
+                    options={dropdownOptions.officeNames}
+                    value={recalledFrom}
+                    onChange={setRecalledFrom}
+                    placeholder="Select or enter recalled from office"
+                    disabled={isUploading}
+                    className={fieldErrors.recalledFrom ? 'searchable-dropdown--error' : ''}
+                  />
+                  {fieldErrors.recalledFrom && <span className="upload-modal__field-error">⚠️ {fieldErrors.recalledFrom}</span>}
+                </div>
+
+                <div className="upload-modal__field">
+                  <label htmlFor="recalledTo" className="upload-modal__label">
+                    Recalled to
+                  </label>
+                  <SearchableDropdown
+                    id="recalledTo"
+                    options={dropdownOptions.officeNames}
+                    value={recalledTo}
+                    onChange={setRecalledTo}
+                    placeholder="Select or enter recalled to office"
+                    disabled={isUploading}
+                    className={fieldErrors.recalledTo ? 'searchable-dropdown--error' : ''}
+                  />
+                  {fieldErrors.recalledTo && <span className="upload-modal__field-error">⚠️ {fieldErrors.recalledTo}</span>}
+                </div>
+
+                <div className="upload-modal__form-row">
+                  <Input
+                    id="recalled-order-from"
+                    label="Duration of recalled Order (From)"
+                    type="date"
+                    value={recalledOrderFrom}
+                    onChange={(e) => setRecalledOrderFrom(e.target.value)}
+                    error={fieldErrors.recalledOrderFrom}
+                    disabled={isUploading}
+                    fullWidth
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="recalled-order-to"
+                      label="Duration of recalled Order (To)"
+                      type={recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={recalledOrderTo}
+                      onChange={(e) => setRecalledOrderTo(e.target.value)}
+                      error={fieldErrors.recalledOrderTo}
+                      disabled={isUploading || recalledOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="recalled-until-revoked-upload"
+                        checked={recalledOrderTo === 'Until revoked'}
+                        onChange={(e) => setRecalledOrderTo(e.target.checked ? 'Until revoked' : '')}
+                        disabled={isUploading}
+                      />
+                      <label htmlFor="recalled-until-revoked-upload" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
             
           </div>
         )}

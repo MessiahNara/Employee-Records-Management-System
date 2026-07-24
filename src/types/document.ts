@@ -27,6 +27,10 @@ export interface EmployeeDocument {
   designatedPositionFunction?: string;
   designatedOrderFrom?: string;
   designatedOrderTo?: string;
+  recalledFrom?: string;
+  recalledTo?: string;
+  recalledOrderFrom?: string;
+  recalledOrderTo?: string;
   appointmentFrom?: string;
   appointmentTo?: string;
 }

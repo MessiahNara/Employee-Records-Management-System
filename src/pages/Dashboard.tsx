@@ -45,10 +45,12 @@ interface ReportRow {
   name: string;
   position: string;
   motherUnit: string;
-  aoType: 'Detailed' | 'Designated' | '';
+  aoType: 'Detailed' | 'Designated' | 'Recalled' | '';
   assignedUnit: string;
   detailedOffice: string;
   designatedPositionFunction: string;
+  recalledFrom?: string;
+  recalledTo?: string;
   durationFrom: string;
   durationTo: string;
   dateOfBirth: string;
@@ -68,6 +70,8 @@ const COLUMN_LABELS: Record<string, string> = {
   motherUnit: 'Mother Unit',
   detailedOffice: 'Detailed/Transferred Office/Hospital',
   designatedPositionFunction: 'Designated Position/Function',
+  recalledFrom: 'Recalled From',
+  recalledTo: 'Recalled To',
   durationFrom: 'Duration From',
   durationTo: 'Duration To',
   dateOfBirth: 'Date of Birth',
@@ -81,6 +85,8 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   motherUnit: true,
   detailedOffice: true,
   designatedPositionFunction: true,
+  recalledFrom: true,
+  recalledTo: true,
   durationFrom: true,
   durationTo: true,
   dateOfBirth: true,
@@ -144,7 +150,9 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
 
   const durationHeader = aoStatus === 'Designated'
     ? 'Duration of Designated Order'
-    : 'Duration of Detailed Order';
+    : aoStatus === 'Detailed'
+      ? 'Duration of Detailed Order'
+      : 'Duration';
 
   const designatedHeader = aoStatus === 'Designated'
     ? 'Designated Position'
@@ -199,6 +207,7 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
 
   const formatDateMDYStr = (dateVal: any) => {
     if (!dateVal) return '';
+    if (dateVal === 'Until revoked') return 'Until revoked';
     const d = new Date(dateVal);
     if (isNaN(d.getTime())) return '';
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -814,7 +823,7 @@ function Dashboard() {
   // Generated Reports UI states
   const location = useLocation();
   const viewMode = location.pathname.startsWith('/reports') ? 'reports' : 'employees';
-  const [reportAoStatus, setReportAoStatus] = useState<'Detailed' | 'Designated' | 'All Employees'>('All Employees');
+  const [reportAoStatus, setReportAoStatus] = useState<'Detailed' | 'Designated' | 'Recalled' | 'All Employees'>('All Employees');
   const [reportSearchName, setReportSearchName] = useState('');
   const [reportMotherUnit, setReportMotherUnit] = useState('all');
   const [reportDetailedOffice, setReportDetailedOffice] = useState('all');
@@ -947,6 +956,10 @@ function Dashboard() {
     designatedPositionFunction: '',
     designatedOrderFrom: '',
     designatedOrderTo: '',
+    recalledFrom: '',
+    recalledTo: '',
+    recalledOrderFrom: '',
+    recalledOrderTo: '',
     fileboxLocation: '',
     file201Status: '',
   });
@@ -1169,11 +1182,12 @@ function Dashboard() {
 
   const reportRows = useMemo<ReportRow[]>(() => {
     // Determine AO type from the DB-persisted aoType field first,
-    // then fall back to isDetailed flag, then check designated fields.
+    // then fall back to isDetailed flag, then check designated/recalled fields.
     const inferAoType = (data: any): ReportRow['aoType'] => {
       const rawAoType = String(data.aoType || '').trim().toLowerCase();
       if (rawAoType === 'detailed') return 'Detailed';
       if (rawAoType === 'designated') return 'Designated';
+      if (rawAoType === 'recalled') return 'Recalled';
       // Legacy: isDetailed boolean stored before aoType column existed
       if (data.isDetailed === true) return 'Detailed';
       // Legacy: designated fields present without aoType
@@ -1182,6 +1196,12 @@ function Dashboard() {
         String(data.designatedOrderFrom || '').trim() ||
         String(data.designatedOrderTo || '').trim()
       ) return 'Designated';
+      if (
+        String(data.recalledFrom || '').trim() ||
+        String(data.recalledTo || '').trim() ||
+        String(data.recalledOrderFrom || '').trim() ||
+        String(data.recalledOrderTo || '').trim()
+      ) return 'Recalled';
       return '';
     };
 
@@ -1206,14 +1226,15 @@ function Dashboard() {
           detailedDivision: docSource.detailedDivision || (isCurrentAo ? source.detailedDivision : ''),
           detailedFunction: docSource.detailedFunction || (isCurrentAo ? source.detailedFunction : ''),
           detailedDate: docSource.detailedDate || (isCurrentAo ? source.detailedDate : null),
-          // detailedOrderFrom/To: prefer doc value; always fall back to the employee record
-          // regardless of isCurrentAo — the employee is the only source when the doc has no dates.
           detailedOrderFrom: docSource.detailedOrderFrom || docSource.appointmentFrom || source.detailedOrderFrom || null,
           detailedOrderTo: docSource.detailedOrderTo || docSource.appointmentTo || source.detailedOrderTo || null,
           designatedPositionFunction: docSource.designatedPositionFunction || (isCurrentAo ? source.designatedPositionFunction : ''),
-          // Same fallback logic for designated order dates
           designatedOrderFrom: docSource.designatedOrderFrom || source.designatedOrderFrom || null,
           designatedOrderTo: docSource.designatedOrderTo || source.designatedOrderTo || null,
+          recalledFrom: docSource.recalledFrom || (isCurrentAo ? source.recalledFrom : ''),
+          recalledTo: docSource.recalledTo || (isCurrentAo ? source.recalledTo : ''),
+          recalledOrderFrom: docSource.recalledOrderFrom || source.recalledOrderFrom || null,
+          recalledOrderTo: docSource.recalledOrderTo || source.recalledOrderTo || null,
           appointmentFrom: docSource.appointmentFrom || (isCurrentAo ? source.appointmentFrom : null),
           appointmentTo: docSource.appointmentTo || (isCurrentAo ? source.appointmentTo : null),
         }
@@ -1222,14 +1243,18 @@ function Dashboard() {
       const aoType = inferAoType(activeSource);
 
       // Detailed: duration = detailedOrderFrom / detailedOrderTo
-      //           fall back to detailedDate for "from" when detailedOrderFrom is absent (legacy records)
       // Designated: duration = designatedOrderFrom / designatedOrderTo
+      // Recalled: duration = recalledOrderFrom / recalledOrderTo
       const durationFrom = aoType === 'Detailed'
-        ? String(activeSource.detailedOrderFrom || activeSource.detailedDate || '').trim()
-        : String(activeSource.designatedOrderFrom || '').trim();
+        ? String(activeSource.detailedOrderFrom || activeSource.detailedDate || activeSource.appointmentFrom || '').trim()
+        : aoType === 'Recalled'
+          ? String(activeSource.recalledOrderFrom || activeSource.appointmentFrom || '').trim()
+          : String(activeSource.designatedOrderFrom || activeSource.appointmentFrom || '').trim();
       const durationTo = aoType === 'Detailed'
-        ? String(activeSource.detailedOrderTo || '').trim()
-        : String(activeSource.designatedOrderTo || '').trim();
+        ? String(activeSource.detailedOrderTo || activeSource.appointmentTo || '').trim()
+        : aoType === 'Recalled'
+          ? String(activeSource.recalledOrderTo || activeSource.appointmentTo || '').trim()
+          : String(activeSource.designatedOrderTo || activeSource.appointmentTo || '').trim();
 
       const aoOrderMonth = durationFrom
         ? (() => {
@@ -1257,6 +1282,8 @@ function Dashboard() {
         assignedUnit: motherUnit || '-',
         detailedOffice: String(activeSource.detailedTo || '').trim(),
         designatedPositionFunction: String(activeSource.designatedPositionFunction || '').trim(),
+        recalledFrom: String(activeSource.recalledFrom || '').trim(),
+        recalledTo: String(activeSource.recalledTo || '').trim(),
         durationFrom,
         durationTo,
         dateOfBirth,
@@ -1276,7 +1303,13 @@ function Dashboard() {
     allEmployees.forEach((emp) => {
       const docs = (emp as any).documents || [];
       const aoDocs = docs.filter((d: any) => d.category === 'Administrative Order');
-      if (aoDocs.length === 0) return;
+      if (aoDocs.length === 0) {
+        const row = buildRow(emp, `emp-${emp.id}`);
+        if (row.aoNumber || row.aoType) {
+          currentRows.push(row);
+        }
+        return;
+      }
 
       aoDocs.forEach((doc: any) => {
         // Build the row prioritizing fields from the document itself if present,
@@ -1305,10 +1338,10 @@ function Dashboard() {
       const emp = allEmployees.find((item) => item.id === empId);
       if (!emp) return;
 
-      // Exclude employee historical records if they no longer have an active Administrative Order document
+      // Exclude employee historical records if they no longer have an active Administrative Order document or AO fields
       const docs = (emp as any).documents || [];
       const hasAoDoc = docs.some((d: any) => d.category === 'Administrative Order');
-      if (!hasAoDoc) return;
+      if (!hasAoDoc && !(emp as any).aoNumber && !(emp as any).aoType) return;
 
       // Sort logs by createdAt descending (newest first)
       const sortedLogs = [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -1324,6 +1357,7 @@ function Dashboard() {
         const aoFields = [
           'aoNumber', 'aoType', 'detailedTo', 'appointmentFrom', 'appointmentTo',
           'designatedPositionFunction', 'designatedOrderFrom', 'designatedOrderTo',
+          'recalledFrom', 'recalledTo', 'recalledOrderFrom', 'recalledOrderTo',
           'aoYear', 'seriesNumber'
         ];
 
@@ -1424,6 +1458,7 @@ function Dashboard() {
     return reportRows.filter((row) => {
       if (reportAoStatus === 'Detailed' && row.aoType !== 'Detailed') return false;
       if (reportAoStatus === 'Designated' && row.aoType !== 'Designated') return false;
+      if (reportAoStatus === 'Recalled' && row.aoType !== 'Recalled') return false;
 
       if (reportSearchName.trim()) {
         const query = reportSearchName.toLowerCase().trim();
@@ -1674,8 +1709,10 @@ function Dashboard() {
       return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'durationFrom', 'durationTo', 'administrativeOrder'];
     } else if (reportAoStatus === 'Designated') {
       return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'durationFrom', 'durationTo', 'administrativeOrder'];
+    } else if (reportAoStatus === 'Recalled') {
+      return ['employeeId', 'name', 'position', 'motherUnit', 'recalledFrom', 'recalledTo', 'durationFrom', 'durationTo', 'administrativeOrder'];
     } else {
-      return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'durationFrom', 'durationTo', 'dateOfBirth', 'administrativeOrder'];
+      return ['employeeId', 'name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'recalledFrom', 'recalledTo', 'durationFrom', 'durationTo', 'dateOfBirth', 'administrativeOrder'];
     }
   }, [reportAoStatus]);
 
@@ -2390,9 +2427,38 @@ function Dashboard() {
       width: selectedReportRowIds.size > 0 ? '160px' : '50px',
     };
 
+    const renderDurationTo = (row: ReportRow) => {
+      if (!row.durationTo) return '—';
+      if (row.durationTo === 'Until revoked') return 'Until revoked';
+      const formattedDate = formatDateMDY(row.durationTo);
+      const formattedToday = formatDateMDY(new Date());
+      const isDeadlineToday = formattedDate !== '—' && formattedDate === formattedToday;
+
+      if (isDeadlineToday) {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span>{formattedDate}</span>
+            <span style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              color: 'var(--color-danger)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              padding: '0.125rem 0.375rem',
+              borderRadius: '4px',
+              whiteSpace: 'nowrap',
+              border: '1px solid rgba(239, 68, 68, 0.2)'
+            }}>
+              ⚠️ Today
+            </span>
+          </div>
+        );
+      }
+      return formattedDate;
+    };
+
     let baseColumns: Column<ReportRow>[] = [];
 
-    // All Employees: Employment ID, Name, Position, Mother Unit, Detailed/Transferred, Designated Position/Function, Duration From/To, Date of Birth, AO
+    // All Employees
     if (reportAoStatus === 'All Employees') {
       baseColumns = [
         {
@@ -2426,6 +2492,16 @@ function Dashboard() {
           render: (row) => row.designatedPositionFunction || '',
         },
         {
+          key: 'recalledFrom',
+          header: renderSortableHeader('Recalled From', 'recalledFrom'),
+          render: (row) => row.recalledFrom || '',
+        },
+        {
+          key: 'recalledTo',
+          header: renderSortableHeader('Recalled To', 'recalledTo'),
+          render: (row) => row.recalledTo || '',
+        },
+        {
           key: 'durationFrom',
           header: renderSortableHeader('Duration From', 'durationFrom'),
           render: (row) => row.durationFrom ? formatDateMDY(row.durationFrom) : '—',
@@ -2433,7 +2509,7 @@ function Dashboard() {
         {
           key: 'durationTo',
           header: renderSortableHeader('Duration To', 'durationTo'),
-          render: (row) => row.durationTo ? formatDateMDY(row.durationTo) : '—',
+          render: renderDurationTo,
         },
         {
           key: 'dateOfBirth',
@@ -2447,7 +2523,6 @@ function Dashboard() {
         },
       ];
     } else if (reportAoStatus === 'Detailed') {
-      // Detailed: Name, Position, Mother Unit, Detailed/Transferred Office/Hospital, Duration From/To, AO
       baseColumns = [
         {
           key: 'employeeId',
@@ -2482,7 +2557,55 @@ function Dashboard() {
         {
           key: 'durationTo',
           header: renderSortableHeader('Duration To', 'durationTo'),
-          render: (row) => row.durationTo ? formatDateMDY(row.durationTo) : '—',
+          render: renderDurationTo,
+        },
+        {
+          key: 'administrativeOrder',
+          header: renderSortableHeader('Administrative Order No.', 'aoNumber'),
+          render: (row) => renderAdministrativeOrder(row),
+        },
+      ];
+    } else if (reportAoStatus === 'Recalled') {
+      baseColumns = [
+        {
+          key: 'employeeId',
+          header: renderSortableHeader('Employment ID', 'employeeId'),
+          render: (row) => <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.employeeId}</span>,
+        },
+        {
+          key: 'name',
+          header: renderSortableHeader('Name of Employee', 'name'),
+          render: (row) => row.name,
+        },
+        {
+          key: 'position',
+          header: renderSortableHeader('Position', 'position'),
+          render: (row) => row.position || '-',
+        },
+        {
+          key: 'motherUnit',
+          header: renderSortableHeader('Mother Unit', 'motherUnit'),
+          render: (row) => row.motherUnit || '-',
+        },
+        {
+          key: 'recalledFrom',
+          header: renderSortableHeader('Recalled From', 'recalledFrom'),
+          render: (row) => row.recalledFrom || '',
+        },
+        {
+          key: 'recalledTo',
+          header: renderSortableHeader('Recalled To', 'recalledTo'),
+          render: (row) => row.recalledTo || '',
+        },
+        {
+          key: 'durationFrom',
+          header: renderSortableHeader('Duration From', 'durationFrom'),
+          render: (row) => row.durationFrom ? formatDateMDY(row.durationFrom) : '—',
+        },
+        {
+          key: 'durationTo',
+          header: renderSortableHeader('Duration To', 'durationTo'),
+          render: renderDurationTo,
         },
         {
           key: 'administrativeOrder',
@@ -2491,7 +2614,7 @@ function Dashboard() {
         },
       ];
     } else {
-      // Designated: Employment ID, Name of Employee, Position, Mother Unit, Designated Position/Function, Duration From/To, AO
+      // Designated
       baseColumns = [
         {
           key: 'employeeId',
@@ -2531,33 +2654,7 @@ function Dashboard() {
         {
           key: 'durationTo',
           header: renderSortableHeader('Duration To', 'durationTo'),
-          render: (row) => {
-            if (!row.durationTo) return '—';
-            const formattedDate = formatDateMDY(row.durationTo);
-            const formattedToday = formatDateMDY(new Date());
-            const isDeadlineToday = formattedDate !== '—' && formattedDate === formattedToday;
-
-            if (isDeadlineToday) {
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                  <span>{formattedDate}</span>
-                  <span style={{
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    color: 'var(--color-danger)',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    padding: '0.125rem 0.375rem',
-                    borderRadius: '4px',
-                    whiteSpace: 'nowrap',
-                    border: '1px solid rgba(239, 68, 68, 0.2)'
-                  }}>
-                    ⚠️ Today
-                  </span>
-                </div>
-              );
-            }
-            return formattedDate;
-          },
+          render: renderDurationTo,
         },
         {
           key: 'administrativeOrder',
@@ -2769,6 +2866,8 @@ function Dashboard() {
           { key: 'motherUnit', label: 'Mother Unit', value: row.motherUnit || '' },
           { key: 'detailedOffice', label: reportAoStatus === 'Detailed' ? 'Detailed/Transferred Office/Hospital' : reportAoStatus === 'Designated' ? 'Designated Office' : 'Detailed/Designated Office/Hospital', value: row.detailedOffice || '' },
           { key: 'designatedPositionFunction', label: 'Designated Position/Function', value: row.designatedPositionFunction || '' },
+          { key: 'recalledFrom', label: 'Recalled From', value: row.recalledFrom || '' },
+          { key: 'recalledTo', label: 'Recalled To', value: row.recalledTo || '' },
           { key: 'durationFrom', label: 'Duration From', value: row.durationFrom ? formatDateMDY(row.durationFrom) : '' },
           { key: 'durationTo', label: 'Duration To', value: row.durationTo ? formatDateMDY(row.durationTo) : '' },
           { key: 'dateOfBirth', label: 'Date of Birth', value: row.dateOfBirth || '' },
@@ -2829,7 +2928,9 @@ function Dashboard() {
 
     const durationColHeader = reportAoStatus === 'Designated'
       ? 'Duration of Designated Order'
-      : 'Duration of Detailed Order';
+      : reportAoStatus === 'Detailed'
+        ? 'Duration of Detailed Order'
+        : 'Duration';
 
     const logoSrc = `${window.location.origin}/template_logo.png`;
 
@@ -2849,7 +2950,15 @@ function Dashboard() {
       : 'Designated Position/Function';
 
     const isDetailed = reportAoStatus === 'Detailed';
+    const isRecalled = reportAoStatus === 'Recalled';
+    const isAllEmployees = reportAoStatus === 'All Employees';
     let tableHeaderHtml = '';
+
+    const renderPrintDuration = (duration: any) => {
+      if (!duration) return '—';
+      if (duration === 'Until revoked') return 'Until revoked';
+      return formatDateMDY(duration);
+    };
 
     if (isDetailed) {
       tableHeaderHtml = `
@@ -2867,7 +2976,7 @@ function Dashboard() {
             <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;vertical-align:middle;">To</th>
           </tr>
         </thead>`;
-    } else {
+    } else if (isRecalled) {
       tableHeaderHtml = `
         <thead>
           <tr style="background-color:#ffffff;">
@@ -2875,10 +2984,29 @@ function Dashboard() {
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">Name of Employee</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">Position</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">Mother Unit</th>
-            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">${officeColHeader}</th>
-            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">${designatedHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:10%;">Recalled From</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:10%;">Recalled To</th>
             <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">${durationColHeader}</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:13%;">Administrative Order No.</th>
+          </tr>
+          <tr style="background-color:#ffffff;">
+            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">From</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">To</th>
+          </tr>
+        </thead>`;
+    } else {
+      tableHeaderHtml = `
+        <thead>
+          <tr style="background-color:#ffffff;">
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:4%;">NO.</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">Name of Employee</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:10%;">Position</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:10%;">Mother Unit</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">${officeColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">${designatedHeader}</th>
+            ${isAllEmployees ? '<th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:8%;">Recalled From</th><th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:8%;">Recalled To</th>' : ''}
+            <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">${durationColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">Administrative Order No.</th>
           </tr>
           <tr style="background-color:#ffffff;">
             <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">From</th>
@@ -2890,10 +3018,11 @@ function Dashboard() {
     const pagesHtml = Array.from({ length: pageCount }, (_, pageIdx) => {
       const pageRows = tabRows.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
       const rowsHtml = pageRows.length === 0
-        ? `<tr><td colspan="${isDetailed ? 7 : 9}" style="border:1px solid #000;padding:20px;text-align:center;color:#555;font-family:'Times New Roman',Times,serif;vertical-align:middle;">No records found matching current filters.</td></tr>`
+        ? `<tr><td colspan="${isDetailed ? 7 : (isRecalled ? 8 : (isAllEmployees ? 10 : 9))}" style="border:1px solid #000;padding:20px;text-align:center;color:#555;font-family:'Times New Roman',Times,serif;vertical-align:middle;">No records found matching current filters.</td></tr>`
         : pageRows.map((row, idx) => {
           const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
           const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
+          const recalledText = row.recalledFrom && row.recalledTo ? `${row.recalledFrom} to ${row.recalledTo}` : (row.recalledFrom || row.recalledTo || '');
 
           if (isDetailed) {
             return `
@@ -2902,8 +3031,21 @@ function Dashboard() {
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.name}</td>
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.detailedOffice || ''}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${renderPrintDuration(row.durationFrom)}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${renderPrintDuration(row.durationTo)}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;">${ao}</td>
+              </tr>`;
+          } else if (isRecalled) {
+            return `
+              <tr style="background-color:#ffffff;">
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${globalIdx + 1}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.name}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.position || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.recalledFrom || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.recalledTo || ''}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${renderPrintDuration(row.durationFrom)}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${renderPrintDuration(row.durationTo)}</td>
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;">${ao}</td>
               </tr>`;
           } else {
@@ -2915,8 +3057,9 @@ function Dashboard() {
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.motherUnit || ''}</td>
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.detailedOffice || ''}</td>
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.designatedPositionFunction || ''}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
-                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
+                ${isAllEmployees ? `<td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.recalledFrom || ''}</td><td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;white-space:normal;">${row.recalledTo || ''}</td>` : ''}
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${renderPrintDuration(row.durationFrom)}</td>
+                <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;">${renderPrintDuration(row.durationTo)}</td>
                 <td style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;word-break:break-word;">${ao}</td>
               </tr>`;
           }
@@ -3277,6 +3420,10 @@ function Dashboard() {
       designatedPositionFunction: '',
       designatedOrderFrom: '',
       designatedOrderTo: '',
+      recalledFrom: '',
+      recalledTo: '',
+      recalledOrderFrom: '',
+      recalledOrderTo: '',
       fileboxLocation: '',
       file201Status: '',
     });
@@ -3320,6 +3467,10 @@ function Dashboard() {
       designatedPositionFunction: (employee as any).designatedPositionFunction || '',
       designatedOrderFrom: convertToDateInputFormat((employee as any).designatedOrderFrom),
       designatedOrderTo: convertToDateInputFormat((employee as any).designatedOrderTo),
+      recalledFrom: (employee as any).recalledFrom || '',
+      recalledTo: (employee as any).recalledTo || '',
+      recalledOrderFrom: convertToDateInputFormat((employee as any).recalledOrderFrom),
+      recalledOrderTo: convertToDateInputFormat((employee as any).recalledOrderTo),
       fileboxLocation: (employee as any).fileboxLocation || '',
       file201Status: (employee as any).file201Status || '',
     };
@@ -3431,12 +3582,18 @@ function Dashboard() {
         dateOfEmployment: formData.dateOfEmployment,
         dateOfSeparation: formData.dateOfSeparation || undefined,
         reasonOfSeparation: formData.reasonForSeparation || undefined,
-        motherUnit: formData.aoType === 'Detailed' ? formData.motherUnit || undefined : undefined,
+        motherUnit: formData.motherUnit || undefined,
         detailedTo: (formData.aoType === 'Detailed' || formData.aoType === 'Designated') ? formData.detailedTo || undefined : undefined,
         detailedDivision: formData.aoType === 'Detailed' ? formData.detailedDivision || undefined : undefined,
+        detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
+        detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
         designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
         designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
         designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
+        recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
+        recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
+        recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
+        recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
         fileboxLocation: formData.fileboxLocation || undefined,
       };
 
@@ -3469,6 +3626,10 @@ function Dashboard() {
               designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
               designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
               designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
+              recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
+              recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
+              recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
+              recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
               autoRename,
             },
             currentUser?.id,
@@ -3504,6 +3665,10 @@ function Dashboard() {
       formData.designatedPositionFunction = '';
       formData.designatedOrderFrom = '';
       formData.designatedOrderTo = '';
+      formData.recalledFrom = '';
+      formData.recalledTo = '';
+      formData.recalledOrderFrom = '';
+      formData.recalledOrderTo = '';
     }
 
     if (!validateForm(true) || !selectedEmployee || !originalEmployeeData) {
@@ -3540,6 +3705,10 @@ function Dashboard() {
         designatedPositionFunction: 'designatedPositionFunction',
         designatedOrderFrom: 'designatedOrderFrom',
         designatedOrderTo: 'designatedOrderTo',
+        recalledFrom: 'recalledFrom',
+        recalledTo: 'recalledTo',
+        recalledOrderFrom: 'recalledOrderFrom',
+        recalledOrderTo: 'recalledOrderTo',
         fileboxLocation: 'fileboxLocation',
         file201Status: 'file201Status',
       };
@@ -3581,6 +3750,10 @@ function Dashboard() {
                 designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
                 designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
                 designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
+                recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
+                recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
+                recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
+                recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
                 autoRename,
               },
               currentUser?.id,
@@ -3625,6 +3798,10 @@ function Dashboard() {
               designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
               designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
               designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
+              recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
+              recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
+              recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
+              recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
               autoRename,
             },
             currentUser?.id,
@@ -4188,11 +4365,12 @@ function Dashboard() {
                     <select
                       className="dashboard__filter-select"
                       value={reportAoStatus}
-                      onChange={(e) => setReportAoStatus(e.target.value as 'Detailed' | 'Designated' | 'All Employees')}
+                      onChange={(e) => setReportAoStatus(e.target.value as 'Detailed' | 'Designated' | 'Recalled' | 'All Employees')}
                     >
                       <option value="All Employees">All Employees</option>
                       <option value="Detailed">Detailed</option>
                       <option value="Designated">Designated</option>
+                      <option value="Recalled">Recalled</option>
                     </select>
                   </div>
 
@@ -5090,157 +5268,157 @@ function Dashboard() {
           <div className="dashboard__form-section">
             <h4 className="dashboard__form-section-header">Employment Details</h4>
 
-          <div className="dashboard__form-field">
-            <label htmlFor="office-hospital-name" className="dashboard__form-label">
-              Office / Hospital Name <span className="dashboard__required">*</span>
-            </label>
-            <SearchableDropdown
-              id="office-hospital-name"
-              options={dropdownOptions.officeNames}
-              value={formData.officeHospitalName}
-              onChange={(val) => handleFormChange('officeHospitalName', val)}
-              placeholder="Select or enter office or hospital name"
-            />
-            {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
-          </div>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="position-function" className="dashboard__form-label">
-              Position / Function <span className="dashboard__required">*</span>
-            </label>
-            <SearchableDropdown
-              id="position-function"
-              options={dropdownOptions.positions}
-              value={formData.positionFunction}
-              onChange={(val) => handleFormChange('positionFunction', val)}
-              placeholder="Select or enter position or function"
-            />
-            {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
-          </div>
-
-          <div className="dashboard__form-field">
-            <label htmlFor="status" className="dashboard__form-label">
-              Status <span className="dashboard__required">*</span>
-            </label>
-            <select
-              id="status"
-              className="dashboard__form-select"
-              value={formData.status}
-              onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-
-          <Input
-            id="date-of-employment"
-            label="Date of Employment"
-            type="date"
-            value={formData.dateOfEmployment}
-            onChange={(e) => handleFormChange('dateOfEmployment', e.target.value)}
-            error={formErrors.dateOfEmployment}
-            fullWidth
-          />
-
-          {formData.status === 'Inactive' && (
-            <>
-              <Input
-                id="date-of-separation"
-                label="Date of Separation"
-                type="date"
-                value={formData.dateOfSeparation}
-                onChange={(e) => handleFormChange('dateOfSeparation', e.target.value)}
-                error={formErrors.dateOfSeparation}
-                fullWidth
+            <div className="dashboard__form-field">
+              <label htmlFor="office-hospital-name" className="dashboard__form-label">
+                Office / Hospital Name <span className="dashboard__required">*</span>
+              </label>
+              <SearchableDropdown
+                id="office-hospital-name"
+                options={dropdownOptions.officeNames}
+                value={formData.officeHospitalName}
+                onChange={(val) => handleFormChange('officeHospitalName', val)}
+                placeholder="Select or enter office or hospital name"
               />
+              {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
+            </div>
 
-              <div className="dashboard__form-field">
-                <label htmlFor="reasonForSeparation" className="dashboard__form-label">
-                  Reason for Separation <span className="dashboard__required">*</span>
-                </label>
-                <select
-                  id="reasonForSeparation"
-                  className="dashboard__form-select"
-                  value={formData.reasonForSeparation}
-                  onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
-                >
-                  <option value="">Select reason for separation</option>
-                  {dropdownOptions.reasonsForSeparation.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))}
-                </select>
-                {formErrors.reasonForSeparation && (
-                  <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
-                )}
-              </div>
-            </>
-          )}
+            <div className="dashboard__form-field">
+              <label htmlFor="position-function" className="dashboard__form-label">
+                Position / Function <span className="dashboard__required">*</span>
+              </label>
+              <SearchableDropdown
+                id="position-function"
+                options={dropdownOptions.positions}
+                value={formData.positionFunction}
+                onChange={(val) => handleFormChange('positionFunction', val)}
+                placeholder="Select or enter position or function"
+              />
+              {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
+            </div>
 
-          <div className="dashboard__form-field">
-            <label htmlFor="appointmentStatus" className="dashboard__form-label">
-              Appointment Status <span className="dashboard__required">*</span>
-            </label>
-            <select
-              id="appointmentStatus"
-              className="dashboard__form-select"
-              value={formData.appointmentStatus}
-              onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
-            >
-              <option value="">Select appointment status</option>
-              {dropdownOptions.appointmentStatuses.map((s) => {
-                const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
-                return (
-                  <option key={s} value={displayName}>{displayName}</option>
-                );
-              })}
-            </select>
-            {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
-          </div>
+            <div className="dashboard__form-field">
+              <label htmlFor="status" className="dashboard__form-label">
+                Status <span className="dashboard__required">*</span>
+              </label>
+              <select
+                id="status"
+                className="dashboard__form-select"
+                value={formData.status}
+                onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
 
-          {/* Durational appointment statuses conditional date inputs */}
-          {formData.appointmentStatus && (
-            (() => {
-              const s = formData.appointmentStatus.toLowerCase().trim();
-              const isDefaultDurational = (
-                s === 'consultant' ||
-                s === 'contract of service' ||
-                s === 'contractual' ||
-                s === 'casual' ||
-                s === 'job order'
-              );
-              if (isDefaultDurational) return true;
+            <Input
+              id="date-of-employment"
+              label="Date of Employment"
+              type="date"
+              value={formData.dateOfEmployment}
+              onChange={(e) => handleFormChange('dateOfEmployment', e.target.value)}
+              error={formErrors.dateOfEmployment}
+              fullWidth
+            />
 
-              const matchedOption = dropdownOptions.appointmentStatuses.find(
-                (opt) => {
-                  const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
-                  return name.toLowerCase().trim() === s;
-                }
-              );
-              return matchedOption ? matchedOption.endsWith('|date') : false;
-            })()
-          ) && (
-              <div className="dashboard__form-row">
+            {formData.status === 'Inactive' && (
+              <>
                 <Input
-                  id="appointment-from"
-                  label="Appointment From"
+                  id="date-of-separation"
+                  label="Date of Separation"
                   type="date"
-                  value={formData.appointmentFrom}
-                  onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
-                  error={formErrors.appointmentFrom}
+                  value={formData.dateOfSeparation}
+                  onChange={(e) => handleFormChange('dateOfSeparation', e.target.value)}
+                  error={formErrors.dateOfSeparation}
                   fullWidth
                 />
-                <Input
-                  id="appointment-to"
-                  label="Appointment To"
-                  type="date"
-                  value={formData.appointmentTo}
-                  onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
-                  error={formErrors.appointmentTo}
-                  fullWidth
-                />
-              </div>
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="reasonForSeparation" className="dashboard__form-label">
+                    Reason for Separation <span className="dashboard__required">*</span>
+                  </label>
+                  <select
+                    id="reasonForSeparation"
+                    className="dashboard__form-select"
+                    value={formData.reasonForSeparation}
+                    onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
+                  >
+                    <option value="">Select reason for separation</option>
+                    {dropdownOptions.reasonsForSeparation.map((reason) => (
+                      <option key={reason} value={reason}>{reason}</option>
+                    ))}
+                  </select>
+                  {formErrors.reasonForSeparation && (
+                    <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
+                  )}
+                </div>
+              </>
             )}
+
+            <div className="dashboard__form-field">
+              <label htmlFor="appointmentStatus" className="dashboard__form-label">
+                Appointment Status <span className="dashboard__required">*</span>
+              </label>
+              <select
+                id="appointmentStatus"
+                className="dashboard__form-select"
+                value={formData.appointmentStatus}
+                onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
+              >
+                <option value="">Select appointment status</option>
+                {dropdownOptions.appointmentStatuses.map((s) => {
+                  const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
+                  return (
+                    <option key={s} value={displayName}>{displayName}</option>
+                  );
+                })}
+              </select>
+              {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
+            </div>
+
+            {/* Durational appointment statuses conditional date inputs */}
+            {formData.appointmentStatus && (
+              (() => {
+                const s = formData.appointmentStatus.toLowerCase().trim();
+                const isDefaultDurational = (
+                  s === 'consultant' ||
+                  s === 'contract of service' ||
+                  s === 'contractual' ||
+                  s === 'casual' ||
+                  s === 'job order'
+                );
+                if (isDefaultDurational) return true;
+
+                const matchedOption = dropdownOptions.appointmentStatuses.find(
+                  (opt) => {
+                    const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
+                    return name.toLowerCase().trim() === s;
+                  }
+                );
+                return matchedOption ? matchedOption.endsWith('|date') : false;
+              })()
+            ) && (
+                <div className="dashboard__form-row">
+                  <Input
+                    id="appointment-from"
+                    label="Appointment From"
+                    type="date"
+                    value={formData.appointmentFrom}
+                    onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
+                    error={formErrors.appointmentFrom}
+                    fullWidth
+                  />
+                  <Input
+                    id="appointment-to"
+                    label="Appointment To"
+                    type="date"
+                    value={formData.appointmentTo}
+                    onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
+                    error={formErrors.appointmentTo}
+                    fullWidth
+                  />
+                </div>
+              )}
 
           </div>
 
@@ -5260,6 +5438,10 @@ function Dashboard() {
                   handleFormChange('designatedPositionFunction', '');
                   handleFormChange('designatedOrderFrom', '');
                   handleFormChange('designatedOrderTo', '');
+                  handleFormChange('recalledFrom', '');
+                  handleFormChange('recalledTo', '');
+                  handleFormChange('recalledOrderFrom', '');
+                  handleFormChange('recalledOrderTo', '');
                   setAoFile(null);
                 }}
                 style={{
@@ -5296,6 +5478,7 @@ function Dashboard() {
                 <option value="">Select AO Type</option>
                 <option value="Detailed">Detailed</option>
                 <option value="Designated">Designated</option>
+                <option value="Recalled">Recalled</option>
               </select>
             </div>
 
@@ -5410,14 +5593,26 @@ function Dashboard() {
                     onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
                     fullWidth
                   />
-                  <Input
-                    id="appointment-to-add"
-                    label="Duration of Detailed Order (To)"
-                    type="date"
-                    value={formData.detailedOrderTo}
-                    onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
-                    fullWidth
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="appointment-to-add"
+                      label="Duration of Detailed Order (To)"
+                      type={formData.detailedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={formData.detailedOrderTo}
+                      onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
+                      disabled={formData.detailedOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="detailed-until-revoked-add"
+                        checked={formData.detailedOrderTo === 'Until revoked'}
+                        onChange={(e) => handleFormChange('detailedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                      />
+                      <label htmlFor="detailed-until-revoked-add" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -5459,14 +5654,87 @@ function Dashboard() {
                     onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
                     fullWidth
                   />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="designated-order-to"
+                      label="Designated Order (To)"
+                      type={formData.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={formData.designatedOrderTo}
+                      onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
+                      disabled={formData.designatedOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="designated-until-revoked-add"
+                        checked={formData.designatedOrderTo === 'Until revoked'}
+                        onChange={(e) => handleFormChange('designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                      />
+                      <label htmlFor="designated-until-revoked-add" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {formData.aoType === 'Recalled' && (
+              <>
+                <div className="dashboard__form-field">
+                  <label htmlFor="recalledFrom" className="dashboard__form-label">
+                    Recalled from
+                  </label>
+                  <SearchableDropdown
+                    id="recalledFrom"
+                    options={dropdownOptions.officeNames}
+                    value={formData.recalledFrom}
+                    onChange={(val) => handleFormChange('recalledFrom', val)}
+                    placeholder="Select or enter recalled from office"
+                  />
+                </div>
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="recalledTo" className="dashboard__form-label">
+                    Recalled to
+                  </label>
+                  <SearchableDropdown
+                    id="recalledTo"
+                    options={dropdownOptions.officeNames}
+                    value={formData.recalledTo}
+                    onChange={(val) => handleFormChange('recalledTo', val)}
+                    placeholder="Select or enter recalled to office"
+                  />
+                </div>
+
+                <div className="dashboard__form-row">
                   <Input
-                    id="designated-order-to"
-                    label="Designated Order (To)"
+                    id="recalled-order-from"
+                    label="Duration of recalled Order (From)"
                     type="date"
-                    value={formData.designatedOrderTo}
-                    onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
+                    value={formData.recalledOrderFrom}
+                    onChange={(e) => handleFormChange('recalledOrderFrom', e.target.value)}
                     fullWidth
                   />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="recalled-order-to"
+                      label="Duration of recalled Order (To)"
+                      type={formData.recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={formData.recalledOrderTo}
+                      onChange={(e) => handleFormChange('recalledOrderTo', e.target.value)}
+                      disabled={formData.recalledOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="recalled-until-revoked-add"
+                        checked={formData.recalledOrderTo === 'Until revoked'}
+                        onChange={(e) => handleFormChange('recalledOrderTo', e.target.checked ? 'Until revoked' : '')}
+                      />
+                      <label htmlFor="recalled-until-revoked-add" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -5812,6 +6080,10 @@ function Dashboard() {
                   handleFormChange('designatedPositionFunction', '');
                   handleFormChange('designatedOrderFrom', '');
                   handleFormChange('designatedOrderTo', '');
+                  handleFormChange('recalledFrom', '');
+                  handleFormChange('recalledTo', '');
+                  handleFormChange('recalledOrderFrom', '');
+                  handleFormChange('recalledOrderTo', '');
                   setAoFile(null);
                 }}
                 style={{
@@ -5848,180 +6120,266 @@ function Dashboard() {
                 <option value="">Select AO Type</option>
                 <option value="Detailed">Detailed</option>
                 <option value="Designated">Designated</option>
+                <option value="Recalled">Recalled</option>
               </select>
             </div>
 
-          <div className="dashboard__form-row">
-            <Input
-              id="update-ao-number"
-              label="AO Number"
-              placeholder="Enter Administrative Order number"
-              value={formData.aoNumber}
-              onChange={(e) => handleFormChange('aoNumber', e.target.value)}
-              fullWidth
-            />
+            <div className="dashboard__form-row">
+              <Input
+                id="update-ao-number"
+                label="AO Number"
+                placeholder="Enter Administrative Order number"
+                value={formData.aoNumber}
+                onChange={(e) => handleFormChange('aoNumber', e.target.value)}
+                fullWidth
+              />
+              <div className="dashboard__form-field">
+                <label htmlFor="update-ao-year" className="dashboard__form-label">
+                  Series
+                </label>
+                <select
+                  id="update-ao-year"
+                  className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
+                  value={formData.aoYear}
+                  onChange={(e) => handleFormChange('aoYear', e.target.value)}
+                >
+                  <option value="">Select series year</option>
+                  {dropdownOptions.aoYears.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+                {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
+              </div>
+            </div>
+
             <div className="dashboard__form-field">
-              <label htmlFor="update-ao-year" className="dashboard__form-label">
-                Series
+              <label htmlFor="update-ao-file" className="dashboard__form-label">
+                Upload AO PDF File {formData.aoNumber.trim() && formData.aoNumber !== originalEmployeeData?.aoNumber ? '(Required)' : '(Optional)'}
               </label>
-              <select
-                id="update-ao-year"
-                className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
-                value={formData.aoYear}
-                onChange={(e) => handleFormChange('aoYear', e.target.value)}
-              >
-                <option value="">Select series year</option>
-                {dropdownOptions.aoYears.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-              {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
+              <input
+                id="update-ao-file"
+                className="dashboard__form-input"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => setAoFile(e.target.files?.[0] || null)}
+                style={{
+                  padding: '0.5rem',
+                  border: '1px dashed var(--border-color)',
+                  borderRadius: 'var(--border-radius)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  width: '100%'
+                }}
+              />
+              {aoFile && (
+                <>
+                  <p style={{
+                    fontSize: '0.8125rem',
+                    marginTop: '0.375rem',
+                    color: 'var(--color-success)',
+                    fontWeight: 500
+                  }}>
+                    ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      id="update-auto-rename"
+                      checked={autoRename}
+                      onChange={(e) => setAutoRename(e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="update-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                      Auto rename file according to AO details
+                    </label>
+                  </div>
+                </>
+              )}
+              {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
             </div>
-          </div>
 
-          <div className="dashboard__form-field">
-            <label htmlFor="update-ao-file" className="dashboard__form-label">
-              Upload AO PDF File {formData.aoNumber.trim() && formData.aoNumber !== originalEmployeeData?.aoNumber ? '(Required)' : '(Optional)'}
-            </label>
-            <input
-              id="update-ao-file"
-              className="dashboard__form-input"
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={(e) => setAoFile(e.target.files?.[0] || null)}
-              style={{
-                padding: '0.5rem',
-                border: '1px dashed var(--border-color)',
-                borderRadius: 'var(--border-radius)',
-                backgroundColor: 'var(--bg-secondary)',
-                width: '100%'
-              }}
-            />
-            {aoFile && (
+            {formData.aoType === 'Detailed' && (
               <>
-                <p style={{
-                  fontSize: '0.8125rem',
-                  marginTop: '0.375rem',
-                  color: 'var(--color-success)',
-                  fontWeight: 500
-                }}>
-                  ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-                </p>
-                <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="checkbox"
-                    id="update-auto-rename"
-                    checked={autoRename}
-                    onChange={(e) => setAutoRename(e.target.checked)}
-                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="update-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                    Auto rename file according to AO details
+                <div className="dashboard__form-field">
+                  <label htmlFor="edit-detailedTo" className="dashboard__form-label">
+                    Detailed/Transferred Office
                   </label>
+                  <SearchableDropdown
+                    id="edit-detailedTo"
+                    options={dropdownOptions.officeNames}
+                    value={formData.detailedTo}
+                    onChange={(val) => handleFormChange('detailedTo', val)}
+                    placeholder="Select or enter office"
+                  />
+                </div>
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="edit-detailedDivision" className="dashboard__form-label">
+                    Division
+                  </label>
+                  <input
+                    id="edit-detailedDivision"
+                    className="dashboard__form-input"
+                    type="text"
+                    placeholder="Enter division"
+                    value={formData.detailedDivision}
+                    onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
+                  />
+                </div>
+
+                <div className="dashboard__form-row">
+                  <Input
+                    id="edit-appointment-from-detailed"
+                    label="Duration of Detailed Order (From)"
+                    type="date"
+                    value={formData.detailedOrderFrom}
+                    onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
+                    fullWidth
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="edit-appointment-to-detailed"
+                      label="Duration of Detailed Order (To)"
+                      type={formData.detailedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={formData.detailedOrderTo}
+                      onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
+                      disabled={formData.detailedOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="detailed-until-revoked-edit"
+                        checked={formData.detailedOrderTo === 'Until revoked'}
+                        onChange={(e) => handleFormChange('detailedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                      />
+                      <label htmlFor="detailed-until-revoked-edit" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
-            {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
-          </div>
 
-          {formData.aoType === 'Detailed' && (
-            <>
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-detailedTo" className="dashboard__form-label">
-                  Detailed/Transferred Office
-                </label>
-                <SearchableDropdown
-                  id="edit-detailedTo"
-                  options={dropdownOptions.officeNames}
-                  value={formData.detailedTo}
-                  onChange={(val) => handleFormChange('detailedTo', val)}
-                  placeholder="Select or enter office"
-                />
-              </div>
+            {formData.aoType === 'Designated' && (
+              <>
+                <div className="dashboard__form-field">
+                  <label htmlFor="edit-designatedOffice" className="dashboard__form-label">
+                    Designated Office
+                  </label>
+                  <SearchableDropdown
+                    id="edit-designatedOffice"
+                    options={dropdownOptions.officeNames}
+                    value={formData.detailedTo}
+                    onChange={(val) => handleFormChange('detailedTo', val)}
+                    placeholder="Select or enter designated office"
+                  />
+                </div>
 
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-detailedDivision" className="dashboard__form-label">
-                  Division
-                </label>
-                <input
-                  id="edit-detailedDivision"
-                  className="dashboard__form-input"
-                  type="text"
-                  placeholder="Enter division"
-                  value={formData.detailedDivision}
-                  onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
-                />
-              </div>
+                <div className="dashboard__form-field">
+                  <label htmlFor="edit-designatedPositionFunction" className="dashboard__form-label">
+                    Designated Position Function
+                  </label>
+                  <SearchableDropdown
+                    id="edit-designatedPositionFunction"
+                    options={dropdownOptions.positions}
+                    value={formData.designatedPositionFunction}
+                    onChange={(val) => handleFormChange('designatedPositionFunction', val)}
+                    placeholder="Select or enter position function"
+                  />
+                </div>
 
-              <div className="dashboard__form-row">
-                <Input
-                  id="edit-appointment-from-detailed"
-                  label="Duration of Detailed Order (From)"
-                  type="date"
-                  value={formData.detailedOrderFrom}
-                  onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
-                  fullWidth
-                />
-                <Input
-                  id="edit-appointment-to-detailed"
-                  label="Duration of Detailed Order (To)"
-                  type="date"
-                  value={formData.detailedOrderTo}
-                  onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
-                  fullWidth
-                />
-              </div>
-            </>
-          )}
+                <div className="dashboard__form-row">
+                  <Input
+                    id="edit-designated-order-from"
+                    label="Designated Order (From)"
+                    type="date"
+                    value={formData.designatedOrderFrom}
+                    onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
+                    fullWidth
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="edit-designated-order-to"
+                      label="Designated Order (To)"
+                      type={formData.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={formData.designatedOrderTo}
+                      onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
+                      disabled={formData.designatedOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="designated-until-revoked-edit"
+                        checked={formData.designatedOrderTo === 'Until revoked'}
+                        onChange={(e) => handleFormChange('designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                      />
+                      <label htmlFor="designated-until-revoked-edit" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
-          {formData.aoType === 'Designated' && (
-            <>
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-designatedOffice" className="dashboard__form-label">
-                  Designated Office
-                </label>
-                <SearchableDropdown
-                  id="edit-designatedOffice"
-                  options={dropdownOptions.officeNames}
-                  value={formData.detailedTo}
-                  onChange={(val) => handleFormChange('detailedTo', val)}
-                  placeholder="Select or enter designated office"
-                />
-              </div>
+            {formData.aoType === 'Recalled' && (
+              <>
+                <div className="dashboard__form-field">
+                  <label htmlFor="edit-recalledFrom" className="dashboard__form-label">
+                    Recalled from
+                  </label>
+                  <SearchableDropdown
+                    id="edit-recalledFrom"
+                    options={dropdownOptions.officeNames}
+                    value={formData.recalledFrom}
+                    onChange={(val) => handleFormChange('recalledFrom', val)}
+                    placeholder="Select or enter recalled from office"
+                  />
+                </div>
 
-              <div className="dashboard__form-field">
-                <label htmlFor="edit-designatedPositionFunction" className="dashboard__form-label">
-                  Designated Position Function
-                </label>
-                <SearchableDropdown
-                  id="edit-designatedPositionFunction"
-                  options={dropdownOptions.positions}
-                  value={formData.designatedPositionFunction}
-                  onChange={(val) => handleFormChange('designatedPositionFunction', val)}
-                  placeholder="Select or enter position function"
-                />
-              </div>
+                <div className="dashboard__form-field">
+                  <label htmlFor="edit-recalledTo" className="dashboard__form-label">
+                    Recalled to
+                  </label>
+                  <SearchableDropdown
+                    id="edit-recalledTo"
+                    options={dropdownOptions.officeNames}
+                    value={formData.recalledTo}
+                    onChange={(val) => handleFormChange('recalledTo', val)}
+                    placeholder="Select or enter recalled to office"
+                  />
+                </div>
 
-              <div className="dashboard__form-row">
-                <Input
-                  id="edit-designated-order-from"
-                  label="Designated Order (From)"
-                  type="date"
-                  value={formData.designatedOrderFrom}
-                  onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
-                  fullWidth
-                />
-                <Input
-                  id="edit-designated-order-to"
-                  label="Designated Order (To)"
-                  type="date"
-                  value={formData.designatedOrderTo}
-                  onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
-                  fullWidth
-                />
-              </div>
-            </>
-          )}
+                <div className="dashboard__form-row">
+                  <Input
+                    id="edit-recalled-order-from"
+                    label="Duration of recalled Order (From)"
+                    type="date"
+                    value={formData.recalledOrderFrom}
+                    onChange={(e) => handleFormChange('recalledOrderFrom', e.target.value)}
+                    fullWidth
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                    <Input
+                      id="edit-recalled-order-to"
+                      label="Duration of recalled Order (To)"
+                      type={formData.recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={formData.recalledOrderTo}
+                      onChange={(e) => handleFormChange('recalledOrderTo', e.target.value)}
+                      disabled={formData.recalledOrderTo === 'Until revoked'}
+                      fullWidth
+                    />
+                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="recalled-until-revoked-edit"
+                        checked={formData.recalledOrderTo === 'Until revoked'}
+                        onChange={(e) => handleFormChange('recalledOrderTo', e.target.checked ? 'Until revoked' : '')}
+                      />
+                      <label htmlFor="recalled-until-revoked-edit" style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
           </div>
 
@@ -6189,13 +6547,7 @@ function Dashboard() {
             >
               Close
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => exportReportData('xlsx')}
-              disabled={sortedReportRows.length === 0}
-            >
-              📊 Export XLSX
-            </Button>
+
             <Button
               variant="primary"
               onClick={async () => {
@@ -6246,7 +6598,9 @@ function Dashboard() {
                 : 'Detailed/Transferred Office/Hospital';
             const durationColHeader = reportAoStatus === 'Designated'
               ? 'Duration of Designated Order'
-              : 'Duration of Detailed Order';
+              : reportAoStatus === 'Detailed'
+                ? 'Duration of Detailed Order'
+                : 'Duration';
 
             const headerBlock = (
               <div style={{
@@ -6279,43 +6633,75 @@ function Dashboard() {
             );
 
             const isDetailed = reportAoStatus === 'Detailed';
+            const isRecalled = reportAoStatus === 'Recalled';
+            const isAllEmployees = reportAoStatus === 'All Employees';
             const designatedHeader = reportAoStatus === 'Designated'
               ? 'Designated Position'
               : 'Designated Position/Function';
 
-            const tableHeader = isDetailed ? (
-              <thead>
-                <tr style={{ backgroundColor: '#ffffff' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>NO.</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Name of Employee</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Mother Unit</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>{officeColHeader}</th>
-                  <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{durationColHeader}</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '19%' }}>Administrative Order No.</th>
-                </tr>
-                <tr style={{ backgroundColor: '#ffffff' }}>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>From</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>To</th>
-                </tr>
-              </thead>
-            ) : (
-              <thead>
-                <tr style={{ backgroundColor: '#ffffff' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Name of Employee</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Position</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Mother Unit</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>{officeColHeader}</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{designatedHeader}</th>
-                  <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>{durationColHeader}</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>Administrative Order No.</th>
-                </tr>
-                <tr style={{ backgroundColor: '#ffffff' }}>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>From</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>To</th>
-                </tr>
-              </thead>
-            );
+            const renderPrintDuration = (duration: any) => {
+              if (!duration) return '—';
+              if (duration === 'Until revoked') return 'Until revoked';
+              return formatDateMDY(duration);
+            };
+
+            let tableHeader;
+            if (isDetailed) {
+              tableHeader = (
+                <thead>
+                  <tr style={{ backgroundColor: '#ffffff' }}>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>NO.</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Name of Employee</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Mother Unit</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>{officeColHeader}</th>
+                    <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{durationColHeader}</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '19%' }}>Administrative Order No.</th>
+                  </tr>
+                  <tr style={{ backgroundColor: '#ffffff' }}>
+                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>From</th>
+                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>To</th>
+                  </tr>
+                </thead>
+              );
+            } else if (isRecalled) {
+              tableHeader = (
+                <thead>
+                  <tr style={{ backgroundColor: '#ffffff' }}>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Name of Employee</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Position</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Mother Unit</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Recalled From &amp; To</th>
+                    <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>{durationColHeader}</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>Administrative Order No.</th>
+                  </tr>
+                  <tr style={{ backgroundColor: '#ffffff' }}>
+                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>From</th>
+                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>To</th>
+                  </tr>
+                </thead>
+              );
+            } else {
+              tableHeader = (
+                <thead>
+                  <tr style={{ backgroundColor: '#ffffff' }}>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Name of Employee</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Position</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Mother Unit</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{officeColHeader}</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{designatedHeader}</th>
+                    {isAllEmployees && <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Recalled From &amp; To</th>}
+                    <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>{durationColHeader}</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>Administrative Order No.</th>
+                  </tr>
+                  <tr style={{ backgroundColor: '#ffffff' }}>
+                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>From</th>
+                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>To</th>
+                  </tr>
+                </thead>
+              );
+            }
 
             if (tabRows.length === 0) {
               return (
@@ -6336,7 +6722,7 @@ function Dashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: "'Times New Roman', Times, serif" }}>
                     {tableHeader}
                     <tbody>
-                      <tr><td colSpan={isDetailed ? 7 : 9} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
+                      <tr><td colSpan={isDetailed ? 7 : (isRecalled ? 8 : (isAllEmployees ? 10 : 9))} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
                     </tbody>
                   </table>
                 </>
@@ -6380,6 +6766,8 @@ function Dashboard() {
                     <tbody>
                       {pageRows.map((row, idx) => {
                         const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
+                        const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
+                        const recalledText = row.recalledFrom && row.recalledTo ? `${row.recalledFrom} to ${row.recalledTo}` : (row.recalledFrom || row.recalledTo || '');
 
                         if (isDetailed) {
                           return (
@@ -6388,11 +6776,22 @@ function Dashboard() {
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>
-                                {row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—'}
-                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
+                            </tr>
+                          );
+                        } else if (isRecalled) {
+                          return (
+                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{globalIdx + 1}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.position || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{recalledText}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
                             </tr>
                           );
                         } else {
@@ -6404,11 +6803,10 @@ function Dashboard() {
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.designatedPositionFunction || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationFrom ? formatDateMDY(row.durationFrom) : '—'}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{row.durationTo ? formatDateMDY(row.durationTo) : '—'}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>
-                                {row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—'}
-                              </td>
+                              {isAllEmployees && <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{recalledText}</td>}
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
                             </tr>
                           );
                         }
@@ -6435,13 +6833,7 @@ function Dashboard() {
             >
               Close
             </Button>
-            <Button
-              variant="secondary"
-              onClick={handleExportBorrowLogsToExcel}
-              disabled={filteredBorrowRows.length === 0}
-            >
-              📊 Export XLSX
-            </Button>
+
             <Button
               variant="primary"
               onClick={async () => {
