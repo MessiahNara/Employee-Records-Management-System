@@ -16,6 +16,7 @@ export function formatDateDDMMYYYY(dateString: string | Date | null | undefined)
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '—';
+    if (date.getFullYear() === 9999) return 'Until revoked';
 
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -42,6 +43,7 @@ export function formatDateMDY(dateString: string | Date | null | undefined): str
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '—';
+    if (date.getFullYear() === 9999) return 'Until revoked';
 
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -65,6 +67,7 @@ export function formatDateLong(dateString: string | Date | null | undefined): st
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '—';
+    if (date.getFullYear() === 9999) return 'Until revoked';
 
     return date.toLocaleDateString('en-US', {
       month: 'long',
@@ -88,6 +91,10 @@ export function convertToDateInputFormat(date: string | Date | null | undefined)
   try {
     const dateObj = new Date(date);
     if (isNaN(dateObj.getTime())) return '';
+
+    if (dateObj.getFullYear() === 9999) {
+      return 'Until revoked';
+    }
 
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');

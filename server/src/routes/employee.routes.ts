@@ -13,6 +13,9 @@ const toNullableDate = (value: any): Date | null => {
   if (value === undefined || value === null || value === '') {
     return null;
   }
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'until revoked') {
+    return new Date('9999-12-31T00:00:00.000Z');
+  }
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -288,6 +291,10 @@ router.post('/', async (req: Request, res: Response) => {
       designatedPositionFunction,
       designatedOrderFrom,
       designatedOrderTo,
+      recalledFrom,
+      recalledTo,
+      recalledOrderFrom,
+      recalledOrderTo,
       fileboxLocation,
     } = req.body;
 
@@ -332,10 +339,14 @@ router.post('/', async (req: Request, res: Response) => {
         detailedFunction: detailedFunction || null,
         detailedDate: detailedDate ? new Date(detailedDate) : null,
         detailedOrderFrom: detailedOrderFrom ? new Date(detailedOrderFrom) : null,
-        detailedOrderTo: detailedOrderTo ? new Date(detailedOrderTo) : null,
+        detailedOrderTo: toNullableDate(detailedOrderTo),
         designatedPositionFunction: designatedPositionFunction || null,
         designatedOrderFrom: designatedOrderFrom ? new Date(designatedOrderFrom) : null,
-        designatedOrderTo: designatedOrderTo ? new Date(designatedOrderTo) : null,
+        designatedOrderTo: toNullableDate(designatedOrderTo),
+        recalledFrom: recalledFrom || null,
+        recalledTo: recalledTo || null,
+        recalledOrderFrom: recalledOrderFrom ? new Date(recalledOrderFrom) : null,
+        recalledOrderTo: toNullableDate(recalledOrderTo),
         fileboxLocation: fileboxLocation || null,
       },
     });
@@ -565,13 +576,19 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
       updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
     }
     if ('designatedOrderTo' in updateData) {
-      updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
+      updateData.designatedOrderTo = toNullableDate(updateData.designatedOrderTo);
+    }
+    if ('recalledOrderFrom' in updateData) {
+      updateData.recalledOrderFrom = updateData.recalledOrderFrom ? new Date(updateData.recalledOrderFrom) : null;
+    }
+    if ('recalledOrderTo' in updateData) {
+      updateData.recalledOrderTo = toNullableDate(updateData.recalledOrderTo);
     }
     if ('detailedOrderFrom' in updateData) {
       updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
     }
     if ('detailedOrderTo' in updateData) {
-      updateData.detailedOrderTo = updateData.detailedOrderTo ? new Date(updateData.detailedOrderTo) : null;
+      updateData.detailedOrderTo = toNullableDate(updateData.detailedOrderTo);
     }
 
     // Fetch old values before overwriting so audit history can be reconstructed
@@ -631,6 +648,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'aoYear', 'aoType', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
       'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate', 'detailedOrderFrom', 'detailedOrderTo',
       'designatedPositionFunction', 'designatedOrderFrom', 'designatedOrderTo',
+      'recalledFrom', 'recalledTo', 'recalledOrderFrom', 'recalledOrderTo',
       'fileboxLocation', 'file201Status'
     ];
 
@@ -666,13 +684,19 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
     }
     if ('designatedOrderTo' in updateData) {
-      updateData.designatedOrderTo = updateData.designatedOrderTo ? new Date(updateData.designatedOrderTo) : null;
+      updateData.designatedOrderTo = toNullableDate(updateData.designatedOrderTo);
     }
     if ('detailedOrderFrom' in updateData) {
       updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
     }
     if ('detailedOrderTo' in updateData) {
-      updateData.detailedOrderTo = updateData.detailedOrderTo ? new Date(updateData.detailedOrderTo) : null;
+      updateData.detailedOrderTo = toNullableDate(updateData.detailedOrderTo);
+    }
+    if ('recalledOrderFrom' in updateData) {
+      updateData.recalledOrderFrom = updateData.recalledOrderFrom ? new Date(updateData.recalledOrderFrom) : null;
+    }
+    if ('recalledOrderTo' in updateData) {
+      updateData.recalledOrderTo = toNullableDate(updateData.recalledOrderTo);
     }
     if ('isDetailed' in updateData) {
       updateData.isDetailed = updateData.isDetailed === true || updateData.isDetailed === 'true';
@@ -750,6 +774,10 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
             designatedPositionFunction: updateData.designatedPositionFunction !== undefined ? updateData.designatedPositionFunction : (oldEmployee as any).designatedPositionFunction,
             designatedOrderFrom: updateData.designatedOrderFrom !== undefined ? updateData.designatedOrderFrom : (oldEmployee as any).designatedOrderFrom,
             designatedOrderTo: updateData.designatedOrderTo !== undefined ? updateData.designatedOrderTo : (oldEmployee as any).designatedOrderTo,
+            recalledFrom: updateData.recalledFrom !== undefined ? updateData.recalledFrom : (oldEmployee as any).recalledFrom,
+            recalledTo: updateData.recalledTo !== undefined ? updateData.recalledTo : (oldEmployee as any).recalledTo,
+            recalledOrderFrom: updateData.recalledOrderFrom !== undefined ? updateData.recalledOrderFrom : (oldEmployee as any).recalledOrderFrom,
+            recalledOrderTo: updateData.recalledOrderTo !== undefined ? updateData.recalledOrderTo : (oldEmployee as any).recalledOrderTo,
             fileboxLocation: updateData.fileboxLocation !== undefined ? updateData.fileboxLocation : oldEmployee.fileboxLocation,
             file201Status: updateData.file201Status !== undefined ? updateData.file201Status : oldEmployee.file201Status,
             profilePicture: oldEmployee.profilePicture,
@@ -1170,6 +1198,10 @@ router.post('/delete-report-entries', async (req: Request, res: Response) => {
                 designatedPositionFunction: null,
                 designatedOrderFrom: null,
                 designatedOrderTo: null,
+                recalledFrom: null,
+                recalledTo: null,
+                recalledOrderFrom: null,
+                recalledOrderTo: null,
                 isDetailed: false,
               }
             });
@@ -1237,7 +1269,10 @@ router.post('/delete-report-entries', async (req: Request, res: Response) => {
               detailedTo: null, detailedDivision: null, detailedFunction: null,
               detailedDate: null, detailedOrderFrom: null, detailedOrderTo: null,
               designatedPositionFunction: null,
-              designatedOrderFrom: null, designatedOrderTo: null, isDetailed: false,
+              designatedOrderFrom: null, designatedOrderTo: null,
+              recalledFrom: null, recalledTo: null,
+              recalledOrderFrom: null, recalledOrderTo: null,
+              isDetailed: false,
             }
           });
 
@@ -1263,3 +1298,4 @@ router.post('/delete-report-entries', async (req: Request, res: Response) => {
 });
 
 export default router;
+// force reload

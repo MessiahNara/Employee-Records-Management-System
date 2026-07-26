@@ -13,6 +13,9 @@ const toNullableDate = (value: any): Date | null => {
   if (value === undefined || value === null || value === '') {
     return null;
   }
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'until revoked') {
+    return new Date('9999-12-31T00:00:00.000Z');
+  }
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -172,6 +175,10 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       designatedPositionFunction,
       designatedOrderFrom,
       designatedOrderTo,
+      recalledFrom,
+      recalledTo,
+      recalledOrderFrom,
+      recalledOrderTo,
       appointmentFrom,
       appointmentTo,
       autoRename
@@ -293,6 +300,10 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
         designatedPositionFunction: designatedPositionFunction || null,
         designatedOrderFrom: toNullableDate(designatedOrderFrom),
         designatedOrderTo: toNullableDate(designatedOrderTo),
+        recalledFrom: recalledFrom || null,
+        recalledTo: recalledTo || null,
+        recalledOrderFrom: toNullableDate(recalledOrderFrom),
+        recalledOrderTo: toNullableDate(recalledOrderTo),
         appointmentFrom: toNullableDate(appointmentFrom),
         appointmentTo: toNullableDate(appointmentTo),
       },

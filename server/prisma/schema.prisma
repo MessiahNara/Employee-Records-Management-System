@@ -76,6 +76,10 @@ model Employee {
   designatedPositionFunction String?   // position/function when designated
   designatedOrderFrom        DateTime? // start date of designation order
   designatedOrderTo          DateTime? // end date of designation order
+  recalledFrom               String?
+  recalledTo                 String?
+  recalledOrderFrom          DateTime?
+  recalledOrderTo            DateTime?
   fileboxLocation     String?   // physical filebox location of the 201 file
   file201Status       String?   @default("Available") // Available | Borrowed | Overdue | Lost
   profilePicture      String?   // Profile picture file path (optional)
@@ -116,6 +120,10 @@ model Document {
   designatedPositionFunction  String?
   designatedOrderFrom         DateTime?
   designatedOrderTo           DateTime?
+  recalledFrom                String?
+  recalledTo                  String?
+  recalledOrderFrom           DateTime?
+  recalledOrderTo             DateTime?
   appointmentFrom             DateTime?
   appointmentTo               DateTime?
 

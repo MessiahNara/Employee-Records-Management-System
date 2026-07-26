@@ -144,9 +144,11 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
   // ── Column header labels ──────────────────────────────────────────────────
   const officeHeader = aoStatus === 'Designated'
     ? 'Designated Office'
-    : aoStatus === 'All Employees'
-      ? 'Detailed/Designated Office/Hospital'
-      : 'Detailed/Transferred Office/Hospital';
+    : aoStatus === 'Recalled'
+      ? 'Recalled From'
+      : aoStatus === 'All Employees'
+        ? 'Detailed/Designated Office/Hospital'
+        : 'Detailed/Transferred Office/Hospital';
 
   const durationHeader = aoStatus === 'Designated'
     ? 'Duration of Designated Order'
@@ -156,7 +158,9 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
 
   const designatedHeader = aoStatus === 'Designated'
     ? 'Designated Position'
-    : 'Designated Position/Function';
+    : aoStatus === 'Recalled'
+      ? 'Recalled To'
+      : 'Designated Position/Function';
 
   // ── Re-write column widths to accommodate 7 or 9 columns ──────────────────
   let colsXml = '';
@@ -207,9 +211,10 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
 
   const formatDateMDYStr = (dateVal: any) => {
     if (!dateVal) return '';
-    if (dateVal === 'Until revoked') return 'Until revoked';
+    if (typeof dateVal === 'string' && dateVal.trim().toLowerCase() === 'until revoked') return 'Until revoked';
     const d = new Date(dateVal);
     if (isNaN(d.getTime())) return '';
+    if (d.getFullYear() === 9999) return 'Until revoked';
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     const year = d.getFullYear();
@@ -385,8 +390,11 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
         newRowsXml += `<c r="B${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(nameVal)}</t></is></c>`;
         newRowsXml += `<c r="C${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(posVal)}</t></is></c>`;
         newRowsXml += `<c r="D${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(motherVal)}</t></is></c>`;
-        newRowsXml += `<c r="E${globalRowNum}" s="${st.sD}" t="inlineStr"><is><t>${escapeXml(officeVal)}</t></is></c>`;
-        newRowsXml += `<c r="F${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(desigPosVal)}</t></is></c>`;
+        const colEVal = aoStatus === 'Recalled' ? (row.recalledFrom || '') : officeVal;
+        const colFVal = aoStatus === 'Recalled' ? (row.recalledTo || '') : desigPosVal;
+
+        newRowsXml += `<c r="E${globalRowNum}" s="${st.sD}" t="inlineStr"><is><t>${escapeXml(colEVal)}</t></is></c>`;
+        newRowsXml += `<c r="F${globalRowNum}" s="${st.sBC}" t="inlineStr"><is><t>${escapeXml(colFVal)}</t></is></c>`;
         newRowsXml += `<c r="G${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(fromVal)}</t></is></c>`;
         newRowsXml += `<c r="H${globalRowNum}" s="${st.sEF}" t="inlineStr"><is><t>${escapeXml(toVal)}</t></is></c>`;
         newRowsXml += `<c r="I${globalRowNum}" s="${st.sG}" t="inlineStr"><is><t>${escapeXml(aoVal)}</t></is></c>`;
@@ -2956,7 +2964,7 @@ function Dashboard() {
 
     const renderPrintDuration = (duration: any) => {
       if (!duration) return '—';
-      if (duration === 'Until revoked') return 'Until revoked';
+      if (typeof duration === 'string' && duration.trim().toLowerCase() === 'until revoked') return 'Until revoked';
       return formatDateMDY(duration);
     };
 
@@ -2968,12 +2976,7 @@ function Dashboard() {
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Name of Employee</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">Mother Unit</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:22%;">${officeColHeader}</th>
-            <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;">${durationColHeader}</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:19%;">Administrative Order No.</th>
-          </tr>
-          <tr style="background-color:#ffffff;">
-            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;vertical-align:middle;">From</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:10%;vertical-align:middle;">To</th>
           </tr>
         </thead>`;
     } else if (isRecalled) {
@@ -2986,12 +2989,9 @@ function Dashboard() {
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:15%;">Mother Unit</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:10%;">Recalled From</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:10%;">Recalled To</th>
-            <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">${durationColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">Duration From</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">Duration To</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:13%;">Administrative Order No.</th>
-          </tr>
-          <tr style="background-color:#ffffff;">
-            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">From</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">To</th>
           </tr>
         </thead>`;
     } else {
@@ -3005,12 +3005,9 @@ function Dashboard() {
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">${officeColHeader}</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:12%;">${designatedHeader}</th>
             ${isAllEmployees ? '<th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:8%;">Recalled From</th><th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:8%;">Recalled To</th>' : ''}
-            <th colspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">${durationColHeader}</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">Duration From</th>
+            <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">Duration To</th>
             <th rowspan="2" style="border:1px solid #000;padding:5px 6px;font-size:9pt;text-align:center;vertical-align:middle;font-weight:bold;width:14%;">Administrative Order No.</th>
-          </tr>
-          <tr style="background-color:#ffffff;">
-            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">From</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:9pt;text-align:center;font-weight:bold;width:7%;vertical-align:middle;">To</th>
           </tr>
         </thead>`;
     }
@@ -6654,12 +6651,9 @@ function Dashboard() {
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Name of Employee</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Mother Unit</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>{officeColHeader}</th>
-                    <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>{durationColHeader}</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Duration From</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Duration To</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '19%' }}>Administrative Order No.</th>
-                  </tr>
-                  <tr style={{ backgroundColor: '#ffffff' }}>
-                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>From</th>
-                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '10%', verticalAlign: 'middle' }}>To</th>
                   </tr>
                 </thead>
               );
@@ -6671,13 +6665,11 @@ function Dashboard() {
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Name of Employee</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Position</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Mother Unit</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Recalled From &amp; To</th>
-                    <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>{durationColHeader}</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7.5%' }}>Recalled From</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7.5%' }}>Recalled To</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration From</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration To</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>Administrative Order No.</th>
-                  </tr>
-                  <tr style={{ backgroundColor: '#ffffff' }}>
-                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>From</th>
-                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>To</th>
                   </tr>
                 </thead>
               );
@@ -6691,13 +6683,15 @@ function Dashboard() {
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Mother Unit</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{officeColHeader}</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{designatedHeader}</th>
-                    {isAllEmployees && <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Recalled From &amp; To</th>}
-                    <th colSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>{durationColHeader}</th>
+                    {isAllEmployees && (
+                      <>
+                        <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>Recalled From</th>
+                        <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>Recalled To</th>
+                      </>
+                    )}
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration From</th>
+                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration To</th>
                     <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>Administrative Order No.</th>
-                  </tr>
-                  <tr style={{ backgroundColor: '#ffffff' }}>
-                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>From</th>
-                    <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '7%', verticalAlign: 'middle' }}>To</th>
                   </tr>
                 </thead>
               );
@@ -6722,7 +6716,7 @@ function Dashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: "'Times New Roman', Times, serif" }}>
                     {tableHeader}
                     <tbody>
-                      <tr><td colSpan={isDetailed ? 7 : (isRecalled ? 8 : (isAllEmployees ? 10 : 9))} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
+                      <tr><td colSpan={isDetailed ? 7 : (isRecalled ? 9 : (isAllEmployees ? 11 : 9))} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
                     </tbody>
                   </table>
                 </>
@@ -6788,7 +6782,8 @@ function Dashboard() {
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.position || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{recalledText}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledFrom || ''}</td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledTo || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
@@ -6803,7 +6798,12 @@ function Dashboard() {
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.designatedPositionFunction || ''}</td>
-                              {isAllEmployees && <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{recalledText}</td>}
+                              {isAllEmployees && (
+                                <>
+                                  <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledFrom || ''}</td>
+                                  <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledTo || ''}</td>
+                                </>
+                              )}
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
