@@ -14,7 +14,7 @@ export default async function generateNapForm1Excel(
   // Legal / Folio landscape
   worksheet.pageSetup = {
     orientation: 'landscape',
-    paperSize: 5,
+    paperSize: 14 as any,
     fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 0,
@@ -233,7 +233,7 @@ export default async function generateNapForm1Excel(
   worksheet.getRow(10).height = 18;
   worksheet.getRow(11).height = 18;
 
-  const colHeaderFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 8, bold: true };
+  const colHeaderFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 10, bold: true };
   const colHeaderAlign: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle', wrapText: true };
   const shrinkHeaderAlign: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle', wrapText: true, shrinkToFit: true };
 
@@ -294,7 +294,7 @@ export default async function generateNapForm1Excel(
     // Apply base styles to all A-P cells
     for (let c = 1; c <= 16; c++) {
       const cell = row.getCell(c);
-      cell.font = { name: 'Arial', size: 8 };
+      cell.font = { name: 'Arial', size: 11 };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = thinBorder;
     }
@@ -303,7 +303,7 @@ export default async function generateNapForm1Excel(
       worksheet.mergeCells(`A${currentRow}:P${currentRow}`);
       const c = worksheet.getCell(`A${currentRow}`);
       c.value = item.title;
-      c.font = { name: 'Calibri', size: 8, bold: true };
+      c.font = { name: 'Calibri', size: 11, bold: true };
       c.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
       c.border = thinBorder;
 
@@ -311,7 +311,7 @@ export default async function generateNapForm1Excel(
       worksheet.mergeCells(`B${currentRow}:P${currentRow}`);
       const c = worksheet.getCell(`B${currentRow}`);
       c.value = item.title;
-      c.font = { name: 'Times New Roman', size: 8, bold: true };
+      c.font = { name: 'Times New Roman', size: 11, bold: true };
       c.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
       
       row.getCell('A').border = { top: thin, bottom: thin, left: thin };
@@ -331,7 +331,7 @@ export default async function generateNapForm1Excel(
         const cell = worksheet.getCell(`${col}${currentRow}`);
         cell.value = val;
         // Use Times New Roman for the entry title (col C), but keep others Arial
-        cell.font = col === 'C' ? { name: 'Times New Roman', size: 8 } : { name: 'Arial', size: 8 };
+        cell.font = col === 'C' ? { name: 'Times New Roman', size: 11 } : { name: 'Arial', size: 11 };
         cell.alignment = align || { horizontal: 'center', vertical: 'middle', wrapText: true };
         cell.border = customBorder || thinBorder;
       };
@@ -362,27 +362,27 @@ export default async function generateNapForm1Excel(
 
   const legendRow = currentRow;
   worksheet.getCell(`A${legendRow}`).value = 'LEGEND:';
-  worksheet.getCell(`A${legendRow}`).font = { name: 'Arial', size: 8, bold: true };
+  worksheet.getCell(`A${legendRow}`).font = { name: 'Arial', size: 11, bold: true };
 
   const tvRow = legendRow + 1;
   worksheet.getCell(`A${tvRow}`).value = 'TIME VALUE:';
-  worksheet.getCell(`A${tvRow}`).font = { name: 'Arial', size: 8, bold: true };
+  worksheet.getCell(`A${tvRow}`).font = { name: 'Arial', size: 11, bold: true };
   worksheet.getCell(`D${tvRow}`).value = 'T  -  Temporary';
-  worksheet.getCell(`D${tvRow}`).font = { name: 'Arial', size: 8 };
+  worksheet.getCell(`D${tvRow}`).font = { name: 'Arial', size: 11 };
   worksheet.getCell(`F${tvRow}`).value = 'P  -  Permanent';
-  worksheet.getCell(`F${tvRow}`).font = { name: 'Arial', size: 8 };
+  worksheet.getCell(`F${tvRow}`).font = { name: 'Arial', size: 11 };
 
   const uvRow = legendRow + 2;
   worksheet.getCell(`A${uvRow}`).value = 'UTILITY VALUE:';
-  worksheet.getCell(`A${uvRow}`).font = { name: 'Arial', size: 8, bold: true };
+  worksheet.getCell(`A${uvRow}`).font = { name: 'Arial', size: 11, bold: true };
   worksheet.getCell(`D${uvRow}`).value = 'Adm  -  Administrative';
-  worksheet.getCell(`D${uvRow}`).font = { name: 'Arial', size: 8 };
+  worksheet.getCell(`D${uvRow}`).font = { name: 'Arial', size: 11 };
   worksheet.getCell(`F${uvRow}`).value = 'F  -  Fiscal';
-  worksheet.getCell(`F${uvRow}`).font = { name: 'Arial', size: 8 };
+  worksheet.getCell(`F${uvRow}`).font = { name: 'Arial', size: 11 };
   worksheet.getCell(`G${uvRow}`).value = 'L  -  Legal';
-  worksheet.getCell(`G${uvRow}`).font = { name: 'Arial', size: 8 };
+  worksheet.getCell(`G${uvRow}`).font = { name: 'Arial', size: 11 };
   worksheet.getCell(`H${uvRow}`).value = 'Arc  -  Archival';
-  worksheet.getCell(`H${uvRow}`).font = { name: 'Arial', size: 8 };
+  worksheet.getCell(`H${uvRow}`).font = { name: 'Arial', size: 11 };
 
   // ==========================================
   // SIGNATURE BLOCK
@@ -406,19 +406,19 @@ export default async function generateNapForm1Excel(
 
   // Labels
   worksheet.getCell(`A${sigLabelRow}`).value = 'PREPARED BY:';
-  worksheet.getCell(`A${sigLabelRow}`).font = { name: 'Arial', size: 8, bold: true };
+  worksheet.getCell(`A${sigLabelRow}`).font = { name: 'Arial', size: 11, bold: true };
 
   worksheet.getCell(`G${sigLabelRow}`).value = 'ASSISTED BY:';
-  worksheet.getCell(`G${sigLabelRow}`).font = { name: 'Arial', size: 8, bold: true };
+  worksheet.getCell(`G${sigLabelRow}`).font = { name: 'Arial', size: 11, bold: true };
 
   worksheet.getCell(`K${sigLabelRow}`).value = 'APPROVED BY:';
-  worksheet.getCell(`K${sigLabelRow}`).font = { name: 'Arial', size: 8, bold: true };
+  worksheet.getCell(`K${sigLabelRow}`).font = { name: 'Arial', size: 11, bold: true };
 
   // PREPARED BY signature line (B to E)
   worksheet.mergeCells(`B${sigNameRow}:E${sigNameRow}`);
   const prepName = worksheet.getCell(`B${sigNameRow}`);
   prepName.value = pVal || 'Name and Position';
-  prepName.font = { name: 'Arial', size: pVal ? 10 : 8, bold: true };
+  prepName.font = { name: 'Arial', size: 11, bold: true };
   prepName.alignment = { horizontal: 'center', vertical: 'bottom' };
   prepName.border = { bottom: thin };
 
@@ -426,7 +426,7 @@ export default async function generateNapForm1Excel(
   worksheet.mergeCells(`G${sigNameRow}:I${sigNameRow}`);
   const asstNameC = worksheet.getCell(`G${sigNameRow}`);
   asstNameC.value = aVal || 'Name';
-  asstNameC.font = { name: 'Arial', size: aVal ? 10 : 8, bold: true };
+  asstNameC.font = { name: 'Arial', size: 11, bold: true };
   asstNameC.alignment = { horizontal: 'center', vertical: 'bottom' };
   asstNameC.border = { bottom: thin };
 
@@ -434,7 +434,7 @@ export default async function generateNapForm1Excel(
   worksheet.mergeCells(`K${sigNameRow}:O${sigNameRow}`);
   const appvNameC = worksheet.getCell(`K${sigNameRow}`);
   appvNameC.value = vVal || 'Name';
-  appvNameC.font = { name: 'Arial', size: vVal ? 10 : 8, bold: true };
+  appvNameC.font = { name: 'Arial', size: 11, bold: true };
   appvNameC.alignment = { horizontal: 'center', vertical: 'bottom' };
   appvNameC.border = { bottom: thin };
 
@@ -442,19 +442,19 @@ export default async function generateNapForm1Excel(
   worksheet.mergeCells(`B${sigTitleRow}:E${sigTitleRow}`);
   const prepTitle = worksheet.getCell(`B${sigTitleRow}`);
   prepTitle.value = 'Name and Position';
-  prepTitle.font = { name: 'Arial', size: 8 };
+  prepTitle.font = { name: 'Arial', size: 11 };
   prepTitle.alignment = { horizontal: 'center', vertical: 'top' };
 
   worksheet.mergeCells(`G${sigTitleRow}:I${sigTitleRow}`);
   const asstTitle = worksheet.getCell(`G${sigTitleRow}`);
   asstTitle.value = 'NAP Records Management Analyst';
-  asstTitle.font = { name: 'Arial', size: 8 };
+  asstTitle.font = { name: 'Arial', size: 11 };
   asstTitle.alignment = { horizontal: 'center', vertical: 'top' };
 
   worksheet.mergeCells(`K${sigTitleRow}:O${sigTitleRow}`);
   const appvTitle = worksheet.getCell(`K${sigTitleRow}`);
   appvTitle.value = 'Chief of the Division/Department';
-  appvTitle.font = { name: 'Arial', size: 8 };
+  appvTitle.font = { name: 'Arial', size: 11 };
   appvTitle.alignment = { horizontal: 'center', vertical: 'top' };
 
   // Footer page number placeholder
@@ -462,7 +462,7 @@ export default async function generateNapForm1Excel(
   worksheet.mergeCells(`O${footerRow}:P${footerRow}`);
   const footerCell = worksheet.getCell(`O${footerRow}`);
   footerCell.value = 'Page ___ of ___ Pages';
-  footerCell.font = { name: 'Arial', size: 8 };
+  footerCell.font = { name: 'Arial', size: 11 };
   footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
   const buffer = await workbook.xlsx.writeBuffer();
