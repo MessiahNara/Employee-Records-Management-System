@@ -1,7 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import basicSsl from '@vitejs/plugin-basic-ssl';
+import fs from 'fs';
 import path from 'path';
+
+try {
+  fs.copyFileSync(
+    path.resolve(__dirname, 'template.xlsx'),
+    path.resolve(__dirname, 'public', 'ao_template.xlsx')
+  );
+  console.log('Successfully copied template.xlsx to public/ao_template.xlsx');
+} catch (e) {
+  console.error('Error copying template:', e);
+}
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig(() => {
   const devPort = 5174;

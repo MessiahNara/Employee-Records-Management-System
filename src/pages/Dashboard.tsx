@@ -28,6 +28,11 @@ import { MdEdit, MdDelete, MdFileUpload, MdPeople, MdCheckCircle, MdPause, MdDes
 import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
 import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
+import generateAOStatusAllEmployeesExcel from '../utils/generateAOStatusAllEmployeesExcel';
+import generateAOStatusDetailedExcel from '../utils/generateAOStatusDetailedExcel';
+import generateAOStatusDesignatedExcel from '../utils/generateAOStatusDesignatedExcel';
+import generateAOStatusRecalledExcel from '../utils/generateAOStatusRecalledExcel';
+import generatePulledOutFilesExcel from '../utils/generatePulledOutFilesExcel';
 import './Dashboard.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -2247,120 +2252,11 @@ function Dashboard() {
   const handleExportBorrowLogsToExcel = async () => {
     const title = 'PULLED-OUT FILES REPORT';
     try {
-      // Fetch the template file
-      let arrayBuffer: ArrayBuffer;
-      if (typeof window !== 'undefined' && (window as any).electron?.getTemplateFile) {
-        arrayBuffer = await (window as any).electron.getTemplateFile();
-      } else {
-        const response = await fetch('/template.xlsx');
-        if (!response.ok) throw new Error('Template file not found or failed to load');
-        arrayBuffer = await response.arrayBuffer();
-      }
+      showToast('Generating report...', 'info');
+      const buffer = await generatePulledOutFilesExcel(title, filteredBorrowRows);
 
-      // Load zip container
-      const zip = await JSZip.loadAsync(arrayBuffer);
-      const sheetXmlPath = 'xl/worksheets/sheet1.xml';
-      const sheetXmlStr = await zip.file(sheetXmlPath)?.async('string');
-      if (!sheetXmlStr) throw new Error('Invalid excel template package: sheet1.xml missing');
-
-      // Modify sheetData XML content
-      const { xml: modifiedXml, lastRow } = modifyBorrowSheetXml(sheetXmlStr, title, filteredBorrowRows);
-
-      // Patch styles.xml: remove shrinkToFit and ensure wrapText is set on target columns
-      const stylesXmlPath = 'xl/styles.xml';
-      const stylesXmlStr = await zip.file(stylesXmlPath)?.async('string');
-      if (stylesXmlStr) {
-        const patchedStylesXml = stylesXmlStr.replace(
-          /<cellXfs\s+count="(\d+)">([\s\S]*?)<\/cellXfs>/,
-          (match: string, count: string, xfsContent: string) => {
-            const xfRegex = /<xf\s+([^>]*)>([\s\S]*?)<\/xf>/g;
-            let idx = 0;
-            const modifiedXfs = xfsContent.replace(xfRegex, (xfMatch: string, xfAttrs: string, xfBody: string) => {
-              let updatedBody = xfBody;
-              const targetIndexes = [12, 13, 15, 16, 17, 19, 22, 23, 28, 29, 30, 32];
-              if (targetIndexes.includes(idx)) {
-                if (updatedBody.includes('<alignment')) {
-                  updatedBody = updatedBody.replace(/<alignment\s+([^>]*)\/>/, (alignMatch: string, alignAttrs: string) => {
-                    const cleanedAttrs = alignAttrs
-                      .replace(/\s*shrinkToFit="[^"]*"/g, '')
-                      .replace(/\s*wrapText="[^"]*"/g, '');
-                    return `<alignment ${cleanedAttrs} wrapText="1"/>`;
-                  });
-                }
-              } else {
-                if (updatedBody.includes('<alignment')) {
-                  updatedBody = updatedBody.replace(/<alignment\s+([^>]*)\/>/, (alignMatch: string, alignAttrs: string) => {
-                    const cleanedAttrs = alignAttrs.replace(/\s*shrinkToFit="[^"]*"/g, '');
-                    return `<alignment ${cleanedAttrs}/>`;
-                  });
-                }
-              }
-              idx++;
-              return `<xf ${xfAttrs}>${updatedBody}</xf>`;
-            });
-            return `<cellXfs count="${count}">${modifiedXfs}</cellXfs>`;
-          }
-        );
-        zip.file(stylesXmlPath, patchedStylesXml);
-      }
-
-      // Add <sheetPr fitToPage> and update pageSetup with fitToWidth=1
-      const lastColLetter = 'M'; // columns go from A to M
-      let finalXml = modifiedXml;
-      // Update sheet dimension to match the exact row count written
-      finalXml = finalXml.replace(
-        /<dimension\s+ref="[^"]*"\s*\/>/,
-        `<dimension ref="A1:${lastColLetter}${lastRow}"/>`
-      );
-
-      if (!finalXml.includes('<sheetPr')) {
-        finalXml = finalXml.replace(
-          /(<(?:dimension|sheetViews)[^>]*(?:\/>|>))/,
-          '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>$1'
-        );
-      }
-      finalXml = finalXml.replace(
-        /<pageSetup([^>]*?)\/>/,
-        (_match: string, attrs: string) => {
-          const cleaned = attrs
-            .replace(/\s*fitToWidth="[^"]*"/g, '')
-            .replace(/\s*fitToHeight="[^"]*"/g, '')
-            .replace(/\s*scale="[^"]*"/g, '')
-            .replace(/\s*r:id="[^"]*"/g, '');
-          return `<pageSetup${cleaned} fitToWidth="1" fitToHeight="0"/>`;
-        }
-      );
-      zip.file(sheetXmlPath, finalXml);
-
-      // Remove printerSettings relationship from sheet1.xml.rels and delete printerSettings1.bin
-      const relsXmlPath = 'xl/worksheets/_rels/sheet1.xml.rels';
-      const relsXmlStr = await zip.file(relsXmlPath)?.async('string');
-      if (relsXmlStr) {
-        const patchedRelsXml = relsXmlStr.replace(
-          /<Relationship[^>]*printerSettings[^>]*\/>/,
-          ''
-        );
-        zip.file(relsXmlPath, patchedRelsXml);
-      }
-      zip.remove('xl/printerSettings/printerSettings1.bin');
-
-      // Patch workbook.xml print area to match the exact row count written
-      const workbookXmlPath = 'xl/workbook.xml';
-      const workbookXmlStr = await zip.file(workbookXmlPath)?.async('string');
-      if (workbookXmlStr) {
-        const patchedWorkbookXml = workbookXmlStr.replace(
-          /<definedName name="_xlnm\.Print_Area"([^>]*)>([^<]*)<\/definedName>/,
-          (match: string, attrs: string, val: string) => {
-            const newVal = val.replace(/\$[A-Z]\$\d+$/, `$${lastColLetter}$${lastRow}`);
-            return `<definedName name="_xlnm.Print_Area"${attrs}>${newVal}</definedName>`;
-          }
-        );
-        zip.file(workbookXmlPath, patchedWorkbookXml);
-      }
-
-      // Generate blob and download
-      const contentBlob = await zip.generateAsync({ type: 'blob' });
-      saveAs(contentBlob, `Pulled-Out_Files_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Pulled-Out_Files_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
       showToast('📊 Report exported successfully!', 'success');
     } catch (error: any) {
       console.error('XLSX export error:', error);
@@ -6546,6 +6442,60 @@ function Dashboard() {
             </Button>
 
             <Button
+              variant="success"
+              onClick={async () => {
+                try {
+                  showToast('Generating Excel...', 'info');
+                  
+                  // Map table data to the expected service format
+                  const recordsToExport = sortedReportRows.map(row => ({
+                    nameOfEmployee: row.name,
+                    position: row.position || '',
+                    motherUnit: row.motherUnit || '',
+                    detailedOffice: row.detailedOffice || '',
+                    designatedPosition: row.designatedPositionFunction || '',
+                    recalledFrom: row.recalledFrom || '',
+                    recalledTo: row.recalledTo || '',
+                    durationFrom: row.durationFrom ? row.durationFrom.split('T')[0] : '',
+                    durationTo: row.durationTo 
+                      ? (row.durationTo.startsWith('9999-12-31') ? 'Until revoked' : row.durationTo.split('T')[0]) 
+                      : '',
+                    adminOrderNo: row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : ''
+                  }));
+
+                  const filterData = {
+                    monthFrom: reportAoOrderMonthFrom || '',
+                    monthTo: reportAoOrderMonthTo || '',
+                    seriesYear: reportAoYear || '',
+                    visibleColumns,
+                    records: recordsToExport
+                  };
+
+                  let buffer;
+                  if (reportAoStatus === 'Detailed') {
+                    buffer = await generateAOStatusDetailedExcel(filterData);
+                  } else if (reportAoStatus === 'Designated') {
+                    buffer = await generateAOStatusDesignatedExcel(filterData);
+                  } else if (reportAoStatus === 'Recalled') {
+                    buffer = await generateAOStatusRecalledExcel(filterData);
+                  } else {
+                    buffer = await generateAOStatusAllEmployeesExcel(filterData);
+                  }
+                  const blob = new Blob([buffer as any], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                  saveAs(blob, 'AO_Status_Report.xlsx');
+                  
+                  showToast('Excel exported successfully!', 'success');
+                } catch (error: any) {
+                  console.error('Export error:', error);
+                  showToast('Error exporting to Excel: ' + (error.message || 'Unknown error'), 'error');
+                }
+              }}
+              disabled={sortedReportRows.length === 0}
+            >
+              📊 Export to Excel
+            </Button>
+
+            <Button
               variant="primary"
               onClick={async () => {
                 const electronApi = (window as any).electron;
@@ -6642,60 +6592,48 @@ function Dashboard() {
               return formatDateMDY(duration);
             };
 
-            let tableHeader;
-            if (isDetailed) {
-              tableHeader = (
-                <thead>
-                  <tr style={{ backgroundColor: '#ffffff' }}>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>NO.</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Name of Employee</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>Mother Unit</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '22%' }}>{officeColHeader}</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Duration From</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Duration To</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '19%' }}>Administrative Order No.</th>
-                  </tr>
-                </thead>
-              );
-            } else if (isRecalled) {
-              tableHeader = (
-                <thead>
-                  <tr style={{ backgroundColor: '#ffffff' }}>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Name of Employee</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Position</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '15%' }}>Mother Unit</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7.5%' }}>Recalled From</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7.5%' }}>Recalled To</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration From</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration To</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>Administrative Order No.</th>
-                  </tr>
-                </thead>
-              );
-            } else {
-              tableHeader = (
-                <thead>
-                  <tr style={{ backgroundColor: '#ffffff' }}>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>Name of Employee</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Position</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '10%' }}>Mother Unit</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{officeColHeader}</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>{designatedHeader}</th>
-                    {isAllEmployees && (
-                      <>
-                        <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>Recalled From</th>
-                        <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>Recalled To</th>
-                      </>
-                    )}
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration From</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>Duration To</th>
-                    <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>Administrative Order No.</th>
-                  </tr>
-                </thead>
-              );
-            }
+            // Dynamic column definitions based on reportAoStatus AND visibleColumns
+            const rawPreviewColDefs = [
+              { key: 'no', label: 'NO.', width: 4 },
+              { key: 'name', label: 'Name of Employee', width: 15 },
+              ...(reportAoStatus === 'Recalled' || reportAoStatus === 'All Employees' 
+                ? [{ key: 'position', label: 'Position', width: 12, show: visibleColumns.position !== false }] 
+                : []),
+              { key: 'motherUnit', label: 'Mother Unit', width: 12, show: visibleColumns.motherUnit !== false },
+              ...(reportAoStatus === 'Detailed' || reportAoStatus === 'All Employees' 
+                ? [{ key: 'detailedOffice', label: officeColHeader, width: 12, show: visibleColumns.detailedOffice !== false }] 
+                : []),
+              ...(reportAoStatus === 'Designated' || reportAoStatus === 'All Employees' 
+                ? [{ key: 'designatedPositionFunction', label: designatedHeader, width: 12, show: visibleColumns.designatedPositionFunction !== false }] 
+                : []),
+              ...(reportAoStatus === 'Recalled' || reportAoStatus === 'All Employees' 
+                ? [
+                    { key: 'recalledFrom', label: 'Recalled From', width: 8, show: visibleColumns.recalledFrom !== false },
+                    { key: 'recalledTo', label: 'Recalled To', width: 8, show: visibleColumns.recalledTo !== false }
+                  ] 
+                : []),
+              { key: 'durationFrom', label: 'Duration From', width: 8, show: visibleColumns.durationFrom !== false },
+              { key: 'durationTo', label: 'Duration To', width: 8, show: visibleColumns.durationTo !== false },
+              { key: 'administrativeOrder', label: 'Administrative Order No.', width: 14, show: visibleColumns.administrativeOrder !== false }
+            ];
+
+            const previewColDefs = rawPreviewColDefs.filter(c => c.show !== false);
+            const totalWidthWeight = previewColDefs.reduce((acc, col) => acc + col.width, 0);
+
+            let tableHeader = (
+              <thead>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  {previewColDefs.map(col => {
+                    const percentageWidth = `${(col.width / totalWidthWeight) * 100}%`;
+                    return (
+                      <th key={col.key} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: percentageWidth }}>
+                        {col.label}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+            );
 
             if (tabRows.length === 0) {
               return (
@@ -6716,7 +6654,7 @@ function Dashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: "'Times New Roman', Times, serif" }}>
                     {tableHeader}
                     <tbody>
-                      <tr><td colSpan={isDetailed ? 7 : (isRecalled ? 9 : (isAllEmployees ? 11 : 9))} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
+                      <tr><td colSpan={previewColDefs.length} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
                     </tbody>
                   </table>
                 </>
@@ -6761,55 +6699,32 @@ function Dashboard() {
                       {pageRows.map((row, idx) => {
                         const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
                         const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
-                        const recalledText = row.recalledFrom && row.recalledTo ? `${row.recalledFrom} to ${row.recalledTo}` : (row.recalledFrom || row.recalledTo || '');
+                        return (
+                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                            {previewColDefs.map(col => {
+                              let val: React.ReactNode = '';
+                              if (col.key === 'no') val = globalIdx + 1;
+                              else if (col.key === 'name') val = row.name;
+                              else if (col.key === 'position') val = row.position || '';
+                              else if (col.key === 'motherUnit') val = row.motherUnit || '';
+                              else if (col.key === 'detailedOffice') val = row.detailedOffice || '';
+                              else if (col.key === 'designatedPositionFunction') val = row.designatedPositionFunction || '';
+                              else if (col.key === 'recalledFrom') val = row.recalledFrom || '';
+                              else if (col.key === 'recalledTo') val = row.recalledTo || '';
+                              else if (col.key === 'durationFrom') val = renderPrintDuration(row.durationFrom);
+                              else if (col.key === 'durationTo') val = renderPrintDuration(row.durationTo);
+                              else if (col.key === 'administrativeOrder') val = ao;
 
-                        if (isDetailed) {
-                          return (
-                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{globalIdx + 1}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
-                            </tr>
-                          );
-                        } else if (isRecalled) {
-                          return (
-                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{globalIdx + 1}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.position || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledFrom || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledTo || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
-                            </tr>
-                          );
-                        } else {
-                          return (
-                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{globalIdx + 1}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.name}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.position || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.motherUnit || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.detailedOffice || ''}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.designatedPositionFunction || ''}</td>
-                              {isAllEmployees && (
-                                <>
-                                  <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledFrom || ''}</td>
-                                  <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>{row.recalledTo || ''}</td>
-                                </>
-                              )}
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationFrom)}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>{renderPrintDuration(row.durationTo)}</td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word' }}>{ao}</td>
-                            </tr>
-                          );
-                        }
+                              const isNormalWhiteSpace = ['name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'recalledFrom', 'recalledTo'].includes(col.key);
+
+                              return (
+                                <td key={col.key} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: isNormalWhiteSpace ? 'normal' : 'normal' }}>
+                                  {val}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
                       })}
                     </tbody>
                   </table>
@@ -6832,6 +6747,13 @@ function Dashboard() {
               onClick={() => setIsBorrowReportPreviewOpen(false)}
             >
               Close
+            </Button>
+
+            <Button
+              variant="success"
+              onClick={handleExportBorrowLogsToExcel}
+            >
+              📊 Export to Excel
             </Button>
 
             <Button

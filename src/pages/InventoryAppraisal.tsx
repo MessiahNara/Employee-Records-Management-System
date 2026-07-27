@@ -13,6 +13,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import './InventoryAppraisal.css';
+import generateNapForm1Excel from '../utils/generateNapForm1Excel';
 
 export interface InventoryRecord {
   id: string;
@@ -41,6 +42,13 @@ export interface InventoryRecord {
   storageStartDate?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NapRowItem {
+  type: 'category' | 'subCategory' | 'record';
+  title: string;
+  record?: InventoryRecord;
+  isUncategorized?: boolean;
 }
 
 export function formatDynamicDates(datesStr: string): string {
@@ -929,26 +937,23 @@ function InventoryAppraisal() {
   }, [authorizedRecords, divisionTab]);
 
   // ── Helper to group records by Division, Category & Sub-Category ──────────
-  interface NapRowItem {
-    type: 'category' | 'subCategory' | 'record';
-    title: string;
-    record?: InventoryRecord;
-    isUncategorized?: boolean;
-  }
 
   const getGroupedNapItems = (list: InventoryRecord[]): NapRowItem[] => {
     const items: NapRowItem[] = [];
-    // Category -> SubCategory -> Array of records
+    // (Division::Category) -> SubCategory -> Array of records
     const catMap = new Map<string, Map<string, InventoryRecord[]>>();
 
     list.forEach(r => {
+      const div = (r.division || 'General').toUpperCase().trim();
       const cat = (r.classificationCategory || r.appraisalCategory || 'GENERAL').toUpperCase().trim();
       const sub = (r.subCategory || '').trim();
 
-      if (!catMap.has(cat)) {
-        catMap.set(cat, new Map());
+      const catKey = `${cat}::${div}`;
+
+      if (!catMap.has(catKey)) {
+        catMap.set(catKey, new Map());
       }
-      const subMap = catMap.get(cat)!;
+      const subMap = catMap.get(catKey)!;
       if (!subMap.has(sub)) {
         subMap.set(sub, []);
       }
@@ -957,15 +962,16 @@ function InventoryAppraisal() {
 
     const sortedCatKeys = Array.from(catMap.keys()).sort((a, b) => a.localeCompare(b));
 
-    sortedCatKeys.forEach((catName) => {
+    sortedCatKeys.forEach((catKey) => {
+      const [catName, div] = catKey.split('::');
       if (catName && catName !== 'GENERAL') {
         items.push({
           type: 'category',
-          title: catName
+          title: catName // The title will just be the category name, but they will be separated by division
         });
       }
 
-      const subMap = catMap.get(catName)!;
+      const subMap = catMap.get(catKey)!;
       const sortedSubKeys = Array.from(subMap.keys()).sort((a, b) => a.localeCompare(b));
 
       sortedSubKeys.forEach((subName) => {
@@ -1527,445 +1533,12 @@ function InventoryAppraisal() {
   const handleExportNapForm1 = async () => {
     try {
       showToast('Preparing NAP Form 1 Excel export...', 'info');
-      let templateBuffer: ArrayBuffer | null = null;
-      // Check Electron IPC first if running inside desktop app
-      if ((window as any).electronAPI && typeof (window as any).electronAPI.getTemplateFile === 'function') {
-        try {
-          templateBuffer = await (window as any).electronAPI.getTemplateFile();
-        } catch (e) {
-          console.warn('Electron IPC template fetch failed, falling back to HTTP fetch:', e);
-        }
-      }
-
-      if (!templateBuffer) {
-        const t = Date.now();
-        const urlsToTry = [
-          `/api/nap-template?t=${t}`,
-          `${encodeURI('/NAP FORM 1 (FORMAT).xlsx')}?t=${t}`,
-          `/NAP%20FORM%201%20(FORMAT).xlsx?t=${t}`,
-          `${encodeURI('/NAP FORM 1 (Sample Format).xlsx')}?t=${t}`,
-          `/NAP%20FORM%201%20(Sample%20Format).xlsx?t=${t}`,
-          `/nap_template.xlsx?t=${t}`,
-          `/template.xlsx?t=${t}`
-        ];
-        for (const url of urlsToTry) {
-          try {
-            const res = await fetch(url);
-            if (res.ok) {
-              templateBuffer = await res.arrayBuffer();
-              break;
-            }
-          } catch {
-            // ignore and retry next url
-          }
-        }
-      }
-
-      if (!templateBuffer) {
-        throw new Error('Official NAP FORM 1 (FORMAT).xlsx template file could not be loaded.');
-      }
-
-      const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       const dateStr = new Date().toISOString().slice(0, 10);
 
       const processZipSheet = async (list: InventoryRecord[], divName: string): Promise<Blob> => {
-        const zip = await JSZip.loadAsync(templateBuffer!);
-        const sheetPath = 'xl/worksheets/sheet1.xml';
-        const xmlText = await zip.file(sheetPath)!.async('text');
-
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
-
-        const deptLabel = (divName && divName !== 'ALL')
-          ? `Human Resource Management and Development Office (HRMDO) - ${divName}`
-          : 'Human Resource Management and Development Office (HRMDO)';
-        const sectionLabel = napFormHeader.sectionUnit || (divName && divName !== 'ALL' ? divName : '');
-
-        const colIndex = (col: string) => {
-          let num = 0;
-          for (let i = 0; i < col.length; i++) {
-            num = num * 26 + (col.charCodeAt(i) - 64);
-          }
-          return num;
-        };
-
-        const sortRowCells = (rowNode: Element) => {
-          const cells = Array.from(rowNode.getElementsByTagNameNS('*', 'c'));
-          cells.sort((a, b) => {
-            const rA = a.getAttribute('r') || '';
-            const rB = b.getAttribute('r') || '';
-            const cA = colIndex(rA.replace(/[0-9]/g, ''));
-            const cB = colIndex(rB.replace(/[0-9]/g, ''));
-            return cA - cB;
-          });
-          cells.forEach(c => rowNode.appendChild(c));
-        };
-
-        const findCellNode = (parent: Element | Document, cellRef: string): Element | null => {
-          const cells = Array.from(parent.getElementsByTagNameNS('*', 'c'));
-          return cells.find(c => c.getAttribute('r') === cellRef) || null;
-        };
-
-        // Capture template table cell border styles and row height from Row 20 (or Row 15) for all columns A..P
-        const templateColStyles: { [colName: string]: string } = {};
-        const dataTemplateRow = Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === '20')
-          || Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === '15')
-          || Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === '33');
-
-        const templateRowHeight = dataTemplateRow?.getAttribute('ht') || '20';
-
-        if (dataTemplateRow) {
-          const cells = Array.from(dataTemplateRow.getElementsByTagNameNS('*', 'c'));
-          cells.forEach(c => {
-            const rRef = c.getAttribute('r') || '';
-            const colName = rRef.replace(/[0-9]/g, '');
-            const sStyle = c.getAttribute('s');
-            if (colName && sStyle) {
-              templateColStyles[colName] = sStyle;
-            }
-          });
-        }
-
-        const setCellVal = (cellRef: string, val: string, isBold: boolean = false, fontSz: string = '9', explicitStyle?: string) => {
-          const colName = cellRef.replace(/[0-9]/g, '');
-          const rowNum = parseInt(cellRef.replace(/[^0-9]/g, ''), 10);
-
-          let rowNode = xmlDoc.querySelector(`row[r="${rowNum}"]`);
-          if (!rowNode) {
-            const rows = Array.from(xmlDoc.getElementsByTagNameNS('*', 'row'));
-            rowNode = rows.find(r => r.getAttribute('r') === String(rowNum)) || null;
-          }
-
-          if (!rowNode) {
-            const sheetData = xmlDoc.getElementsByTagNameNS('*', 'sheetData')[0];
-            if (!sheetData) return;
-            rowNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'row');
-            rowNode.setAttribute('r', String(rowNum));
-            rowNode.setAttribute('ht', templateRowHeight);
-            rowNode.setAttribute('customHeight', '1');
-            sheetData.appendChild(rowNode);
-          }
-
-          if (templateRowHeight && !rowNode.getAttribute('ht')) {
-            rowNode.setAttribute('ht', templateRowHeight);
-            rowNode.setAttribute('customHeight', '1');
-          }
-
-          let cellNode = findCellNode(rowNode, cellRef);
-          if (!cellNode) {
-            cellNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'c');
-            cellNode.setAttribute('r', cellRef);
-            rowNode.appendChild(cellNode);
-          }
-
-          if (!cellNode.getAttribute('s')) {
-            if (explicitStyle) {
-              cellNode.setAttribute('s', explicitStyle);
-            } else if (templateColStyles[colName]) {
-              cellNode.setAttribute('s', templateColStyles[colName]);
-            }
-          }
-
-          cellNode.removeAttribute('t');
-          while (cellNode.firstChild) {
-            cellNode.removeChild(cellNode.firstChild);
-          }
-
-          if (val !== undefined && val !== null && val !== '') {
-            const strVal = String(val).trim();
-            if (/^\d+$/.test(strVal)) {
-              cellNode.setAttribute('t', 'n');
-              const vNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'v');
-              vNode.textContent = strVal;
-              cellNode.appendChild(vNode);
-            } else {
-              cellNode.setAttribute('t', 'inlineStr');
-              const isNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'is');
-              const tNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 't');
-              tNode.setAttribute('xml:space', 'preserve');
-              tNode.textContent = val;
-              isNode.appendChild(tNode);
-              cellNode.appendChild(isNode);
-            }
-          }
-
-          sortRowCells(rowNode);
-        };
-
-        const clearCellVal = (cellRef: string) => {
-          const rowNum = parseInt(cellRef.replace(/[^0-9]/g, ''), 10);
-          const rowNode = Array.from(xmlDoc.getElementsByTagNameNS('*', 'row')).find(r => r.getAttribute('r') === String(rowNum));
-          if (rowNode) {
-            const cellNode = findCellNode(rowNode, cellRef);
-            if (cellNode) {
-              while (cellNode.firstChild) {
-                cellNode.removeChild(cellNode.firstChild);
-              }
-              cellNode.removeAttribute('t');
-            }
-          }
-        };
-
-        // Set Top Header block (A1:C8 merged area)
-        setCellVal('A1', 'NATIONAL ARCHIVES OF THE PHILIPPINES\nPambansang Sinupan ng Pilipinas\n\nRECORDS INVENTORY AND APPRAISAL', true, '10');
-
-        // Header info
-        setCellVal('J4', deptLabel, true, '8.5');
-        setCellVal('J6', sectionLabel, true, '8.5');
-        setCellVal('N4', napFormHeader.telephoneNo || '', true, '8.5');
-        setCellVal('N6', napFormHeader.emailAddress || '', true, '8.5');
-        setCellVal('J8', napFormHeader.personInCharge || '', true, '8.5');
-        setCellVal('N8', datePrepared, true, '8.5');
-
         const items = getGroupedNapItems(list);
-
-        let mergeCellsNode = xmlDoc.getElementsByTagNameNS('*', 'mergeCells')[0];
-        if (!mergeCellsNode) {
-          mergeCellsNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'mergeCells');
-          const pageMarginsNode = xmlDoc.getElementsByTagNameNS('*', 'pageMargins')[0];
-          if (pageMarginsNode && pageMarginsNode.parentNode) {
-            pageMarginsNode.parentNode.insertBefore(mergeCellsNode, pageMarginsNode);
-          } else {
-            xmlDoc.getElementsByTagNameNS('*', 'worksheet')[0]?.appendChild(mergeCellsNode);
-          }
-        }
-
-        const extraRows = Math.max(0, items.length - 22);
-
-        if (extraRows > 0) {
-          if (mergeCellsNode) {
-            const allMerges = Array.from(mergeCellsNode.getElementsByTagNameNS('*', 'mergeCell'));
-            allMerges.forEach(mc => {
-              const ref = (mc.getAttribute('ref') || '').trim();
-              const match = ref.match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i);
-              if (match) {
-                const startCol = match[1].toUpperCase();
-                const startRow = parseInt(match[2], 10);
-                const endCol = (match[3] || startCol).toUpperCase();
-                const endRow = parseInt(match[4] || match[2], 10);
-
-                if (startRow >= 34) {
-                  const newRef = `${startCol}${startRow + extraRows}:${endCol}${endRow + extraRows}`;
-                  mc.setAttribute('ref', newRef);
-                }
-              }
-            });
-          }
-
-          const sheetData = xmlDoc.getElementsByTagNameNS('*', 'sheetData')[0];
-          if (sheetData) {
-            const rows = Array.from(sheetData.getElementsByTagNameNS('*', 'row'));
-            const templateBottomRows = rows
-              .filter(r => parseInt(r.getAttribute('r') || '0', 10) >= 34)
-              .sort((a, b) => parseInt(b.getAttribute('r') || '0', 10) - parseInt(a.getAttribute('r') || '0', 10));
-
-            templateBottomRows.forEach(row => {
-              const rNum = parseInt(row.getAttribute('r') || '0', 10);
-              const newRNum = rNum + extraRows;
-              row.setAttribute('r', String(newRNum));
-
-              const cells = Array.from(row.getElementsByTagNameNS('*', 'c'));
-              cells.forEach(cell => {
-                const oldRef = cell.getAttribute('r') || '';
-                const colName = oldRef.replace(/[0-9]/g, '');
-                cell.setAttribute('r', `${colName}${newRNum}`);
-              });
-            });
-          }
-        }
-
-        const existingMerges = new Set<string>();
-        if (mergeCellsNode) {
-          const mcs = Array.from(mergeCellsNode.getElementsByTagNameNS('*', 'mergeCell'));
-          mcs.forEach(mc => {
-            const r = mc.getAttribute('ref');
-            if (r) existingMerges.add(r.toUpperCase().trim());
-          });
-        }
-
-        let categoryStyle = '';
-        let subCategoryStyle = '';
-        let entryStyle = '';
-
-        // Dynamically find placeholders
-        const allCells = Array.from(xmlDoc.getElementsByTagNameNS('*', 'c'));
-        const sharedStrings: string[] = [];
-        try {
-          const zip = await JSZip.loadAsync(templateBuffer!);
-          const ssXml = await zip.file('xl/sharedStrings.xml')?.async('text');
-          if (ssXml) {
-            const parser2 = new DOMParser();
-            const ssDoc = parser2.parseFromString(ssXml, 'application/xml');
-            const siNodes = Array.from(ssDoc.getElementsByTagNameNS('*', 'si'));
-            for (const si of siNodes) {
-              const tNode = si.getElementsByTagNameNS('*', 't')[0];
-              sharedStrings.push(tNode ? tNode.textContent : '');
-            }
-          }
-        } catch (e) {
-           // ignore
-        }
-
-        allCells.forEach(c => {
-          const tType = c.getAttribute('t');
-          let val = '';
-          if (tType === 's') {
-             const vNode = c.getElementsByTagNameNS('*', 'v')[0];
-             if (vNode && vNode.textContent) {
-                const idx = parseInt(vNode.textContent, 10);
-                if (sharedStrings[idx]) val = sharedStrings[idx]!;
-             }
-          } else if (tType === 'inlineStr') {
-             const tNode = c.getElementsByTagNameNS('*', 't')[0];
-             if (tNode) val = tNode.textContent || '';
-          } else {
-             const vNode = c.getElementsByTagNameNS('*', 'v')[0];
-             if (vNode) val = vNode.textContent || '';
-          }
-          
-          if (val) {
-             const v = val.trim().toLowerCase();
-             if (v === 'category' && !categoryStyle) categoryStyle = c.getAttribute('s') || '';
-             else if (v === 'sub category' && !subCategoryStyle) subCategoryStyle = c.getAttribute('s') || '';
-             else if (v === 'entry' && !entryStyle) entryStyle = c.getAttribute('s') || '';
-          }
-        });
-
-        items.forEach((item, i) => {
-          const rNum = 12 + i;
-
-          if (rNum > 33) {
-            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'].forEach(col => {
-              setCellVal(`${col}${rNum}`, '');
-            });
-          }
-
-          if (mergeCellsNode) {
-            const ref = `A${rNum}:C${rNum}`;
-            if (!existingMerges.has(ref)) {
-              const mc = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'mergeCell');
-              mc.setAttribute('ref', ref);
-              mergeCellsNode.appendChild(mc);
-              existingMerges.add(ref);
-            }
-          }
-
-          if (item.type === 'category') {
-            setCellVal(`A${rNum}`, item.title, true, '9.5', categoryStyle);
-          } else if (item.type === 'subCategory') {
-            setCellVal(`A${rNum}`, item.title, true, '9', subCategoryStyle);
-          } else if (item.type === 'record' && item.record) {
-            const r = item.record;
-            const perm = r.appraisalCategory === 'Permanent';
-            const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
-
-            setCellVal(`A${rNum}`, `${item.isUncategorized ? ' ' : ''}${r.seriesTitle || ''}`, false, '9', entryStyle);
-            setCellVal(`D${rNum}`, formatDynamicDates(r.inclusiveDates), false, '9');
-            setCellVal(`E${rNum}`, r.volume || '', false, '9');
-            setCellVal(`F${rNum}`, r.medium || '', false, '9');
-            setCellVal(`G${rNum}`, r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : '', false, '9');
-            setCellVal(`H${rNum}`, r.locationOfRecords || '', false, '9');
-            setCellVal(`I${rNum}`, r.frequencyOfUse || '', false, '9');
-            setCellVal(`J${rNum}`, r.duplication || '', false, '9');
-            setCellVal(`K${rNum}`, r.appraisalCategory || '', false, '9');
-            setCellVal(`L${rNum}`, util, false, '9');
-            setCellVal(`M${rNum}`, perm ? '-' : String(r.activeDeskYrs), false, '9');
-            setCellVal(`N${rNum}`, perm ? '-' : String(r.storageYrs), false, '9');
-            setCellVal(`O${rNum}`, perm ? '-' : String(r.totalRetention), false, '9');
-            setCellVal(`P${rNum}`, r.dispositionProvision || '', false, '9');
-          }
-        });
-
-        clearCellVal(`P${43 + extraRows}`);
-        clearCellVal(`P${44 + extraRows}`);
-
-        // Populate signature block values on shifted signature row (41 + extraRows)
-        const pVal = napFormHeader.preparedBy || '';
-        const aVal = napFormHeader.assistedBy || '';
-        const vVal = napFormHeader.approvedBy || '';
-        const sigRow = 41 + extraRows;
-
-        setCellVal(`C${sigRow}`, pVal, true, '10');
-        setCellVal(`H${sigRow}`, aVal, true, '10');
-        setCellVal(`L${sigRow}`, vVal, true, '10');
-        setCellVal(`M${sigRow}`, vVal, true, '10');
-        setCellVal(`N${sigRow}`, vVal, true, '10');
-
-        const rowSig = xmlDoc.querySelector(`row[r="${sigRow}"]`) || xmlDoc;
-        const cellHSig = findCellNode(rowSig, `H${sigRow}`);
-        const centerStyle = cellHSig?.getAttribute('s');
-
-        [`A${40 + extraRows}`, `A${sigRow}`, `B${40 + extraRows}`, `B${sigRow}`, `D${sigRow}`, `E${sigRow}`, `F${40 + extraRows}`, `F${sigRow}`, `G${sigRow}`, `I${sigRow}`, `J${sigRow}`, `K${40 + extraRows}`, `K${sigRow}`, `O${sigRow}`, `P${sigRow}`].forEach(ref => {
-          clearCellVal(ref);
-        });
-
-        if (centerStyle) {
-          [`C${sigRow}`, `H${sigRow}`, `L${sigRow}`, `M${sigRow}`, `N${sigRow}`].forEach(ref => {
-            const node = findCellNode(rowSig, ref);
-            if (node) node.setAttribute('s', centerStyle);
-          });
-        }
-
-        const maxRow = 44 + extraRows;
-        const dimensionNode = xmlDoc.getElementsByTagNameNS('*', 'dimension')[0];
-        if (dimensionNode) {
-          dimensionNode.setAttribute('ref', `A1:P${maxRow}`);
-        }
-
-        if (mergeCellsNode) {
-          const seenMerges = new Set<string>();
-          const allMerges = Array.from(mergeCellsNode.getElementsByTagNameNS('*', 'mergeCell'));
-          allMerges.forEach(mc => {
-            const ref = (mc.getAttribute('ref') || '').toUpperCase().trim();
-            if (seenMerges.has(ref)) {
-              mc.parentNode?.removeChild(mc);
-            } else {
-              seenMerges.add(ref);
-            }
-          });
-          mergeCellsNode.setAttribute('count', String(seenMerges.size));
-
-          const targetNode = xmlDoc.getElementsByTagNameNS('*', 'printOptions')[0]
-            || xmlDoc.getElementsByTagNameNS('*', 'pageMargins')[0]
-            || xmlDoc.getElementsByTagNameNS('*', 'pageSetup')[0]
-            || xmlDoc.getElementsByTagNameNS('*', 'drawing')[0];
-
-          if (targetNode && targetNode.parentNode && mergeCellsNode.nextSibling !== targetNode) {
-            targetNode.parentNode.insertBefore(mergeCellsNode, targetNode);
-          }
-        }
-
-        // Set Legal 8.5 x 13 in / Folio paperSize 5 in landscape
-        let pageSetupNode = xmlDoc.getElementsByTagNameNS('*', 'pageSetup')[0];
-        if (!pageSetupNode) {
-          pageSetupNode = xmlDoc.createElementNS('http://schemas.openxmlformats.org/spreadsheetml/2006/main', 'pageSetup');
-          const worksheetNode = xmlDoc.getElementsByTagNameNS('*', 'worksheet')[0];
-          worksheetNode?.appendChild(pageSetupNode);
-        }
-        pageSetupNode.setAttribute('paperSize', '5');
-        pageSetupNode.setAttribute('orientation', 'landscape');
-        pageSetupNode.setAttribute('fitToWidth', '1');
-        pageSetupNode.setAttribute('fitToHeight', '0');
-
-        const sortSheetRows = () => {
-          const sheetData = xmlDoc.getElementsByTagNameNS('*', 'sheetData')[0];
-          if (!sheetData) return;
-          const rows = Array.from(sheetData.getElementsByTagNameNS('*', 'row'));
-          rows.sort((a, b) => {
-            const rA = parseInt(a.getAttribute('r') || '0', 10);
-            const rB = parseInt(b.getAttribute('r') || '0', 10);
-            return rA - rB;
-          });
-          rows.forEach(r => sheetData.appendChild(r));
-        };
-
-        sortSheetRows();
-
-        const serializer = new XMLSerializer();
-        const newXmlText = serializer.serializeToString(xmlDoc);
-
-        zip.file(sheetPath, newXmlText);
-        return await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const buffer = await generateNapForm1Excel(items, divName, napFormHeader);
+        return new Blob([buffer as any], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       };
 
       if (divisionTab !== 'ALL') {
@@ -4608,6 +4181,14 @@ function InventoryAppraisal() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
               <Button variant="secondary" onClick={() => setShowNapFormPreview(false)}>
                 Close
+              </Button>
+
+              <Button
+                variant="primary"
+                onClick={handleExportNapForm1}
+                style={{ backgroundColor: '#107c41', borderColor: '#107c41' }}
+              >
+                <MdFileDownload style={{ marginRight: '0.35rem' }} /> Export to Excel
               </Button>
 
               <Button variant="primary" onClick={() => handlePrintNapForm1(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab)}>
