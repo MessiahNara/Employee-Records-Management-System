@@ -425,6 +425,8 @@ router.post('/requests', async (req: Request, res: Response) => {
         targetRecords.push({
           id: id,
           seriesTitle: clientItem.seriesTitle || (baseRecord ? baseRecord.seriesTitle : id),
+          prdsGrds: clientItem.prdsGrds || (baseRecord ? baseRecord.prdsGrds : ''),
+          itemNo: clientItem.itemNo || (baseRecord ? baseRecord.itemNo : ''),
           division: clientItem.division || (baseRecord ? baseRecord.division : 'General'),
           classificationCategory: clientItem.classificationCategory || (baseRecord ? baseRecord.classificationCategory : 'General'),
           inclusiveDates: clientItem.inclusiveDates || (baseRecord ? baseRecord.inclusiveDates : 'N/A'),
@@ -435,6 +437,8 @@ router.post('/requests', async (req: Request, res: Response) => {
         targetRecords.push({
           id: id,
           seriesTitle: year ? `${baseRecord.seriesTitle} (${year})` : baseRecord.seriesTitle,
+          prdsGrds: baseRecord.prdsGrds || '',
+          itemNo: baseRecord.itemNo || '',
           division: baseRecord.division,
           classificationCategory: baseRecord.classificationCategory,
           inclusiveDates: year || baseRecord.inclusiveDates,
@@ -443,6 +447,8 @@ router.post('/requests', async (req: Request, res: Response) => {
         targetRecords.push({
           id: id,
           seriesTitle: id,
+          prdsGrds: '',
+          itemNo: '',
           division: 'General',
           classificationCategory: 'General',
           inclusiveDates: 'N/A',
@@ -459,6 +465,8 @@ router.post('/requests', async (req: Request, res: Response) => {
       recordsSummary: targetRecords.map((r: any) => ({
         id: r.id,
         seriesTitle: r.seriesTitle,
+        prdsGrds: r.prdsGrds,
+        itemNo: r.itemNo,
         division: r.division,
         classificationCategory: r.classificationCategory || 'General',
         inclusiveDates: r.inclusiveDates,
@@ -502,152 +510,173 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
     const logs = readDisposalHistory();
     const baseTimestamp = Date.now();
 
-    const cleanSeriesTitle = (t?: string) => t ? t.replace(/\s*\(\s*\d{4}(?:\s*-\s*\d{4})?\s*\)$/i, '').trim().toLowerCase() : '';
+    const recordsToAdd: any[] = [];
 
     // Update retention stage, inclusive dates, and create history logs
     records.forEach((r: InventoryRecord) => {
-      const isMatched = reqItem.recordIds.some((id: string) => id === r.id || id.startsWith(`${r.id}-`) || id.startsWith(`${r.id}_`)) ||
-        (reqItem.recordsSummary && reqItem.recordsSummary.some((s: any) => cleanSeriesTitle(s.seriesTitle) === cleanSeriesTitle(r.seriesTitle)));
+      const isMatched = reqItem.recordIds.some((id: string) => id === r.id || id.startsWith(`${r.id}-`) || id.startsWith(`${r.id}_`));
 
       if (isMatched) {
         const previousInclusiveDates = r.inclusiveDates || 'N/A';
+        const targetYears: number[] = [];
 
-        if (targetStage === 'Storage') {
-          r.retentionStage = 'Storage';
-          r.storageStartDate = new Date().toISOString();
-          r.frequencyOfUse = 'Inactive';
+        reqItem.recordIds.forEach((id: string) => {
+          const yearMatch = id.match(/-yr-(\d{4})/);
+          if (yearMatch) targetYears.push(parseInt(yearMatch[1], 10));
+        });
 
-          logs.unshift({
-            id: `DISP-${baseTimestamp}-${logs.length}`,
-            recordId: r.id,
-            seriesTitle: r.seriesTitle,
-            division: r.division || 'General',
-            classificationCategory: r.classificationCategory || 'General',
-            subCategory: r.subCategory || '',
-            disposedYears: 'Moved to Storage',
-            previousInclusiveDates: previousInclusiveDates,
-            newInclusiveDates: r.inclusiveDates || 'N/A',
-            disposedAt: new Date().toISOString(),
-            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
-            reason: reqItem.reason,
-            attachmentUrl: reqItem.attachmentUrl,
-            attachmentName: reqItem.attachmentName,
-          } as any);
-        } else if (targetStage === 'Disposed') {
-          const targetYears: number[] = [];
+        if (reqItem.recordsSummary) {
+          reqItem.recordsSummary.forEach((s: any) => {
+            if (s.inclusiveDates && /^\d{4}$/.test(String(s.inclusiveDates).trim())) {
+              targetYears.push(parseInt(String(s.inclusiveDates).trim(), 10));
+            }
+            const titleYearMatch = s.seriesTitle ? s.seriesTitle.match(/\((20\d{2})\)$/) : null;
+            if (titleYearMatch) {
+              targetYears.push(parseInt(titleYearMatch[1], 10));
+            }
+          });
+        }
 
-          reqItem.recordIds.forEach((id: string) => {
-            const yearMatch = id.match(/-yr-(\d{4})/);
-            if (yearMatch) targetYears.push(parseInt(yearMatch[1], 10));
+        let newInclusiveDates = previousInclusiveDates;
+        const uniqueTargetYears = [...new Set(targetYears)].filter((y) => !isNaN(y));
+        const currentYear = new Date().getFullYear();
+
+        if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
+          const yearsStr = String(r.inclusiveDates).trim();
+          const hasPresent = /present/i.test(yearsStr);
+          let allYears: number[] = [];
+
+          // Split on commas first to handle non-contiguous ranges like "2020 - 2021, 2024 - Present"
+          const segments = yearsStr.split(',').map((s) => s.trim());
+          segments.forEach((seg) => {
+            if (seg.includes('-')) {
+              const rangeParts = seg.split('-').map((p) => p.trim());
+              const rangeStart = parseInt(rangeParts[0], 10);
+              let rangeEnd: number;
+              if (/present/i.test(rangeParts[rangeParts.length - 1])) {
+                rangeEnd = currentYear;
+              } else {
+                rangeEnd = parseInt(rangeParts[rangeParts.length - 1], 10);
+              }
+              if (!isNaN(rangeStart) && !isNaN(rangeEnd)) {
+                for (let y = rangeStart; y <= rangeEnd; y++) {
+                  allYears.push(y);
+                }
+              }
+            } else {
+              const singleYear = parseInt(seg, 10);
+              if (!isNaN(singleYear)) {
+                allYears.push(singleYear);
+              }
+            }
           });
 
-          if (reqItem.recordsSummary) {
-            reqItem.recordsSummary.forEach((s: any) => {
-              if (s.inclusiveDates && /^\d{4}$/.test(String(s.inclusiveDates).trim())) {
-                targetYears.push(parseInt(String(s.inclusiveDates).trim(), 10));
-              }
-              const titleYearMatch = s.seriesTitle ? s.seriesTitle.match(/\((20\d{2})\)$/) : null;
-              if (titleYearMatch) {
-                targetYears.push(parseInt(titleYearMatch[1], 10));
-              }
-            });
-          }
-
-          let newInclusiveDates = previousInclusiveDates;
-          const uniqueTargetYears = [...new Set(targetYears)].filter((y) => !isNaN(y));
-          const currentYear = new Date().getFullYear();
-
-          if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
-            const yearsStr = String(r.inclusiveDates).trim();
-            const hasPresent = /present/i.test(yearsStr);
-            let allYears: number[] = [];
-
-            // Split on commas first to handle non-contiguous ranges like "2020 - 2021, 2024 - Present"
-            const segments = yearsStr.split(',').map((s) => s.trim());
-            segments.forEach((seg) => {
-              if (seg.includes('-')) {
-                const rangeParts = seg.split('-').map((p) => p.trim());
-                const rangeStart = parseInt(rangeParts[0], 10);
-                let rangeEnd: number;
-                if (/present/i.test(rangeParts[rangeParts.length - 1])) {
-                  rangeEnd = currentYear;
-                } else {
-                  rangeEnd = parseInt(rangeParts[rangeParts.length - 1], 10);
-                }
-                if (!isNaN(rangeStart) && !isNaN(rangeEnd)) {
-                  for (let y = rangeStart; y <= rangeEnd; y++) {
-                    allYears.push(y);
-                  }
-                }
-              } else {
-                const singleYear = parseInt(seg, 10);
-                if (!isNaN(singleYear)) {
-                  allYears.push(singleYear);
-                }
-              }
-            });
-
-            const remainingYears = allYears.filter((y) => !uniqueTargetYears.includes(y)).sort((a, b) => a - b);
-            if (remainingYears.length === 0) {
+          const remainingYears = allYears.filter((y) => !uniqueTargetYears.includes(y)).sort((a, b) => a - b);
+          if (remainingYears.length === 0) {
+            if (targetStage === 'Disposed') {
               r.retentionStage = 'Disposed';
               r.inclusiveDates = 'Disposed';
               newInclusiveDates = 'Disposed';
             } else {
-              // Group consecutive years into ranges
-              const groups: number[][] = [];
-              let currentGroup: number[] = [remainingYears[0]];
-              for (let i = 1; i < remainingYears.length; i++) {
-                if (remainingYears[i] === remainingYears[i - 1] + 1) {
-                  currentGroup.push(remainingYears[i]);
-                } else {
-                  groups.push(currentGroup);
-                  currentGroup = [remainingYears[i]];
-                }
-              }
-              groups.push(currentGroup);
-
-              // Format each group, applying "Present" to the last group if original had Present
-              const formatted = groups.map((g, idx) => {
-                const isLastGroup = idx === groups.length - 1;
-                const gStart = g[0];
-                const gEnd = g[g.length - 1];
-                if (g.length === 1) {
-                  return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
-                } else {
-                  return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
-                }
-              });
-
-              r.inclusiveDates = formatted.join(', ');
-              newInclusiveDates = r.inclusiveDates;
+              r.retentionStage = 'Storage';
+              r.storageStartDate = new Date().toISOString();
+              r.frequencyOfUse = 'Inactive';
             }
           } else {
+            // Group consecutive years into ranges
+            const groups: number[][] = [];
+            let currentGroup: number[] = [remainingYears[0]];
+            for (let i = 1; i < remainingYears.length; i++) {
+              if (remainingYears[i] === remainingYears[i - 1] + 1) {
+                currentGroup.push(remainingYears[i]);
+              } else {
+                groups.push(currentGroup);
+                currentGroup = [remainingYears[i]];
+              }
+            }
+            groups.push(currentGroup);
+
+            // Format each group, applying "Present" to the last group if original had Present
+            const formatted = groups.map((g, idx) => {
+              const isLastGroup = idx === groups.length - 1;
+              const gStart = g[0];
+              const gEnd = g[g.length - 1];
+              if (g.length === 1) {
+                return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
+              } else {
+                return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
+              }
+            });
+
+            r.inclusiveDates = formatted.join(', ');
+            newInclusiveDates = r.inclusiveDates;
+
+            // If Storage, create a new record for the specific years
+            if (targetStage === 'Storage') {
+              const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
+              const targetGroups: number[][] = [];
+              let curTargetGrp = [sortedTargetYears[0]];
+              for (let i = 1; i < sortedTargetYears.length; i++) {
+                if (sortedTargetYears[i] === sortedTargetYears[i-1] + 1) {
+                  curTargetGrp.push(sortedTargetYears[i]);
+                } else {
+                  targetGroups.push(curTargetGrp);
+                  curTargetGrp = [sortedTargetYears[i]];
+                }
+              }
+              targetGroups.push(curTargetGrp);
+              const targetFormatted = targetGroups.map(g => g.length === 1 ? `${g[0]}` : `${g[0]} - ${g[g.length - 1]}`).join(', ');
+
+              const newStorageRecord = {
+                ...r, // Copy all properties (retains series title, division, etc)
+                id: `${r.id}_storage_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                inclusiveDates: targetFormatted,
+                retentionStage: 'Storage',
+                storageStartDate: new Date().toISOString(),
+                frequencyOfUse: 'Inactive'
+              };
+              recordsToAdd.push(newStorageRecord);
+            }
+          }
+        } else {
+          if (targetStage === 'Disposed') {
             r.retentionStage = 'Disposed';
             newInclusiveDates = 'Disposed';
+          } else {
+            r.retentionStage = 'Storage';
+            r.storageStartDate = new Date().toISOString();
+            r.frequencyOfUse = 'Inactive';
           }
-
-          const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
-          const disposedYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(', ') : (previousInclusiveDates || 'Disposed');
-
-          logs.unshift({
-            id: `DISP-${baseTimestamp}-${logs.length}`,
-            recordId: r.id,
-            seriesTitle: r.seriesTitle,
-            division: r.division || 'General',
-            classificationCategory: r.classificationCategory || 'General',
-            subCategory: r.subCategory || '',
-            disposedYears: disposedYearsDisplay,
-            previousInclusiveDates: previousInclusiveDates,
-            newInclusiveDates: newInclusiveDates,
-            disposedAt: new Date().toISOString(),
-            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
-            reason: reqItem.reason,
-            attachmentUrl: reqItem.attachmentUrl,
-            attachmentName: reqItem.attachmentName,
-          } as any);
         }
+
+        const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
+        const actionYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(', ') : (previousInclusiveDates || targetStage);
+
+        logs.unshift({
+          id: `DISP-${baseTimestamp}-${logs.length}`,
+          recordId: r.id,
+          seriesTitle: r.seriesTitle,
+          prdsGrds: r.prdsGrds,
+          itemNo: r.itemNo,
+          division: r.division || 'General',
+          classificationCategory: r.classificationCategory || 'General',
+          subCategory: r.subCategory || '',
+          disposedYears: targetStage === 'Storage' ? `Moved to Storage: ${actionYearsDisplay}` : actionYearsDisplay,
+          previousInclusiveDates: previousInclusiveDates,
+          newInclusiveDates: newInclusiveDates,
+          disposedAt: new Date().toISOString(),
+          disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+          reason: reqItem.reason,
+          attachmentUrl: reqItem.attachmentUrl,
+          attachmentName: reqItem.attachmentName,
+        } as any);
       }
     });
+
+    // Add newly created storage records to the main records list
+    if (recordsToAdd.length > 0) {
+      records.push(...recordsToAdd);
+    }
 
     saveRecords(records);
     saveDisposalHistory(logs);

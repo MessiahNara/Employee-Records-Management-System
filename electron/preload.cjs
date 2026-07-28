@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('electron', {
   getServerUrl: () => ipcRenderer.invoke('get-server-url'),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
   getTemplateFile: () => ipcRenderer.invoke('get-template-file'),
+  openFileNatively: (url, filename) => ipcRenderer.invoke('open-file-natively', { url, filename }),
+  saveFileNatively: (url, filename) => ipcRenderer.invoke('save-file-natively', { url, filename }),
   versions: {
     node: process.versions.node,
     chrome: process.versions.chrome,

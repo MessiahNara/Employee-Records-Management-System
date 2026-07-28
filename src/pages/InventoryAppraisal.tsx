@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
@@ -6,7 +6,7 @@ import Table, { Column } from '../components/ui/Table';
 import Modal from '../components/ui/Modal';
 import CreateRecordSeriesModal, { RecordSeriesFormData } from '../components/CreateRecordSeriesModal';
 import { useToast } from '../contexts/ToastContext';
-import api from '../services/api';
+import api, { getAbsoluteUrl } from '../services/api';
 import { MdAdd, MdDelete, MdDeleteOutline, MdEdit, MdAssignment, MdCheckCircle, MdHourglassTop, MdArchive, MdWarning, MdHistory, MdInventory, MdDeleteSweep, MdPrint, MdFileDownload, MdInfoOutline } from 'react-icons/md';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
@@ -14,6 +14,7 @@ import { saveAs } from 'file-saver';
 import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import './InventoryAppraisal.css';
 import generateNapForm1Excel from '../utils/generateNapForm1Excel';
+import generateAuthorityFormExcel from '../utils/generateAuthorityFormExcel';
 
 export interface InventoryRecord {
   id: string;
@@ -126,8 +127,112 @@ export function formatYearsListToDatesString(years: number[], isOngoing: boolean
   return formattedParts.join(', ');
 }
 
+const exportStagedRecordsToCSV = (records: any[], type: 'Storage' | 'Disposal') => {
+  const headers = ['Date & Time', 'Item No.', 'Record Series', 'Division', 'Category', 'Year'];
+  const rows = records.map(r => [
+    new Date(r.createdAt || Date.now()).toLocaleString(),
+    (r.prdsGrds || '') + ' ' + (r.itemNo || ''),
+    r.seriesTitle,
+    r.division || 'General',
+    r.classificationCategory || '-',
+    r.inclusiveDates || 'N/A'
+  ].map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(','));
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `${type}_Confirmation_Queue_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const handleExportAuthorityForm = async (records: any[], type: 'Storage' | 'Disposal') => {
+  try {
+    const buffer = await generateAuthorityFormExcel(records, type);
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `Request_Authority_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  } catch (err) {
+    console.error('Error generating authority form excel:', err);
+    alert('Failed to generate the Excel form.');
+  }
+};
+
+const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal') => {
+  const title = type === 'Storage' ? 'REQUEST FOR AUTHORITY TO STORAGE OF RECORD FORM' : 'REQUEST FOR AUTHORITY TO DISPOSE OF RECORD FORM';
+
+  return `
+    <html>
+      <head>
+        <title>Print Request Form</title>
+        <style>
+          @page { size: letter portrait; margin: 0.6in; }
+          body { font-family: "Times New Roman", Times, serif; font-size: 11pt; padding: 20px; margin: 0; background: white; }
+          .header-box { border: 1px solid black; text-align: center; font-weight: bold; padding: 5px; }
+          .header-box.title { font-size: 12pt; padding: 10px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          th, td { border: 1px solid black; padding: 8px; text-align: left; }
+          th { text-align: center; font-weight: bold; }
+          .signatures { display: flex; justify-content: space-between; margin-top: 40px; padding: 0 40px; }
+          .signature-block { width: 250px; }
+          .signature-line { border-bottom: 1px solid black; margin-top: 40px; }
+          .signature-label { margin-top: 5px; font-size: 10pt; }
+        </style>
+      </head>
+      <body>
+        <div class="header-box">Provincial Government of Pangasinan</div>
+        <div class="header-box">Lingayen, Pangasinan</div>
+        <div style="height: 15px; border-left: 1px solid black; border-right: 1px solid black;"></div>
+        <div class="header-box title">${title}</div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 15%;">GRDS/RDS<br/>ITEM NO.</th>
+              <th style="width: 45%;">RECORD SERIES TITLE AND DESCRIPTION</th>
+              <th style="width: 15%;">Document<br/>Year</th>
+              <th style="width: 25%;">Period<br/>Covered</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${records.length > 0 ? records.map(r => {
+    let docYear = '';
+    if (r.inclusiveDates) {
+      const matches = r.inclusiveDates.match(/\\b\\d{4}\\b/g);
+      if (matches) docYear = matches.join('-');
+    }
+    if (!docYear) docYear = new Date(r.createdAt || Date.now()).getFullYear().toString();
+    return `
+                <tr>
+                  <td style="text-align: center;">${(r.prdsGrds || '') + ' ' + (r.itemNo || '')}</td>
+                  <td>${r.seriesTitle}</td>
+                  <td style="text-align: center;">${docYear}</td>
+                  <td style="text-align: center;">${r.inclusiveDates || 'N/A'}</td>
+                </tr>
+              `;
+  }).join('') : `<tr><td colspan="4" style="text-align:center; height: 100px;">No records staged.</td></tr>`}
+          </tbody>
+        </table>
+        
+        <div class="signatures">
+          <div class="signature-block">
+            <div class="signature-label">Prepared by:</div>
+            <div class="signature-line"></div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-label">Checked and reviewed by:</div>
+            <div class="signature-line"></div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
 export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number, retentionStage?: string) {
-  if (retentionStage === 'Storage' || retentionStage === 'Disposed') return null;
+  const stage = (retentionStage || '').trim().toLowerCase();
+  if (stage === 'storage' || stage === 'disposed') return null;
   if (!datesStr || !activeDeskYrs || activeDeskYrs <= 0) return null;
 
   const currentYear = new Date().getFullYear();
@@ -135,7 +240,7 @@ export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number
   if (!matches || matches.length === 0) return null;
 
   const years = matches.map(Number);
-  const startYear = years[0];
+  const startYear = Math.min(...years);
   const elapsedYears = currentYear - startYear;
 
   if (elapsedYears >= activeDeskYrs) {
@@ -151,45 +256,35 @@ export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number
   return null;
 }
 
-export function getOngoingDisposalInfo(datesStr: string, totalRetention: number, retentionStage?: string, frequencyOfUse?: string) {
-  // Disposal evaluation ONLY applies if the record is currently in Storage!
-  const isStorage = retentionStage === 'Storage' || frequencyOfUse === 'Inactive';
+export function getOngoingDisposalInfo(datesStr: any, totalRetention: any, retentionStage?: any, frequencyOfUse?: any) {
+  const stage = String(retentionStage || '').trim().toLowerCase();
+  const freq = String(frequencyOfUse || '').trim().toLowerCase();
+  const isStorage = stage === 'storage' || freq === 'inactive' || freq.includes('inactive');
   if (!isStorage) return null;
 
-  if (!datesStr || !totalRetention || totalRetention <= 0) return null;
+  const safeDatesStr = String(datesStr || '');
+  const safeTotalRetention = Number(totalRetention) || 0;
+  if (!safeDatesStr || safeTotalRetention <= 0) return null;
 
   const currentYear = new Date().getFullYear();
-  const lower = datesStr.toLowerCase();
 
-  if (!lower.includes('present')) return null;
+  const covered = extractCoveredYears(safeDatesStr);
+  const eligibleYears = covered.years.filter(yr => (currentYear - yr) >= safeTotalRetention);
 
-  const matches = datesStr.match(/\b\d{4}\b/g);
-  if (!matches || matches.length === 0) return null;
+  if (eligibleYears.length === 0) return null;
 
-  const ongoingStartYear = Number(matches[matches.length - 1]);
-  if (!ongoingStartYear || isNaN(ongoingStartYear)) return null;
-
-  const elapsedYears = currentYear - ongoingStartYear;
-  if (elapsedYears < totalRetention) return null;
-
-  // Advance ongoing start year by 1 year (e.g. 2024 - Present becomes 2025 - Present)
-  const newStartYear = ongoingStartYear + 1;
-
-  let newDatesStr = '';
-  if (datesStr.includes(',')) {
-    newDatesStr = datesStr.replace(new RegExp(`${ongoingStartYear}\\s*-\\s*Present`, 'i'), `${newStartYear} - Present`);
-  } else {
-    newDatesStr = `${newStartYear} - Present`;
-  }
+  const activeYearsRemaining = covered.years.filter(yr => !eligibleYears.includes(yr));
+  const newDatesStr = formatYearsListToDatesString(activeYearsRemaining, covered.isOngoing) || 'Disposed';
 
   return {
-    ongoingStartYear,
+    ongoingStartYear: eligibleYears[0],
     currentYear,
-    elapsedYears,
-    totalRetention,
-    newStartYear,
+    elapsedYears: currentYear - eligibleYears[0],
+    totalRetention: safeTotalRetention,
+    newStartYear: eligibleYears[0],
     newDatesStr,
     isRetentionReached: true,
+    eligibleYears,
   };
 }
 
@@ -246,7 +341,41 @@ function InventoryAppraisal() {
   const [showEvaluateModal, setShowEvaluateModal] = useState(false);
   const [evaluatingRecord, setEvaluatingRecord] = useState<{ record: InventoryRecord; info: any } | null>(null);
   const [customDisposedYears, setCustomDisposedYears] = useState<number[]>([]);
+  const [customStorageYears, setCustomStorageYears] = useState<number[]>([]);
   const [editingRecord, setEditingRecord] = useState<InventoryRecord | null>(null);
+
+  // PDF viewer state
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerSrc, setViewerSrc] = useState('');
+  const [viewerTitle, setViewerTitle] = useState('');
+  const [isViewerMaximized, setIsViewerMaximized] = useState(false);
+
+  const handleNativeFileAction = async (e: React.MouseEvent<HTMLAnchorElement>, url?: string, filename?: string) => {
+    e.preventDefault();
+    if (!url) return;
+    const lower = url.toLowerCase();
+
+    // Natively save Excel, CSV, and Word documents via IPC to prevent browser launch
+    if (lower.match(/\.(xlsx|xls|csv|docx|doc)$/)) {
+      if ((window as any).electron?.saveFileNatively) {
+        await (window as any).electron.saveFileNatively(url, filename || 'document');
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'document';
+        a.click();
+      }
+      return;
+    }
+
+    // For PDF, open the inline React Modal viewer
+    const absoluteUrl = getAbsoluteUrl(url) || url;
+    const encodedUrl = encodeURI(absoluteUrl);
+    setViewerSrc(`${encodedUrl}#toolbar=0&navpanes=0`);
+    setViewerTitle(filename || 'Document Viewer');
+    setIsViewerMaximized(false);
+    setViewerOpen(true);
+  };
   const [viewingRecord, setViewingRecord] = useState<InventoryRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<InventoryRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -264,11 +393,11 @@ function InventoryAppraisal() {
     approvedBy: '',
   });
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [disposalLogs, setDisposalLogs] = useState<any[]>([]);
+  const [rawDisposalLogs, setDisposalLogs] = useState<any[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
 
   // ── Inventory Storage & Disposal Request state ───────────────────────
-  const [inventoryRequests, setInventoryRequests] = useState<any[]>([]);
+  const [rawInventoryRequests, setInventoryRequests] = useState<any[]>([]);
   const [selectedRequestDetails, setSelectedRequestDetails] = useState<any | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestType, setRequestType] = useState<'Storage' | 'Disposal'>('Storage');
@@ -292,6 +421,7 @@ function InventoryAppraisal() {
   const [storageReason, setStorageReason] = useState('');
   const [storageFile, setStorageFile] = useState<File | null>(null);
   const [isSendingStorageRequest, setIsSendingStorageRequest] = useState(false);
+  const [storageRequestFilter, setStorageRequestFilter] = useState<'All' | 'Pending'>('All');
 
   // ── 3-Tab Disposal Management Modal state ──────────────────────────────
   const [showDisposalManagementModal, setShowDisposalManagementModal] = useState(false);
@@ -308,6 +438,18 @@ function InventoryAppraisal() {
   const [disposalReason, setDisposalReason] = useState('');
   const [disposalFile, setDisposalFile] = useState<File | null>(null);
   const [isSendingDisposalRequest, setIsSendingDisposalRequest] = useState(false);
+  const [disposalRequestFilter, setDisposalRequestFilter] = useState<'All' | 'Pending'>('All');
+
+  // ── Preview Modal state ──────────────────────────────────────────────
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewType, setPreviewType] = useState<'Storage' | 'Disposal'>('Storage');
+
+  const handlePrintIframe = () => {
+    const iframe = document.getElementById('preview-iframe') as HTMLIFrameElement;
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.print();
+    }
+  };
 
   useEffect(() => {
     try {
@@ -397,6 +539,27 @@ function InventoryAppraisal() {
 
   const hasFullDivisionAccess = allowedDivisions.includes('ALL');
 
+  const isDivisionAllowed = useCallback((div: string | undefined) => {
+    if (hasFullDivisionAccess) return true;
+    if (!div) return false;
+    return allowedDivisions.some((d: string) => d.trim().toLowerCase() === div.trim().toLowerCase());
+  }, [hasFullDivisionAccess, allowedDivisions]);
+
+  const inventoryRequests = useMemo(() => {
+    if (hasFullDivisionAccess) return rawInventoryRequests;
+    return rawInventoryRequests.filter((req: any) => {
+      if (req.recordsSummary && Array.isArray(req.recordsSummary)) {
+        return req.recordsSummary.some((rs: any) => isDivisionAllowed(rs.division));
+      }
+      return false;
+    });
+  }, [rawInventoryRequests, hasFullDivisionAccess, isDivisionAllowed]);
+
+  const disposalLogs = useMemo(() => {
+    if (hasFullDivisionAccess) return rawDisposalLogs;
+    return rawDisposalLogs.filter((log: any) => isDivisionAllowed(log.division));
+  }, [rawDisposalLogs, hasFullDivisionAccess, isDivisionAllowed]);
+
   // Filter raw records based on user's authorized division scope
   const authorizedRecords = useMemo(() => {
     if (hasFullDivisionAccess) return records;
@@ -451,7 +614,7 @@ function InventoryAppraisal() {
   const analytics = useMemo(() => {
     const total = scopeFilteredRecords.length;
     const permanent = scopeFilteredRecords.filter(r => r.appraisalCategory === 'Permanent').length;
-    
+
     // Medium breakdown
     const mediumCounts = { Paper: 0, Digital: 0, 'Mixed Media': 0 };
     scopeFilteredRecords.forEach(r => {
@@ -644,8 +807,7 @@ function InventoryAppraisal() {
       const newRecs = recs.filter((r) => !prev.some((p) => p.id === r.id));
       return [...prev, ...newRecs];
     });
-    setStorageModalTab('confirmation');
-    setShowStorageManagementModal(true);
+    showToast(`${recs.length} record(s) staged in Storage Management under Confirmation of Storage tab.`, 'info');
   };
 
   const openDisposalRequestModal = (recs: InventoryRecord[]) => {
@@ -691,6 +853,9 @@ function InventoryAppraisal() {
           division: r.division || 'General',
           classificationCategory: r.classificationCategory || 'General',
           inclusiveDates: r.inclusiveDates,
+          prdsGrds: r.prdsGrds,
+          itemNo: r.itemNo,
+          totalRetention: r.totalRetention,
         }));
 
       await api.inventory.createRequest({
@@ -748,6 +913,9 @@ function InventoryAppraisal() {
         division: r.division || 'General',
         classificationCategory: r.classificationCategory || 'General',
         inclusiveDates: r.inclusiveDates,
+        prdsGrds: r.prdsGrds,
+        itemNo: r.itemNo,
+        totalRetention: r.totalRetention,
       }));
 
       await api.inventory.createRequest({
@@ -1695,20 +1863,21 @@ function InventoryAppraisal() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginLeft: 'auto' }}>
           {hasFullDivisionAccess && (
-            <Button
-              variant={pendingRequests.length > 0 ? "primary" : "secondary"}
+            <button
+              className={`capsule-action-btn ${pendingRequests.length > 0 ? 'capsule-action-btn--primary' : 'capsule-action-btn--secondary'}`}
               onClick={() => {
                 fetchInventoryRequests();
                 setShowPendingRequestsModal(true);
               }}
-              style={{ position: 'relative', fontWeight: pendingRequests.length > 0 ? 700 : 500 }}
             >
-              <MdAssignment style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: pendingRequests.length > 0 ? '#b45309' : '#2563eb' }} />
-              Pending Requests ({pendingRequests.length})
-            </Button>
+              <div className="capsule-action-btn__icon">
+                <MdAssignment style={{ color: pendingRequests.length > 0 ? '#fff' : '#2563eb' }} />
+              </div>
+              <span>Pending Requests {pendingRequests.length > 0 && <span className="capsule-action-btn__badge">{pendingRequests.length}</span>}</span>
+            </button>
           )}
-          <Button
-            variant="secondary"
+          <button
+            className="capsule-action-btn capsule-action-btn--secondary"
             onClick={() => {
               fetchDisposalHistory();
               fetchInventoryRequests();
@@ -1716,10 +1885,13 @@ function InventoryAppraisal() {
               setShowStorageManagementModal(true);
             }}
           >
-            <MdInventory style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: '#d97706' }} /> Storage Management ({storageLogs.length} History{stagedStorageRecords.length > 0 ? `, ${stagedStorageRecords.length} Staged` : ''})
-          </Button>
-          <Button
-            variant="secondary"
+            <div className="capsule-action-btn__icon">
+              <MdInventory style={{ color: '#d97706' }} />
+            </div>
+            <span>Storage ({storageLogs.length} History) {stagedStorageRecords.length > 0 && <span className="capsule-action-btn__badge" style={{ backgroundColor: '#d97706' }}>{stagedStorageRecords.length} Staged</span>}</span>
+          </button>
+          <button
+            className="capsule-action-btn capsule-action-btn--secondary"
             onClick={() => {
               fetchDisposalHistory();
               fetchInventoryRequests();
@@ -1727,11 +1899,17 @@ function InventoryAppraisal() {
               setShowDisposalManagementModal(true);
             }}
           >
-            <MdDeleteSweep style={{ marginRight: '0.35rem', fontSize: '1.15rem', color: '#dc2626' }} /> Disposal Management ({disposalOnlyLogs.length} History{stagedDisposalRecords.length > 0 ? `, ${stagedDisposalRecords.length} Staged` : ''})
-          </Button>
-          <Button variant="primary" onClick={handleCreateNew}>
-            <MdAdd style={{ marginRight: '0.35rem', fontSize: '1.2rem' }} /> Create New Records Series Entry
-          </Button>
+            <div className="capsule-action-btn__icon">
+              <MdDeleteSweep style={{ color: '#dc2626' }} />
+            </div>
+            <span>Disposal ({disposalOnlyLogs.length} History) {stagedDisposalRecords.length > 0 && <span className="capsule-action-btn__badge" style={{ backgroundColor: '#dc2626' }}>{stagedDisposalRecords.length} Staged</span>}</span>
+          </button>
+          <button className="capsule-action-btn capsule-action-btn--primary" onClick={handleCreateNew}>
+            <div className="capsule-action-btn__icon">
+              <MdAdd style={{ color: '#fff' }} />
+            </div>
+            <span>Create New Records Series Entry</span>
+          </button>
         </div>
       </div>
 
@@ -2277,7 +2455,7 @@ function InventoryAppraisal() {
                                     }}
                                     title={`Active desk period of ${r.activeDeskYrs} years reached! Click to evaluate moving to storage.`}
                                   >
-                                    <MdHourglassTop style={{ fontSize: '0.75rem' }} /> Move to Storage
+                                    <MdHourglassTop style={{ fontSize: '0.75rem' }} /> Evaluate Storage
                                   </button>
                                 )}
                                 {disposalInfo && (
@@ -2303,7 +2481,7 @@ function InventoryAppraisal() {
                                     }}
                                     title={`Retention period of ${disposalInfo.totalRetention} years reached in Storage! Click to evaluate disposal.`}
                                   >
-                                    <MdWarning style={{ fontSize: '0.75rem' }} /> Evaluate Disposal
+                                    <MdWarning style={{ fontSize: '0.75rem' }} /> Evaluate & Dispose
                                   </button>
                                 )}
                               </td>
@@ -2356,6 +2534,10 @@ function InventoryAppraisal() {
 
         const isCustomSelected = customDisposedYears.length > 0;
 
+        const currentYear = new Date().getFullYear();
+        const reqYears = evaluatingRecord.record.totalRetention || 0;
+        const eligibleDisposalYears = covered.years.filter(yr => (currentYear - yr) >= reqYears);
+
         return (
           <Modal
             isOpen={!!evaluatingRecord}
@@ -2367,31 +2549,54 @@ function InventoryAppraisal() {
             size="lg"
           >
             <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <p style={{ margin: 0, fontSize: '0.925rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                The record series <strong>{evaluatingRecord.record.seriesTitle}</strong> (Division: <strong>{evaluatingRecord.record.division || 'General'}</strong>) has reached its <strong>{evaluatingRecord.info.totalRetention}-year retention period</strong>.
-              </p>
+              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                <strong>Confirm Disposal Transition:</strong> You are about to permanently dispose of this record series. This action will mark the selected years as disposed.
+              </div>
 
-              <div style={{ background: 'var(--bg-secondary)', padding: '1.15rem', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.875rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Current Stored Period:</span>
-                  <strong style={{ fontSize: '0.925rem' }}>{evaluatingRecord.record.inclusiveDates}</strong>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem 1rem', background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Item No.</div>
+                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+                    {evaluatingRecord.record.prdsGrds && evaluatingRecord.record.itemNo
+                      ? `${evaluatingRecord.record.prdsGrds} — ${evaluatingRecord.record.itemNo}`
+                      : evaluatingRecord.record.prdsGrds || evaluatingRecord.record.itemNo || '-'}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Currently Displayed:</span>
-                  <strong style={{ fontSize: '0.925rem' }}>{formatDynamicDates(evaluatingRecord.record.inclusiveDates)}</strong>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Record Series</div>
+                  <div style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '1.2rem' }}>{cleanSeriesTitle(evaluatingRecord.record.seriesTitle)}</div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Retention Period Reached:</span>
-                  <span style={{ color: '#d97706', fontWeight: 700, fontSize: '0.9rem' }}>{evaluatingRecord.info.totalRetention} Year(s)</span>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Division</div>
+                  <div style={{ fontWeight: 500 }}>{evaluatingRecord.record.division || 'General'}</div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '0.65rem', marginTop: '0.35rem' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>New Inclusive Dates if Disposed:</span>
-                  <span style={{ color: 'var(--color-primary)', fontWeight: 800, fontSize: '1rem' }}>{computedCustomDates}</span>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Category</div>
+                  <div style={{ fontWeight: 500 }}>{evaluatingRecord.record.classificationCategory || '-'}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem 1rem', background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Current Stored Period</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{evaluatingRecord.record.inclusiveDates}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Currently Displayed</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatDynamicDates(evaluatingRecord.record.inclusiveDates)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total Retention Reached</div>
+                  <div style={{ fontWeight: 700, color: '#dc2626' }}>{evaluatingRecord.info.totalRetention} Year(s)</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>New Inclusive Dates if Disposed</div>
+                  <div style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '1.2rem' }}>{computedCustomDates}</div>
                 </div>
               </div>
 
               {/* Specific Year Disposal Selector */}
-              {covered.years.length > 0 && (
+              {eligibleDisposalYears.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--bg-primary)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                   <label style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                     💡 Or Select Specific Year(s) to Dispose:
@@ -2400,25 +2605,26 @@ function InventoryAppraisal() {
                     Click a year below to mark it as disposed (e.g. disposing 2024 from <code>2023 - 2026</code> saves as <code>2023, 2025 - 2026</code>):
                   </span>
                   <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                    {covered.years.map((yr) => {
+                    {eligibleDisposalYears.map((yr) => {
                       const isDisposed = customDisposedYears.includes(yr);
                       return (
                         <button
                           key={`yr-pill-${yr}`}
                           type="button"
                           style={{
-                            fontSize: '0.8rem',
-                            padding: '0.3rem 0.65rem',
+                            fontSize: '0.85rem',
+                            padding: '0.45rem 0.85rem',
                             borderRadius: '6px',
-                            border: isDisposed ? '1.5px solid #ef4444' : '1px solid var(--border-color)',
-                            background: isDisposed ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-tertiary)',
+                            border: isDisposed ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                            background: isDisposed ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-primary)',
                             color: isDisposed ? '#dc2626' : 'var(--text-primary)',
-                            fontWeight: 600,
+                            fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.3rem',
+                            gap: '0.4rem',
                             textDecoration: isDisposed ? 'line-through' : 'none',
+                            boxShadow: isDisposed ? '0 2px 4px rgba(239, 68, 68, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
                             transition: 'all 0.2s ease',
                           }}
                           onClick={() => {
@@ -2427,7 +2633,7 @@ function InventoryAppraisal() {
                             );
                           }}
                         >
-                          {isDisposed ? '🗑️ Disposed ' : '📅 '} {yr}
+                          {isDisposed ? '🗑️ Disposed ' : '📅 '} {yr} ({currentYear - yr} yrs)
                         </button>
                       );
                     })}
@@ -2452,11 +2658,11 @@ function InventoryAppraisal() {
                   }}
                   style={{ padding: '0.5rem 1rem' }}
                 >
-                  Do Not Dispose (Keep As Is)
+                  Cancel
                 </Button>
                 <Button
                   variant="primary"
-                  style={{ padding: '0.5rem 1.15rem' }}
+                  style={{ padding: '0.5rem 1.15rem', background: '#dc2626', borderColor: '#dc2626' }}
                   onClick={() => {
                     const rec = evaluatingRecord.record;
                     setEvaluatingRecord(null);
@@ -2470,14 +2676,24 @@ function InventoryAppraisal() {
                       }));
                       openDisposalRequestModal(yearRecords);
                     } else {
-                      const startYear = evaluatingRecord.info.ongoingStartYear;
-                      const yearRec = {
-                        ...rec,
-                        id: `${rec.id}-yr-${startYear}`,
-                        inclusiveDates: String(startYear),
-                        seriesTitle: `${rec.seriesTitle} (${startYear})`,
-                      };
-                      openDisposalRequestModal([yearRec]);
+                      if (evaluatingRecord.info.eligibleYears && evaluatingRecord.info.eligibleYears.length > 0) {
+                        const yearRecords = evaluatingRecord.info.eligibleYears.map((yr: number) => ({
+                          ...rec,
+                          id: `${rec.id}-yr-${yr}`,
+                          inclusiveDates: String(yr),
+                          seriesTitle: `${rec.seriesTitle} (${yr})`,
+                        }));
+                        openDisposalRequestModal(yearRecords);
+                      } else {
+                        const startYear = evaluatingRecord.info.ongoingStartYear;
+                        const yearRec = {
+                          ...rec,
+                          id: `${rec.id}-yr-${startYear}`,
+                          inclusiveDates: String(startYear),
+                          seriesTitle: `${rec.seriesTitle} (${startYear})`,
+                        };
+                        openDisposalRequestModal([yearRec]);
+                      }
                     }
                     setCustomDisposedYears([]);
                   }}
@@ -2553,7 +2769,6 @@ function InventoryAppraisal() {
                               size="sm"
                               style={{ background: '#dc2626', borderColor: '#dc2626' }}
                               onClick={() => {
-                                setShowEvaluateModal(false);
                                 setEvaluatingRecord({
                                   record: r,
                                   info: ongoingInfo || {
@@ -2663,11 +2878,11 @@ function InventoryAppraisal() {
                   transition: 'all 0.2s ease',
                 }}
               >
-                <span>Requests</span>
+                <span>Requests ({inventoryRequests.filter(r => r.requestType === 'Storage').length})</span>
                 {pendingStorageRequests.length > 0 && (
                   <span style={{
-                    background: 'rgba(59, 130, 246, 0.15)',
-                    color: '#2563eb',
+                    background: 'rgba(217, 119, 6, 0.15)',
+                    color: '#d97706',
                     padding: '0.15rem 0.5rem',
                     borderRadius: '99px',
                     fontSize: '0.75rem',
@@ -2712,9 +2927,16 @@ function InventoryAppraisal() {
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                      Select the records you want to submit for storage confirmation, provide the reason, and attach authorization proof.
-                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                      <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                        Select the records you want to submit for storage confirmation, provide the reason, and attach authorization proof.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <Button variant="secondary" size="sm" onClick={() => { setPreviewType('Storage'); setShowPreviewModal(true); }} style={{ display: 'flex', alignItems: 'center' }}>
+                          <MdPrint style={{ marginRight: '6px', fontSize: '1.1rem' }} /> View & Print Request Form
+                        </Button>
+                      </div>
+                    </div>
                     <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '250px' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
@@ -2733,10 +2955,12 @@ function InventoryAppraisal() {
                               />
                             </th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Storage Year</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Action</th>
                           </tr>
                         </thead>
@@ -2760,6 +2984,16 @@ function InventoryAppraisal() {
                                 <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                                   {new Date(r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
                                 </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
+                                  {r.prdsGrds && r.itemNo ? (
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{r.prdsGrds}</div>
+                                      <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{r.itemNo}</div>
+                                    </div>
+                                  ) : (
+                                    r.prdsGrds || r.itemNo || '-'
+                                  )}
+                                </td>
                                 <td style={{ padding: '0.75rem 0.85rem' }}>
                                   <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(r.seriesTitle)}</div>
                                 </td>
@@ -2771,6 +3005,14 @@ function InventoryAppraisal() {
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#d97706' }}>
                                   {r.inclusiveDates}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {(() => {
+                                    const baseYear = parseInt(r.inclusiveDates || '0');
+                                    const ret = parseInt(String(r.totalRetention || '0'));
+                                    const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                    return expiryYear ? `${expiryYear} (${ret} yrs)` : `${r.totalRetention || '-'} yrs`;
+                                  })()}
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
                                   <Button
@@ -2852,17 +3094,35 @@ function InventoryAppraisal() {
             {/* TAB 2: Requests Status Queue */}
             {storageModalTab === 'requests' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                  Submitted storage requests awaiting Admin confirmation or historical decision review.
-                </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '75%' }}>
+                    Track the status of your submitted storage requests, including pending, approved, and rejected.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setStorageRequestFilter('All')}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: storageRequestFilter === 'All' ? 700 : 500, background: storageRequestFilter === 'All' ? 'var(--bg-primary)' : 'transparent', color: storageRequestFilter === 'All' ? 'var(--color-primary)' : 'var(--text-secondary)', borderRadius: '6px', border: storageRequestFilter === 'All' ? '1px solid var(--border-color)' : '1px solid transparent', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: storageRequestFilter === 'All' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' }}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStorageRequestFilter('Pending')}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: storageRequestFilter === 'Pending' ? 700 : 500, background: storageRequestFilter === 'Pending' ? 'var(--bg-primary)' : 'transparent', color: storageRequestFilter === 'Pending' ? 'var(--color-primary)' : 'var(--text-secondary)', borderRadius: '6px', border: storageRequestFilter === 'Pending' ? '1px solid var(--border-color)' : '1px solid transparent', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: storageRequestFilter === 'Pending' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' }}
+                    >
+                      Pending
+                    </button>
+                  </div>
+                </div>
 
-                {inventoryRequests.filter((r) => r.requestType === 'Storage').length === 0 ? (
+                {inventoryRequests.filter((r) => r.requestType === 'Storage' && (storageRequestFilter === 'All' || r.status === 'pending')).length === 0 ? (
                   <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
                     No storage requests found.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto' }}>
-                    {inventoryRequests.filter((r) => r.requestType === 'Storage').map((req) => (
+                    {inventoryRequests.filter((r) => r.requestType === 'Storage' && (storageRequestFilter === 'All' || r.status === 'pending')).map((req) => (
                       <div
                         key={`req-tab-${req.id}`}
                         onClick={() => setSelectedRequestDetails(req)}
@@ -2908,8 +3168,22 @@ function InventoryAppraisal() {
                             Target Records ({req.recordsSummary?.length || 0})
                           </div>
                           <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                            {(req.recordsSummary || []).map((s: any) => s.seriesTitle).join(', ')}
+                            {(req.recordsSummary || []).map((s: any) => `${s.prdsGrds || s.itemNo ? `[${s.prdsGrds ? s.prdsGrds + ' ' : ''}${s.itemNo || ''}] `.trim() + ' ' : ''}${s.seriesTitle}`).join(', ')}
                           </div>
+                          {(req.recordsSummary || []).some((s: any) => s.totalRetention) && (
+                            <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              {(req.recordsSummary || []).filter((s: any) => s.totalRetention).map((s: any, idx: number) => {
+                                const baseYear = parseInt(s.inclusiveDates || '0');
+                                const ret = parseInt(s.totalRetention || '0');
+                                const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                return (
+                                  <span key={`ret-s-${idx}`} style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', color: '#b45309', fontWeight: 600 }}>
+                                    {s.seriesTitle}: {expiryYear ? `${expiryYear} (${ret} yrs)` : `${ret} yrs`}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
@@ -2918,7 +3192,14 @@ function InventoryAppraisal() {
 
                         {req.attachmentUrl && (
                           <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                            📎 Attached Proof: <a href={req.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}>{req.attachmentName || 'View Attached Document'}</a>
+                            📎 Attached Proof: <a
+                              href={req.attachmentUrl}
+                              onClick={(e) => handleNativeFileAction(e, req.attachmentUrl, req.attachmentName)}
+                              rel="noopener noreferrer"
+                              style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}
+                            >
+                              {req.attachmentName || 'View Attached Document'}
+                            </a>
                           </div>
                         )}
 
@@ -3001,7 +3282,35 @@ function InventoryAppraisal() {
                 </div>
 
                 {(() => {
-                  const filtered = storageLogs.filter((log) => {
+                  const expandedLogs: any[] = [];
+                  storageLogs.forEach((log) => {
+                    const yearsStr = String(log.disposedYears || '').trim();
+                    let yearList: number[] = [];
+
+                    if (yearsStr.includes('-')) {
+                      const parts = yearsStr.split('-').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+                      if (parts.length === 2 && parts[0] <= parts[1]) {
+                        for (let y = parts[0]; y <= parts[1]; y++) yearList.push(y);
+                      }
+                    }
+                    if (yearList.length === 0) {
+                      yearList = (yearsStr.match(/\b\d{4}\b/g) || []).map((n) => parseInt(n, 10));
+                    }
+
+                    if (yearList.length > 1) {
+                      yearList.forEach((singleYear, idx) => {
+                        expandedLogs.push({
+                          ...log,
+                          id: `${log.id}-${singleYear}-${idx}`,
+                          disposedYears: String(singleYear),
+                        });
+                      });
+                    } else {
+                      expandedLogs.push(log);
+                    }
+                  });
+
+                  const filtered = expandedLogs.filter((log) => {
                     if (storageDivisionFilter !== 'ALL' && (log.division || 'General') !== storageDivisionFilter) return false;
                     if (storageCategoryFilter !== 'ALL' && log.classificationCategory !== storageCategoryFilter) return false;
                     const q = storageSearchQuery.toLowerCase().trim();
@@ -3029,11 +3338,13 @@ function InventoryAppraisal() {
                         <thead>
                           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Transition Status</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Stage Shift</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3042,15 +3353,18 @@ function InventoryAppraisal() {
                               <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                               </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
+                                {log.prdsGrds && log.itemNo ? (
+                                  <div>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{log.prdsGrds}</div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{log.itemNo}</div>
+                                  </div>
+                                ) : (
+                                  log.prdsGrds || log.itemNo || '-'
+                                )}
+                              </td>
                               <td style={{ padding: '0.75rem 0.85rem' }}>
                                 <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{log.seriesTitle}</div>
-                                {log.attachmentUrl && (
-                                  <div style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
-                                    <a href={log.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
-                                      📎 {log.attachmentName || 'Proof Document'}
-                                    </a>
-                                  </div>
-                                )}
                               </td>
                               <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {log.division || 'General'}
@@ -3058,13 +3372,22 @@ function InventoryAppraisal() {
                               <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
                                 {log.classificationCategory || '-'}
                               </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#d97706' }}>
+                                {log.inclusiveDates || log.disposedYears || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {(() => {
+                                  const baseYear = parseInt(log.inclusiveDates || log.disposedYears || '0');
+                                  const matchedRecord = records.find((r: any) => r.id === log.recordId || r.id === log.id);
+                                  const ret = parseInt(log.totalRetention || matchedRecord?.totalRetention || '0');
+                                  const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                  return expiryYear ? `${expiryYear} (${ret} yrs)` : ret ? `${ret} yrs` : '-';
+                                })()}
+                              </td>
                               <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, fontSize: '0.8rem' }}>
                                   <MdArchive style={{ fontSize: '0.9rem' }} /> Moved to Storage
                                 </span>
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: '#d97706', fontWeight: 700 }}>
-                                Active Desk ➔ Storage
                               </td>
                             </tr>
                           ))}
@@ -3160,7 +3483,7 @@ function InventoryAppraisal() {
                   transition: 'all 0.2s ease',
                 }}
               >
-                <span>Requests</span>
+                <span>Requests ({inventoryRequests.filter(r => r.requestType === 'Disposal').length})</span>
                 {pendingDisposalRequests.length > 0 && (
                   <span style={{
                     background: 'rgba(239, 68, 68, 0.15)',
@@ -3209,9 +3532,16 @@ function InventoryAppraisal() {
                   </div>
                 ) : (
                   <>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                      Select the records you want to submit for disposal confirmation, provide the reason, and attach authorization proof.
-                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                      <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                        Select the records you want to submit for disposal confirmation, provide the reason, and attach authorization proof.
+                      </p>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <Button variant="secondary" size="sm" onClick={() => { setPreviewType('Disposal'); setShowPreviewModal(true); }} style={{ display: 'flex', alignItems: 'center' }}>
+                          <MdPrint style={{ marginRight: '6px', fontSize: '1.1rem' }} /> View & Print Request Form
+                        </Button>
+                      </div>
+                    </div>
                     <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '250px' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
@@ -3230,10 +3560,12 @@ function InventoryAppraisal() {
                               />
                             </th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Disposed Year</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Action</th>
                           </tr>
                         </thead>
@@ -3257,6 +3589,16 @@ function InventoryAppraisal() {
                                 <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                                   {new Date(r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
                                 </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
+                                  {r.prdsGrds && r.itemNo ? (
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{r.prdsGrds}</div>
+                                      <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{r.itemNo}</div>
+                                    </div>
+                                  ) : (
+                                    r.prdsGrds || r.itemNo || '-'
+                                  )}
+                                </td>
                                 <td style={{ padding: '0.75rem 0.85rem' }}>
                                   <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(r.seriesTitle)}</div>
                                 </td>
@@ -3268,6 +3610,14 @@ function InventoryAppraisal() {
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
                                   {r.inclusiveDates}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {(() => {
+                                    const baseYear = parseInt(r.inclusiveDates || '0');
+                                    const ret = parseInt(String(r.totalRetention || '0'));
+                                    const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                    return expiryYear ? `${expiryYear} (${ret} yrs)` : `${r.totalRetention || '-'} yrs`;
+                                  })()}
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
                                   <Button
@@ -3349,17 +3699,35 @@ function InventoryAppraisal() {
             {/* TAB 2: Requests Status Queue */}
             {disposalModalTab === 'requests' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
-                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                  Submitted disposal requests awaiting Admin confirmation or decision review.
-                </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '75%' }}>
+                    Track the status of your submitted disposal requests, including pending, approved, and rejected.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setDisposalRequestFilter('All')}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: disposalRequestFilter === 'All' ? 700 : 500, background: disposalRequestFilter === 'All' ? 'var(--bg-primary)' : 'transparent', color: disposalRequestFilter === 'All' ? 'var(--color-primary)' : 'var(--text-secondary)', borderRadius: '6px', border: disposalRequestFilter === 'All' ? '1px solid var(--border-color)' : '1px solid transparent', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: disposalRequestFilter === 'All' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' }}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDisposalRequestFilter('Pending')}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: disposalRequestFilter === 'Pending' ? 700 : 500, background: disposalRequestFilter === 'Pending' ? 'var(--bg-primary)' : 'transparent', color: disposalRequestFilter === 'Pending' ? 'var(--color-primary)' : 'var(--text-secondary)', borderRadius: '6px', border: disposalRequestFilter === 'Pending' ? '1px solid var(--border-color)' : '1px solid transparent', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: disposalRequestFilter === 'Pending' ? '0 2px 5px rgba(0,0,0,0.05)' : 'none' }}
+                    >
+                      Pending
+                    </button>
+                  </div>
+                </div>
 
-                {inventoryRequests.filter(r => r.requestType === 'Disposal').length === 0 ? (
+                {inventoryRequests.filter(r => r.requestType === 'Disposal' && (disposalRequestFilter === 'All' || r.status === 'pending')).length === 0 ? (
                   <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
                     No disposal requests found.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '420px', overflowY: 'auto' }}>
-                    {inventoryRequests.filter(r => r.requestType === 'Disposal').map((req) => (
+                    {inventoryRequests.filter(r => r.requestType === 'Disposal' && (disposalRequestFilter === 'All' || r.status === 'pending')).map((req) => (
                       <div
                         key={`req-disp-tab-${req.id}`}
                         onClick={() => setSelectedRequestDetails(req)}
@@ -3405,8 +3773,22 @@ function InventoryAppraisal() {
                             Target Records ({req.recordsSummary?.length || 0})
                           </div>
                           <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                            {(req.recordsSummary || []).map((s: any) => s.seriesTitle).join(', ')}
+                            {(req.recordsSummary || []).map((s: any) => `${s.prdsGrds || s.itemNo ? `[${s.prdsGrds ? s.prdsGrds + ' ' : ''}${s.itemNo || ''}] `.trim() + ' ' : ''}${s.seriesTitle}`).join(', ')}
                           </div>
+                          {(req.recordsSummary || []).some((s: any) => s.totalRetention) && (
+                            <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              {(req.recordsSummary || []).filter((s: any) => s.totalRetention).map((s: any, idx: number) => {
+                                const baseYear = parseInt(s.inclusiveDates || '0');
+                                const ret = parseInt(s.totalRetention || '0');
+                                const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                return (
+                                  <span key={`ret-d-${idx}`} style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.1)', color: '#b91c1c', fontWeight: 600 }}>
+                                    {s.seriesTitle}: {expiryYear ? `${expiryYear} (${ret} yrs)` : `${ret} yrs`}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
@@ -3414,8 +3796,15 @@ function InventoryAppraisal() {
                         </div>
 
                         {req.attachmentUrl && (
-                          <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                            📎 Attached Proof: <a href={req.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}>{req.attachmentName || 'View Attached Document'}</a>
+                          <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600, marginTop: '0.5rem' }}>
+                            📎 Attached Proof: <a
+                              href={req.attachmentUrl}
+                              onClick={(e) => handleNativeFileAction(e, req.attachmentUrl, req.attachmentName)}
+                              rel="noopener noreferrer"
+                              style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}
+                            >
+                              {req.attachmentName || 'View Attached Document'}
+                            </a>
                           </div>
                         )}
 
@@ -3554,10 +3943,12 @@ function InventoryAppraisal() {
                         <thead>
                           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Disposed Year</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
+                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3566,15 +3957,18 @@ function InventoryAppraisal() {
                               <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                               </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
+                                {log.prdsGrds && log.itemNo ? (
+                                  <div>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{log.prdsGrds}</div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{log.itemNo}</div>
+                                  </div>
+                                ) : (
+                                  log.prdsGrds || log.itemNo || '-'
+                                )}
+                              </td>
                               <td style={{ padding: '0.75rem 0.85rem' }}>
                                 <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(log.seriesTitle)}</div>
-                                {log.attachmentUrl && (
-                                  <div style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
-                                    <a href={log.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
-                                      📎 {log.attachmentName || 'Proof Document'}
-                                    </a>
-                                  </div>
-                                )}
                               </td>
                               <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {log.division || 'General'}
@@ -3582,10 +3976,17 @@ function InventoryAppraisal() {
                               <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
                                 {log.classificationCategory || '-'}
                               </td>
-                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(239, 68, 68, 0.12)', color: '#b91c1c', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.2rem 0.6rem', borderRadius: '6px', fontWeight: 700, fontSize: '0.8rem' }}>
-                                  <MdDeleteOutline style={{ fontSize: '0.95rem' }} /> {log.disposedYears}
-                                </span>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
+                                {log.inclusiveDates || log.disposedYears || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {(() => {
+                                  const baseYear = parseInt(log.inclusiveDates || log.disposedYears || '0');
+                                  const matchedRecord = records.find((r: any) => r.id === log.recordId || r.id === log.id);
+                                  const ret = parseInt(log.totalRetention || matchedRecord?.totalRetention || '0');
+                                  const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                  return expiryYear ? `${expiryYear} (${ret} yrs)` : ret ? `${ret} yrs` : '-';
+                                })()}
                               </td>
                             </tr>
                           ))}
@@ -3694,7 +4095,7 @@ function InventoryAppraisal() {
                   Retention Schedule & Compliance Notice ({new Date().getFullYear()})
                 </div>
                 <div style={{ fontSize: '0.875rem', color: '#78350f', lineHeight: 1.55 }}>
-                  Under <strong>NAP Form 1 / GRDS</strong> guidelines, several record series entries have completed their required active desk period or total retention lifecycle. <strong>Immediate action is required</strong> to transition or dispose of these records to maintain compliance and keep storage records up-to-date.
+                  Under <strong>NAP</strong> guidelines, several record series entries have completed their required active desk period or total retention lifecycle. <strong>Immediate action is required</strong> to transition or dispose of these records to maintain compliance and keep storage records up-to-date.
                 </div>
               </div>
             </div>
@@ -3768,7 +4169,6 @@ function InventoryAppraisal() {
                     onClick={() => {
                       const currentYear = new Date().getFullYear();
                       sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
-                      setShowAnnualNoticeModal(false);
                       setShowActiveDeskModal(true);
                     }}
                   >
@@ -3856,7 +4256,6 @@ function InventoryAppraisal() {
                     onClick={() => {
                       const currentYear = new Date().getFullYear();
                       sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
-                      setShowAnnualNoticeModal(false);
                       setShowEvaluateModal(true);
                     }}
                   >
@@ -3907,8 +4306,8 @@ function InventoryAppraisal() {
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Record Series</th>
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Division</th>
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Inclusive Dates</th>
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Active Limit</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Elapsed Yrs</th>
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions / Transition Choice</th>
                     </tr>
                   </thead>
@@ -3929,24 +4328,23 @@ function InventoryAppraisal() {
                           </td>
                           <td style={{ padding: '0.75rem 0.85rem' }}>
                             <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{cleanSeriesTitle(record.seriesTitle)}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formatDynamicDates(record.inclusiveDates)}</div>
                           </td>
                           <td style={{ padding: '0.75rem 0.85rem' }}>{record.division || 'General'}</td>
                           <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>{record.classificationCategory || '-'}</td>
-                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600 }}>{record.activeDeskYrs} yrs</td>
-                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                            <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
-                              {info?.elapsedYears || record.activeDeskYrs} yrs
-                            </span>
+                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {formatDynamicDates(record.inclusiveDates)}
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#d97706' }}>
+                            {record.activeDeskYrs} Year(s)
                           </td>
                           <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                               <Button
                                 variant="primary"
                                 style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem', background: '#d97706', borderColor: '#d97706' }}
-                                onClick={() => handleMoveToStorage(record)}
+                                onClick={() => setSingleStorageRecord(record)}
                               >
-                                Move to Storage ➔
+                                Evaluate & Move to Storage ➔
                               </Button>
                             </div>
                           </td>
@@ -3968,83 +4366,158 @@ function InventoryAppraisal() {
       )}
 
       {/* Single Record Move to Storage Confirmation Modal */}
-      {singleStorageRecord && (
-        <Modal
-          isOpen={!!singleStorageRecord}
-          onClose={() => setSingleStorageRecord(null)}
-          title="Move to Storage"
-          size="md"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-              <strong>Confirm Storage Transition:</strong> You are about to move this record series from <strong>Active</strong> to <strong>Storage</strong> stage. This will start the storage retention countdown toward disposal eligibility.
-            </div>
+      {singleStorageRecord && (() => {
+        const covered = extractCoveredYears(singleStorageRecord.inclusiveDates);
+        const activeYearsRemaining = covered.years.filter(y => !customStorageYears.includes(y));
+        const computedCustomDates = customStorageYears.length > 0
+          ? formatYearsListToDatesString(activeYearsRemaining, covered.isOngoing)
+          : 'N/A';
+        const isCustomSelected = customStorageYears.length > 0;
 
-            <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', width: '40%', background: 'var(--bg-secondary)' }}>Item No.</td>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                      {singleStorageRecord.prdsGrds && singleStorageRecord.itemNo
-                        ? `${singleStorageRecord.prdsGrds} — ${singleStorageRecord.itemNo}`
-                        : singleStorageRecord.prdsGrds || singleStorageRecord.itemNo || '-'}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Record Series</td>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 600 }}>{cleanSeriesTitle(singleStorageRecord.seriesTitle)}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Division</td>
-                    <td style={{ padding: '0.7rem 1rem' }}>{singleStorageRecord.division || 'General'}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Category</td>
-                    <td style={{ padding: '0.7rem 1rem' }}>{singleStorageRecord.classificationCategory || '-'}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Inclusive Dates</td>
-                    <td style={{ padding: '0.7rem 1rem' }}>{formatDynamicDates(singleStorageRecord.inclusiveDates)}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>Active Desk Period</td>
-                    <td style={{ padding: '0.7rem 1rem' }}>
-                      <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
-                        {singleStorageRecord.activeDeskYrs} year(s) reached
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '0.7rem 1rem', fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}>New Stage</td>
-                    <td style={{ padding: '0.7rem 1rem' }}>
-                      <span style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700 }}>
-                        Active → Storage
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+        const currentYear = new Date().getFullYear();
+        const activeDeskYrs = singleStorageRecord.activeDeskYrs || 0;
+        const eligibleStorageYears = covered.years.filter(yr => (currentYear - yr) >= activeDeskYrs);
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
-              <Button variant="secondary" onClick={() => setSingleStorageRecord(null)}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                style={{ background: '#d97706', borderColor: '#d97706' }}
-                onClick={() => {
-                  handleMoveToStorage(singleStorageRecord);
+        return (
+          <Modal
+            isOpen={!!singleStorageRecord}
+            onClose={() => {
+              setSingleStorageRecord(null);
+              setCustomStorageYears([]);
+            }}
+            title="Evaluate & Move to Storage"
+            size="lg"
+          >
+            <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                <strong>Confirm Storage Transition:</strong> You are about to move this record series from <strong>Active</strong> to <strong>Storage</strong> stage. This will start the storage retention countdown toward disposal eligibility.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem 1rem', background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Item No.</div>
+                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+                    {singleStorageRecord.prdsGrds && singleStorageRecord.itemNo
+                      ? `${singleStorageRecord.prdsGrds} — ${singleStorageRecord.itemNo}`
+                      : singleStorageRecord.prdsGrds || singleStorageRecord.itemNo || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Record Series</div>
+                  <div style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '1.2rem' }}>{cleanSeriesTitle(singleStorageRecord.seriesTitle)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Division</div>
+                  <div style={{ fontWeight: 500 }}>{singleStorageRecord.division || 'General'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Category</div>
+                  <div style={{ fontWeight: 500 }}>{singleStorageRecord.classificationCategory || '-'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Inclusive Dates</div>
+                  <div style={{ fontWeight: 500 }}>{formatDynamicDates(singleStorageRecord.inclusiveDates)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Active Desk Period</div>
+                  <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.8rem' }}>
+                    {singleStorageRecord.activeDeskYrs} year(s) reached
+                  </span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total Retention</div>
+                  <div style={{ fontWeight: 500 }}>{singleStorageRecord.totalRetention} year(s)</div>
+                </div>
+              </div>
+
+              {/* Specific Year Storage Selector */}
+              {eligibleStorageYears.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--bg-primary)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    💡 Or Select Specific Year(s) to Storage:
+                  </label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    Click a year below to move it to Storage (e.g. moving 2024 from <code>2023 - 2026</code> leaves active dates as <code>2023, 2025 - 2026</code>):
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    {eligibleStorageYears.map((yr) => {
+                      const isStorageSelected = customStorageYears.includes(yr);
+                      return (
+                        <button
+                          key={`yr-pill-storage-${yr}`}
+                          type="button"
+                          style={{
+                            fontSize: '0.85rem',
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '6px',
+                            border: isStorageSelected ? '1px solid #d97706' : '1px solid var(--border-color)',
+                            background: isStorageSelected ? 'rgba(245, 158, 11, 0.12)' : 'var(--bg-primary)',
+                            color: isStorageSelected ? '#b45309' : 'var(--text-primary)',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            boxShadow: isStorageSelected ? '0 2px 4px rgba(245, 158, 11, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onClick={() => {
+                            setCustomStorageYears((prev) =>
+                              prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
+                            );
+                          }}
+                        >
+                          {isStorageSelected ? '📦 Storage ' : '📅 '} {yr} ({currentYear - yr} yrs)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {isCustomSelected && (
+                <p style={{ margin: 0, fontSize: '0.835rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                  Moving year(s) <strong>{customStorageYears.sort().join(', ')}</strong> to Storage will update active inclusive dates to <strong>{computedCustomDates || 'None (Fully in Storage)'}</strong>.
+                </p>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <Button variant="secondary" onClick={() => {
                   setSingleStorageRecord(null);
-                }}
-              >
-                <MdArchive style={{ marginRight: '0.3rem' }} /> Confirm Move to Storage
-              </Button>
+                  setCustomStorageYears([]);
+                }}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  style={{ background: '#d97706', borderColor: '#d97706' }}
+                  onClick={() => {
+                    const rec = singleStorageRecord;
+                    setSingleStorageRecord(null);
+                    setViewingRecord(null);
+
+                    if (isCustomSelected) {
+                      const yearRecords = customStorageYears.map((yr) => ({
+                        ...rec,
+                        id: `${rec.id}-yr-${yr}`,
+                        inclusiveDates: String(yr),
+                        seriesTitle: `${rec.seriesTitle} (${yr})`,
+                      }));
+                      openStorageRequestModal(yearRecords);
+                    } else {
+                      // If no custom years selected, send the whole record
+                      openStorageRequestModal([rec]);
+                    }
+                    setCustomStorageYears([]);
+                  }}
+                >
+                  <MdArchive style={{ marginRight: '0.3rem' }} /> {isCustomSelected ? 'Confirm Selected Years to Storage' : 'Confirm Move to Storage'}
+                </Button>
+              </div>
             </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {/* NAP Form 1 View Modal */}
       {showNapFormPreview && (
@@ -4215,12 +4688,32 @@ function InventoryAppraisal() {
                   ⚠️ Active desk period ({viewingRecord.activeDeskYrs} yrs) has been reached!
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <Button variant="primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: '#d97706', borderColor: '#d97706' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); handleMoveToStorage(rec); }}>
-                    Move to Storage ➔
+                  <Button variant="primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: '#d97706', borderColor: '#d97706' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); setSingleStorageRecord(rec); }}>
+                    Evaluate & Move to Storage ➔
                   </Button>
                 </div>
               </div>
             )}
+
+            {/* Disposal Alert inside viewing modal */}
+            {(() => {
+              const disposalInfo = getOngoingDisposalInfo(viewingRecord.inclusiveDates, viewingRecord.totalRetention, viewingRecord.retentionStage, viewingRecord.storageStartDate);
+              if (disposalInfo !== null) {
+                return (
+                  <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', padding: '0.85rem 1rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '0.85rem', color: '#dc2626', fontWeight: 600 }}>
+                      ⚠️ Retention period ({disposalInfo.totalRetention} yrs) reached in Storage! Eligible for disposal.
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <Button variant="primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: '#dc2626', borderColor: '#dc2626' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); setEvaluatingRecord({ record: rec, info: disposalInfo }); }}>
+                        Evaluate & Dispose ➔
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Top Info Header Summary */}
             <div style={{ padding: '0.25rem 0 0.75rem 0', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -4369,6 +4862,34 @@ function InventoryAppraisal() {
               >
                 <MdEdit style={{ marginRight: '0.35rem' }} /> Update Entry
               </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {showPreviewModal && (
+        <Modal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          title={`Preview ${previewType} Request Form`}
+          size="lg"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              <Button variant="secondary" onClick={() => handleExportAuthorityForm(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType)}>
+                Export Request (Excel)
+              </Button>
+              <Button variant="primary" onClick={handlePrintIframe} style={{ display: 'flex', alignItems: 'center' }}>
+                <MdPrint style={{ marginRight: '6px', fontSize: '1.1rem' }} /> Print Form
+              </Button>
+            </div>
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', height: '600px', background: '#e5e7eb' }}>
+              <iframe
+                id="preview-iframe"
+                srcDoc={generatePreviewHtml(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType)}
+                style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+                title="Form Preview"
+              />
             </div>
           </div>
         </Modal>
@@ -4561,6 +5082,7 @@ function InventoryAppraisal() {
                 {pendingRequests.map((req) => (
                   <div
                     key={req.id}
+                    onClick={() => setSelectedRequestDetails(req)}
                     style={{
                       border: '1px solid var(--border-color)',
                       borderRadius: '8px',
@@ -4569,6 +5091,8 @@ function InventoryAppraisal() {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.75rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -4611,11 +5135,18 @@ function InventoryAppraisal() {
 
                     {req.attachmentUrl && (
                       <div style={{ fontSize: '0.825rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                        📎 Attached Proof: <a href={req.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}>{req.attachmentName || 'View Attached Document'}</a>
+                        📎 Attached Proof: <a
+                          href={req.attachmentUrl}
+                          onClick={(e) => handleNativeFileAction(e, req.attachmentUrl, req.attachmentName)}
+                          rel="noopener noreferrer"
+                          style={{ textDecoration: 'underline', color: 'var(--color-primary)' }}
+                        >
+                          {req.attachmentName || 'View Attached Document'}
+                        </a>
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
                       <input
                         type="text"
                         placeholder="Admin confirmation or rejection remarks (optional)..."
@@ -4670,49 +5201,52 @@ function InventoryAppraisal() {
           }
           size="lg"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem 0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>Request Reference</div>
-                <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-primary)' }}>{selectedRequestDetails.id}</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
-                  Requested by <strong>{selectedRequestDetails.requesterName}</strong>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem', padding: '1rem 0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', background: 'linear-gradient(145deg, var(--bg-secondary) 0%, var(--bg-primary) 100%)', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>Request Reference</div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: 'var(--color-primary)', fontFamily: 'monospace' }}>{selectedRequestDetails.id}</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                  Requested by <strong style={{ fontWeight: 800 }}>{selectedRequestDetails.requesterName}</strong>
                 </div>
               </div>
 
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
                 <span
                   style={{
-                    padding: '0.35rem 0.85rem',
+                    padding: '0.4rem 1rem',
                     borderRadius: '99px',
                     fontSize: '0.85rem',
                     fontWeight: 800,
                     background: selectedRequestDetails.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : selectedRequestDetails.status === 'rejected' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
                     color: selectedRequestDetails.status === 'approved' ? '#059669' : selectedRequestDetails.status === 'rejected' ? '#dc2626' : '#d97706',
                     border: selectedRequestDetails.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : selectedRequestDetails.status === 'rejected' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
                   }}
                 >
                   {selectedRequestDetails.status === 'approved' ? '✓ Approved' : selectedRequestDetails.status === 'rejected' ? '✕ Rejected' : '⏳ Pending Confirmation'}
                 </span>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-                  Submitted on {new Date(selectedRequestDetails.createdAt).toLocaleString()}
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                  Submitted on {new Date(selectedRequestDetails.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                 </div>
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ width: '4px', height: '14px', background: 'var(--color-primary)', borderRadius: '4px' }}></div>
                 Target Record Series ({selectedRequestDetails.recordsSummary?.length || selectedRequestDetails.recordIds?.length || 0})
               </div>
-              <div style={{ borderRadius: '8px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+              <div style={{ borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', background: 'var(--bg-primary)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
-                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                      <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-color)', textAlign: 'left' }}>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Date & Time</th>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Item No.</th>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Record Series</th>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Division</th>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Category</th>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em', textAlign: 'center' }}>
                         {selectedRequestDetails.requestType === 'Storage' ? 'Storage Year' : 'Disposed Year'}
                       </th>
                     </tr>
@@ -4720,20 +5254,32 @@ function InventoryAppraisal() {
                   <tbody>
                     {(selectedRequestDetails.recordsSummary || []).length > 0 ? (
                       selectedRequestDetails.recordsSummary.map((item: any, idx: number) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.15s ease', cursor: 'default' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                          <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
                             {new Date(selectedRequestDetails.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
                           </td>
-                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 800, color: 'var(--color-primary)' }}>
+                            {item.prdsGrds && item.itemNo ? (
+                              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(59, 130, 246, 0.05)', padding: '0.25rem 0.5rem', borderRadius: '6px' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{item.prdsGrds}</div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 900, color: 'var(--color-primary)' }}>{item.itemNo}</div>
+                              </div>
+                            ) : (
+                              item.prdsGrds || item.itemNo || '-'
+                            )}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                             {cleanSeriesTitle(item.seriesTitle)}
                           </td>
-                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600 }}>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                             {item.division || 'General'}
                           </td>
-                          <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)' }}>
-                            {item.classificationCategory || item.category || records.find((rec) => rec.id === item.id || (item.id && item.id.startsWith(`${rec.id}-`)))?.classificationCategory || '-'}
+                          <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>
+                            <span style={{ background: 'var(--bg-secondary)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
+                              {item.classificationCategory || item.category || records.find((rec) => rec.id === item.id || (item.id && item.id.startsWith(`${rec.id}-`)))?.classificationCategory || '-'}
+                            </span>
                           </td>
-                          <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', fontWeight: 700, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 800, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>
                             {item.inclusiveDates || 'N/A'}
                           </td>
                         </tr>
@@ -4741,13 +5287,14 @@ function InventoryAppraisal() {
                     ) : (
                       (selectedRequestDetails.recordIds || []).map((id: string, idx: number) => (
                         <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.65rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                             {new Date(selectedRequestDetails.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
                           </td>
-                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>Record Entry {id}</td>
-                          <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600 }}>General</td>
-                          <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)' }}>-</td>
-                          <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center', fontWeight: 700, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>N/A</td>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>-</td>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 600, color: 'var(--color-primary)' }}>Record Entry {id}</td>
+                          <td style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>General</td>
+                          <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>-</td>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 700, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>N/A</td>
                         </tr>
                       ))
                     )}
@@ -4756,30 +5303,36 @@ function InventoryAppraisal() {
               </div>
             </div>
 
-            <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Reason Provided</div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{selectedRequestDetails.reason}</div>
+            <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', borderLeft: '4px solid var(--color-primary)', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Reason Provided</div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>{selectedRequestDetails.reason}</div>
             </div>
 
             {selectedRequestDetails.attachmentUrl && (
-              <div style={{ background: 'rgba(59, 130, 246, 0.08)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ background: 'rgba(59, 130, 246, 0.05)', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 10px rgba(59, 130, 246, 0.05)' }}>
                 <div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Attached Authorization / Proof</div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.15rem' }}>{selectedRequestDetails.attachmentName || 'Proof Document'}</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attached Authorization / Proof</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    📎 {selectedRequestDetails.attachmentName || 'Proof Document'}
+                  </div>
                 </div>
                 <a
                   href={selectedRequestDetails.attachmentUrl}
-                  target="_blank"
+                  onClick={(e) => handleNativeFileAction(e, selectedRequestDetails.attachmentUrl, selectedRequestDetails.attachmentName)}
                   rel="noopener noreferrer"
                   style={{
-                    padding: '0.4rem 0.85rem',
-                    borderRadius: '6px',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
                     background: 'var(--color-primary)',
                     color: '#fff',
                     textDecoration: 'none',
-                    fontSize: '0.8rem',
+                    fontSize: '0.85rem',
                     fontWeight: 700,
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                    transition: 'all 0.2s ease'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                 >
                   View File ↗
                 </a>
@@ -4787,15 +5340,54 @@ function InventoryAppraisal() {
             )}
 
             {selectedRequestDetails.adminReason && (
-              <div style={{ background: selectedRequestDetails.status === 'approved' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)', padding: '0.85rem 1rem', borderRadius: '8px', border: selectedRequestDetails.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: selectedRequestDetails.status === 'approved' ? '#059669' : '#dc2626', textTransform: 'uppercase' }}>
+              <div style={{ background: selectedRequestDetails.status === 'approved' ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)', padding: '1.25rem 1.5rem', borderRadius: '12px', border: selectedRequestDetails.status === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)', borderLeft: selectedRequestDetails.status === 'approved' ? '4px solid #10b981' : '4px solid #ef4444', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: selectedRequestDetails.status === 'approved' ? '#059669' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Admin Remarks
                 </div>
-                <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', marginTop: '0.5rem', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
                   {selectedRequestDetails.adminReason}
                 </div>
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {viewerOpen && (
+        <Modal
+          isOpen={viewerOpen}
+          onClose={() => setViewerOpen(false)}
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+              <span>{viewerTitle}</span>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  const urlToDownload = viewerSrc.split('#')[0];
+                  if ((window as any).electron?.saveFileNatively) {
+                    await (window as any).electron.saveFileNatively(urlToDownload, viewerTitle || 'document.pdf');
+                  } else {
+                    const a = document.createElement('a');
+                    a.href = urlToDownload;
+                    a.download = viewerTitle || 'document.pdf';
+                    a.click();
+                  }
+                }}
+              >
+                <MdFileDownload style={{ marginRight: '0.4rem', fontSize: '1.1rem' }} /> Download PDF
+              </Button>
+            </div>
+          }
+          size="xl"
+          isMaximized={isViewerMaximized}
+        >
+          <div style={{ height: isViewerMaximized ? 'calc(100vh - 120px)' : '70vh', width: '100%', position: 'relative' }}>
+            <iframe
+              src={viewerSrc}
+              style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }}
+              title="Document Viewer"
+            />
           </div>
         </Modal>
       )}

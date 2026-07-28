@@ -116,7 +116,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files from uploads directory
 const uploadsPath = process.env.UPLOADS_DIR || path.join(__dirname, '../uploads');
-app.use('/uploads', express.static(uploadsPath));
+app.use('/uploads', express.static(uploadsPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+  }
+}));
 
 // Proxy missing uploads to remote server (for installs where uploads live on another machine)
 const remoteUploadsUrl = process.env.REMOTE_UPLOADS_URL;

@@ -122,7 +122,10 @@ export const uploadDocumentFile = multer({
 
 const inventoryStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    const destDir = path.join(uploadsDir, 'inventory');
+    const baseUploadsDir = process.env.UPLOADS_DIR
+      ? process.env.UPLOADS_DIR
+      : path.join(__dirname, '../../uploads');
+    const destDir = path.join(baseUploadsDir, 'inventory');
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
     }

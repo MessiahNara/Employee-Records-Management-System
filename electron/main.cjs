@@ -273,6 +273,22 @@ function createWindow() {
     mainWindow.show();
   });
 
+  // Intercept all target="_blank" links and window.open calls
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const lowerUrl = url.toLowerCase();
+    
+    // For PDFs and DOCX, hand them over to the OS to open in native apps (Acrobat, Word)
+    // This is the most reliable way to "view" them since Electron lacks built-in document viewers.
+    if (lowerUrl.endsWith('.pdf') || lowerUrl.endsWith('.docx') || lowerUrl.endsWith('.doc')) {
+      require('electron').shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    
+    // For XLSX, XLS, and others, force a direct download dialog instead of opening a browser!
+    mainWindow.webContents.downloadURL(url);
+    return { action: 'deny' };
+  });
+
   // Enforce zoom factor on every navigation (login, dashboard, etc.)
   // Overrides any zoom level persisted by Electron between sessions
   const enforceZoom = () => mainWindow.webContents.setZoomFactor(0.65);
@@ -333,6 +349,70 @@ ipcMain.handle('get-template-file', async () => {
 ipcMain.handle('get-server-url', () => {
   console.log('[ipc] Frontend requested server URL:', GLOBAL_SERVER_URL);
   return GLOBAL_SERVER_URL;
+});
+
+// IPC handler to securely fetch and open file in system native app (Acrobat, MS Word)
+ipcMain.handle('open-file-natively', async (event, { url, filename }) => {
+  try {
+    const { shell, app } = require('electron');
+    const path = require('path');
+    const fs = require('fs');
+    const https = require('https');
+    
+    const tempPath = path.join(app.getPath('temp'), filename || 'document.pdf');
+    
+    // Download to temp file bypassing cert errors
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(tempPath);
+      https.get(url, { rejectUnauthorized: false }, (response) => {
+        response.pipe(file);
+        file.on('finish', () => {
+          file.close(async () => {
+            // Open the file with default system handler
+            await shell.openPath(tempPath);
+            resolve({ success: true });
+          });
+        });
+      }).on('error', (err) => {
+        fs.unlink(tempPath, () => {});
+        reject({ success: false, error: err.message });
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC handler to securely trigger a save dialog for a file (like XLSX)
+ipcMain.handle('save-file-natively', async (event, { url, filename }) => {
+  try {
+    const { dialog, app } = require('electron');
+    const fs = require('fs');
+    const https = require('https');
+    
+    const { filePath } = await dialog.showSaveDialog({
+      defaultPath: filename || 'document.xlsx',
+    });
+    
+    if (!filePath) return { success: false, canceled: true };
+    
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(filePath);
+      https.get(url, { rejectUnauthorized: false }, (response) => {
+        response.pipe(file);
+        file.on('finish', () => {
+          file.close(() => {
+            resolve({ success: true, filePath });
+          });
+        });
+      }).on('error', (err) => {
+        fs.unlink(filePath, () => {});
+        reject({ success: false, error: err.message });
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // IPC handler for frontend to print window contents to PDF and open it

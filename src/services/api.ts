@@ -286,10 +286,12 @@ export function getServerBaseUrl(): string {
 }
 
 // Helper function to convert relative URLs to absolute URLs
-function getAbsoluteUrl(relativePath: string | undefined): string | undefined {
+export function getAbsoluteUrl(relativePath: string | undefined): string | undefined {
   if (!relativePath) return undefined;
   if (relativePath.startsWith('http')) return relativePath;
-  return `${getServerBaseUrl()}${relativePath}`;
+  const baseUrl = getServerBaseUrl();
+  const sep = (baseUrl.endsWith('/') || relativePath.startsWith('/')) ? '' : '/';
+  return `${baseUrl}${sep}${relativePath}`;
 }
 
 // User API
@@ -1042,7 +1044,13 @@ export const inventoryApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
     }),
-  getDisposalHistory: () => apiRequest<any[]>('/inventory/disposal-history'),
+  getDisposalHistory: async () => {
+    const history = await apiRequest<any[]>('/inventory/disposal-history');
+    return history.map(item => ({
+      ...item,
+      attachmentUrl: getAbsoluteUrl(item.attachmentUrl) || item.attachmentUrl,
+    }));
+  },
   logDisposal: (data: {
     recordId: string;
     seriesTitle: string;
@@ -1068,7 +1076,13 @@ export const inventoryApi = {
     const result = await response.json();
     return { ...result, attachmentUrl: getAbsoluteUrl(result.attachmentUrl) || result.attachmentUrl };
   },
-  getRequests: () => apiRequest<any[]>('/inventory/requests'),
+  getRequests: async () => {
+    const requests = await apiRequest<any[]>('/inventory/requests');
+    return requests.map(req => ({
+      ...req,
+      attachmentUrl: getAbsoluteUrl(req.attachmentUrl) || req.attachmentUrl,
+    }));
+  },
   createRequest: (data: { requestType: 'Storage' | 'Disposal'; recordIds: string[]; recordsSummary?: any[]; reason: string; attachmentUrl?: string; attachmentName?: string }) =>
     apiRequest<any>('/inventory/requests', {
       method: 'POST',

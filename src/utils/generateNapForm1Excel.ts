@@ -18,7 +18,7 @@ export default async function generateNapForm1Excel(
     fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 0,
-    margins: { left: 0.25, right: 0.25, top: 0.25, bottom: 0.25, header: 0.1, footer: 0.1 }
+    margins: { left: 0.6, right: 0.5, top: 0.6, bottom: 1, header: 0.3, footer: 0 }
   };
 
   // Column widths matching template exactly (from nap_detailed.json wch values)

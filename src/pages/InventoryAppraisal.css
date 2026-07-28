@@ -484,3 +484,66 @@
   border-color: #ef4444;
   transform: translateY(-1px);
 }
+
+/* Capsule Action Buttons */
+.capsule-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 99px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.capsule-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.capsule-action-btn:active {
+  transform: translateY(0);
+}
+
+.capsule-action-btn--primary {
+  background-color: #3b82f6;
+  border-color: #2563eb;
+  color: white;
+}
+.capsule-action-btn--primary:hover {
+  background-color: #2563eb;
+}
+
+.capsule-action-btn--secondary {
+  background-color: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+.capsule-action-btn--secondary:hover {
+  background-color: var(--bg-secondary);
+  border-color: #d1d5db;
+}
+
+.capsule-action-btn__icon {
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.capsule-action-btn__badge {
+  background-color: #ef4444;
+  color: white;
+  border-radius: 99px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-left: 0.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
