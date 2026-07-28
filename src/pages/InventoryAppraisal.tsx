@@ -3250,33 +3250,35 @@ function InventoryAppraisal() {
             {/* TAB 3: History of Storage */}
             {storageModalTab === 'history' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     History of all record series transitioned from Active Desk to Storage.
                   </p>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <select
-                      value={storageDivisionFilter}
-                      onChange={(e) => setStorageDivisionFilter(e.target.value)}
-                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
-                    >
-                      <option value="ALL">All Divisions</option>
-                      {Array.from(new Set(storageLogs.map(l => l.division || 'General'))).sort().map(d => <option key={`s-div-${d}`} value={d}>{d}</option>)}
-                    </select>
-                    <select
-                      value={storageCategoryFilter}
-                      onChange={(e) => setStorageCategoryFilter(e.target.value)}
-                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
-                    >
-                      <option value="ALL">All Categories</option>
-                      {Array.from(new Set(storageLogs.map(l => l.classificationCategory).filter(Boolean))).sort().map(c => <option key={`s-cat-${String(c)}`} value={String(c)}>{c}</option>)}
-                    </select>
-                    <div style={{ width: '220px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ width: '250px' }}>
                       <SearchBar
                         value={storageSearchQuery}
                         onChange={(e) => setStorageSearchQuery(e.target.value)}
                         placeholder="Search logs..."
                       />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <select
+                        value={storageDivisionFilter}
+                        onChange={(e) => setStorageDivisionFilter(e.target.value)}
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                      >
+                        <option value="ALL">All Divisions</option>
+                        {Array.from(new Set(storageLogs.map(l => l.division || 'General'))).sort().map(d => <option key={`s-div-${d}`} value={d}>{d}</option>)}
+                      </select>
+                      <select
+                        value={storageCategoryFilter}
+                        onChange={(e) => setStorageCategoryFilter(e.target.value)}
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                      >
+                        <option value="ALL">All Categories</option>
+                        {Array.from(new Set(storageLogs.map(l => l.classificationCategory).filter(Boolean))).sort().map(c => <option key={`s-cat-${String(c)}`} value={String(c)}>{c}</option>)}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -3855,33 +3857,35 @@ function InventoryAppraisal() {
             {/* TAB 3: History of Disposal */}
             {disposalModalTab === 'history' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     History of all record series disposal evaluations and disposed year periods.
                   </p>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <select
-                      value={historyDivisionFilter}
-                      onChange={(e) => setHistoryDivisionFilter(e.target.value)}
-                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
-                    >
-                      <option value="ALL">All Divisions</option>
-                      {Array.from(new Set(disposalOnlyLogs.map(l => l.division || 'General'))).sort().map(d => <option key={`d-div-${d}`} value={d}>{d}</option>)}
-                    </select>
-                    <select
-                      value={historyCategoryFilter}
-                      onChange={(e) => setHistoryCategoryFilter(e.target.value)}
-                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
-                    >
-                      <option value="ALL">All Categories</option>
-                      {Array.from(new Set(disposalOnlyLogs.map(l => l.classificationCategory).filter(Boolean))).sort().map(c => <option key={`d-cat-${String(c)}`} value={String(c)}>{c}</option>)}
-                    </select>
-                    <div style={{ width: '220px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ width: '250px' }}>
                       <SearchBar
                         value={historySearchQuery}
                         onChange={(e) => setHistorySearchQuery(e.target.value)}
                         placeholder="Search logs..."
                       />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <select
+                        value={historyDivisionFilter}
+                        onChange={(e) => setHistoryDivisionFilter(e.target.value)}
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                      >
+                        <option value="ALL">All Divisions</option>
+                        {Array.from(new Set(disposalOnlyLogs.map(l => l.division || 'General'))).sort().map(d => <option key={`d-div-${d}`} value={d}>{d}</option>)}
+                      </select>
+                      <select
+                        value={historyCategoryFilter}
+                        onChange={(e) => setHistoryCategoryFilter(e.target.value)}
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer' }}
+                      >
+                        <option value="ALL">All Categories</option>
+                        {Array.from(new Set(disposalOnlyLogs.map(l => l.classificationCategory).filter(Boolean))).sort().map(c => <option key={`d-cat-${String(c)}`} value={String(c)}>{c}</option>)}
+                      </select>
                     </div>
                   </div>
                 </div>
