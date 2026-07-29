@@ -489,6 +489,67 @@ router.post('/requests', async (req: Request, res: Response) => {
   }
 });
 
+function calculateNewInclusiveDates(currentDatesStr: string, yearsToRemove: number[]): { newDatesStr: string, isDisposed: boolean } {
+  const currentYear = new Date().getFullYear();
+  const yearsStr = String(currentDatesStr || '').trim();
+  const hasPresent = /present/i.test(yearsStr);
+  let allYears: number[] = [];
+
+  const segments = yearsStr.split(',').map((s) => s.trim());
+  segments.forEach((seg) => {
+    if (seg.includes('-')) {
+      const rangeParts = seg.split('-').map((p) => p.trim());
+      const rangeStart = parseInt(rangeParts[0], 10);
+      let rangeEnd: number;
+      if (/present/i.test(rangeParts[rangeParts.length - 1])) {
+        rangeEnd = currentYear;
+      } else {
+        rangeEnd = parseInt(rangeParts[rangeParts.length - 1], 10);
+      }
+      if (!isNaN(rangeStart) && !isNaN(rangeEnd)) {
+        for (let y = rangeStart; y <= rangeEnd; y++) {
+          allYears.push(y);
+        }
+      }
+    } else {
+      const singleYear = parseInt(seg, 10);
+      if (!isNaN(singleYear)) {
+        allYears.push(singleYear);
+      }
+    }
+  });
+
+  const remainingYears = allYears.filter((y) => !yearsToRemove.includes(y)).sort((a, b) => a - b);
+  if (remainingYears.length === 0) {
+    return { newDatesStr: 'Disposed', isDisposed: true };
+  }
+
+  const groups: number[][] = [];
+  let currentGroup: number[] = [remainingYears[0]];
+  for (let i = 1; i < remainingYears.length; i++) {
+    if (remainingYears[i] === remainingYears[i - 1] + 1) {
+      currentGroup.push(remainingYears[i]);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [remainingYears[i]];
+    }
+  }
+  groups.push(currentGroup);
+
+  const formatted = groups.map((g, idx) => {
+    const isLastGroup = idx === groups.length - 1;
+    const gStart = g[0];
+    const gEnd = g[g.length - 1];
+    if (g.length === 1) {
+      return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
+    } else {
+      return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
+    }
+  });
+
+  return { newDatesStr: formatted.join(', '), isDisposed: false };
+}
+
 // POST confirm / approve an inventory request (Admin action)
 router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
   try {
@@ -514,25 +575,34 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
 
     // Update retention stage, inclusive dates, and create history logs
     records.forEach((r: InventoryRecord) => {
-      const isMatched = reqItem.recordIds.some((id: string) => id === r.id || id.startsWith(`${r.id}-`) || id.startsWith(`${r.id}_`));
+      const isMatched = reqItem.recordIds.some((id: string) => {
+        const exactRecordId = id.replace(/-yr-\d{4}$/, '');
+        return id === r.id || exactRecordId === r.id;
+      });
 
       if (isMatched) {
         const previousInclusiveDates = r.inclusiveDates || 'N/A';
         const targetYears: number[] = [];
 
         reqItem.recordIds.forEach((id: string) => {
-          const yearMatch = id.match(/-yr-(\d{4})/);
-          if (yearMatch) targetYears.push(parseInt(yearMatch[1], 10));
+          const exactRecordId = id.replace(/-yr-\d{4}$/, '');
+          if (id === r.id || exactRecordId === r.id) {
+            const yearMatch = id.match(/-yr-(\d{4})/);
+            if (yearMatch) targetYears.push(parseInt(yearMatch[1], 10));
+          }
         });
 
         if (reqItem.recordsSummary) {
           reqItem.recordsSummary.forEach((s: any) => {
-            if (s.inclusiveDates && /^\d{4}$/.test(String(s.inclusiveDates).trim())) {
-              targetYears.push(parseInt(String(s.inclusiveDates).trim(), 10));
-            }
-            const titleYearMatch = s.seriesTitle ? s.seriesTitle.match(/\((20\d{2})\)$/) : null;
-            if (titleYearMatch) {
-              targetYears.push(parseInt(titleYearMatch[1], 10));
+            const exactSId = s.id ? s.id.replace(/-yr-\d{4}$/, '') : '';
+            if (s.id === r.id || exactSId === r.id) {
+              if (s.inclusiveDates && /^\d{4}$/.test(String(s.inclusiveDates).trim())) {
+                targetYears.push(parseInt(String(s.inclusiveDates).trim(), 10));
+              }
+              const titleYearMatch = s.seriesTitle ? s.seriesTitle.match(/\((20\d{2})\)$/) : null;
+              if (titleYearMatch) {
+                targetYears.push(parseInt(titleYearMatch[1], 10));
+              }
             }
           });
         }
@@ -541,135 +611,111 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
         const uniqueTargetYears = [...new Set(targetYears)].filter((y) => !isNaN(y));
         const currentYear = new Date().getFullYear();
 
-        if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
-          const yearsStr = String(r.inclusiveDates).trim();
-          const hasPresent = /present/i.test(yearsStr);
-          let allYears: number[] = [];
+        if (targetStage === 'Storage') {
+          if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
+            const { newDatesStr } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
+            newInclusiveDates = newDatesStr;
+            r.inclusiveDates = newInclusiveDates;
 
-          // Split on commas first to handle non-contiguous ranges like "2020 - 2021, 2024 - Present"
-          const segments = yearsStr.split(',').map((s) => s.trim());
-          segments.forEach((seg) => {
-            if (seg.includes('-')) {
-              const rangeParts = seg.split('-').map((p) => p.trim());
-              const rangeStart = parseInt(rangeParts[0], 10);
-              let rangeEnd: number;
-              if (/present/i.test(rangeParts[rangeParts.length - 1])) {
-                rangeEnd = currentYear;
+            const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
+            const targetGroups: number[][] = [];
+            let curTargetGrp = [sortedTargetYears[0]];
+            for (let i = 1; i < sortedTargetYears.length; i++) {
+              if (sortedTargetYears[i] === sortedTargetYears[i-1] + 1) {
+                curTargetGrp.push(sortedTargetYears[i]);
               } else {
-                rangeEnd = parseInt(rangeParts[rangeParts.length - 1], 10);
-              }
-              if (!isNaN(rangeStart) && !isNaN(rangeEnd)) {
-                for (let y = rangeStart; y <= rangeEnd; y++) {
-                  allYears.push(y);
-                }
-              }
-            } else {
-              const singleYear = parseInt(seg, 10);
-              if (!isNaN(singleYear)) {
-                allYears.push(singleYear);
+                targetGroups.push(curTargetGrp);
+                curTargetGrp = [sortedTargetYears[i]];
               }
             }
-          });
+            targetGroups.push(curTargetGrp);
+            const targetFormatted = targetGroups.map(g => g.length === 1 ? `${g[0]}` : `${g[0]} - ${g[g.length - 1]}`).join(', ');
 
-          const remainingYears = allYears.filter((y) => !uniqueTargetYears.includes(y)).sort((a, b) => a - b);
-          if (remainingYears.length === 0) {
-            if (targetStage === 'Disposed') {
-              r.retentionStage = 'Disposed';
-              r.inclusiveDates = 'Disposed';
-              newInclusiveDates = 'Disposed';
-            } else {
-              r.retentionStage = 'Storage';
-              r.storageStartDate = new Date().toISOString();
-              r.frequencyOfUse = 'Inactive';
-            }
-          } else {
-            // Group consecutive years into ranges
-            const groups: number[][] = [];
-            let currentGroup: number[] = [remainingYears[0]];
-            for (let i = 1; i < remainingYears.length; i++) {
-              if (remainingYears[i] === remainingYears[i - 1] + 1) {
-                currentGroup.push(remainingYears[i]);
-              } else {
-                groups.push(currentGroup);
-                currentGroup = [remainingYears[i]];
-              }
-            }
-            groups.push(currentGroup);
-
-            // Format each group, applying "Present" to the last group if original had Present
-            const formatted = groups.map((g, idx) => {
-              const isLastGroup = idx === groups.length - 1;
-              const gStart = g[0];
-              const gEnd = g[g.length - 1];
-              if (g.length === 1) {
-                return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
-              } else {
-                return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
-              }
-            });
-
-            r.inclusiveDates = formatted.join(', ');
-            newInclusiveDates = r.inclusiveDates;
-
-            // If Storage, create a new record for the specific years
-            if (targetStage === 'Storage') {
-              const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
-              const targetGroups: number[][] = [];
-              let curTargetGrp = [sortedTargetYears[0]];
-              for (let i = 1; i < sortedTargetYears.length; i++) {
-                if (sortedTargetYears[i] === sortedTargetYears[i-1] + 1) {
-                  curTargetGrp.push(sortedTargetYears[i]);
-                } else {
-                  targetGroups.push(curTargetGrp);
-                  curTargetGrp = [sortedTargetYears[i]];
-                }
-              }
-              targetGroups.push(curTargetGrp);
-              const targetFormatted = targetGroups.map(g => g.length === 1 ? `${g[0]}` : `${g[0]} - ${g[g.length - 1]}`).join(', ');
-
-              const newStorageRecord = {
-                ...r, // Copy all properties (retains series title, division, etc)
-                id: `${r.id}_storage_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-                inclusiveDates: targetFormatted,
-                retentionStage: 'Storage',
-                storageStartDate: new Date().toISOString(),
-                frequencyOfUse: 'Inactive'
-              };
-              recordsToAdd.push(newStorageRecord);
-            }
-          }
-        } else {
-          if (targetStage === 'Disposed') {
-            r.retentionStage = 'Disposed';
-            newInclusiveDates = 'Disposed';
+            const newStorageRecord = {
+              ...r, // Copy all properties (retains series title, division, etc)
+              id: `${r.id}_storage_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+              inclusiveDates: targetFormatted,
+              retentionStage: 'Storage',
+              storageStartDate: new Date().toISOString(),
+              frequencyOfUse: 'Inactive'
+            };
+            recordsToAdd.push(newStorageRecord);
           } else {
             r.retentionStage = 'Storage';
             r.storageStartDate = new Date().toISOString();
             r.frequencyOfUse = 'Inactive';
           }
+
+          const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
+          const actionYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(', ') : (previousInclusiveDates || targetStage);
+
+          logs.unshift({
+            id: `DISP-${baseTimestamp}-${logs.length}`,
+            status: 'Completed',
+            recordId: r.id,
+            seriesTitle: r.seriesTitle,
+            prdsGrds: r.prdsGrds,
+            itemNo: r.itemNo,
+            division: r.division || 'General',
+            classificationCategory: r.classificationCategory || 'General',
+            subCategory: r.subCategory || '',
+            disposedYears: `Moved to Storage: ${actionYearsDisplay}`,
+            previousInclusiveDates: previousInclusiveDates,
+            newInclusiveDates: newInclusiveDates,
+            disposedAt: new Date().toISOString(),
+            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+            reason: reqItem.reason,
+            attachmentUrl: reqItem.attachmentUrl,
+            attachmentName: reqItem.attachmentName,
+          } as any);
+
+        } else {
+          // targetStage === 'Disposed'
+          const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
+          if (sortedTargetYears.length > 0) {
+            sortedTargetYears.forEach(year => {
+              logs.unshift({
+                id: `DISP-${baseTimestamp}-${logs.length}`,
+                status: 'Pending',
+                recordId: r.id,
+                seriesTitle: r.seriesTitle,
+                prdsGrds: r.prdsGrds,
+                itemNo: r.itemNo,
+                division: r.division || 'General',
+                classificationCategory: r.classificationCategory || 'General',
+                subCategory: r.subCategory || '',
+                disposedYears: String(year),
+                previousInclusiveDates: previousInclusiveDates,
+                newInclusiveDates: '', // Calculated dynamically upon completion
+                disposedAt: new Date().toISOString(),
+                disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+                reason: reqItem.reason,
+                attachmentUrl: reqItem.attachmentUrl,
+                attachmentName: reqItem.attachmentName,
+              } as any);
+            });
+          } else {
+            logs.unshift({
+              id: `DISP-${baseTimestamp}-${logs.length}`,
+              status: 'Pending',
+              recordId: r.id,
+              seriesTitle: r.seriesTitle,
+              prdsGrds: r.prdsGrds,
+              itemNo: r.itemNo,
+              division: r.division || 'General',
+              classificationCategory: r.classificationCategory || 'General',
+              subCategory: r.subCategory || '',
+              disposedYears: previousInclusiveDates || 'Disposed',
+              previousInclusiveDates: previousInclusiveDates,
+              newInclusiveDates: '',
+              disposedAt: new Date().toISOString(),
+              disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+              reason: reqItem.reason,
+              attachmentUrl: reqItem.attachmentUrl,
+              attachmentName: reqItem.attachmentName,
+            } as any);
+          }
         }
-
-        const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
-        const actionYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(', ') : (previousInclusiveDates || targetStage);
-
-        logs.unshift({
-          id: `DISP-${baseTimestamp}-${logs.length}`,
-          recordId: r.id,
-          seriesTitle: r.seriesTitle,
-          prdsGrds: r.prdsGrds,
-          itemNo: r.itemNo,
-          division: r.division || 'General',
-          classificationCategory: r.classificationCategory || 'General',
-          subCategory: r.subCategory || '',
-          disposedYears: targetStage === 'Storage' ? `Moved to Storage: ${actionYearsDisplay}` : actionYearsDisplay,
-          previousInclusiveDates: previousInclusiveDates,
-          newInclusiveDates: newInclusiveDates,
-          disposedAt: new Date().toISOString(),
-          disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
-          reason: reqItem.reason,
-          attachmentUrl: reqItem.attachmentUrl,
-          attachmentName: reqItem.attachmentName,
-        } as any);
       }
     });
 
@@ -692,6 +738,52 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Error confirming inventory request:', err);
     res.status(500).json({ error: err.message || 'Failed to confirm request' });
+  }
+});
+
+// POST update disposal history status
+router.post('/disposal-history/update-status', async (req: Request, res: Response) => {
+  try {
+    const { logIds, newStatus } = req.body;
+    if (!Array.isArray(logIds) || !['Completed', 'Decline'].includes(newStatus)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+    
+    const logs = readDisposalHistory();
+    const records = readRecords();
+    let recordsModified = false;
+
+    logIds.forEach((id: string) => {
+      const log = logs.find((l: any) => l.id === id);
+      if (log && log.status === 'Pending') {
+        log.status = newStatus;
+        if (newStatus === 'Completed') {
+          const record = records.find((r: any) => r.id === log.recordId);
+          if (record) {
+            const yearToRemove = parseInt(log.disposedYears, 10);
+            if (!isNaN(yearToRemove)) {
+              const { newDatesStr, isDisposed } = calculateNewInclusiveDates(String(record.inclusiveDates), [yearToRemove]);
+              record.inclusiveDates = newDatesStr;
+              log.newInclusiveDates = newDatesStr;
+              if (isDisposed) {
+                record.retentionStage = 'Disposed';
+              }
+              recordsModified = true;
+            }
+          }
+        }
+      }
+    });
+
+    saveDisposalHistory(logs);
+    if (recordsModified) {
+      saveRecords(records);
+    }
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Error updating disposal history status:', err);
+    res.status(500).json({ error: 'Failed to update disposal history status' });
   }
 });
 
@@ -1004,6 +1096,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 export interface DisposalLog {
   id: string;
+  status?: 'Pending' | 'Completed' | 'Decline';
   recordId: string;
   seriesTitle: string;
   division?: string;

@@ -8,18 +8,28 @@ export default async function generateNapForm1Excel(
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('NAP Form 1', {
-    views: [{ showGridLines: false }]
+    views: [{ showGridLines: false, style: 'pageBreakPreview' }],
+    pageSetup: {
+      paperSize: 5, // 5 = Legal (8.5 x 14) 
+      orientation: 'landscape',
+      scale: 60,
+      margins: {
+        left: 0.6 / 2.54,
+        right: 0.6 / 2.54,
+        top: 0.6 / 2.54,
+        bottom: 1.0 / 2.54,
+        header: 0.3 / 2.54,
+        footer: 0
+      }
+    },
+    headerFooter: {
+      differentFirst: true,
+      firstHeader: '&L&7NAP Records Inventory and Appraisal Form\n2024',
+      firstFooter: '&R&10Page ___ of ___ Pages',
+      oddHeader: '',
+      oddFooter: '&R&10Page ___ of ___ Pages'
+    }
   });
-
-  // Legal / Folio landscape
-  worksheet.pageSetup = {
-    orientation: 'landscape',
-    paperSize: 14 as any,
-    fitToPage: true,
-    fitToWidth: 1,
-    fitToHeight: 0,
-    margins: { left: 0.6, right: 0.5, top: 0.6, bottom: 1, header: 0.3, footer: 0 }
-  };
 
   // Column widths matching template exactly (from nap_detailed.json wch values)
   const colWidths: number[] = [
@@ -45,7 +55,7 @@ export default async function generateNapForm1Excel(
   const thin: ExcelJS.Border = { style: 'thin', color: { argb: 'FF000000' } };
   const thinBorder: Partial<ExcelJS.Borders> = { top: thin, bottom: thin, left: thin, right: thin };
   const headerLabelFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 8, bold: true };
-  const headerValueFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 9 };
+  const headerValueFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 10, bold: true };
 
   // Dynamic values
   const deptLabel = 'Human Resource Management and Development Office (HRMDO)';
@@ -81,13 +91,22 @@ export default async function generateNapForm1Excel(
     ]
   };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  titleCell.border = { top: thin, left: thin }; // The missing line the user pointed out
+  const mediumB: ExcelJS.Border = { style: 'medium', color: { argb: 'FF000000' } };
+  for (let r = 3; r <= 8; r++) {
+    for (let c = 1; c <= 5; c++) {
+      const cell = worksheet.getCell(r, c);
+      const b: any = cell.border ? { ...cell.border } : {};
+      if (r === 3) b.top = mediumB;
+      if (r === 8) b.bottom = mediumB;
+      if (c === 1) b.left = mediumB;
+      if (c === 5) b.right = mediumB;
+      cell.border = b;
+    }
+  }
 
-  // Also put the tiny form label in A1 and 2024 in A2
-  worksheet.getCell('A1').value = 'NAP Records Inventory and Appraisal Form';
-  worksheet.getCell('A1').font = { name: 'Arial', size: 6 };
-  worksheet.getCell('A2').value = '2024';
-  worksheet.getCell('A2').font = { name: 'Arial', size: 6 };
+  // Empty cells for A1 and A2 to match spacing but remove text
+  worksheet.getCell('A1').value = '';
+  worksheet.getCell('A2').value = '';
 
   // --- ROW 3: Header labels ---
   // F3:I3 = "1. NAME OF OFFICE:"
@@ -119,7 +138,7 @@ export default async function generateNapForm1Excel(
   worksheet.mergeCells('F4:I6');
   const nameVal = worksheet.getCell('F4');
   nameVal.value = 'PROVINCIAL GOVERNMENT OF PANGASINAN';
-  nameVal.font = { name: 'Arial', size: 9, bold: true };
+  nameVal.font = { name: 'Arial', size: 12, bold: true };
   nameVal.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   nameVal.border = { bottom: thin, left: thin, right: thin };
 
@@ -203,7 +222,7 @@ export default async function generateNapForm1Excel(
   worksheet.mergeCells('F8:I8');
   const addrVal = worksheet.getCell('F8');
   addrVal.value = 'Provincial Capitol Complex Lingayen, Pangasinan';
-  addrVal.font = { name: 'Arial', size: 9 };
+  addrVal.font = { name: 'Arial', size: 10, bold: true };
   addrVal.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   addrVal.border = { bottom: thin, left: thin, right: thin };
 
@@ -282,6 +301,23 @@ export default async function generateNapForm1Excel(
     c.border = thinBorder;
   });
 
+  // Apply thick outside border to the entire header grid (A3:P11)
+  const thickOutside: ExcelJS.Border = { style: 'medium', color: { argb: 'FF000000' } };
+  for (let r = 3; r <= 11; r++) {
+    for (let c = 1; c <= 16; c++) {
+      if (r === 3 || r === 11 || c === 1 || c === 16) {
+        const cell = worksheet.getCell(r, c);
+        const b: any = cell.border ? { ...cell.border } : {};
+        if (r === 3) b.top = thickOutside;
+        if (r === 11) b.bottom = thickOutside;
+        if (c === 1) b.left = thickOutside;
+        if (c === 16) b.right = thickOutside;
+        cell.border = b;
+      }
+    }
+  }
+
+
   // ==========================================
   // DATA ROWS (starting row 12)
   // ==========================================
@@ -289,13 +325,13 @@ export default async function generateNapForm1Excel(
 
   items.forEach((item) => {
     const row = worksheet.getRow(currentRow);
-    row.height = 18;
+    row.height = 30;
 
     // Apply base styles to all A-P cells
     for (let c = 1; c <= 16; c++) {
       const cell = row.getCell(c);
-      cell.font = { name: 'Arial', size: 11 };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.font = { name: 'Calibri', size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: false, shrinkToFit: true };
       cell.border = thinBorder;
     }
 
@@ -313,7 +349,7 @@ export default async function generateNapForm1Excel(
       c.value = item.title;
       c.font = { name: 'Times New Roman', size: 11, bold: true };
       c.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
-      
+
       row.getCell('A').border = { top: thin, bottom: thin, left: thin };
       c.border = { top: thin, bottom: thin, right: thin };
 
@@ -330,26 +366,28 @@ export default async function generateNapForm1Excel(
       const setVal = (col: string, val: string, align?: Partial<ExcelJS.Alignment>, customBorder?: Partial<ExcelJS.Borders>) => {
         const cell = worksheet.getCell(`${col}${currentRow}`);
         cell.value = val;
-        // Use Times New Roman for the entry title (col C), but keep others Arial
-        cell.font = col === 'C' ? { name: 'Times New Roman', size: 11 } : { name: 'Arial', size: 11 };
-        cell.alignment = align || { horizontal: 'center', vertical: 'middle', wrapText: true };
+        // Use Times New Roman for the entry title (col C), but keep others Calibri
+        cell.font = col === 'C' ? { name: 'Times New Roman', size: 11 } : { name: 'Calibri', size: 11 };
+        cell.alignment = align || { horizontal: 'center', vertical: 'middle', wrapText: false, shrinkToFit: true };
         cell.border = customBorder || thinBorder;
       };
 
-      setVal('C', r.seriesTitle || '', { horizontal: 'left', vertical: 'middle', wrapText: false }, { top: thin, bottom: thin, right: thin });
-      setVal('D', formatDynamicDates(r.inclusiveDates));
-      setVal('E', r.volume || '');
-      setVal('F', r.medium || '');
-      setVal('G', r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : '');
-      setVal('H', r.locationOfRecords || '');
-      setVal('I', r.frequencyOfUse || '');
-      setVal('J', r.duplication || '');
-      setVal('K', r.appraisalCategory || '');
+      const safeStr = (v: any) => (v === undefined || v === null || v === '' || String(v).trim().toLowerCase() === 'undefined' ? '-' : String(v));
+
+      setVal('C', r.seriesTitle || '', { horizontal: 'left', vertical: 'middle', wrapText: false, shrinkToFit: true }, { top: thin, bottom: thin, right: thin });
+      setVal('D', safeStr(r.inclusiveDates) === '-' ? '-' : formatDynamicDates(r.inclusiveDates));
+      setVal('E', safeStr(r.volume) !== '-' ? r.volume! : '');
+      setVal('F', safeStr(r.medium) !== '-' ? r.medium! : '');
+      setVal('G', r.restrictions && r.restrictions.toLowerCase() !== 'none' && r.restrictions !== 'undefined' ? r.restrictions : '');
+      setVal('H', safeStr(r.locationOfRecords) !== '-' ? r.locationOfRecords! : '');
+      setVal('I', safeStr(r.frequencyOfUse) !== '-' ? r.frequencyOfUse! : '');
+      setVal('J', safeStr(r.duplication) !== '-' ? r.duplication! : '');
+      setVal('K', safeStr(r.appraisalCategory) !== '-' ? r.appraisalCategory! : '');
       setVal('L', util);
-      setVal('M', perm ? '-' : String(r.activeDeskYrs));
-      setVal('N', perm ? '-' : String(r.storageYrs));
-      setVal('O', perm ? '-' : String(r.totalRetention));
-      setVal('P', r.dispositionProvision || '', { horizontal: 'left', vertical: 'middle', wrapText: true });
+      setVal('M', perm ? '-' : safeStr(r.activeDeskYrs));
+      setVal('N', perm ? '-' : safeStr(r.storageYrs));
+      setVal('O', perm ? '-' : safeStr(r.totalRetention));
+      setVal('P', r.dispositionProvision || '', { horizontal: 'left', vertical: 'middle', wrapText: false, shrinkToFit: true });
     }
 
     currentRow++;
@@ -457,13 +495,7 @@ export default async function generateNapForm1Excel(
   appvTitle.font = { name: 'Arial', size: 11 };
   appvTitle.alignment = { horizontal: 'center', vertical: 'top' };
 
-  // Footer page number placeholder
-  const footerRow = sigTitleRow + 2;
-  worksheet.mergeCells(`O${footerRow}:P${footerRow}`);
-  const footerCell = worksheet.getCell(`O${footerRow}`);
-  footerCell.value = 'Page ___ of ___ Pages';
-  footerCell.font = { name: 'Arial', size: 11 };
-  footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
+  // Removed Footer page number placeholder
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer;

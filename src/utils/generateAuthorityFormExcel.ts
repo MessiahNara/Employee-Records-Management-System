@@ -2,7 +2,9 @@ import * as ExcelJS from 'exceljs';
 
 export default async function generateAuthorityFormExcel(
   records: any[],
-  formType: 'Storage' | 'Disposal'
+  formType: 'Storage' | 'Disposal',
+  preparedByName: string = '',
+  preparedByPosition: string = ''
 ): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Authority Form', {
@@ -50,15 +52,13 @@ export default async function generateAuthorityFormExcel(
   b2.value = 'Provincial Government of Pangasinan';
   b2.font = { name: 'Times New Roman', size: 12, bold: true };
   b2.alignment = { horizontal: 'center', vertical: 'middle' };
-  b2.border = borderAll;
 
   // B3 - Lingayen, Pangasinan
   worksheet.mergeCells('B3:K3');
   const b3 = worksheet.getCell('B3');
   b3.value = 'Lingayen, Pangasinan';
   b3.font = { name: 'Times New Roman', size: 11, bold: true };
-  b3.alignment = { horizontal: 'center', vertical: 'middle' };
-  b3.border = borderAll; // Based on typical forms, maybe B2:K3 have a box? The user said "B2 ... B3 ...". I'll add borders.
+  b3.alignment = { horizontal: 'center', vertical: 'middle' }; // Based on typical forms, maybe B2:K3 have a box? The user said "B2 ... B3 ...". I'll add borders.
 
   // B5 - Title
   worksheet.mergeCells('B5:K5');
@@ -74,7 +74,7 @@ export default async function generateAuthorityFormExcel(
   const b7 = worksheet.getCell('B7');
   b7.value = 'GRDS/RDS\nITEM NO.';
   b7.font = { name: 'Times New Roman', size: 10, bold: true };
-  b7.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  b7.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
   b7.border = borderAll;
 
   // C7:I7 - RECORD SERIES TITLE AND DESCRIPTION
@@ -89,63 +89,189 @@ export default async function generateAuthorityFormExcel(
   const j7 = worksheet.getCell('J7');
   j7.value = 'Document\nYear';
   j7.font = { name: 'Times New Roman', size: 10, bold: true };
-  j7.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  j7.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
   j7.border = borderAll;
 
   // K7
   const k7 = worksheet.getCell('K7');
-  k7.value = 'Period\nCovered';
+  k7.value = 'Retention\nPeriod';
   k7.font = { name: 'Times New Roman', size: 10, bold: true };
-  k7.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  k7.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
   k7.border = borderAll;
 
-  // Populate data starting from Row 8
-  let currentRow = 8;
-  const numEmptyRows = 10; // ensure minimum 10 rows to look like a form
-  const totalRows = Math.max(records.length, numEmptyRows);
+  // Pre-process and group records
+  const processedRecords = records.map(r => {
+    let docYear = (r.inclusiveDates || '').replace(/Present/gi, String(new Date().getFullYear())).trim();
+    if (!docYear) docYear = new Date(r.createdAt || Date.now()).getFullYear().toString();
 
-  for (let i = 0; i < totalRows; i++) {
-    worksheet.getRow(currentRow).height = 20;
-
-    // B
-    const cellB = worksheet.getCell(`B${currentRow}`);
-    cellB.border = borderAll;
-    cellB.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    // C-I
-    worksheet.mergeCells(`C${currentRow}:I${currentRow}`);
-    const cellC = worksheet.getCell(`C${currentRow}`);
-    cellC.border = borderAll;
-    cellC.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-
-    // J
-    const cellJ = worksheet.getCell(`J${currentRow}`);
-    cellJ.border = borderAll;
-    cellJ.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    // K
-    const cellK = worksheet.getCell(`K${currentRow}`);
-    cellK.border = borderAll;
-    cellK.alignment = { horizontal: 'center', vertical: 'middle' };
-
-    if (i < records.length) {
-      const r = records[i];
-      cellB.value = `${r.prdsGrds || ''} ${r.itemNo || ''}`.trim();
-      cellC.value = r.seriesTitle || '';
-      // Parse Document Year from inclusive dates if available, or createdAt
-      let docYear = '';
-      if (r.inclusiveDates) {
-        const matches = r.inclusiveDates.match(/\b\d{4}\b/g);
-        if (matches) docYear = matches.join('-');
+    const retentionYrs = Number(r.totalRetention) || 0;
+    let retentionStr = '';
+    if (retentionYrs > 0) {
+      const matches = docYear.match(/\b\d{4}\b/g);
+      if (matches && matches.length > 0) {
+        const lastYear = parseInt(matches[matches.length - 1], 10);
+        retentionStr = `${lastYear + retentionYrs} (${retentionYrs} yrs)`;
+      } else {
+        retentionStr = `${retentionYrs} yrs`;
       }
-      if (!docYear) docYear = new Date(r.createdAt || Date.now()).getFullYear().toString();
-      
-      cellJ.value = docYear;
-      cellK.value = r.inclusiveDates || 'N/A';
+    } else {
+      retentionStr = `${retentionYrs} yrs`;
     }
 
-    currentRow++;
+    return {
+      ...r,
+      docYear,
+      retentionStr,
+      groupKey: (r.subCategory || r.classificationCategory || '').trim()
+    };
+  });
+
+  const prdsGroups = new Map<string, any[]>();
+  for (const r of processedRecords) {
+    const prds = (r.prdsGrds || '').trim();
+    if (!prdsGroups.has(prds)) prdsGroups.set(prds, []);
+    prdsGroups.get(prds)!.push(r);
   }
+
+  const sortedPrds = Array.from(prdsGroups.keys()).sort();
+  let currentRow = 8;
+
+  for (const prds of sortedPrds) {
+    const prdsRecords = prdsGroups.get(prds)!;
+
+    if (prds) {
+      worksheet.getRow(currentRow).height = 20;
+      const cellB = worksheet.getCell(`B${currentRow}`);
+      cellB.value = prds;
+      cellB.border = borderAll;
+      cellB.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+      cellB.font = { name: 'Calibri', size: 10, bold: false };
+      
+      worksheet.mergeCells(`C${currentRow}:I${currentRow}`);
+      worksheet.getCell(`C${currentRow}`).border = borderAll;
+      worksheet.getCell(`J${currentRow}`).border = borderAll;
+      worksheet.getCell(`K${currentRow}`).border = borderAll;
+      currentRow++;
+    }
+
+    prdsRecords.sort((a, b) => {
+      const numA = parseInt(a.itemNo || '0', 10) || 0;
+      const numB = parseInt(b.itemNo || '0', 10) || 0;
+      if (numA !== numB) return numA - numB;
+      
+      const itemA = (a.itemNo || '').localeCompare(b.itemNo || '');
+      if (itemA !== 0) return itemA;
+      return a.groupKey.localeCompare(b.groupKey);
+    });
+
+    const itemGroups = new Map<string, any[]>();
+    for (const r of prdsRecords) {
+      const itemKey = `${r.itemNo || ''}::${r.groupKey}`;
+      if (!itemGroups.has(itemKey)) itemGroups.set(itemKey, []);
+      itemGroups.get(itemKey)!.push(r);
+    }
+
+    for (const [itemKey, items] of itemGroups.entries()) {
+      const firstItem = items[0];
+      const itemNo = (firstItem.itemNo || '').trim();
+      const groupKey = firstItem.groupKey;
+
+      if (groupKey) {
+        // Category Header
+        worksheet.getRow(currentRow).height = 20;
+        const cellB = worksheet.getCell(`B${currentRow}`);
+        cellB.value = itemNo;
+        cellB.border = borderAll;
+        cellB.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+        cellB.font = { name: 'Calibri', size: 10, bold: true };
+        
+        worksheet.mergeCells(`C${currentRow}:I${currentRow}`);
+        const cellC = worksheet.getCell(`C${currentRow}`);
+        cellC.value = groupKey;
+        cellC.border = borderAll;
+        cellC.font = { name: 'Calibri', size: 11, bold: true };
+        cellC.alignment = { horizontal: 'left', vertical: 'middle', indent: 1, shrinkToFit: true };
+        
+        worksheet.getCell(`J${currentRow}`).border = borderAll;
+        worksheet.getCell(`K${currentRow}`).border = borderAll;
+        currentRow++;
+
+        // Items
+        for (const item of items) {
+          worksheet.getRow(currentRow).height = 20;
+          worksheet.getCell(`B${currentRow}`).border = borderAll;
+          
+          worksheet.mergeCells(`C${currentRow}:I${currentRow}`);
+          const cellCItem = worksheet.getCell(`C${currentRow}`);
+          
+          const cleanTitle = (item.seriesTitle || '').replace(/\s*\(\d{4}\)$/, '');
+          
+          cellCItem.value = cleanTitle;
+          cellCItem.border = borderAll;
+          cellCItem.font = { name: 'Calibri', size: 11, bold: true };
+          cellCItem.alignment = { horizontal: 'left', vertical: 'middle', indent: 2, shrinkToFit: true };
+
+          const cellJItem = worksheet.getCell(`J${currentRow}`);
+          cellJItem.value = item.docYear;
+          cellJItem.border = borderAll;
+          cellJItem.font = { name: 'Calibri', size: 11, bold: true };
+          cellJItem.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+
+          const cellKItem = worksheet.getCell(`K${currentRow}`);
+          cellKItem.value = item.retentionStr;
+          cellKItem.border = borderAll;
+          cellKItem.font = { name: 'Calibri', size: 11, bold: true };
+          cellKItem.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+          currentRow++;
+        }
+      } else {
+        // No category items
+        for (const item of items) {
+          worksheet.getRow(currentRow).height = 20;
+          const cellBItem = worksheet.getCell(`B${currentRow}`);
+          cellBItem.value = item.itemNo;
+          cellBItem.border = borderAll;
+          cellBItem.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+          cellBItem.font = { name: 'Calibri', size: 10, bold: true };
+          
+          worksheet.mergeCells(`C${currentRow}:I${currentRow}`);
+          const cellCItem = worksheet.getCell(`C${currentRow}`);
+          
+          const cleanTitle = (item.seriesTitle || '').replace(/\s*\(\d{4}\)$/, '');
+          cellCItem.value = cleanTitle;
+          
+          cellCItem.border = borderAll;
+          cellCItem.font = { name: 'Calibri', size: 11, bold: true };
+          cellCItem.alignment = { horizontal: 'left', vertical: 'middle', indent: 1, shrinkToFit: true };
+
+          const cellJItem = worksheet.getCell(`J${currentRow}`);
+          cellJItem.value = item.docYear;
+          cellJItem.border = borderAll;
+          cellJItem.font = { name: 'Calibri', size: 11, bold: true };
+          cellJItem.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+
+          const cellKItem = worksheet.getCell(`K${currentRow}`);
+          cellKItem.value = item.retentionStr;
+          cellKItem.border = borderAll;
+          cellKItem.font = { name: 'Calibri', size: 11, bold: true };
+          cellKItem.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+          currentRow++;
+        }
+      }
+    }
+  }
+
+  // ***Nothing Follows***
+  worksheet.getRow(currentRow).height = 20;
+  worksheet.getCell(`B${currentRow}`).border = borderAll;
+  worksheet.mergeCells(`C${currentRow}:I${currentRow}`);
+  const nfCell = worksheet.getCell(`C${currentRow}`);
+  nfCell.value = '***Nothing Follows***';
+  nfCell.border = borderAll;
+  nfCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getCell(`J${currentRow}`).border = borderAll;
+  worksheet.getCell(`K${currentRow}`).border = borderAll;
+  currentRow++;
 
   // Add some space
   currentRow += 2;
@@ -166,12 +292,31 @@ export default async function generateAuthorityFormExcel(
   // Lines
   worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
   const prepLine = worksheet.getCell(`B${currentRow}`);
+  prepLine.value = preparedByName;
+  prepLine.font = { name: 'Times New Roman', size: 11, bold: true };
+  prepLine.alignment = { horizontal: 'center', vertical: 'bottom' };
   prepLine.border = { bottom: thin };
 
   worksheet.mergeCells(`G${currentRow}:J${currentRow}`);
   const chkLine = worksheet.getCell(`G${currentRow}`);
+  chkLine.value = 'Brian Mike G. Del Mundo';
+  chkLine.font = { name: 'Times New Roman', size: 11, bold: true };
+  chkLine.alignment = { horizontal: 'center', vertical: 'bottom' };
   chkLine.border = { bottom: thin };
 
+  currentRow++;
+  worksheet.mergeCells(`B${currentRow}:D${currentRow}`);
+  const prepTitle = worksheet.getCell(`B${currentRow}`);
+  prepTitle.value = preparedByPosition;
+  prepTitle.font = { name: 'Times New Roman', size: 10 };
+  prepTitle.alignment = { horizontal: 'center', vertical: 'top' };
+
+  worksheet.mergeCells(`G${currentRow}:J${currentRow}`);
+  const chkTitle = worksheet.getCell(`G${currentRow}`);
+  chkTitle.value = 'Administrative Aide I';
+  chkTitle.font = { name: 'Times New Roman', size: 10 };
+  chkTitle.alignment = { horizontal: 'center', vertical: 'top' };
+
   const buffer = await workbook.xlsx.writeBuffer();
-  return buffer;
+  return buffer as ArrayBuffer;
 }

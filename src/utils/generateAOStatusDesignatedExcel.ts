@@ -29,12 +29,12 @@ export default async function generateAOStatusDesignatedExcel(data: AOStatusExpo
 
   // Configure for 8.5 x 13 (Legal/Folio size)
   worksheet.pageSetup = {
-    paperSize: 14 as any,
+    paperSize: 5 as any, // 5 = Legal (8.5 x 14) to prevent A4 fallback
     orientation: 'landscape',
     fitToPage: true,
     fitToWidth: 1,
-    fitToHeight: 0, // 0 allows multiple pages vertically if there are many rows
-    margins: { left: 0.25, right: 0.25, top: 0.25, bottom: 0.75, header: 0.3, footer: 0.3 }
+    fitToHeight: 0,
+    margins: { left: 0.6 / 2.54, right: 0.6 / 2.54, top: 0.6 / 2.54, bottom: 1.0 / 2.54, header: 0.3 / 2.54, footer: 0 }
   };
 
   const { monthFrom, monthTo, seriesYear, records } = data;
@@ -193,6 +193,7 @@ export default async function generateAOStatusDesignatedExcel(data: AOStatusExpo
   if (records && Array.isArray(records)) {
     records.forEach((record, index) => {
       const row = worksheet.getRow(currentRowNumber);
+      row.height = 30;
 
       const rowValues: any[] = [];
       colDefs.forEach((col, colIndex) => {

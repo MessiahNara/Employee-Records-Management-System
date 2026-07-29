@@ -55,6 +55,11 @@ export interface NapRowItem {
 export function formatDynamicDates(datesStr: string): string {
   if (!datesStr) return '-';
   const currYr = new Date().getFullYear();
+  
+  if (datesStr.trim().toLowerCase() === 'disposed') {
+    return currYr === 2026 ? '2026' : `2026 - ${currYr}`;
+  }
+
   const replaced = datesStr.replace(/Present/gi, String(currYr)).trim();
   const match = replaced.match(/^(\d{4})\s*-\s*(\d{4})$/);
   if (match && match[1] === match[2]) {
@@ -148,9 +153,9 @@ const exportStagedRecordsToCSV = (records: any[], type: 'Storage' | 'Disposal') 
   document.body.removeChild(link);
 };
 
-const handleExportAuthorityForm = async (records: any[], type: 'Storage' | 'Disposal') => {
+const handleExportAuthorityForm = async (records: any[], type: 'Storage' | 'Disposal', prepName: string, prepPos: string) => {
   try {
-    const buffer = await generateAuthorityFormExcel(records, type);
+    const buffer = await generateAuthorityFormExcel(records, type, prepName, prepPos);
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(blob, `Request_Authority_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
   } catch (err) {
@@ -159,8 +164,131 @@ const handleExportAuthorityForm = async (records: any[], type: 'Storage' | 'Disp
   }
 };
 
-const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal') => {
+const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal', prepName: string, prepPos: string) => {
   const title = type === 'Storage' ? 'REQUEST FOR AUTHORITY TO STORAGE OF RECORD FORM' : 'REQUEST FOR AUTHORITY TO DISPOSE OF RECORD FORM';
+
+  const processedRecords = records.map(r => {
+    let docYear = (r.inclusiveDates || '').replace(/Present/gi, String(new Date().getFullYear())).trim();
+    if (!docYear) docYear = new Date(r.createdAt || Date.now()).getFullYear().toString();
+
+    const retentionYrs = Number(r.totalRetention) || 0;
+    let retentionStr = '';
+    if (retentionYrs > 0) {
+      const matches = docYear.match(/\b\d{4}\b/g);
+      if (matches && matches.length > 0) {
+        const lastYear = parseInt(matches[matches.length - 1], 10);
+        retentionStr = `${lastYear + retentionYrs} (${retentionYrs} yrs)`;
+      } else {
+        retentionStr = `${retentionYrs} yrs`;
+      }
+    } else {
+      retentionStr = `${retentionYrs} yrs`;
+    }
+
+    return {
+      ...r,
+      docYear,
+      retentionStr,
+      groupKey: (r.subCategory || r.classificationCategory || '').trim(),
+      cleanSeriesTitle: (r.seriesTitle || '').replace(/\s*\(\d{4}\)$/, '')
+    };
+  });
+
+  const prdsGroups = new Map<string, any[]>();
+  for (const r of processedRecords) {
+    const prds = (r.prdsGrds || '').trim();
+    if (!prdsGroups.has(prds)) prdsGroups.set(prds, []);
+    prdsGroups.get(prds)!.push(r);
+  }
+
+  const sortedPrds = Array.from(prdsGroups.keys()).sort();
+  
+  let tbodyHtml = '';
+  let rowCount = 0;
+
+  for (const prds of sortedPrds) {
+    const prdsRecords = prdsGroups.get(prds)!;
+
+    if (prds) {
+      tbodyHtml += `
+        <tr>
+          <td style="text-align: center;">${prds}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      `;
+      rowCount++;
+    }
+
+    prdsRecords.sort((a, b) => {
+      const numA = parseInt(a.itemNo || '0', 10) || 0;
+      const numB = parseInt(b.itemNo || '0', 10) || 0;
+      if (numA !== numB) return numA - numB;
+      
+      const itemA = (a.itemNo || '').localeCompare(b.itemNo || '');
+      if (itemA !== 0) return itemA;
+      return a.groupKey.localeCompare(b.groupKey);
+    });
+
+    const itemGroups = new Map<string, any[]>();
+    for (const r of prdsRecords) {
+      const itemKey = `${r.itemNo || ''}::${r.groupKey}`;
+      if (!itemGroups.has(itemKey)) itemGroups.set(itemKey, []);
+      itemGroups.get(itemKey)!.push(r);
+    }
+
+    for (const [itemKey, items] of itemGroups.entries()) {
+      const firstItem = items[0];
+      const itemNo = (firstItem.itemNo || '').trim();
+      const groupKey = firstItem.groupKey;
+
+      if (groupKey) {
+        tbodyHtml += `
+          <tr>
+            <td style="text-align: center; font-weight: bold;">${itemNo}</td>
+            <td style="font-weight: bold; padding-left: 15px;">${groupKey}</td>
+            <td></td>
+            <td></td>
+          </tr>
+        `;
+        rowCount++;
+
+        for (const item of items) {
+          tbodyHtml += `
+            <tr>
+              <td></td>
+              <td style="padding-left: 30px; font-weight: bold;">${item.cleanSeriesTitle}</td>
+              <td style="text-align: center; font-weight: bold;">${item.docYear}</td>
+              <td style="text-align: center; font-weight: bold;">${item.retentionStr}</td>
+            </tr>
+          `;
+          rowCount++;
+        }
+      } else {
+        for (const item of items) {
+          tbodyHtml += `
+            <tr>
+              <td style="text-align: center; font-weight: bold;">${item.itemNo || ''}</td>
+              <td style="padding-left: 15px; font-weight: bold;">${item.cleanSeriesTitle}</td>
+              <td style="text-align: center; font-weight: bold;">${item.docYear}</td>
+              <td style="text-align: center; font-weight: bold;">${item.retentionStr}</td>
+            </tr>
+          `;
+          rowCount++;
+        }
+      }
+    }
+  }
+
+  tbodyHtml += `
+    <tr>
+      <td></td>
+      <td style="text-align: center;">***Nothing Follows***</td>
+      <td></td>
+      <td></td>
+    </tr>
+  `;
 
   return `
     <html>
@@ -169,8 +297,9 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal') => {
         <style>
           @page { size: letter portrait; margin: 0.6in; }
           body { font-family: "Times New Roman", Times, serif; font-size: 11pt; padding: 20px; margin: 0; background: white; }
-          .header-box { border: 1px solid black; text-align: center; font-weight: bold; padding: 5px; }
-          .header-box.title { font-size: 12pt; padding: 10px; }
+          .header-text { text-align: center; font-weight: bold; font-size: 11pt; padding: 2px; }
+          .header-text.large { font-size: 12pt; }
+          .header-box.title { font-size: 12pt; padding: 10px; text-align: center; font-weight: bold; margin-top: 15px; }
           table { width: 100%; border-collapse: collapse; margin-top: 15px; }
           th, td { border: 1px solid black; padding: 8px; text-align: left; }
           th { text-align: center; font-weight: bold; }
@@ -181,9 +310,8 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal') => {
         </style>
       </head>
       <body>
-        <div class="header-box">Provincial Government of Pangasinan</div>
-        <div class="header-box">Lingayen, Pangasinan</div>
-        <div style="height: 15px; border-left: 1px solid black; border-right: 1px solid black;"></div>
+        <div class="header-text large">Provincial Government of Pangasinan</div>
+        <div class="header-text">Lingayen, Pangasinan</div>
         <div class="header-box title">${title}</div>
         
         <table>
@@ -192,37 +320,32 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal') => {
               <th style="width: 15%;">GRDS/RDS<br/>ITEM NO.</th>
               <th style="width: 45%;">RECORD SERIES TITLE AND DESCRIPTION</th>
               <th style="width: 15%;">Document<br/>Year</th>
-              <th style="width: 25%;">Period<br/>Covered</th>
+              <th style="width: 25%;">Retention<br/>Period</th>
             </tr>
           </thead>
           <tbody>
-            ${records.length > 0 ? records.map(r => {
-    let docYear = '';
-    if (r.inclusiveDates) {
-      const matches = r.inclusiveDates.match(/\\b\\d{4}\\b/g);
-      if (matches) docYear = matches.join('-');
-    }
-    if (!docYear) docYear = new Date(r.createdAt || Date.now()).getFullYear().toString();
-    return `
-                <tr>
-                  <td style="text-align: center;">${(r.prdsGrds || '') + ' ' + (r.itemNo || '')}</td>
-                  <td>${r.seriesTitle}</td>
-                  <td style="text-align: center;">${docYear}</td>
-                  <td style="text-align: center;">${r.inclusiveDates || 'N/A'}</td>
-                </tr>
-              `;
-  }).join('') : `<tr><td colspan="4" style="text-align:center; height: 100px;">No records staged.</td></tr>`}
+            ${records.length > 0 ? tbodyHtml : `<tr><td colspan="4" style="text-align:center; height: 100px;">No records staged.</td></tr>`}
           </tbody>
         </table>
         
         <div class="signatures">
-          <div class="signature-block">
+          <div class="signature-block" style="margin-right: 50px;">
             <div class="signature-label">Prepared by:</div>
-            <div class="signature-line"></div>
+            <div class="signature-line" style="text-align: center; font-weight: bold; font-size: 11pt; padding-top: 15px; border-bottom: 1px solid black;">
+              ${prepName || '&nbsp;'}
+            </div>
+            <div style="text-align: center; font-size: 10pt; margin-top: 2px;">
+              ${prepPos || '&nbsp;'}
+            </div>
           </div>
           <div class="signature-block">
             <div class="signature-label">Checked and reviewed by:</div>
-            <div class="signature-line"></div>
+            <div class="signature-line" style="text-align: center; font-weight: bold; font-size: 11pt; padding-top: 15px; border-bottom: 1px solid black;">
+              Brian Mike G. Del Mundo
+            </div>
+            <div style="text-align: center; font-size: 10pt; margin-top: 2px;">
+              Administrative Aide I
+            </div>
           </div>
         </div>
       </body>
@@ -274,7 +397,7 @@ export function getOngoingDisposalInfo(datesStr: any, totalRetention: any, reten
   if (eligibleYears.length === 0) return null;
 
   const activeYearsRemaining = covered.years.filter(yr => !eligibleYears.includes(yr));
-  const newDatesStr = formatYearsListToDatesString(activeYearsRemaining, covered.isOngoing) || 'Disposed';
+  const newDatesStr = formatYearsListToDatesString(activeYearsRemaining, covered.isOngoing) || currentYear.toString();
 
   return {
     ongoingStartYear: eligibleYears[0],
@@ -289,10 +412,11 @@ export function getOngoingDisposalInfo(datesStr: any, totalRetention: any, reten
 }
 
 export function computeDisposalPeriodChange(datesStr: string): string {
-  if (!datesStr) return 'Disposed';
+  const currentYear = new Date().getFullYear().toString();
+  if (!datesStr) return currentYear;
 
   const matches = datesStr.match(/\b\d{4}\b/g);
-  if (!matches || matches.length === 0) return `${datesStr} → Disposed`;
+  if (!matches || matches.length === 0) return `${datesStr} → ${currentYear}`;
 
   const years = matches.map(Number);
   const minYear = Math.min(...years);
@@ -305,7 +429,7 @@ export function computeDisposalPeriodChange(datesStr: string): string {
   }
 
   if (years.length === 1 || minYear === maxYear) {
-    return `${minYear} → Disposed`;
+    return `${minYear} → ${new Date().getFullYear().toString()}`;
   }
 
   const newMinYear = minYear + 1;
@@ -313,7 +437,7 @@ export function computeDisposalPeriodChange(datesStr: string): string {
     return `${minYear} - ${maxYear} → ${newMinYear} - ${maxYear}`;
   }
 
-  return `${datesStr} → Disposed`;
+  return `${datesStr} → ${new Date().getFullYear().toString()}`;
 }
 
 export function computeStoragePeriodChange(datesStr: string): string {
@@ -382,6 +506,8 @@ function InventoryAppraisal() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [showNapFormPreview, setShowNapFormPreview] = useState(false);
+  const [preparedByName, setPreparedByName] = useState('');
+  const [preparedByPosition, setPreparedByPosition] = useState('');
   const [previewViewMode, setPreviewViewMode] = useState<'excel' | 'form'>('excel');
   const [napFormHeader, setNapFormHeader] = useState({
     personInCharge: '',
@@ -439,6 +565,9 @@ function InventoryAppraisal() {
   const [disposalFile, setDisposalFile] = useState<File | null>(null);
   const [isSendingDisposalRequest, setIsSendingDisposalRequest] = useState(false);
   const [disposalRequestFilter, setDisposalRequestFilter] = useState<'All' | 'Pending'>('All');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'Pending' | 'Completed' | 'Decline'>('Pending');
+  const [historySelectedIds, setHistorySelectedIds] = useState<string[]>([]);
+  const [isUpdatingHistoryStatus, setIsUpdatingHistoryStatus] = useState(false);
 
   // ── Preview Modal state ──────────────────────────────────────────────
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -1021,6 +1150,24 @@ function InventoryAppraisal() {
     }
   };
 
+  const handleUpdateHistoryStatus = async (newStatus: 'Completed' | 'Decline') => {
+    if (historySelectedIds.length === 0) return;
+    setIsUpdatingHistoryStatus(true);
+    try {
+      await api.inventory.updateDisposalHistoryStatus(historySelectedIds, newStatus);
+      showToast(`Successfully marked ${historySelectedIds.length} logs as ${newStatus}.`, 'success');
+      setHistorySelectedIds([]);
+      // Refresh the logs.
+      const freshLogs = await api.inventory.getDisposalHistory();
+      setDisposalLogs(freshLogs);
+      fetchRecords(); // refresh records to see inclusiveDates updates
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update disposal history status.', 'error');
+    } finally {
+      setIsUpdatingHistoryStatus(false);
+    }
+  };
+
   const handleResetFilters = () => {
     setSearchQuery('');
     setCategoryFilter('ALL');
@@ -1113,7 +1260,7 @@ function InventoryAppraisal() {
 
     list.forEach(r => {
       const div = (r.division || 'General').toUpperCase().trim();
-      const cat = (r.classificationCategory || r.appraisalCategory || 'GENERAL').toUpperCase().trim();
+      const cat = (r.classificationCategory || 'GENERAL').toUpperCase().trim();
       const sub = (r.subCategory || '').trim();
 
       const catKey = `${cat}::${div}`;
@@ -1128,10 +1275,29 @@ function InventoryAppraisal() {
       subMap.get(sub)!.push(r);
     });
 
-    const sortedCatKeys = Array.from(catMap.keys()).sort((a, b) => a.localeCompare(b));
+    const sortedCatKeys = Array.from(catMap.keys()).sort((a, b) => {
+      const isAGen = a.startsWith('GENERAL::');
+      const isBGen = b.startsWith('GENERAL::');
+      if (isAGen && !isBGen) return 1;
+      if (!isAGen && isBGen) return -1;
+      return a.localeCompare(b);
+    });
 
+    let hasInsertedBlank = false;
     sortedCatKeys.forEach((catKey) => {
       const [catName, div] = catKey.split('::');
+      const isGeneral = catName === 'GENERAL';
+
+      if (isGeneral && items.length > 0 && !hasInsertedBlank) {
+        hasInsertedBlank = true;
+        items.push({
+          type: 'record',
+          title: '',
+          record: { inclusiveDates: '' } as any,
+          isUncategorized: true
+        });
+      }
+
       if (catName && catName !== 'GENERAL') {
         items.push({
           type: 'category',
@@ -1199,27 +1365,28 @@ function InventoryAppraisal() {
       } else if (item.type === 'record' && item.record) {
         const r = item.record;
         const perm = r.appraisalCategory === 'Permanent';
-        const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+        const safe = (v: any) => (v === undefined || v === null || v === '' || String(v).trim().toLowerCase() === 'undefined' ? '-' : v);
+        const util = safe((r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim());
 
         rows.push(`
           <tr style="height:24px; background:#fff;">
             <td style="border:1px solid #000; padding:3px 6px 3px ${item.isUncategorized ? '6px' : '36px'}; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
-              <div style="font-weight:normal; color:#000;">${r.seriesTitle || ''}</div>
-              ${r.scopeDescription ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
+              <div style="font-weight:normal; color:#000;">${safe(r.seriesTitle) !== '-' ? r.seriesTitle : ''}</div>
+              ${r.scopeDescription && r.scopeDescription !== 'undefined' ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
             </td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top; white-space:nowrap;">${formatDynamicDates(r.inclusiveDates)}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.volume || ''}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.medium || ''}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : ''}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.locationOfRecords || ''}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.frequencyOfUse || ''}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.duplication || ''}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.appraisalCategory || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top; white-space:nowrap;">${safe(r.inclusiveDates) === '-' ? '-' : formatDynamicDates(r.inclusiveDates)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.volume)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.medium)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' && r.restrictions !== 'undefined' ? r.restrictions : '-'}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.locationOfRecords)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.frequencyOfUse)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.duplication)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.appraisalCategory)}</td>
             <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${util}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.activeDeskYrs}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.storageYrs}</td>
-            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.totalRetention}</td>
-            <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${r.dispositionProvision || ''}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : safe(r.activeDeskYrs)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : safe(r.storageYrs)}</td>
+            <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : safe(r.totalRetention)}</td>
+            <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${safe(r.dispositionProvision)}</td>
           </tr>
         `);
       }
@@ -1266,13 +1433,17 @@ function InventoryAppraisal() {
       const sliceItems = items.slice(pi * ROWS_PER_PAGE, (pi + 1) * ROWS_PER_PAGE);
       const isLast = pi === pageCount - 1;
       const pb = !isLast ? 'page-break-after:always;margin-bottom:20px;' : '';
+      const styleBlock = pi === 0 ? `
+        <style>
+          @media print {
+            @page { margin: 0.6in 0.5in 1.0in 0.6in !important; }
+          }
+        </style>
+      ` : '';
       return `
+        ${styleBlock}
         <div style="${pb} font-family: Arial, sans-serif; font-size: 8pt; color: #000; background: #fff; padding: 12px;">
-          <!-- Small Top Identifier Tag -->
-          <div style="font-size: 6.5pt; color: #333; margin-bottom: 4px; font-family: Arial, sans-serif; line-height: 1.2;">
-            <div>NAP Records Inventory and Appraisal Form</div>
-            <div>2024</div>
-          </div>
+          <!-- Removed Small Top Identifier Tag -->
 
           <!-- Official Top Header Grid Box matching reference image -->
           <table style="width: 100%; min-width: 1050px; border-collapse: collapse; border: 1.5px solid #000; font-size: 8pt; table-layout: fixed; font-family: Arial, sans-serif;">
@@ -1374,25 +1545,26 @@ function InventoryAppraisal() {
         if (item.type === 'subCategory') return `<tr style="height:24px; background:#fff;"><td colspan="14" style="border:1px solid #000; padding:4px 6px 4px 20px; font-weight:bold; font-size:9pt; font-family:Arial, sans-serif; text-align:left;">${item.title}</td></tr>`;
         const r = item.record!;
         const perm = r.appraisalCategory === 'Permanent';
-        const util = (r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim();
+        const safe = (v: any) => (v === undefined || v === null || v === '' || String(v).trim().toLowerCase() === 'undefined' ? '-' : v);
+        const util = safe((r.utilityValue || '').replace(/\s*\(.*?\)/g, '').trim());
         return `<tr style="height:24px; background:#fff;">
                   <td style="border:1px solid #000; padding:3px 6px 3px ${item.isUncategorized ? '6px' : '36px'}; font-size:9pt; vertical-align:top; font-family:Arial, sans-serif; word-break:break-word;">
-                    <div style="font-weight:normal; color:#000;">${r.seriesTitle || ''}</div>
-                    ${r.scopeDescription ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
+                    <div style="font-weight:normal; color:#000;">${safe(r.seriesTitle) !== '-' ? r.seriesTitle : ''}</div>
+                    ${r.scopeDescription && r.scopeDescription !== 'undefined' ? `<div style="font-size:7.5pt; color:#555; margin-top:1px;">${r.scopeDescription}</div>` : ''}
                   </td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top; white-space:nowrap;">${formatDynamicDates(r.inclusiveDates)}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.volume || ''}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.medium || ''}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' ? r.restrictions : ''}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.locationOfRecords || ''}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.frequencyOfUse || ''}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.duplication || ''}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.appraisalCategory || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top; white-space:nowrap;">${safe(r.inclusiveDates) === '-' ? '-' : formatDynamicDates(r.inclusiveDates)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.volume)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.medium)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${r.restrictions && r.restrictions.toLowerCase() !== 'none' && r.restrictions !== 'undefined' ? r.restrictions : '-'}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.locationOfRecords)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.frequencyOfUse)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.duplication)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${safe(r.appraisalCategory)}</td>
                   <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${util}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.activeDeskYrs}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.storageYrs}</td>
-                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : r.totalRetention}</td>
-                  <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${r.dispositionProvision || ''}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : safe(r.activeDeskYrs)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : safe(r.storageYrs)}</td>
+                  <td style="border:1px solid #000; padding:3px 4px; font-size:9pt; text-align:center; vertical-align:top;">${perm ? '-' : safe(r.totalRetention)}</td>
+                  <td style="border:1px solid #000; padding:3px 5px; font-size:9pt; vertical-align:top; word-break:break-word;">${safe(r.dispositionProvision)}</td>
                 </tr>`;
       }).join('')}
             </tbody>
@@ -2529,7 +2701,7 @@ function InventoryAppraisal() {
         const covered = extractCoveredYears(evaluatingRecord.record.inclusiveDates);
         const activeYearsRemaining = covered.years.filter(y => !customDisposedYears.includes(y));
         const computedCustomDates = customDisposedYears.length > 0
-          ? formatYearsListToDatesString(activeYearsRemaining, covered.isOngoing)
+          ? (formatYearsListToDatesString(activeYearsRemaining, covered.isOngoing) || new Date().getFullYear().toString())
           : evaluatingRecord.info.newDatesStr;
 
         const isCustomSelected = customDisposedYears.length > 0;
@@ -2607,6 +2779,12 @@ function InventoryAppraisal() {
                   <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {eligibleDisposalYears.map((yr) => {
                       const isDisposed = customDisposedYears.includes(yr);
+                      const isDeclined = disposalOnlyLogs.some(log => 
+                        log.recordId === evaluatingRecord.record.id && 
+                        log.status === 'Decline' && 
+                        String(log.disposedYears || '').includes(yr.toString())
+                      );
+                      
                       return (
                         <button
                           key={`yr-pill-${yr}`}
@@ -2615,9 +2793,9 @@ function InventoryAppraisal() {
                             fontSize: '0.85rem',
                             padding: '0.45rem 0.85rem',
                             borderRadius: '6px',
-                            border: isDisposed ? '1px solid #ef4444' : '1px solid var(--border-color)',
-                            background: isDisposed ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-primary)',
-                            color: isDisposed ? '#dc2626' : 'var(--text-primary)',
+                            border: isDisposed ? '1px solid #ef4444' : (isDeclined ? '1px dashed #f59e0b' : '1px solid var(--border-color)'),
+                            background: isDisposed ? 'rgba(239, 68, 68, 0.12)' : (isDeclined ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-primary)'),
+                            color: isDisposed ? '#dc2626' : (isDeclined ? '#d97706' : 'var(--text-primary)'),
                             fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
@@ -2633,7 +2811,7 @@ function InventoryAppraisal() {
                             );
                           }}
                         >
-                          {isDisposed ? '🗑️ Disposed ' : '📅 '} {yr} ({currentYear - yr} yrs)
+                          {isDisposed ? '🗑️ Disposed ' : (isDeclined ? '⚠️ Declined ' : '📅 ')} {yr} ({currentYear - yr} yrs)
                         </button>
                       );
                     })}
@@ -2698,7 +2876,9 @@ function InventoryAppraisal() {
                     setCustomDisposedYears([]);
                   }}
                 >
-                  {isCustomSelected ? `Dispose Selected Year(s) & Save as ${computedCustomDates}` : `Dispose & Advance to ${evaluatingRecord.info.newDatesStr}`}
+                  {isCustomSelected 
+                    ? `Dispose Selected Year(s) & Save as ${computedCustomDates}`
+                    : `Dispose & Advance to ${evaluatingRecord.info.newDatesStr}`}
                 </Button>
               </div>
             </div>
@@ -3128,14 +3308,15 @@ function InventoryAppraisal() {
                         onClick={() => setSelectedRequestDetails(req)}
                         style={{
                           border: '1px solid var(--border-color)',
-                          borderRadius: '8px',
-                          padding: '1rem',
-                          background: 'var(--bg-secondary)',
+                          borderRadius: '10px',
+                          padding: '1.25rem',
+                          background: 'var(--bg-primary)',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '0.75rem',
+                          gap: '0.85rem',
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease',
+                          transition: 'all 0.2s ease',
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -3163,7 +3344,7 @@ function InventoryAppraisal() {
                           </span>
                         </div>
 
-                        <div style={{ background: 'var(--bg-primary)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
                           <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
                             Target Records ({req.recordsSummary?.length || 0})
                           </div>
@@ -3205,19 +3386,22 @@ function InventoryAppraisal() {
 
                         {/* Admin Decision actions if pending & user is Admin/Dev */}
                         {req.status === 'pending' && hasFullDivisionAccess && (
-                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Admin Decision</div>
                             <input
                               type="text"
-                              placeholder="Admin decision remarks / reason..."
+                              placeholder="Optional remarks or reason for decision..."
                               value={adminDecisionReason}
                               onChange={(e) => setAdminDecisionReason(e.target.value)}
                               style={{
-                                padding: '0.45rem 0.75rem',
-                                fontSize: '0.825rem',
+                                padding: '0.55rem 0.75rem',
+                                fontSize: '0.85rem',
                                 borderRadius: '6px',
                                 border: '1px solid var(--border-color)',
                                 background: 'var(--bg-primary)',
                                 color: 'var(--text-primary)',
+                                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+                                outline: 'none',
                               }}
                             />
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -3227,7 +3411,7 @@ function InventoryAppraisal() {
                                 disabled={isProcessingAdminDecision}
                                 onClick={() => handleAdminRejectRequest(req.id)}
                               >
-                                Reject Request
+                                ✕ Reject Request
                               </Button>
                               <Button
                                 variant="success"
@@ -3235,7 +3419,7 @@ function InventoryAppraisal() {
                                 disabled={isProcessingAdminDecision}
                                 onClick={() => handleAdminConfirmRequest(req.id)}
                               >
-                                Confirm & Update Tab
+                                ✓ Accept Request
                               </Button>
                             </div>
                           </div>
@@ -3735,14 +3919,15 @@ function InventoryAppraisal() {
                         onClick={() => setSelectedRequestDetails(req)}
                         style={{
                           border: '1px solid var(--border-color)',
-                          borderRadius: '8px',
-                          padding: '1rem',
-                          background: 'var(--bg-secondary)',
+                          borderRadius: '10px',
+                          padding: '1.25rem',
+                          background: 'var(--bg-primary)',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '0.75rem',
+                          gap: '0.85rem',
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease',
+                          transition: 'all 0.2s ease',
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -3770,7 +3955,7 @@ function InventoryAppraisal() {
                           </span>
                         </div>
 
-                        <div style={{ background: 'var(--bg-primary)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
                           <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
                             Target Records ({req.recordsSummary?.length || 0})
                           </div>
@@ -3812,19 +3997,22 @@ function InventoryAppraisal() {
 
                         {/* Admin Decision actions if pending & user is Admin/Dev */}
                         {req.status === 'pending' && hasFullDivisionAccess && (
-                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem', background: 'var(--bg-primary)', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Admin Decision</div>
                             <input
                               type="text"
-                              placeholder="Admin decision remarks / reason..."
+                              placeholder="Optional remarks or reason for decision..."
                               value={adminDecisionReason}
                               onChange={(e) => setAdminDecisionReason(e.target.value)}
                               style={{
-                                padding: '0.45rem 0.75rem',
-                                fontSize: '0.825rem',
+                                padding: '0.55rem 0.75rem',
+                                fontSize: '0.85rem',
                                 borderRadius: '6px',
                                 border: '1px solid var(--border-color)',
                                 background: 'var(--bg-primary)',
                                 color: 'var(--text-primary)',
+                                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+                                outline: 'none',
                               }}
                             />
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -3834,7 +4022,7 @@ function InventoryAppraisal() {
                                 disabled={isProcessingAdminDecision}
                                 onClick={() => handleAdminRejectRequest(req.id)}
                               >
-                                Reject Request
+                                ✕ Reject Request
                               </Button>
                               <Button
                                 variant="success"
@@ -3842,7 +4030,7 @@ function InventoryAppraisal() {
                                 disabled={isProcessingAdminDecision}
                                 onClick={() => handleAdminConfirmRequest(req.id)}
                               >
-                                Confirm & Update Tab
+                                ✓ Accept Request
                               </Button>
                             </div>
                           </div>
@@ -3858,9 +4046,36 @@ function InventoryAppraisal() {
             {disposalModalTab === 'history' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    History of all record series disposal evaluations and disposed year periods.
-                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                      History of all record series disposal evaluations and disposed year periods.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.25rem', width: '280px', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      {(['Pending', 'Completed', 'Decline'] as const).map(status => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setHistoryStatusFilter(status)}
+                          style={{
+                            flex: 1,
+                            padding: '0.35rem 0',
+                            textAlign: 'center',
+                            fontSize: '0.8rem',
+                            fontWeight: historyStatusFilter === status ? 700 : 500,
+                            background: historyStatusFilter === status ? 'var(--bg-primary)' : 'transparent',
+                            color: historyStatusFilter === status ? 'var(--color-primary)' : 'var(--text-secondary)',
+                            borderRadius: '6px',
+                            border: historyStatusFilter === status ? '1px solid var(--border-color)' : '1px solid transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: historyStatusFilter === status ? '0 2px 5px rgba(0,0,0,0.05)' : 'none'
+                          }}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <div style={{ width: '250px' }}>
                       <SearchBar
@@ -3891,35 +4106,11 @@ function InventoryAppraisal() {
                 </div>
 
                 {(() => {
-                  const expandedLogs: any[] = [];
-                  disposalOnlyLogs.forEach((log) => {
-                    const yearsStr = String(log.disposedYears || '').trim();
-                    let yearList: number[] = [];
+                  const filteredLogs = disposalOnlyLogs.filter((log) => {
+                    // Default legacy logs without status to 'Completed'
+                    const logStatus = log.status || 'Completed';
+                    if (logStatus !== historyStatusFilter) return false;
 
-                    if (yearsStr.includes('-')) {
-                      const parts = yearsStr.split('-').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
-                      if (parts.length === 2 && parts[0] <= parts[1]) {
-                        for (let y = parts[0]; y <= parts[1]; y++) yearList.push(y);
-                      }
-                    }
-                    if (yearList.length === 0) {
-                      yearList = (yearsStr.match(/\b\d{4}\b/g) || []).map((n) => parseInt(n, 10));
-                    }
-
-                    if (yearList.length > 1) {
-                      yearList.forEach((singleYear, idx) => {
-                        expandedLogs.push({
-                          ...log,
-                          id: `${log.id}-${singleYear}-${idx}`,
-                          disposedYears: String(singleYear),
-                        });
-                      });
-                    } else {
-                      expandedLogs.push(log);
-                    }
-                  });
-
-                  const filteredLogs = expandedLogs.filter((log) => {
                     if (historyDivisionFilter !== 'ALL' && (log.division || 'General') !== historyDivisionFilter) return false;
                     if (historyCategoryFilter !== 'ALL' && log.classificationCategory !== historyCategoryFilter) return false;
                     const q = historySearchQuery.toLowerCase().trim();
@@ -3936,32 +4127,83 @@ function InventoryAppraisal() {
                   if (filteredLogs.length === 0) {
                     return (
                       <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                        No disposal history logs found.
+                        No disposal history logs found for this status.
                       </div>
                     );
                   }
 
                   return (
-                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '380px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                        <thead>
-                          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Division</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Category</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
-                            <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
-                          </tr>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {historyStatusFilter === 'Pending' && historySelectedIds.length > 0 && (
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <Button
+                            variant="success"
+                            size="sm"
+                            loading={isUpdatingHistoryStatus}
+                            onClick={() => handleUpdateHistoryStatus('Completed')}
+                          >
+                            Mark as Completed
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            loading={isUpdatingHistoryStatus}
+                            onClick={() => handleUpdateHistoryStatus('Decline')}
+                          >
+                            Mark as Declined
+                          </Button>
+                        </div>
+                      )}
+                      <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '380px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                              <th style={{ padding: '0.65rem 0.85rem', width: '40px', textAlign: 'center' }}>
+                                {historyStatusFilter === 'Pending' && (
+                                  <input
+                                    type="checkbox"
+                                    checked={historySelectedIds.length > 0 && historySelectedIds.length === filteredLogs.length}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setHistorySelectedIds(filteredLogs.map(l => l.id));
+                                      } else {
+                                        setHistorySelectedIds([]);
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>Date & Time</th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>Item No.</th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, width: '20%' }}>Record Series</th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, width: '25%' }}>Division</th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, width: '15%' }}>Category</th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Period Covered</th>
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Total Retention</th>
+                            </tr>
                         </thead>
-                        <tbody>
-                          {filteredLogs.map((log) => (
-                            <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
+                          <tbody>
+                            {filteredLogs.map((log) => (
+                              <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  {historyStatusFilter === 'Pending' && (
+                                    <input
+                                      type="checkbox"
+                                      checked={historySelectedIds.includes(log.id)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setHistorySelectedIds(prev => [...prev, log.id]);
+                                        } else {
+                                          setHistorySelectedIds(prev => prev.filter(id => id !== log.id));
+                                        }
+                                      }}
+                                    />
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                               </td>
-                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>
                                 {log.prdsGrds && log.itemNo ? (
                                   <div>
                                     <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{log.prdsGrds}</div>
@@ -3983,7 +4225,7 @@ function InventoryAppraisal() {
                               <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
                                 {log.inclusiveDates || log.disposedYears || '-'}
                               </td>
-                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                                 {(() => {
                                   const baseYear = parseInt(log.inclusiveDates || log.disposedYears || '0');
                                   const matchedRecord = records.find((r: any) => r.id === log.recordId || r.id === log.id);
@@ -3997,9 +4239,10 @@ function InventoryAppraisal() {
                         </tbody>
                       </table>
                     </div>
-                  );
-                })()}
-              </div>
+                  </div>
+                );
+              })()}
+            </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
@@ -4879,21 +5122,44 @@ function InventoryAppraisal() {
           size="lg"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 600 }}>Prepared by (Name)</label>
+                <input
+                  type="text"
+                  value={preparedByName}
+                  onChange={(e) => setPreparedByName(e.target.value)}
+                  placeholder="e.g. Juan Dela Cruz"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: 600 }}>Position</label>
+                <input
+                  type="text"
+                  value={preparedByPosition}
+                  onChange={(e) => setPreparedByPosition(e.target.value)}
+                  placeholder="e.g. Administrative Officer II"
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', height: '600px', background: '#e5e7eb' }}>
+              <iframe
+                id="preview-iframe"
+                srcDoc={generatePreviewHtml(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType, preparedByName, preparedByPosition)}
+                style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+                title="Form Preview"
+              />
+            </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <Button variant="secondary" onClick={() => handleExportAuthorityForm(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType)}>
+              <Button variant="secondary" onClick={() => handleExportAuthorityForm(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType, preparedByName, preparedByPosition)}>
                 Export Request (Excel)
               </Button>
               <Button variant="primary" onClick={handlePrintIframe} style={{ display: 'flex', alignItems: 'center' }}>
                 <MdPrint style={{ marginRight: '6px', fontSize: '1.1rem' }} /> Print Form
               </Button>
-            </div>
-            <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', height: '600px', background: '#e5e7eb' }}>
-              <iframe
-                id="preview-iframe"
-                srcDoc={generatePreviewHtml(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType)}
-                style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
-                title="Form Preview"
-              />
             </div>
           </div>
         </Modal>
@@ -5089,14 +5355,15 @@ function InventoryAppraisal() {
                     onClick={() => setSelectedRequestDetails(req)}
                     style={{
                       border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      padding: '1rem',
-                      background: 'var(--bg-secondary)',
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      background: 'var(--bg-primary)',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.75rem',
+                      gap: '0.85rem',
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease',
+                      transition: 'all 0.2s ease',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -5124,7 +5391,7 @@ function InventoryAppraisal() {
                       </span>
                     </div>
 
-                    <div style={{ background: 'var(--bg-primary)', padding: '0.65rem 0.85rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ background: 'var(--bg-secondary)', padding: '0.85rem', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
                       <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
                         Target Records ({req.recordsSummary?.length || 0})
                       </div>
@@ -5150,19 +5417,22 @@ function InventoryAppraisal() {
                       </div>
                     )}
 
-                    <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Admin Decision</div>
                       <input
                         type="text"
-                        placeholder="Admin confirmation or rejection remarks (optional)..."
+                        placeholder="Optional remarks or reason for decision..."
                         value={adminDecisionReason}
                         onChange={(e) => setAdminDecisionReason(e.target.value)}
                         style={{
-                          padding: '0.45rem 0.75rem',
-                          fontSize: '0.825rem',
+                          padding: '0.55rem 0.75rem',
+                          fontSize: '0.85rem',
                           borderRadius: '6px',
                           border: '1px solid var(--border-color)',
                           background: 'var(--bg-primary)',
                           color: 'var(--text-primary)',
+                          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+                          outline: 'none',
                         }}
                       />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -5172,7 +5442,7 @@ function InventoryAppraisal() {
                           disabled={isProcessingAdminDecision}
                           onClick={() => handleAdminRejectRequest(req.id)}
                         >
-                          Reject Request
+                          ✕ Reject Request
                         </Button>
                         <Button
                           variant="success"
@@ -5180,7 +5450,7 @@ function InventoryAppraisal() {
                           disabled={isProcessingAdminDecision}
                           onClick={() => handleAdminConfirmRequest(req.id)}
                         >
-                          Confirm & Update Tab
+                          ✓ Accept Request
                         </Button>
                       </div>
                     </div>

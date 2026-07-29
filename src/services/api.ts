@@ -1051,6 +1051,12 @@ export const inventoryApi = {
       attachmentUrl: getAbsoluteUrl(item.attachmentUrl) || item.attachmentUrl,
     }));
   },
+  updateDisposalHistoryStatus: (logIds: string[], newStatus: 'Completed' | 'Decline') =>
+    apiRequest<any>('/inventory/disposal-history/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logIds, newStatus }),
+    }),
   logDisposal: (data: {
     recordId: string;
     seriesTitle: string;
