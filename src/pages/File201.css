@@ -643,7 +643,6 @@
 
 .yellow-box-container.yellow-box-container--highlighted .yellow-box-card {
   border: 5px solid #2563eb !important;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important; /* Soft blue cardboard to contrast with yellow boxes! */
 }
 
 /* Modal Header Actions */

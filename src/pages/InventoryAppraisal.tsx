@@ -15,6 +15,7 @@ import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import './InventoryAppraisal.css';
 import generateNapForm1Excel from '../utils/generateNapForm1Excel';
 import generateAuthorityFormExcel from '../utils/generateAuthorityFormExcel';
+import { generateDisposalWord } from '../utils/generateDisposalWord';
 
 export interface InventoryRecord {
   id: string;
@@ -55,7 +56,7 @@ export interface NapRowItem {
 export function formatDynamicDates(datesStr: string): string {
   if (!datesStr) return '-';
   const currYr = new Date().getFullYear();
-  
+
   if (datesStr.trim().toLowerCase() === 'disposed') {
     return currYr === 2026 ? '2026' : `2026 - ${currYr}`;
   }
@@ -202,7 +203,7 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal', prepN
   }
 
   const sortedPrds = Array.from(prdsGroups.keys()).sort();
-  
+
   let tbodyHtml = '';
   let rowCount = 0;
 
@@ -225,7 +226,7 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal', prepN
       const numA = parseInt(a.itemNo || '0', 10) || 0;
       const numB = parseInt(b.itemNo || '0', 10) || 0;
       if (numA !== numB) return numA - numB;
-      
+
       const itemA = (a.itemNo || '').localeCompare(b.itemNo || '');
       if (itemA !== 0) return itemA;
       return a.groupKey.localeCompare(b.groupKey);
@@ -341,10 +342,10 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal', prepN
           <div class="signature-block">
             <div class="signature-label">Checked and reviewed by:</div>
             <div class="signature-line" style="text-align: center; font-weight: bold; font-size: 11pt; padding-top: 15px; border-bottom: 1px solid black;">
-              Brian Mike G. Del Mundo
+              &nbsp;
             </div>
             <div style="text-align: center; font-size: 10pt; margin-top: 2px;">
-              Administrative Aide I
+              &nbsp;
             </div>
           </div>
         </div>
@@ -355,7 +356,7 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal', prepN
 
 export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number, retentionStage?: string) {
   const stage = (retentionStage || '').trim().toLowerCase();
-  if (stage === 'storage' || stage === 'disposed') return null;
+  if (stage === 'disposed' || stage === 'storage') return null;
   if (!datesStr || !activeDeskYrs || activeDeskYrs <= 0) return null;
 
   const currentYear = new Date().getFullYear();
@@ -379,11 +380,11 @@ export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number
   return null;
 }
 
-export function getOngoingDisposalInfo(datesStr: any, totalRetention: any, retentionStage?: any, frequencyOfUse?: any) {
+export function getOngoingDisposalInfo(datesStr: any, totalRetention: any, retentionStage?: any, frequencyOfUse?: any, storageYrs?: any) {
   const stage = String(retentionStage || '').trim().toLowerCase();
-  const freq = String(frequencyOfUse || '').trim().toLowerCase();
-  const isStorage = stage === 'storage' || freq === 'inactive' || freq.includes('inactive');
-  if (!isStorage) return null;
+  if (stage === 'disposed') return null;
+
+  const safeStorageYrs = Number(storageYrs) || 0;
 
   const safeDatesStr = String(datesStr || '');
   const safeTotalRetention = Number(totalRetention) || 0;
@@ -450,7 +451,243 @@ export function cleanSeriesTitle(title?: string): string {
   return title.replace(/\s*\(\s*\d{4}(?:\s*-\s*\d{4})?\s*\)$/i, '').trim();
 }
 
+const generateNapForm3PreviewHtml = (records: any[], telephone: string, volume: string) => {
+  let tbodyHtml = '';
+  records.forEach(r => {
+    let itemNoStyle = 'text-align: center; border: 1px solid black; padding: 5px;';
+    let seriesTitleStyle = 'border: 1px solid black; padding: 5px;';
+
+    if (r.isHeader) {
+      itemNoStyle += ' font-weight: bold;';
+    } else if (r.isCategory) {
+      itemNoStyle += ' font-weight: bold;';
+      seriesTitleStyle += ' font-weight: bold; padding-left: 10px;';
+    } else if (r.isItem && r.seriesTitle.trim().startsWith('-')) {
+      seriesTitleStyle += ' padding-left: 20px;';
+    }
+
+    const safeTitle = (r.seriesTitle || '').replace(/      /g, '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+    const displayVal = r.isHeader ? r.prds : r.itemNo;
+    const itemNoDisplay = r.isHeader && displayVal ? displayVal.replace(' ', '<br/>') : `<strong>${displayVal || ''}</strong>`;
+
+    tbodyHtml += `
+      <tr>
+        <td style="${itemNoStyle}">${itemNoDisplay || ''}</td>
+        <td style="border: 1px solid black; padding: 5px;"><strong>${safeTitle}</strong></td>
+        <td style="text-align: center; border: 1px solid black; padding: 5px;"><strong>${r.period || ''}</strong></td>
+        <td style="text-align: center; border: 1px solid black; padding: 5px;"><strong>${r.retention || ''}</strong></td>
+      </tr>
+    `;
+  });
+
+  return `
+    <html>
+      <head>
+        <title>NAP Form 3 Preview</title>
+        <style>
+          @page { size: 8.5in 13in; margin: 0.5in; }
+          body { font-family: "Arial", sans-serif; font-size: 10pt; padding: 0; margin: 0; background: white; }
+          table { width: 100%; border-collapse: collapse; }
+          .header-table td { border: 1px solid black; padding: 5px; vertical-align: top; }
+          .header-title { font-family: "Times New Roman", serif; font-weight: bold; text-align: center; font-size: 11pt; margin-bottom: 5px; }
+          .header-sub { font-family: "Times New Roman", serif; text-align: center; font-style: italic; font-size: 10pt; margin-bottom: 15px; }
+          .records-table th { border: 1px solid black; padding: 5px; text-align: center; font-weight: bold; font-size: 9pt; }
+        </style>
+      </head>
+      <body>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 9pt;">
+          <div>Form No. 3<br/>Revised 2012</div>
+          <div>Accomplish in 3 copies</div>
+        </div>
+        
+        <table class="header-table">
+          <tr>
+            <td style="width: 50%; text-align: center;">
+              <div class="header-title">NATIONAL ARCHIVES OF THE PHILIPPINES</div>
+              <div class="header-sub">Pambansang Sinupan ng Pilipinas</div>
+              <div class="header-title" style="margin-top: 20px;">REQUEST FOR AUTHORITY TO DISPOSE<br/>OF RECORDS</div>
+            </td>
+            <td style="width: 50%;">
+              <div style="font-size: 10pt;"><strong>AGENCY NAME:</strong></div>
+              <div style="font-weight: bold; font-size: 11pt;">PROVINCIAL GOVERNMENT OF PANGASINAN</div>
+              <div style="font-size: 10pt;">Human, Resource Management and Development Office</div>
+              <div style="border-top: 1px solid black; margin-top: 5px; padding-top: 5px; font-size: 10pt;"><strong>ADDRESS:</strong></div>
+              <div style="text-align: center; font-size: 10pt;">1st Floor, Palaris Building, Capitol Compound,<br/>Lingayen, Pangasinan</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>DATE:</strong><br/>
+              <span style="font-size: 11pt;">&nbsp;</span>
+            </td>
+            <td>
+              <strong>TELEPHONE NUMBER:</strong><br/>
+              ${telephone || ''}
+            </td>
+          </tr>
+        </table>
+        
+        <table class="records-table" style="margin-top: -1px;">
+          <thead>
+            <tr>
+              <th style="width: 15%;">GRDS/RDS<br/>ITEM NO.</th>
+              <th style="width: 45%;">RECORDS SERIES TITLE AND DESCRIPTION</th>
+              <th style="width: 15%;">PERIOD<br/>COVERED</th>
+              <th style="width: 25%;">RETENTION PERIOD<br/>AND PROVISION/S<br/>COMPLIED (if any)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tbodyHtml}
+            <tr>
+              <td style="border: 1px solid black; padding: 5px;"></td>
+              <td style="text-align: center; border: 1px solid black; padding: 5px;">***Nothing Follows***</td>
+              <td style="border: 1px solid black; padding: 5px;"></td>
+              <td style="border: 1px solid black; padding: 5px;"></td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <table class="header-table" style="margin-top: -1px;">
+          <tr>
+            <td style="width: 60%;"><strong>LOCATION OF RECORDS:</strong><br/><br/><strong>HRMDO Records Room</strong></td>
+            <td style="width: 40%;"><strong>VOLUME IN CUBIC METER:</strong><br/><br/><div style="text-align: center; font-weight: bold;">${volume || ''}</div></td>
+          </tr>
+          <tr>
+            <td style="height: 60px;"><strong>PREPARED BY:</strong> (Name & Signature)<br/><br/><br/><div style="text-align: center; font-weight: bold;">MERLYN Y. ADAN</div></td>
+            <td><strong>POSITION:</strong><br/><br/><br/><strong>Supervising Administrative Officer</strong></td>
+          </tr>
+          <tr>
+            <td colspan="2" style="height: 100px;">
+              <div style="font-size: 9pt;"><strong>CERTIFIED AND APPROVED BY:</strong></div>
+              <div style="text-align: center; font-size: 9pt; margin-top: 5px;">This is to certify that the above mentioned records are no longer needed and<br/>not involved nor connected in any administrative or judicial cases.</div>
+              <div style="text-align: right; margin-top: 40px; padding-right: 50px;">
+                <div style="font-weight: bold; font-size: 11pt;">JANETTE C. ASIS</div>
+                <div style="font-weight: bold;">Prov'l. Gov't. Department Head-HRMD Officer</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+  `;
+};
+
 function InventoryAppraisal() {
+  const processDisposalRecordsForExport = (selectedLogs: any[], allRecords: any[]) => {
+    const enriched = selectedLogs.map(l => {
+      const matchedRecord = allRecords.find((r: any) => r.id === l.recordId || r.id === l.id);
+      const prdsGrds = (l.prdsGrds || matchedRecord?.prdsGrds || '').trim();
+      const itemNo = (l.itemNo || matchedRecord?.itemNo || '').trim();
+      const category = (matchedRecord?.subCategory || matchedRecord?.classificationCategory || '').trim();
+      let title = (l.seriesTitle || matchedRecord?.seriesTitle || '').trim();
+
+      if (category) {
+        title = title.replace(/^-\s*/, '');
+        title = `- ${title}`;
+      }
+      const period = (l.inclusiveDates || l.disposedYears || '').trim();
+      const ret = parseInt(l.totalRetention || matchedRecord?.totalRetention || '0');
+      const retention = ret > 1 ? `${ret} years` : ret === 1 ? `1 year` : '';
+
+      return { prdsGrds, itemNo, category, title, period, retention };
+    });
+
+    const mergedItems = new Map<string, any>();
+    enriched.forEach(item => {
+      const key = `${item.prdsGrds}|${item.itemNo}|${item.category}|${item.title}|${item.retention}`;
+      if (!mergedItems.has(key)) {
+        mergedItems.set(key, { ...item, periods: new Set<string>(item.period ? [item.period] : []) });
+      } else {
+        if (item.period) mergedItems.get(key).periods.add(item.period);
+      }
+    });
+
+    const finalEnriched = Array.from(mergedItems.values()).map(item => ({
+      ...item,
+      period: Array.from(item.periods).sort().join(', ')
+    }));
+
+    const prdsGroups = new Map<string, any[]>();
+    finalEnriched.forEach(r => {
+      if (!prdsGroups.has(r.prdsGrds)) prdsGroups.set(r.prdsGrds, []);
+      prdsGroups.get(r.prdsGrds)!.push(r);
+    });
+
+    const sortedPrds = Array.from(prdsGroups.keys()).sort();
+    const exportRows: any[] = [];
+
+    for (const prds of sortedPrds) {
+      if (prds) {
+        exportRows.push({
+          prds: prds,
+          itemNo: '',
+          seriesTitle: '',
+          period: '',
+          retention: '',
+          isHeader: true
+        });
+      }
+
+      const prdsRecords = prdsGroups.get(prds)!;
+      prdsRecords.sort((a, b) => {
+        const numA = parseInt(a.itemNo || '0', 10) || 0;
+        const numB = parseInt(b.itemNo || '0', 10) || 0;
+        if (numA !== numB) return numA - numB;
+        const itemA = (a.itemNo || '').localeCompare(b.itemNo || '');
+        if (itemA !== 0) return itemA;
+        return a.category.localeCompare(b.category);
+      });
+
+      const itemGroups = new Map<string, any[]>();
+      for (const r of prdsRecords) {
+        const itemKey = `${r.itemNo}::${r.category}`;
+        if (!itemGroups.has(itemKey)) itemGroups.set(itemKey, []);
+        itemGroups.get(itemKey)!.push(r);
+      }
+
+      for (const [itemKey, items] of itemGroups.entries()) {
+        const firstItem = items[0];
+        const itemNo = firstItem.itemNo;
+        const category = firstItem.category;
+
+        if (category) {
+          exportRows.push({
+            prds: '',
+            itemNo: itemNo,
+            seriesTitle: category,
+            period: '',
+            retention: '',
+            isCategory: true
+          });
+
+          for (const item of items) {
+            exportRows.push({
+              prds: '',
+              itemNo: '',
+              seriesTitle: item.title,
+              period: item.period,
+              retention: item.retention,
+              isItem: true
+            });
+          }
+        } else {
+          for (const item of items) {
+            exportRows.push({
+              prds: '',
+              itemNo: item.itemNo,
+              seriesTitle: item.title.replace(/^-\s*/, ''),
+              period: item.period,
+              retention: item.retention,
+              isItem: true
+            });
+          }
+        }
+      }
+    }
+
+    return exportRows;
+  };
+
   const [records, setRecords] = useState<InventoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -572,6 +809,9 @@ function InventoryAppraisal() {
   // ── Preview Modal state ──────────────────────────────────────────────
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewType, setPreviewType] = useState<'Storage' | 'Disposal'>('Storage');
+  const [showDisposalExportPreview, setShowDisposalExportPreview] = useState(false);
+  const [disposalVolumeInput, setDisposalVolumeInput] = useState('');
+  const [disposalTelephoneInput, setDisposalTelephoneInput] = useState('(075) 656-3796');
 
   const handlePrintIframe = () => {
     const iframe = document.getElementById('preview-iframe') as HTMLIFrameElement;
@@ -727,6 +967,7 @@ function InventoryAppraisal() {
   const [storageDivisionFilter, setStorageDivisionFilter] = useState('ALL');
   const [storageCategoryFilter, setStorageCategoryFilter] = useState('ALL');
 
+
   const storageLogs = useMemo(() => {
     return disposalLogs.filter(l => String(l.disposedYears).includes('Storage'));
   }, [disposalLogs]);
@@ -769,8 +1010,11 @@ function InventoryAppraisal() {
 
     // Division breakdown
     const divCounts: Record<string, number> = {};
+    const divsToInit = hasFullDivisionAccess ? systemDivisions : allowedDivisions;
+    divsToInit.forEach(d => { if (d !== 'ALL') divCounts[d] = 0; });
     scopeFilteredRecords.forEach(r => {
       const d = r.division || 'General';
+      if (d !== 'General' && divCounts[d] === undefined) divCounts[d] = 0;
       divCounts[d] = (divCounts[d] || 0) + 1;
     });
     const divisionStats = Object.keys(divCounts).map(d => ({
@@ -780,15 +1024,54 @@ function InventoryAppraisal() {
     })).sort((a, b) => b.count - a.count);
 
     return { total, permanent, mediumCounts, frequencyCounts, utilityCounts, divisionStats };
-  }, [scopeFilteredRecords]);
+  }, [scopeFilteredRecords, systemDivisions, hasFullDivisionAccess, allowedDivisions]);
+
+  const disposalAnalytics = useMemo(() => {
+    // Only count completed disposals
+    const completedDisposals = disposalOnlyLogs.filter(log => log.status === 'Completed');
+    const totalDisposed = completedDisposals.length;
+    const divCounts: Record<string, number> = {};
+    const divsToInit = hasFullDivisionAccess ? systemDivisions : allowedDivisions;
+    divsToInit.forEach(d => { if (d !== 'ALL') divCounts[d] = 0; });
+    
+    completedDisposals.forEach(log => {
+      const d = log.division || 'General';
+      if (d !== 'General' && divCounts[d] === undefined) divCounts[d] = 0;
+      divCounts[d] = (divCounts[d] || 0) + 1;
+    });
+    
+    const divisionStats = Object.keys(divCounts).map(d => ({
+      name: d,
+      count: divCounts[d],
+      percentage: totalDisposed > 0 ? Math.round((divCounts[d] / totalDisposed) * 100) : 0,
+    })).sort((a, b) => b.count - a.count);
+
+    return { total: totalDisposed, divisionStats };
+  }, [disposalOnlyLogs, systemDivisions]);
 
   const activeDeskEligibleRecords = useMemo(() => {
-    return scopeFilteredRecords.filter(r => getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage) !== null);
-  }, [scopeFilteredRecords]);
+    return scopeFilteredRecords.filter(r => {
+      const activeDeskInfoRaw = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
+      if (!activeDeskInfoRaw) return false;
+      const covered = extractCoveredYears(r.inclusiveDates);
+      const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(r.activeDeskYrs));
+      const hasUnstored = eligibleYrs.some(yr => {
+        return !storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
+      });
+      return hasUnstored;
+    });
+  }, [scopeFilteredRecords, storageLogs]);
 
   const disposalEligibleRecords = useMemo(() => {
-    return scopeFilteredRecords.filter(r => getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse) !== null);
-  }, [scopeFilteredRecords]);
+    return scopeFilteredRecords.filter(r => {
+      const disposalInfoRaw = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs));
+      if (!disposalInfoRaw) return false;
+      const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
+        return !disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+      });
+      return hasUndisposed;
+    });
+  }, [scopeFilteredRecords, disposalOnlyLogs]);
 
   useEffect(() => {
     if (records.length > 0) {
@@ -1122,13 +1405,23 @@ function InventoryAppraisal() {
     if (!deletingRecord) return;
     setIsDeleting(true);
     try {
-      await api.inventory.delete(deletingRecord.id);
-      showToast('Record series entry deleted successfully.', 'success');
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || 'system',
+        requestedByName: currentUser ? `${currentUser.lastName}, ${currentUser.firstName}` : 'System User',
+        action: 'delete_inventory_record',
+        entityType: 'inventory',
+        entityId: deletingRecord.id,
+        entityName: deletingRecord.seriesTitle,
+        payload: {
+          id: deletingRecord.id,
+          seriesTitle: deletingRecord.seriesTitle,
+        }
+      });
+      showToast('Deletion request submitted successfully! Awaiting Admin approval in Requests & Approvals tab.', 'success');
       setDeletingRecord(null);
       setViewingRecord(null);
-      fetchRecords();
     } catch (err: any) {
-      showToast(err.message || 'Failed to delete record.', 'error');
+      showToast(err.message || 'Failed to submit deletion request.', 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -1138,13 +1431,23 @@ function InventoryAppraisal() {
     if (selectedIds.length === 0) return;
     setIsDeleting(true);
     try {
-      await api.inventory.bulkDelete(selectedIds);
-      showToast(`Successfully deleted ${selectedIds.length} record series entries.`, 'success');
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || 'system',
+        requestedByName: currentUser ? `${currentUser.lastName}, ${currentUser.firstName}` : 'System User',
+        action: 'bulk_delete_inventory_records',
+        entityType: 'inventory',
+        entityId: 'bulk',
+        entityName: 'Multiple Inventory Records',
+        payload: {
+          ids: selectedIds,
+          count: selectedIds.length
+        }
+      });
+      showToast(`Successfully submitted bulk deletion request for ${selectedIds.length} records.`, 'success');
       setShowBulkDeleteModal(false);
       setSelectedIds([]);
-      fetchRecords();
     } catch (err: any) {
-      showToast(err.message || 'Failed to delete selected records.', 'error');
+      showToast(err.message || 'Failed to submit bulk deletion request.', 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -1220,12 +1523,14 @@ function InventoryAppraisal() {
           openDisposalRequestModal([recordToRequest]);
         }
         showToast(`Record updated. Changing stage to ${targetStage} requires Admin confirmation. Request modal opened!`, 'info');
+        setIsModalOpen(false);
         fetchRecords();
         return;
       }
 
       await api.inventory.update(editingRecord.id, data);
       showToast('Record series updated successfully!', 'success');
+      setIsModalOpen(false);
     } else {
       if (targetStage === 'Storage' || targetStage === 'Disposed') {
         const newRecord = await api.inventory.create({ ...data, retentionStage: 'Active' });
@@ -1235,12 +1540,14 @@ function InventoryAppraisal() {
         } else {
           openDisposalRequestModal([newRecord]);
         }
+        setIsModalOpen(false);
         fetchRecords();
         return;
       }
 
       await api.inventory.create(data);
       showToast('New record series entry created successfully!', 'success');
+      setIsModalOpen(false);
     }
     fetchRecords();
   };
@@ -2146,11 +2453,35 @@ function InventoryAppraisal() {
             </div>
           </div>
         </Card>
+
+        {!hasFullDivisionAccess && (
+          <Card
+            hoverable
+            className="inventory-kpi-card inventory-kpi-card--emerald"
+            onClick={() => {
+              fetchDisposalHistory();
+              setDisposalModalTab('history');
+              setShowDisposalManagementModal(true);
+            }}
+            style={{ cursor: 'pointer' }}
+            title="Click to open your disposal history"
+          >
+            <div className="inventory-kpi-card__inner">
+              <div className="inventory-kpi-card__icon-wrapper inventory-kpi-card__icon-wrapper--emerald">
+                <MdDeleteSweep />
+              </div>
+              <div className="inventory-kpi-card__info">
+                <span className="inventory-kpi-card__label">Total Disposed Items</span>
+                <span className="inventory-kpi-card__value inventory-kpi-card__value--emerald">{disposalAnalytics.total}</span>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Analytics Dashboard Grid */}
       <div className="inventory-dashboard-grid">
-        {/* Division Breakdown (Only shown for users with full division access) */}
+        {/* Division Breakdown */}
         {hasFullDivisionAccess && (
           <Card className="dashboard-widget">
             <div>
@@ -2159,7 +2490,7 @@ function InventoryAppraisal() {
                 {analytics.divisionStats.length === 0 ? (
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>No records available</div>
                 ) : (
-                  analytics.divisionStats.slice(0, 4).map((stat, idx) => (
+                  analytics.divisionStats.map((stat, idx) => (
                     <div key={stat.name} className="dashboard-stat-item">
                       <div className="dashboard-stat-header">
                         <span>{stat.name}</span>
@@ -2169,6 +2500,34 @@ function InventoryAppraisal() {
                         <div
                           className={`dashboard-progress-fill ${idx % 3 === 0 ? 'dashboard-progress-fill--blue' : idx % 3 === 1 ? 'dashboard-progress-fill--indigo' : 'dashboard-progress-fill--purple'}`}
                           style={{ width: `${stat.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {hasFullDivisionAccess && (
+          <Card className="dashboard-widget">
+            <div>
+              <h3 className="dashboard-widget__title">Disposed Series by Division</h3>
+              <div className="dashboard-stat-list">
+                {disposalAnalytics.divisionStats.length === 0 ? (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>No disposed items available</div>
+                ) : (
+                  disposalAnalytics.divisionStats.map((stat, idx) => (
+                    <div key={stat.name} className="dashboard-stat-item">
+                      <div className="dashboard-stat-header">
+                        <span>{stat.name}</span>
+                        <span className="dashboard-stat-badge" style={{ background: 'rgba(220, 38, 38, 0.1)', color: '#dc2626' }}>{stat.count} ({stat.percentage}%)</span>
+                      </div>
+                      <div className="dashboard-progress-track">
+                        <div
+                          className={`dashboard-progress-fill`}
+                          style={{ width: `${stat.percentage}%`, background: idx % 3 === 0 ? '#dc2626' : idx % 3 === 1 ? '#ea580c' : '#d97706' }}
                         />
                       </div>
                     </div>
@@ -2568,8 +2927,25 @@ function InventoryAppraisal() {
                         {subGrp.items.map((r, rIdx) => {
                           const isPermanent = r.appraisalCategory === 'Permanent';
                           const isSelected = selectedIds.includes(r.id);
-                          const activeDeskInfo = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
-                          const disposalInfo = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse);
+                          const activeDeskInfoRaw = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
+                          let activeDeskInfo = null;
+                          if (activeDeskInfoRaw) {
+                            const covered = extractCoveredYears(r.inclusiveDates);
+                            const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(r.activeDeskYrs));
+                            const hasUnstored = eligibleYrs.some(yr => {
+                              return !storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
+                            });
+                            if (hasUnstored) activeDeskInfo = activeDeskInfoRaw;
+                          }
+
+                          const disposalInfoRaw = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs));
+                          let disposalInfo = null;
+                          if (disposalInfoRaw) {
+                            const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
+                              return !disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+                            });
+                            if (hasUndisposed) disposalInfo = disposalInfoRaw;
+                          }
 
                           return (
                             <tr
@@ -2604,58 +2980,58 @@ function InventoryAppraisal() {
                               </td>
                               <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                                 <div>{formatDynamicDates(r.inclusiveDates)}</div>
-                                {activeDeskInfo && (
-                                  <button
-                                    type="button"
-                                    style={{
-                                      marginTop: '0.25rem',
-                                      fontSize: '0.68rem',
-                                      padding: '0.15rem 0.45rem',
-                                      borderRadius: '4px',
-                                      border: '1px solid #d97706',
-                                      background: 'rgba(245, 158, 11, 0.12)',
-                                      color: '#b45309',
-                                      fontWeight: 700,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '0.2rem',
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSingleStorageRecord(r);
-                                    }}
-                                    title={`Active desk period of ${r.activeDeskYrs} years reached! Click to evaluate moving to storage.`}
-                                  >
-                                    <MdHourglassTop style={{ fontSize: '0.75rem' }} /> Evaluate Storage
-                                  </button>
-                                )}
-                                {disposalInfo && (
-                                  <button
-                                    type="button"
-                                    style={{
-                                      marginTop: '0.25rem',
-                                      fontSize: '0.68rem',
-                                      padding: '0.15rem 0.45rem',
-                                      borderRadius: '4px',
-                                      border: '1px solid #dc2626',
-                                      background: 'rgba(239, 68, 68, 0.12)',
-                                      color: '#dc2626',
-                                      fontWeight: 700,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '0.2rem',
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEvaluatingRecord({ record: r, info: disposalInfo });
-                                    }}
-                                    title={`Retention period of ${disposalInfo.totalRetention} years reached in Storage! Click to evaluate disposal.`}
-                                  >
-                                    <MdWarning style={{ fontSize: '0.75rem' }} /> Evaluate & Dispose
-                                  </button>
-                                )}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', justifyContent: 'center', marginTop: '0.35rem' }}>
+                                  {activeDeskInfo && (
+                                    <button
+                                      type="button"
+                                      style={{
+                                        fontSize: '0.68rem',
+                                        padding: '0.15rem 0.45rem',
+                                        borderRadius: '4px',
+                                        border: '1px solid #d97706',
+                                        background: 'rgba(245, 158, 11, 0.12)',
+                                        color: '#b45309',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSingleStorageRecord(r);
+                                      }}
+                                      title={`Active desk period of ${r.activeDeskYrs} years reached! Click to evaluate moving to storage.`}
+                                    >
+                                      <MdHourglassTop style={{ fontSize: '0.75rem' }} /> Evaluate Storage
+                                    </button>
+                                  )}
+                                  {disposalInfo && (
+                                    <button
+                                      type="button"
+                                      style={{
+                                        fontSize: '0.68rem',
+                                        padding: '0.15rem 0.45rem',
+                                        borderRadius: '4px',
+                                        border: '1px solid #dc2626',
+                                        background: 'rgba(239, 68, 68, 0.12)',
+                                        color: '#dc2626',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEvaluatingRecord({ record: r, info: disposalInfo });
+                                      }}
+                                      title={`Retention period of ${disposalInfo.totalRetention} years reached! Click to evaluate disposal.`}
+                                    >
+                                      <MdWarning style={{ fontSize: '0.75rem' }} /> Evaluate & Dispose
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                               <td style={{ textAlign: 'center' }}>{r.volume}</td>
                               <td style={{ textAlign: 'center' }}>
@@ -2776,43 +3152,62 @@ function InventoryAppraisal() {
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                     Click a year below to mark it as disposed (e.g. disposing 2024 from <code>2023 - 2026</code> saves as <code>2023, 2025 - 2026</code>):
                   </span>
+
+                  {Number(evaluatingRecord.record.storageYrs) > 0 && eligibleDisposalYears.some(yr => !storageLogs.some(log => (log.recordId === evaluatingRecord.record.id || log.id === evaluatingRecord.record.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()))) && (
+                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.4)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.75rem', color: '#b45309', fontWeight: 600, display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                      <MdWarning style={{ fontSize: '1.2rem', flexShrink: 0 }} />
+                      <div>
+                        <strong>Warning:</strong> Some eligible years below (highlighted in orange) have not been formally confirmed in Storage. Disposing them now will skip their required {evaluatingRecord.record.storageYrs}-year storage phase.
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {eligibleDisposalYears.map((yr) => {
                       const isDisposed = customDisposedYears.includes(yr);
-                      const isDeclined = disposalOnlyLogs.some(log => 
-                        log.recordId === evaluatingRecord.record.id && 
-                        log.status === 'Decline' && 
+                      const isDeclined = disposalOnlyLogs.some(log =>
+                        (log.recordId === evaluatingRecord.record.id || log.id === evaluatingRecord.record.id) &&
+                        log.status === 'Decline' &&
                         String(log.disposedYears || '').includes(yr.toString())
                       );
-                      
+                      const isStored = storageLogs.some(log =>
+                        (log.recordId === evaluatingRecord.record.id || log.id === evaluatingRecord.record.id) &&
+                        String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString())
+                      );
+
                       return (
-                        <button
-                          key={`yr-pill-${yr}`}
-                          type="button"
-                          style={{
-                            fontSize: '0.85rem',
-                            padding: '0.45rem 0.85rem',
-                            borderRadius: '6px',
-                            border: isDisposed ? '1px solid #ef4444' : (isDeclined ? '1px dashed #f59e0b' : '1px solid var(--border-color)'),
-                            background: isDisposed ? 'rgba(239, 68, 68, 0.12)' : (isDeclined ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-primary)'),
-                            color: isDisposed ? '#dc2626' : (isDeclined ? '#d97706' : 'var(--text-primary)'),
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            textDecoration: isDisposed ? 'line-through' : 'none',
-                            boxShadow: isDisposed ? '0 2px 4px rgba(239, 68, 68, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
-                            transition: 'all 0.2s ease',
-                          }}
-                          onClick={() => {
-                            setCustomDisposedYears((prev) =>
-                              prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
-                            );
-                          }}
-                        >
-                          {isDisposed ? '🗑️ Disposed ' : (isDeclined ? '⚠️ Declined ' : '📅 ')} {yr} ({currentYear - yr} yrs)
-                        </button>
+                        <div key={`yr-pill-container-${yr}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
+                          <button
+                            type="button"
+                            title={isStored ? "Confirmed in Storage" : "Warning: Not found in Storage History"}
+                            style={{
+                              fontSize: '0.85rem',
+                              padding: '0.45rem 0.85rem',
+                              borderRadius: '6px',
+                              border: isDisposed ? '1px solid #ef4444' : (isDeclined ? '1px dashed #f59e0b' : (isStored ? '1px solid #10b981' : '1px solid #f59e0b')),
+                              background: isDisposed ? 'rgba(239, 68, 68, 0.12)' : (isDeclined ? 'rgba(245, 158, 11, 0.1)' : (isStored ? 'rgba(16, 185, 129, 0.05)' : 'rgba(245, 158, 11, 0.05)')),
+                              color: isDisposed ? '#dc2626' : (isDeclined ? '#d97706' : (isStored ? '#059669' : '#d97706')),
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              textDecoration: isDisposed ? 'line-through' : 'none',
+                              boxShadow: isDisposed ? '0 2px 4px rgba(239, 68, 68, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onClick={() => {
+                              setCustomDisposedYears((prev) =>
+                                prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
+                              );
+                            }}
+                          >
+                            {isDisposed ? '🗑️ Disposed ' : (isDeclined ? '⛔ Declined ' : (isStored ? '📦 ' : '⚠️ '))} {yr} ({currentYear - yr} yrs)
+                          </button>
+                          <span style={{ fontSize: '0.65rem', color: isStored ? '#059669' : '#d97706', fontWeight: 700 }}>
+                            {isStored ? 'In Storage' : 'Not in Storage'}
+                          </span>
+                        </div>
                       );
                     })}
                   </div>
@@ -2876,7 +3271,7 @@ function InventoryAppraisal() {
                     setCustomDisposedYears([]);
                   }}
                 >
-                  {isCustomSelected 
+                  {isCustomSelected
                     ? `Dispose Selected Year(s) & Save as ${computedCustomDates}`
                     : `Dispose & Advance to ${evaluatingRecord.info.newDatesStr}`}
                 </Button>
@@ -3334,9 +3729,21 @@ function InventoryAppraisal() {
                             >
                               {req.status === 'approved' ? '✓ Approved' : req.status === 'rejected' ? '✕ Rejected' : '⏳ Pending Confirmation'}
                             </span>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                              Requested by {req.requesterName}
-                            </span>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <span>Requested by {req.requesterName}</span>
+                              {req.status === 'approved' && req.approvedByName && (
+                                <>
+                                  <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>•</span>
+                                  <span>Approved by {req.approvedByName}</span>
+                                </>
+                              )}
+                              {req.status === 'rejected' && req.approvedByName && (
+                                <>
+                                  <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>•</span>
+                                  <span>Rejected by {req.approvedByName}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
 
                           <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
@@ -4137,21 +4544,32 @@ function InventoryAppraisal() {
                       {historyStatusFilter === 'Pending' && historySelectedIds.length > 0 && (
                         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                           <Button
-                            variant="success"
+                            variant="secondary"
                             size="sm"
-                            loading={isUpdatingHistoryStatus}
-                            onClick={() => handleUpdateHistoryStatus('Completed')}
+                            onClick={() => setShowDisposalExportPreview(true)}
                           >
-                            Mark as Completed
+                            <MdPrint style={{ fontSize: '1rem', marginRight: '0.25rem' }} /> View & Print NAP Form 3
                           </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            loading={isUpdatingHistoryStatus}
-                            onClick={() => handleUpdateHistoryStatus('Decline')}
-                          >
-                            Mark as Declined
-                          </Button>
+                          {hasFullDivisionAccess && (
+                            <>
+                              <Button
+                                variant="success"
+                                size="sm"
+                                loading={isUpdatingHistoryStatus}
+                                onClick={() => handleUpdateHistoryStatus('Completed')}
+                              >
+                                Mark as Completed
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                loading={isUpdatingHistoryStatus}
+                                onClick={() => handleUpdateHistoryStatus('Decline')}
+                              >
+                                Mark as Declined
+                              </Button>
+                            </>
+                          )}
                         </div>
                       )}
                       <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '380px' }}>
@@ -4181,7 +4599,7 @@ function InventoryAppraisal() {
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Period Covered</th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Total Retention</th>
                             </tr>
-                        </thead>
+                          </thead>
                           <tbody>
                             {filteredLogs.map((log) => (
                               <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -4201,48 +4619,48 @@ function InventoryAppraisal() {
                                   )}
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
-                                {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>
-                                {log.prdsGrds && log.itemNo ? (
-                                  <div>
-                                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{log.prdsGrds}</div>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{log.itemNo}</div>
-                                  </div>
-                                ) : (
-                                  log.prdsGrds || log.itemNo || '-'
-                                )}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem' }}>
-                                <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(log.seriesTitle)}</div>
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                                {log.division || 'General'}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
-                                {log.classificationCategory || '-'}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
-                                {log.inclusiveDates || log.disposedYears || '-'}
-                              </td>
-                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
-                                {(() => {
-                                  const baseYear = parseInt(log.inclusiveDates || log.disposedYears || '0');
-                                  const matchedRecord = records.find((r: any) => r.id === log.recordId || r.id === log.id);
-                                  const ret = parseInt(log.totalRetention || matchedRecord?.totalRetention || '0');
-                                  const expiryYear = baseYear && ret ? baseYear + ret : null;
-                                  return expiryYear ? `${expiryYear} (${ret} yrs)` : ret ? `${ret} yrs` : '-';
-                                })()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                  {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>
+                                  {log.prdsGrds && log.itemNo ? (
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{log.prdsGrds}</div>
+                                      <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{log.itemNo}</div>
+                                    </div>
+                                  ) : (
+                                    log.prdsGrds || log.itemNo || '-'
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{cleanSeriesTitle(log.seriesTitle)}</div>
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                                  {log.division || 'General'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                  {log.classificationCategory || '-'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
+                                  {log.inclusiveDates || log.disposedYears || '-'}
+                                </td>
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                                  {(() => {
+                                    const baseYear = parseInt(log.inclusiveDates || log.disposedYears || '0');
+                                    const matchedRecord = records.find((r: any) => r.id === log.recordId || r.id === log.id);
+                                    const ret = parseInt(log.totalRetention || matchedRecord?.totalRetention || '0');
+                                    const expiryYear = baseYear && ret ? baseYear + ret : null;
+                                    return expiryYear ? `${expiryYear} (${ret} yrs)` : ret ? `${ret} yrs` : '-';
+                                  })()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
-            </div>
+                  );
+                })()}
+              </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
@@ -4688,33 +5106,43 @@ function InventoryAppraisal() {
                   </span>
                   <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {eligibleStorageYears.map((yr) => {
+                      const isStored = storageLogs.some(log =>
+                        (log.recordId === singleStorageRecord.id || log.id === singleStorageRecord.id) &&
+                        String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString())
+                      );
                       const isStorageSelected = customStorageYears.includes(yr);
+
                       return (
                         <button
                           key={`yr-pill-storage-${yr}`}
                           type="button"
+                          disabled={isStored}
+                          title={isStored ? "Already Confirmed in Storage" : ""}
                           style={{
                             fontSize: '0.85rem',
                             padding: '0.45rem 0.85rem',
                             borderRadius: '6px',
-                            border: isStorageSelected ? '1px solid #d97706' : '1px solid var(--border-color)',
-                            background: isStorageSelected ? 'rgba(245, 158, 11, 0.12)' : 'var(--bg-primary)',
-                            color: isStorageSelected ? '#b45309' : 'var(--text-primary)',
+                            border: isStored ? '1px solid #10b981' : (isStorageSelected ? '1px solid #d97706' : '1px solid var(--border-color)'),
+                            background: isStored ? 'rgba(16, 185, 129, 0.05)' : (isStorageSelected ? 'rgba(245, 158, 11, 0.12)' : 'var(--bg-primary)'),
+                            color: isStored ? '#059669' : (isStorageSelected ? '#b45309' : 'var(--text-primary)'),
                             fontWeight: 700,
-                            cursor: 'pointer',
+                            cursor: isStored ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '0.4rem',
-                            boxShadow: isStorageSelected ? '0 2px 4px rgba(245, 158, 11, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            boxShadow: isStorageSelected && !isStored ? '0 2px 4px rgba(245, 158, 11, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
                             transition: 'all 0.2s ease',
+                            opacity: isStored ? 0.8 : 1,
                           }}
                           onClick={() => {
-                            setCustomStorageYears((prev) =>
-                              prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
-                            );
+                            if (!isStored) {
+                              setCustomStorageYears((prev) =>
+                                prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
+                              );
+                            }
                           }}
                         >
-                          {isStorageSelected ? '📦 Storage ' : '📅 '} {yr} ({currentYear - yr} yrs)
+                          {isStored ? '✅ ' : (isStorageSelected ? '📦 Storage ' : '📅 ')} {yr} ({currentYear - yr} yrs)
                         </button>
                       );
                     })}
@@ -4766,6 +5194,263 @@ function InventoryAppraisal() {
         );
       })()}
 
+      {/* Evaluate Disposal Modal */}
+      {showEvaluateModal && (
+        <Modal
+          isOpen={showEvaluateModal}
+          onClose={() => setShowEvaluateModal(false)}
+          title={`Evaluate Disposal Records (${disposalEligibleRecords.length})`}
+          size="xl"
+        >
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              <strong>Total Retention Period Reached:</strong> The following record series have completed their designated retention period. Transitioning a record to <strong>Disposal</strong> starts the disposal appraisal process.
+            </div>
+
+            {disposalEligibleRecords.length === 0 ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+                No records currently eligible for disposal evaluation.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Item No.</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Record Series</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Division</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Inclusive Dates</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disposalEligibleRecords.map((record) => {
+                      const info = getOngoingDisposalInfo(record.inclusiveDates, Number(record.totalRetention), record.retentionStage, record.frequencyOfUse, Number(record.storageYrs));
+                      return (
+                        <tr key={record.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                            {record.prdsGrds && record.itemNo ? (
+                              <div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{record.prdsGrds}</div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{record.itemNo}</div>
+                              </div>
+                            ) : (
+                              record.prdsGrds || record.itemNo || '-'
+                            )}
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{cleanSeriesTitle(record.seriesTitle)}</div>
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem' }}>{record.division || 'General'}</td>
+                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>{record.classificationCategory || '-'}</td>
+                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {formatDynamicDates(record.inclusiveDates)}
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
+                            {record.totalRetention} Year(s)
+                          </td>
+                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                              <Button
+                                variant="danger"
+                                style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem', background: '#dc2626', borderColor: '#dc2626' }}
+                                onClick={() => {
+                                  setEvaluatingRecord({ record, info });
+                                  setShowEvaluateModal(false);
+                                }}
+                              >
+                                Evaluate & Dispose ➔
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <Button variant="secondary" onClick={() => setShowEvaluateModal(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Single Record Move to Disposal Confirmation Modal */}
+      {evaluatingRecord && (() => {
+        const covered = extractCoveredYears(evaluatingRecord.record.inclusiveDates);
+        const { record, info } = evaluatingRecord;
+        const eligibleDisposalYears = info?.eligibleYears || [];
+        const currentYear = new Date().getFullYear();
+
+        // Use customStorageYears as customDisposalYears conceptually since they share the same pill selection logic pattern
+        // We will just use it to let users pick specific years to dispose of if they wish
+        const isCustomSelected = customStorageYears.length > 0;
+        const computedCustomDates = isCustomSelected
+          ? formatYearsListToDatesString(covered.years.filter(y => !customStorageYears.includes(y)), covered.isOngoing)
+          : 'N/A';
+
+        return (
+          <Modal
+            isOpen={!!evaluatingRecord}
+            onClose={() => {
+              setEvaluatingRecord(null);
+              setCustomStorageYears([]);
+            }}
+            title="Evaluate & Move to Disposal"
+            size="lg"
+          >
+            <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                <strong>Confirm Disposal Transition:</strong> You are about to move this record series to the <strong>Disposal Appraisal</strong> stage.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem 1rem', background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Item No.</div>
+                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+                    {record.prdsGrds && record.itemNo
+                      ? `${record.prdsGrds} — ${record.itemNo}`
+                      : record.prdsGrds || record.itemNo || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Record Series</div>
+                  <div style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '1.2rem' }}>{cleanSeriesTitle(record.seriesTitle)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Division</div>
+                  <div style={{ fontWeight: 500 }}>{record.division || 'General'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Category</div>
+                  <div style={{ fontWeight: 500 }}>{record.classificationCategory || '-'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Inclusive Dates</div>
+                  <div style={{ fontWeight: 500 }}>{formatDynamicDates(record.inclusiveDates)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total Retention</div>
+                  <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.8rem' }}>
+                    {record.totalRetention} year(s) reached
+                  </span>
+                </div>
+              </div>
+
+              {/* Specific Year Disposal Selector */}
+              {eligibleDisposalYears.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--bg-primary)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    💡 Or Select Specific Year(s) to Dispose:
+                  </label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    Click a year below to move it to Disposal:
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    {eligibleDisposalYears.map((yr: any) => {
+                      const isStored = disposalOnlyLogs.some(log =>
+                        (log.recordId === record.id || log.id === record.id) &&
+                        String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()) &&
+                        log.status !== 'Decline'
+                      );
+                      const isStorageSelected = customStorageYears.includes(yr);
+
+                      return (
+                        <button
+                          key={`yr-pill-disposal-${yr}`}
+                          type="button"
+                          disabled={isStored}
+                          title={isStored ? "Already Confirmed in Disposal" : ""}
+                          style={{
+                            fontSize: '0.85rem',
+                            padding: '0.45rem 0.85rem',
+                            borderRadius: '6px',
+                            border: isStored ? '1px solid #10b981' : (isStorageSelected ? '1px solid #dc2626' : '1px solid var(--border-color)'),
+                            background: isStored ? 'rgba(16, 185, 129, 0.05)' : (isStorageSelected ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-primary)'),
+                            color: isStored ? '#059669' : (isStorageSelected ? '#b91c1c' : 'var(--text-primary)'),
+                            fontWeight: 700,
+                            cursor: isStored ? 'not-allowed' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            boxShadow: isStorageSelected && !isStored ? '0 2px 4px rgba(239, 68, 68, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            transition: 'all 0.2s ease',
+                            opacity: isStored ? 0.8 : 1,
+                          }}
+                          onClick={() => {
+                            if (!isStored) {
+                              setCustomStorageYears((prev) =>
+                                prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
+                              );
+                            }
+                          }}
+                        >
+                          {isStored ? '✅ ' : (isStorageSelected ? '🗑️ Disposal ' : '📅 ')} {yr} ({currentYear - yr} yrs)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {isCustomSelected && (
+                <p style={{ margin: 0, fontSize: '0.835rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                  Moving year(s) <strong>{customStorageYears.sort().join(', ')}</strong> to Disposal will update remaining inclusive dates to <strong>{computedCustomDates || 'None (Fully Disposed)'}</strong>.
+                </p>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <Button variant="secondary" onClick={() => {
+                  setEvaluatingRecord(null);
+                  setCustomStorageYears([]);
+                }}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  style={{ background: '#dc2626', borderColor: '#dc2626' }}
+                  onClick={() => {
+                    const rec = record;
+                    setEvaluatingRecord(null);
+
+                    if (isCustomSelected) {
+                      const yearRecords = customStorageYears.map((yr) => ({
+                        ...rec,
+                        id: `${rec.id}-yr-${yr}`,
+                        inclusiveDates: String(yr),
+                        seriesTitle: `${rec.seriesTitle} (${yr})`,
+                      }));
+                      // Make sure to add openDisposalRequestModal logic if we use it, but typically we stage it:
+                      setStagedDisposalRecords((prev) => {
+                        const newRecs = yearRecords.filter(nr => !prev.some(p => p.id === nr.id));
+                        return [...prev, ...newRecs];
+                      });
+                      showToast(`Custom years of "${rec.seriesTitle}" staged in Disposal Management.`, 'info');
+                    } else {
+                      setStagedDisposalRecords((prev) => {
+                        if (prev.some(p => p.id === rec.id)) return prev;
+                        return [...prev, rec];
+                      });
+                      showToast(`"${rec.seriesTitle}" staged in Disposal Management.`, 'info');
+                    }
+                    setCustomStorageYears([]);
+                  }}
+                >
+                  <MdDeleteSweep style={{ marginRight: '0.3rem' }} /> {isCustomSelected ? 'Confirm Selected Years to Disposal' : 'Confirm Move to Disposal'}
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
       {/* NAP Form 1 View Modal */}
       {showNapFormPreview && (
         <Modal
@@ -4779,44 +5464,6 @@ function InventoryAppraisal() {
               <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                 Showing <strong>{activeDivisionRecords.length}</strong> record series entries {divisionTab === 'ALL' ? '(All Divisions)' : `for ${divisionTab}`}.
               </p>
-
-              {/* View Format Selector */}
-              <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <button
-                  type="button"
-                  onClick={() => setPreviewViewMode('excel')}
-                  style={{
-                    padding: '0.35rem 0.85rem',
-                    borderRadius: '6px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: previewViewMode === 'excel' ? '#107c41' : 'transparent',
-                    color: previewViewMode === 'excel' ? '#fff' : 'var(--text-secondary)',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  📊 Excel Sheet View
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewViewMode('form')}
-                  style={{
-                    padding: '0.35rem 0.85rem',
-                    borderRadius: '6px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background: previewViewMode === 'form' ? 'var(--color-primary)' : 'transparent',
-                    color: previewViewMode === 'form' ? '#fff' : 'var(--text-secondary)',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  📄 Printable Form View
-                </button>
-              </div>
             </div>
 
             {/* Real-Time Form Inputs Panel */}
@@ -4891,28 +5538,18 @@ function InventoryAppraisal() {
 
             <div
               dangerouslySetInnerHTML={{
-                __html: previewViewMode === 'excel'
-                  ? buildNapForm1ExcelHtml(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab, napFormHeader)
-                  : buildNapForm1Html(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab, napFormHeader)
+                __html: buildNapForm1ExcelHtml(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab, napFormHeader)
               }}
-              style={{ overflowX: 'auto', border: previewViewMode === 'excel' ? 'none' : '1.5px solid #000', borderRadius: '4px' }}
+              style={{ overflowX: 'auto', border: 'none', borderRadius: '4px' }}
             />
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
-              <Button variant="secondary" onClick={() => setShowNapFormPreview(false)}>
-                Close
-              </Button>
-
               <Button
                 variant="primary"
                 onClick={handleExportNapForm1}
                 style={{ backgroundColor: '#107c41', borderColor: '#107c41' }}
               >
                 <MdFileDownload style={{ marginRight: '0.35rem' }} /> Export to Excel
-              </Button>
-
-              <Button variant="primary" onClick={() => handlePrintNapForm1(activeDivisionRecords, divisionTab === 'ALL' ? undefined : divisionTab)}>
-                <MdPrint style={{ marginRight: '0.35rem' }} /> Print NAP Form 1
               </Button>
             </div>
           </div>
@@ -4929,22 +5566,46 @@ function InventoryAppraisal() {
         >
           <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {/* Active Desk Retention Alert inside viewing modal */}
-            {getOngoingActiveDeskInfo(viewingRecord.inclusiveDates, Number(viewingRecord.activeDeskYrs), viewingRecord.retentionStage) !== null && (
-              <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', padding: '0.85rem 1rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                  ⚠️ Active desk period ({viewingRecord.activeDeskYrs} yrs) has been reached!
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <Button variant="primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: '#d97706', borderColor: '#d97706' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); setSingleStorageRecord(rec); }}>
-                    Evaluate & Move to Storage ➔
-                  </Button>
-                </div>
-              </div>
-            )}
+            {(() => {
+              const activeDeskInfoRaw = getOngoingActiveDeskInfo(viewingRecord.inclusiveDates, Number(viewingRecord.activeDeskYrs), viewingRecord.retentionStage);
+              let activeDeskInfo = null;
+              if (activeDeskInfoRaw) {
+                const covered = extractCoveredYears(viewingRecord.inclusiveDates);
+                const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(viewingRecord.activeDeskYrs));
+                const hasUnstored = eligibleYrs.some(yr => {
+                  return !storageLogs.some(log => (log.recordId === viewingRecord.id || log.id === viewingRecord.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
+                });
+                if (hasUnstored) activeDeskInfo = activeDeskInfoRaw;
+              }
+
+              if (activeDeskInfo !== null) {
+                return (
+                  <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', padding: '0.85rem 1rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                      ⚠️ Active desk period ({viewingRecord.activeDeskYrs} yrs) has been reached!
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <Button variant="primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: '#d97706', borderColor: '#d97706' }} onClick={() => { const rec = viewingRecord; setViewingRecord(null); setSingleStorageRecord(rec); }}>
+                        Evaluate & Move to Storage ➔
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Disposal Alert inside viewing modal */}
             {(() => {
-              const disposalInfo = getOngoingDisposalInfo(viewingRecord.inclusiveDates, viewingRecord.totalRetention, viewingRecord.retentionStage, viewingRecord.storageStartDate);
+              const disposalInfoRaw = getOngoingDisposalInfo(viewingRecord.inclusiveDates, Number(viewingRecord.totalRetention), viewingRecord.retentionStage, viewingRecord.frequencyOfUse, Number(viewingRecord.storageYrs));
+              let disposalInfo = null;
+              if (disposalInfoRaw) {
+                const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
+                  return !disposalOnlyLogs.some(log => (log.recordId === viewingRecord.id || log.id === viewingRecord.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+                });
+                if (hasUndisposed) disposalInfo = disposalInfoRaw;
+              }
+
               if (disposalInfo !== null) {
                 return (
                   <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', padding: '0.85rem 1rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
@@ -4976,31 +5637,7 @@ function InventoryAppraisal() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <span style={{
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '99px',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  background: viewingRecord.retentionStage === 'Storage' ? 'rgba(245, 158, 11, 0.15)' : viewingRecord.retentionStage === 'Disposed' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: viewingRecord.retentionStage === 'Storage' ? '#d97706' : viewingRecord.retentionStage === 'Disposed' ? '#dc2626' : '#2563eb',
-                  border: viewingRecord.retentionStage === 'Storage' ? '1px solid rgba(245, 158, 11, 0.3)' : viewingRecord.retentionStage === 'Disposed' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(59, 130, 246, 0.3)'
-                }}>
-                  {viewingRecord.retentionStage || 'Active Stage'}
-                </span>
 
-                <span style={{
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '99px',
-                  fontWeight: 700,
-                  fontSize: '0.78rem',
-                  background: viewingRecord.disposalStatus === 'Safe for Disposal' ? 'rgba(239, 68, 68, 0.15)' : viewingRecord.disposalStatus === 'Permanent' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(14, 165, 233, 0.15)',
-                  color: viewingRecord.disposalStatus === 'Safe for Disposal' ? '#dc2626' : viewingRecord.disposalStatus === 'Permanent' ? '#4f46e5' : '#0284c7',
-                  border: viewingRecord.disposalStatus === 'Safe for Disposal' ? '1px solid rgba(239, 68, 68, 0.3)' : viewingRecord.disposalStatus === 'Permanent' ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(14, 165, 233, 0.3)'
-                }}>
-                  {viewingRecord.disposalStatus}
-                </span>
-              </div>
             </div>
 
             {/* Clean Key-Value Grid */}
@@ -5154,11 +5791,12 @@ function InventoryAppraisal() {
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <Button variant="secondary" onClick={() => handleExportAuthorityForm(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType, preparedByName, preparedByPosition)}>
-                Export Request (Excel)
-              </Button>
-              <Button variant="primary" onClick={handlePrintIframe} style={{ display: 'flex', alignItems: 'center' }}>
-                <MdPrint style={{ marginRight: '6px', fontSize: '1.1rem' }} /> Print Form
+              <Button
+                variant="primary"
+                onClick={() => handleExportAuthorityForm(previewType === 'Storage' ? stagedStorageRecords : stagedDisposalRecords, previewType, preparedByName, preparedByPosition)}
+                style={{ backgroundColor: '#107c41', borderColor: '#107c41', display: 'flex', alignItems: 'center' }}
+              >
+                <MdFileDownload style={{ marginRight: '6px', fontSize: '1.1rem' }} /> Export Request (Excel)
               </Button>
             </div>
           </div>
@@ -5171,6 +5809,7 @@ function InventoryAppraisal() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveRecord}
         initialData={editingRecord}
+        allowedDivisions={allowedDivisions}
       />
 
       {/* Delete Confirmation Modal */}
@@ -5189,7 +5828,7 @@ function InventoryAppraisal() {
             </div>
 
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-              You are about to delete <strong>"{deletingRecord.seriesTitle}"</strong>. This action cannot be undone and will permanently erase this record series entry from the system inventory.
+              You are about to delete <strong>"{deletingRecord.seriesTitle}"</strong>. This action will submit a deletion request to the Super Admin for approval in the Requests & Approvals tab.
             </p>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
@@ -5228,7 +5867,7 @@ function InventoryAppraisal() {
             </div>
 
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-              This action cannot be undone and will permanently remove all selected record series entries from the system inventory.
+              This action will submit a bulk deletion request to the Super Admin for approval in the Requests & Approvals tab.
             </p>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
@@ -5336,7 +5975,7 @@ function InventoryAppraisal() {
           isOpen={showPendingRequestsModal}
           onClose={() => setShowPendingRequestsModal(false)}
           title={`Inventory Storage & Disposal Confirmation Queue (${pendingRequests.length} Pending)`}
-          size="lg"
+          size="xl"
         >
           <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
@@ -5348,7 +5987,7 @@ function InventoryAppraisal() {
                 No pending requests awaiting confirmation.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '70vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
                 {pendingRequests.map((req) => (
                   <div
                     key={req.id}
@@ -5381,9 +6020,21 @@ function InventoryAppraisal() {
                         >
                           {req.requestType === 'Storage' ? '📦 Storage Request' : '🗑️ Disposal Request'}
                         </span>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                          Requested by {req.requesterName}
-                        </span>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <span>Requested by {req.requesterName}</span>
+                          {req.status === 'approved' && req.approvedByName && (
+                            <>
+                              <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>•</span>
+                              <span>Approved by {req.approvedByName}</span>
+                            </>
+                          )}
+                          {req.status === 'rejected' && req.approvedByName && (
+                            <>
+                              <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>•</span>
+                              <span>Rejected by {req.approvedByName}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
@@ -5480,8 +6131,20 @@ function InventoryAppraisal() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>Request Reference</div>
                 <div style={{ fontSize: '1.15rem', fontWeight: 900, color: 'var(--color-primary)', fontFamily: 'monospace' }}>{selectedRequestDetails.id}</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
-                  Requested by <strong style={{ fontWeight: 800 }}>{selectedRequestDetails.requesterName}</strong>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <span>Requested by <strong style={{ fontWeight: 800 }}>{selectedRequestDetails.requesterName}</strong></span>
+                  {selectedRequestDetails.status === 'approved' && selectedRequestDetails.approvedByName && (
+                    <>
+                      <span style={{ color: 'var(--text-secondary)' }}>•</span>
+                      <span>Approved by <strong style={{ fontWeight: 800 }}>{selectedRequestDetails.approvedByName}</strong></span>
+                    </>
+                  )}
+                  {selectedRequestDetails.status === 'rejected' && selectedRequestDetails.approvedByName && (
+                    <>
+                      <span style={{ color: 'var(--text-secondary)' }}>•</span>
+                      <span>Rejected by <strong style={{ fontWeight: 800 }}>{selectedRequestDetails.approvedByName}</strong></span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -5521,7 +6184,10 @@ function InventoryAppraisal() {
                       <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Division</th>
                       <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em' }}>Category</th>
                       <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em', textAlign: 'center' }}>
-                        {selectedRequestDetails.requestType === 'Storage' ? 'Storage Year' : 'Disposed Year'}
+                        {selectedRequestDetails.requestType === 'Storage' ? 'Storage Year' : 'Period Covered'}
+                      </th>
+                      <th style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.02em', textAlign: 'center' }}>
+                        Retention Year
                       </th>
                     </tr>
                   </thead>
@@ -5549,12 +6215,19 @@ function InventoryAppraisal() {
                             {item.division || 'General'}
                           </td>
                           <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>
-                            <span style={{ background: 'var(--bg-secondary)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
+                            <span style={{ display: 'inline-block', background: 'var(--bg-secondary)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid var(--border-color)', lineHeight: '1.4', textAlign: 'center' }}>
                               {item.classificationCategory || item.category || records.find((rec) => rec.id === item.id || (item.id && item.id.startsWith(`${rec.id}-`)))?.classificationCategory || '-'}
                             </span>
                           </td>
                           <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 800, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>
                             {item.inclusiveDates || 'N/A'}
+                          </td>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {(() => {
+                              const matchedRec = records.find((rec) => rec.id === item.id || (item.id && item.id.startsWith(`${rec.id}-`)) || rec.id === item.recordId);
+                              const ret = parseInt(item.totalRetention || matchedRec?.totalRetention || '0');
+                              return ret > 1 ? `${ret} years` : ret === 1 ? `1 year` : 'N/A';
+                            })()}
                           </td>
                         </tr>
                       ))
@@ -5569,6 +6242,7 @@ function InventoryAppraisal() {
                           <td style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>General</td>
                           <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>-</td>
                           <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 700, color: selectedRequestDetails.requestType === 'Storage' ? '#d97706' : '#dc2626' }}>N/A</td>
+                          <td style={{ padding: '0.85rem 1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>N/A</td>
                         </tr>
                       ))
                     )}
@@ -5623,6 +6297,49 @@ function InventoryAppraisal() {
                 </div>
               </div>
             )}
+            {selectedRequestDetails.status === 'pending' && hasFullDivisionAccess && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', background: 'var(--bg-secondary)', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', borderLeft: '4px solid #d97706', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Admin Decision</div>
+                <input
+                  type="text"
+                  placeholder="Optional remarks or reason for decision..."
+                  value={adminDecisionReason}
+                  onChange={(e) => setAdminDecisionReason(e.target.value)}
+                  style={{
+                    padding: '0.65rem 0.85rem',
+                    fontSize: '0.85rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+                    outline: 'none',
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+                  <Button
+                    variant="danger"
+                    disabled={isProcessingAdminDecision}
+                    onClick={async () => {
+                      await handleAdminRejectRequest(selectedRequestDetails.id);
+                      setSelectedRequestDetails(null);
+                    }}
+                  >
+                    ✕ Reject Request
+                  </Button>
+                  <Button
+                    variant="success"
+                    disabled={isProcessingAdminDecision}
+                    onClick={async () => {
+                      await handleAdminConfirmRequest(selectedRequestDetails.id);
+                      setSelectedRequestDetails(null);
+                    }}
+                  >
+                    ✓ Accept Request
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}
@@ -5662,6 +6379,90 @@ function InventoryAppraisal() {
               style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }}
               title="Document Viewer"
             />
+          </div>
+        </Modal>
+      )}
+      {showDisposalExportPreview && (
+        <Modal
+          isOpen={showDisposalExportPreview}
+          onClose={() => setShowDisposalExportPreview(false)}
+          title="Preview Disposal Export"
+          size="lg"
+          footer={
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1.5rem', alignItems: 'center', width: '100%' }}>
+              <Button variant="secondary" onClick={() => setShowDisposalExportPreview(false)}>Cancel</Button>
+              <Button variant="primary" onClick={async () => {
+                const selectedLogs = disposalOnlyLogs.filter(l => historySelectedIds.includes(l.id));
+                const payload = processDisposalRecordsForExport(selectedLogs, records);
+                try {
+                  await generateDisposalWord(payload, disposalVolumeInput, disposalTelephoneInput);
+                  showToast('Exported successfully to DOCX', 'success');
+                  setShowDisposalExportPreview(false);
+                } catch (err: any) {
+                  console.error('DOCX Export Error:', err);
+                  let msg = err?.message || 'Unknown error occurred during export.';
+
+                  // Extract detailed docxtemplater errors if it's a Multi error
+                  if (err.properties && err.properties.errors instanceof Array) {
+                    const errorMessages = err.properties.errors.map((e: any) => e.properties?.explanation || e.message).join(', ');
+                    msg = `Template Error: ${errorMessages}`;
+                  }
+
+                  showToast(`Export Failed: ${msg}`, 'error');
+                }
+              }}>
+                <MdFileDownload style={{ fontSize: '1.1rem', marginRight: '0.4rem' }} /> Export to DOCX
+              </Button>
+            </div>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '1.5rem', padding: '1rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Volume in Cubic Meter:</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 52 Sacks"
+                  value={disposalVolumeInput}
+                  onChange={(e) => setDisposalVolumeInput(e.target.value)}
+                  style={{
+                    padding: '0.6rem 0.8rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    width: '100%'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Telephone Number:</label>
+                <input
+                  type="text"
+                  placeholder="e.g. (075) 656-3796"
+                  value={disposalTelephoneInput}
+                  onChange={(e) => setDisposalTelephoneInput(e.target.value)}
+                  style={{
+                    padding: '0.6rem 0.8rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    width: '100%'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ height: '70vh', width: '100%', position: 'relative' }}>
+              <iframe
+                src={`data:text/html;charset=utf-8,${encodeURIComponent(generateNapForm3PreviewHtml(
+                  processDisposalRecordsForExport(disposalOnlyLogs.filter(l => historySelectedIds.includes(l.id)), records),
+                  disposalTelephoneInput,
+                  disposalVolumeInput
+                ))}`}
+                style={{ width: '100%', height: '100%', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'white' }}
+                title="NAP Form 3 Preview"
+              />
+            </div>
           </div>
         </Modal>
       )}

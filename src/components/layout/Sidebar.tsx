@@ -302,7 +302,6 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     });
   }
 
-  mainItems.push({ path: '/settings', label: 'Settings', icon: MdSettings, iconColor: '#6b7280' });
   mainItems.push({ path: '/chats', label: 'Chats', icon: MdChat, iconColor: '#8b5cf6', badge: chatUnreadCount });
 
   const adminItems: NavItem[] = [
@@ -343,6 +342,15 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     });
   }
 
+  const bottomItems: NavItem[] = [
+    { path: '/settings', label: 'Settings', icon: MdSettings, iconColor: '#6b7280' }
+  ];
+
+  navGroups.push({
+    label: '',
+    items: bottomItems,
+  });
+
   const hasAccess = (item: NavItem): boolean => {
     if (item.requiredRoles && item.requiredRoles.length > 0 && !item.requiredRoles.includes(userRole)) {
       return false;
@@ -362,12 +370,13 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="sidebar__nav">
-        {navGroups.map((group, groupIndex) => (
-          <div key={groupIndex} className="sidebar__nav-group">
-            {!isCollapsed && (
-              <div className="sidebar__nav-group-label">{group.label}</div>
-            )}
+      <nav className="sidebar__nav" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {navGroups.slice(0, -1).map((group, groupIndex) => (
+            <div key={groupIndex} className="sidebar__nav-group">
+              {!isCollapsed && group.label && (
+                <div className="sidebar__nav-group-label">{group.label}</div>
+              )}
             <div className="sidebar__nav-items">
               {group.items.filter(item => hasAccess(item)).map((item) => {
                 const IconComponent = item.icon;
@@ -464,6 +473,34 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
             </div>
           </div>
         ))}
+        </div>
+        <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem' }}>
+          {navGroups[navGroups.length - 1].items.filter(item => hasAccess(item)).map((item) => {
+            const IconComponent = item.icon;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `sidebar__nav-item ${isActive ? 'sidebar__nav-item--active' : ''}`
+                }
+                title={isCollapsed ? item.label : undefined}
+              >
+                {({ isActive }) => (
+                  <>
+                    <span style={{ position: 'relative', display: 'inline-flex' }}>
+                      <IconComponent
+                        className="sidebar__nav-icon"
+                        style={{ color: isActive ? '#ffffff' : item.iconColor }}
+                      />
+                    </span>
+                    {!isCollapsed && <span className="sidebar__nav-label">{item.label}</span>}
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
+        </div>
       </nav>
     </aside>
   );

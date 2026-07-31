@@ -40,6 +40,7 @@ interface CreateRecordSeriesModalProps {
   onClose: () => void;
   onSave: (data: RecordSeriesFormData) => Promise<void>;
   initialData?: RecordSeriesFormData | null;
+  allowedDivisions?: string[];
 }
 
 const defaultFormState: RecordSeriesFormData = {
@@ -98,6 +99,7 @@ function CreateRecordSeriesModal({
   onClose,
   onSave,
   initialData,
+  allowedDivisions,
 }: CreateRecordSeriesModalProps) {
   const currentYear = new Date().getFullYear();
   const [formData, setFormData] = useState<RecordSeriesFormData & { startYear: string; endYear: string; isOngoing: boolean; dateMode?: 'range' | 'custom'; customDates?: string }>({
@@ -135,7 +137,13 @@ function CreateRecordSeriesModal({
           }
           const divs = (settings as any)?.divisions;
           if (Array.isArray(divs)) {
-            setDivisionOptions(divs);
+            if (allowedDivisions && allowedDivisions.length > 0 && !allowedDivisions.includes('ALL')) {
+               const filteredDivs = divs.filter((d: string) => allowedDivisions.some((ad: string) => ad.trim().toLowerCase() === d.trim().toLowerCase()));
+               const optionsToUse = filteredDivs.length > 0 ? filteredDivs : allowedDivisions;
+               setDivisionOptions(optionsToUse);
+            } else {
+               setDivisionOptions(divs);
+            }
           }
           const cats = (settings as any)?.classificationCategories;
           if (Array.isArray(cats)) {
@@ -176,8 +184,14 @@ function CreateRecordSeriesModal({
         customDates: '',
       });
     }
+    
+    // Auto-select division if there's only 1 option and no initialData division provided
+    if (allowedDivisions && allowedDivisions.length === 1 && !allowedDivisions.includes('ALL') && (!initialData || !initialData.division)) {
+      setFormData(prev => ({ ...prev, division: allowedDivisions[0] }));
+    }
+    
     setError('');
-  }, [initialData, isOpen]);
+  }, [initialData, isOpen, allowedDivisions]);
 
   const handleActiveDeskChange = (yrs: number) => {
     const active = Math.max(0, yrs);

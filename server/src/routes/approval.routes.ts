@@ -60,11 +60,14 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Check if there's already a pending request for the same entity+action
-    const existing = await (prisma as any).approvalRequest.findFirst({
-      where: { requestedBy, entityId, action, status: 'pending' },
-    });
-    if (existing) {
-      return res.status(409).json({ error: 'A pending request for this action already exists' });
+    // Bypass this check for bulk actions, since 'bulk' entityId is generic and the payload contains the specifics.
+    if (!action.startsWith('bulk_')) {
+      const existing = await (prisma as any).approvalRequest.findFirst({
+        where: { requestedBy, entityId, action, status: 'pending' },
+      });
+      if (existing) {
+        return res.status(409).json({ error: 'A pending request for this action already exists' });
+      }
     }
 
     const request = await (prisma as any).approvalRequest.create({

@@ -299,7 +299,7 @@ export default async function generateAuthorityFormExcel(
 
   worksheet.mergeCells(`G${currentRow}:J${currentRow}`);
   const chkLine = worksheet.getCell(`G${currentRow}`);
-  chkLine.value = 'Brian Mike G. Del Mundo';
+  chkLine.value = '';
   chkLine.font = { name: 'Times New Roman', size: 11, bold: true };
   chkLine.alignment = { horizontal: 'center', vertical: 'bottom' };
   chkLine.border = { bottom: thin };
@@ -313,7 +313,7 @@ export default async function generateAuthorityFormExcel(
 
   worksheet.mergeCells(`G${currentRow}:J${currentRow}`);
   const chkTitle = worksheet.getCell(`G${currentRow}`);
-  chkTitle.value = 'Administrative Aide I';
+  chkTitle.value = '';
   chkTitle.font = { name: 'Times New Roman', size: 10 };
   chkTitle.alignment = { horizontal: 'center', vertical: 'top' };
 

@@ -25,6 +25,8 @@ const ACTION_LABELS: Record<string, string> = {
   view_document: 'View Document',
   print_document: 'Print Document',
   download_document: 'Download Document',
+  delete_inventory_record: 'Delete Inventory Record',
+  bulk_delete_inventory_records: 'Bulk Delete Inventory Records',
 };
 
 function Approvals() {
@@ -167,6 +169,10 @@ function Approvals() {
         const docNames = (payload.documentNames || []).map((d: any) => d.fileName).join('; ');
         return `Delete ${payload.ids?.length || 0} documents${docNames ? ': ' + docNames : ''}`;
       }
+      case 'delete_inventory_record':
+        return `Delete Inventory Record: ${payload.seriesTitle}`;
+      case 'bulk_delete_inventory_records':
+        return `Delete ${payload.count} Inventory Records`;
       case 'borrow_201':
         return `Borrow 201 of ${payload.employeeName}${payload.borrowerName ? ' — Borrowed By: ' + payload.borrowerName : ''}${payload.purpose ? ' | Purpose: ' + payload.purpose : ''}`;
       case 'view_document':
@@ -234,6 +240,12 @@ function Approvals() {
         break;
       case 'delete_borrow_logs':
         await api.file201.deleteLogs(payload.ids || [entityId]);
+        break;
+      case 'delete_inventory_record':
+        await api.inventory.delete(entityId, approvalToken);
+        break;
+      case 'bulk_delete_inventory_records':
+        await api.inventory.bulkDelete(payload.ids, approvalToken);
         break;
       case 'update_user': {
         // Extract only the 'to' values from { from, to } structure

@@ -24,7 +24,7 @@ import { generateImportTemplate } from '../utils/exportUtils';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { formatDateDDMMYYYY, convertToDateInputFormat, formatDateMDY } from '../utils/dateUtils';
-import { MdEdit, MdDelete, MdFileUpload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel } from 'react-icons/md';
+import { MdEdit, MdDelete, MdFileUpload, MdFileDownload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel, MdPrint } from 'react-icons/md';
 import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
 import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
@@ -4454,12 +4454,11 @@ function Dashboard() {
 
                 <div className="reports-view__export-actions">
                   <Button
-                    variant="primary"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => setIsReportPreviewOpen(true)}
                     disabled={sortedReportRows.length === 0}
                   >
-                    🖨️ View & Print
+                    <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print
                   </Button>
                   <div ref={dropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
                     <Button
@@ -4689,12 +4688,11 @@ function Dashboard() {
                   <>
                     <div className="reports-view__export-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                       <Button
-                        variant="primary"
-                        size="sm"
+                        variant="secondary"
                         onClick={() => setIsBorrowReportPreviewOpen(true)}
                         disabled={filteredBorrowRows.length === 0}
                       >
-                        🖨️ View & Print
+                        <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print
                       </Button>
                       <div ref={borrowDropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
                         <Button
@@ -6435,14 +6433,8 @@ function Dashboard() {
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
             <Button
-              variant="secondary"
-              onClick={() => setIsReportPreviewOpen(false)}
-            >
-              Close
-            </Button>
-
-            <Button
-              variant="success"
+              variant="primary"
+              style={{ background: '#10b981', borderColor: '#10b981' }}
               onClick={async () => {
                 try {
                   showToast('Generating Excel...', 'info');
@@ -6492,26 +6484,7 @@ function Dashboard() {
               }}
               disabled={sortedReportRows.length === 0}
             >
-              📊 Export to Excel
-            </Button>
-
-            <Button
-              variant="primary"
-              onClick={async () => {
-                const electronApi = (window as any).electron;
-                if (electronApi && typeof electronApi.printToPdf === 'function') {
-                  showToast('Generating print preview PDF...', 'info');
-                  const res = await electronApi.printToPdf();
-                  if (!res.success) {
-                    showToast(`Failed to generate print preview: ${res.error}`, 'error');
-                  }
-                } else {
-                  window.print();
-                }
-              }}
-              disabled={sortedReportRows.length === 0}
-            >
-              🖨️ Print
+              <MdFileDownload style={{ marginRight: '0.35rem', fontSize: '1.1rem' }} /> Export Request (Excel)
             </Button>
           </div>
         }
@@ -6743,36 +6716,11 @@ function Dashboard() {
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
             <Button
-              variant="secondary"
-              onClick={() => setIsBorrowReportPreviewOpen(false)}
-            >
-              Close
-            </Button>
-
-            <Button
-              variant="success"
+              variant="primary"
+              style={{ background: '#10b981', borderColor: '#10b981' }}
               onClick={handleExportBorrowLogsToExcel}
             >
-              📊 Export to Excel
-            </Button>
-
-            <Button
-              variant="primary"
-              onClick={async () => {
-                const electronApi = (window as any).electron;
-                if (electronApi && typeof electronApi.printToPdf === 'function') {
-                  showToast('Generating print preview PDF...', 'info');
-                  const res = await electronApi.printToPdf();
-                  if (!res.success) {
-                    showToast(`Failed to generate print preview: ${res.error}`, 'error');
-                  }
-                } else {
-                  window.print();
-                }
-              }}
-              disabled={filteredBorrowRows.length === 0}
-            >
-              🖨️ Print
+              <MdFileDownload style={{ marginRight: '0.35rem', fontSize: '1.1rem' }} /> Export Request (Excel)
             </Button>
           </div>
         }

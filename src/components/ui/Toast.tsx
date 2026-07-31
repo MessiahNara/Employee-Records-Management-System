@@ -64,35 +64,29 @@ function Toast({ message, type = 'success', duration = 10000, onClose, icon }: T
     }
   };
 
-  // Don't render the blocking overlay when a modal is open
-  const isModalOpen = typeof document !== 'undefined' && !!document.querySelector('.modal-overlay');
-
   return (
-    <>
-      {!isModalOpen && <div className="toast-overlay" onClick={onClose} />}
-      <div
-        className={`toast-center toast-center--${type}`}
-        role="alert"
-        aria-live="assertive"
-        aria-atomic="true"
-      >
-        <div className="toast-center__icon-wrapper">
-          <div className="toast-center__icon">{getIcon()}</div>
-        </div>
-        <div className="toast-center__content">
-          <div className="toast-center__message">{message}</div>
-        </div>
-        <button
-          ref={okButtonRef}
-          className="toast-center__button"
-          onClick={onClose}
-          type="button"
-          aria-label="Dismiss notification"
-        >
-          OK
-        </button>
+    <div
+      className={`modern-toast modern-toast--${type}`}
+      role="alert"
+      aria-live="assertive"
+      aria-atomic="true"
+    >
+      <div className="modern-toast__icon-wrapper">
+        <div className="modern-toast__icon">{getIcon()}</div>
       </div>
-    </>
+      <div className="modern-toast__content">
+        <div className="modern-toast__message">{message}</div>
+      </div>
+      <button
+        ref={okButtonRef}
+        className="modern-toast__close-btn"
+        onClick={onClose}
+        type="button"
+        aria-label="Dismiss notification"
+      >
+        ✕
+      </button>
+    </div>
   );
 }
 

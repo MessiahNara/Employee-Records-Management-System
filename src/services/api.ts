@@ -1034,16 +1034,23 @@ export const inventoryApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }),
-  delete: (id: string) =>
-    apiRequest<any>(`/inventory/${id}`, {
+  delete: (id: string, token?: string) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['x-approval-token'] = token;
+    return apiRequest<any>(`/inventory/${id}`, {
       method: 'DELETE',
-    }),
-  bulkDelete: (ids: string[]) =>
-    apiRequest<any>('/inventory/bulk-delete', {
+      headers,
+    });
+  },
+  bulkDelete: (ids: string[], token?: string) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['x-approval-token'] = token;
+    return apiRequest<any>('/inventory/bulk-delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ ids }),
-    }),
+    });
+  },
   getDisposalHistory: async () => {
     const history = await apiRequest<any[]>('/inventory/disposal-history');
     return history.map(item => ({
@@ -1095,17 +1102,17 @@ export const inventoryApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }),
-  confirmRequest: (id: string, adminReason?: string) =>
-    apiRequest<any>(`/inventory/requests/${id}/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminReason }),
-    }),
   rejectRequest: (id: string, rejectionReason?: string) =>
     apiRequest<any>(`/inventory/requests/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionReason }),
+    }),
+  confirmRequest: (id: string, adminReason?: string) =>
+    apiRequest<any>(`/inventory/requests/${id}/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminReason }),
     }),
 };
 

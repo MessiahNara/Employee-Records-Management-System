@@ -613,33 +613,13 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
 
         if (targetStage === 'Storage') {
           if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
-            const { newDatesStr } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
-            newInclusiveDates = newDatesStr;
-            r.inclusiveDates = newInclusiveDates;
+            const { isDisposed } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
 
-            const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
-            const targetGroups: number[][] = [];
-            let curTargetGrp = [sortedTargetYears[0]];
-            for (let i = 1; i < sortedTargetYears.length; i++) {
-              if (sortedTargetYears[i] === sortedTargetYears[i-1] + 1) {
-                curTargetGrp.push(sortedTargetYears[i]);
-              } else {
-                targetGroups.push(curTargetGrp);
-                curTargetGrp = [sortedTargetYears[i]];
-              }
+            if (isDisposed) {
+              r.retentionStage = 'Storage';
+              r.storageStartDate = new Date().toISOString();
+              r.frequencyOfUse = 'Inactive';
             }
-            targetGroups.push(curTargetGrp);
-            const targetFormatted = targetGroups.map(g => g.length === 1 ? `${g[0]}` : `${g[0]} - ${g[g.length - 1]}`).join(', ');
-
-            const newStorageRecord = {
-              ...r, // Copy all properties (retains series title, division, etc)
-              id: `${r.id}_storage_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-              inclusiveDates: targetFormatted,
-              retentionStage: 'Storage',
-              storageStartDate: new Date().toISOString(),
-              frequencyOfUse: 'Inactive'
-            };
-            recordsToAdd.push(newStorageRecord);
           } else {
             r.retentionStage = 'Storage';
             r.storageStartDate = new Date().toISOString();
@@ -810,7 +790,7 @@ router.post('/requests/:id/reject', async (req: Request, res: Response) => {
     reqItem.resolvedAt = new Date().toISOString();
     saveInventoryRequests(requests);
 
-    res.json(reqItem);
+    res.json({ rejected: true, request: reqItem });
   } catch (err: any) {
     console.error('Error rejecting inventory request:', err);
     res.status(500).json({ error: err.message || 'Failed to reject request' });
