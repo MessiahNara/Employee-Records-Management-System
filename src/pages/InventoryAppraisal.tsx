@@ -1067,16 +1067,21 @@ function InventoryAppraisal() {
       const disposalInfoRaw = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs));
       if (!disposalInfoRaw) return false;
       const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
-        return !disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+        const isDisposed = disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+        const requiresStorage = Number(r.storageYrs) > 0;
+        const isStored = storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
+        
+        // It's eligible for disposal IF it's not yet disposed AND (it doesn't require storage OR it is already confirmed in storage)
+        return !isDisposed && (!requiresStorage || isStored);
       });
       return hasUndisposed;
     });
-  }, [scopeFilteredRecords, disposalOnlyLogs]);
+  }, [scopeFilteredRecords, disposalOnlyLogs, storageLogs]);
 
   useEffect(() => {
     if (records.length > 0) {
       const currentYear = new Date().getFullYear();
-      const hasSeenNotice = sessionStorage.getItem(`annual_retention_notice_${currentYear}`);
+      const hasSeenNotice = localStorage.getItem(`annual_retention_notice_${currentYear}`);
       if (!hasSeenNotice && (activeDeskEligibleRecords.length > 0 || disposalEligibleRecords.length > 0)) {
         setShowAnnualNoticeModal(true);
       }
@@ -2942,7 +2947,10 @@ function InventoryAppraisal() {
                           let disposalInfo = null;
                           if (disposalInfoRaw) {
                             const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
-                              return !disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+                              const isDisposed = disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
+                              const requiresStorage = Number(r.storageYrs) > 0;
+                              const isStored = storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
+                              return !isDisposed && (!requiresStorage || isStored);
                             });
                             if (hasUndisposed) disposalInfo = disposalInfoRaw;
                           }
@@ -4678,7 +4686,7 @@ function InventoryAppraisal() {
           isOpen={showAnnualNoticeModal}
           onClose={() => {
             const currentYear = new Date().getFullYear();
-            sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
+            localStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
             setShowAnnualNoticeModal(false);
           }}
           title={
@@ -4721,7 +4729,7 @@ function InventoryAppraisal() {
                 style={{ fontWeight: 600, padding: '0.5rem 1.25rem' }}
                 onClick={() => {
                   const currentYear = new Date().getFullYear();
-                  sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
+                  localStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
                   setShowAnnualNoticeModal(false);
                 }}
               >
@@ -5282,174 +5290,6 @@ function InventoryAppraisal() {
         </Modal>
       )}
 
-      {/* Single Record Move to Disposal Confirmation Modal */}
-      {evaluatingRecord && (() => {
-        const covered = extractCoveredYears(evaluatingRecord.record.inclusiveDates);
-        const { record, info } = evaluatingRecord;
-        const eligibleDisposalYears = info?.eligibleYears || [];
-        const currentYear = new Date().getFullYear();
-
-        // Use customStorageYears as customDisposalYears conceptually since they share the same pill selection logic pattern
-        // We will just use it to let users pick specific years to dispose of if they wish
-        const isCustomSelected = customStorageYears.length > 0;
-        const computedCustomDates = isCustomSelected
-          ? formatYearsListToDatesString(covered.years.filter(y => !customStorageYears.includes(y)), covered.isOngoing)
-          : 'N/A';
-
-        return (
-          <Modal
-            isOpen={!!evaluatingRecord}
-            onClose={() => {
-              setEvaluatingRecord(null);
-              setCustomStorageYears([]);
-            }}
-            title="Evaluate & Move to Disposal"
-            size="lg"
-          >
-            <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                <strong>Confirm Disposal Transition:</strong> You are about to move this record series to the <strong>Disposal Appraisal</strong> stage.
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem 1rem', background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Item No.</div>
-                  <div style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                    {record.prdsGrds && record.itemNo
-                      ? `${record.prdsGrds} — ${record.itemNo}`
-                      : record.prdsGrds || record.itemNo || '-'}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Record Series</div>
-                  <div style={{ fontWeight: 800, color: 'var(--color-primary)', fontSize: '1.2rem' }}>{cleanSeriesTitle(record.seriesTitle)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Division</div>
-                  <div style={{ fontWeight: 500 }}>{record.division || 'General'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Category</div>
-                  <div style={{ fontWeight: 500 }}>{record.classificationCategory || '-'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Inclusive Dates</div>
-                  <div style={{ fontWeight: 500 }}>{formatDynamicDates(record.inclusiveDates)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.2rem' }}>Total Retention</div>
-                  <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '0.2rem 0.55rem', borderRadius: '4px', fontWeight: 700, fontSize: '0.8rem' }}>
-                    {record.totalRetention} year(s) reached
-                  </span>
-                </div>
-              </div>
-
-              {/* Specific Year Disposal Selector */}
-              {eligibleDisposalYears.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--bg-primary)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    💡 Or Select Specific Year(s) to Dispose:
-                  </label>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    Click a year below to move it to Disposal:
-                  </span>
-                  <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-                    {eligibleDisposalYears.map((yr: any) => {
-                      const isStored = disposalOnlyLogs.some(log =>
-                        (log.recordId === record.id || log.id === record.id) &&
-                        String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()) &&
-                        log.status !== 'Decline'
-                      );
-                      const isStorageSelected = customStorageYears.includes(yr);
-
-                      return (
-                        <button
-                          key={`yr-pill-disposal-${yr}`}
-                          type="button"
-                          disabled={isStored}
-                          title={isStored ? "Already Confirmed in Disposal" : ""}
-                          style={{
-                            fontSize: '0.85rem',
-                            padding: '0.45rem 0.85rem',
-                            borderRadius: '6px',
-                            border: isStored ? '1px solid #10b981' : (isStorageSelected ? '1px solid #dc2626' : '1px solid var(--border-color)'),
-                            background: isStored ? 'rgba(16, 185, 129, 0.05)' : (isStorageSelected ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-primary)'),
-                            color: isStored ? '#059669' : (isStorageSelected ? '#b91c1c' : 'var(--text-primary)'),
-                            fontWeight: 700,
-                            cursor: isStored ? 'not-allowed' : 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            boxShadow: isStorageSelected && !isStored ? '0 2px 4px rgba(239, 68, 68, 0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
-                            transition: 'all 0.2s ease',
-                            opacity: isStored ? 0.8 : 1,
-                          }}
-                          onClick={() => {
-                            if (!isStored) {
-                              setCustomStorageYears((prev) =>
-                                prev.includes(yr) ? prev.filter((y) => y !== yr) : [...prev, yr]
-                              );
-                            }
-                          }}
-                        >
-                          {isStored ? '✅ ' : (isStorageSelected ? '🗑️ Disposal ' : '📅 ')} {yr} ({currentYear - yr} yrs)
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {isCustomSelected && (
-                <p style={{ margin: 0, fontSize: '0.835rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  Moving year(s) <strong>{customStorageYears.sort().join(', ')}</strong> to Disposal will update remaining inclusive dates to <strong>{computedCustomDates || 'None (Fully Disposed)'}</strong>.
-                </p>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
-                <Button variant="secondary" onClick={() => {
-                  setEvaluatingRecord(null);
-                  setCustomStorageYears([]);
-                }}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="danger"
-                  style={{ background: '#dc2626', borderColor: '#dc2626' }}
-                  onClick={() => {
-                    const rec = record;
-                    setEvaluatingRecord(null);
-
-                    if (isCustomSelected) {
-                      const yearRecords = customStorageYears.map((yr) => ({
-                        ...rec,
-                        id: `${rec.id}-yr-${yr}`,
-                        inclusiveDates: String(yr),
-                        seriesTitle: `${rec.seriesTitle} (${yr})`,
-                      }));
-                      // Make sure to add openDisposalRequestModal logic if we use it, but typically we stage it:
-                      setStagedDisposalRecords((prev) => {
-                        const newRecs = yearRecords.filter(nr => !prev.some(p => p.id === nr.id));
-                        return [...prev, ...newRecs];
-                      });
-                      showToast(`Custom years of "${rec.seriesTitle}" staged in Disposal Management.`, 'info');
-                    } else {
-                      setStagedDisposalRecords((prev) => {
-                        if (prev.some(p => p.id === rec.id)) return prev;
-                        return [...prev, rec];
-                      });
-                      showToast(`"${rec.seriesTitle}" staged in Disposal Management.`, 'info');
-                    }
-                    setCustomStorageYears([]);
-                  }}
-                >
-                  <MdDeleteSweep style={{ marginRight: '0.3rem' }} /> {isCustomSelected ? 'Confirm Selected Years to Disposal' : 'Confirm Move to Disposal'}
-                </Button>
-              </div>
-            </div>
-          </Modal>
-        );
-      })()}
 
       {/* NAP Form 1 View Modal */}
       {showNapFormPreview && (

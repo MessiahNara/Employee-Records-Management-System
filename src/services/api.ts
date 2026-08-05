@@ -26,6 +26,28 @@ async function fetchServerUrlFromElectron(): Promise<string> {
   }
 }
 
+export async function setServerBaseUrl(url: string): Promise<boolean> {
+  const isBrowser = typeof window !== 'undefined';
+  const isElectron = isBrowser && typeof (window as any).electron !== 'undefined';
+  
+  if (!isElectron) {
+    return false;
+  }
+
+  try {
+    const result = await (window as any).electron.setServerUrl(url);
+    if (result && result.success) {
+      serverBaseUrl = url;
+      serverUrlPromise = Promise.resolve(url);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('[api] Error setting server URL via IPC:', e);
+    return false;
+  }
+}
+
 function getDefaultServerBaseUrl(): string {
   const isBrowser = typeof window !== 'undefined';
   const isElectron = isBrowser && typeof (window as any).electron !== 'undefined';
@@ -83,7 +105,7 @@ function normalizeApiUrlForLan(apiUrl: string): string {
 
 const normalizedEnvApiUrl = envApiUrl ? normalizeApiUrlForLan(envApiUrl) : undefined;
 
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
   if (normalizedEnvApiUrl) {
     return normalizedEnvApiUrl;
   }
@@ -104,7 +126,7 @@ function getApiBaseUrl(): string {
 }
 
 // Async version to handle IPC fetching
-async function ensureServerUrl(): Promise<void> {
+export async function ensureServerUrl(): Promise<void> {
   if (serverBaseUrl) {
     return; // Already have it
   }
@@ -246,25 +268,66 @@ async function apiUpload<T>(
   formData: FormData,
   headers: Record<string, string> = {}
 ): Promise<T> {
-  // Ensure server URL is fetched before making request
-  await ensureServerUrl();
+  return apiUploadWithProgress(endpoint, formData, headers);
+}
 
+// FormData upload with progress
+async function apiUploadWithProgress<T>(
+  endpoint: string,
+  formData: FormData,
+  headers: Record<string, string> = {},
+  onProgress?: (progressEvent: ProgressEvent) => void
+): Promise<T> {
+  await ensureServerUrl();
   const API_BASE_URL = getApiBaseUrl();
   const url = `${API_BASE_URL}${endpoint}`;
-  try {
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', onProgress);
+    }
+    
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } catch (e) {
+          resolve(xhr.responseText as any);
+        }
+      } else {
+        let errorData: any = {};
+        try {
+          errorData = JSON.parse(xhr.responseText);
+        } catch (e) {
+          errorData = { error: 'Upload failed' };
+        }
+        reject(new Error(errorData.error || errorData.message || `HTTP ${xhr.status}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Network error during upload'));
+    });
+    
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload aborted'));
+    });
+
+    xhr.open('POST', url);
     const finalHeaders = {
       ...getSessionIdHeader(),
       ...headers,
     };
-    const response = await fetch(url, { method: 'POST', headers: finalHeaders, body: formData });
-    if (!response.ok) {
-      await handleResponseError(response);
+    
+    for (const [key, value] of Object.entries(finalHeaders)) {
+      xhr.setRequestHeader(key, value);
     }
-    return await response.json();
-  } catch (error: any) {
-    console.error('API Upload Error:', error);
-    throw error;
-  }
+    
+    xhr.send(formData);
+  });
 }
 
 export function getServerBaseUrl(): string {
@@ -653,9 +716,11 @@ export const documentApi = {
       appointmentTo?: string;
       autoRename?: boolean;
       replace?: boolean;
+      compressionLevel?: string;
     },
     userId?: string,
-    userName?: string
+    userName?: string,
+    onProgress?: (e: ProgressEvent) => void
   ) => {
     const formData = new FormData();
     // Fields must come before the file so multer can read them in destination/filename callbacks
@@ -685,17 +750,16 @@ export const documentApi = {
     if (data.appointmentTo) formData.append('appointmentTo', data.appointmentTo);
     if (data.autoRename !== undefined) formData.append('autoRename', String(data.autoRename));
     if (data.replace !== undefined) formData.append('replace', String(data.replace));
+    if (data.compressionLevel) formData.append('compressionLevel', data.compressionLevel);
     formData.append('file', file);
 
     const headers: Record<string, string> = {};
     if (userId) headers['X-User-Id'] = userId;
     if (userName) headers['X-User-Name'] = userName;
 
-    const res = await apiUpload<any>('/documents', formData, headers);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('employeeUpdated'));
-      window.dispatchEvent(new Event('documentsUpdated'));
-    }
+    const res = await apiUploadWithProgress<any>('/documents', formData, headers, onProgress);
+    // Note: dispatchEvent was removed here to prevent glitching on bulk uploads. 
+    // The calling hook should handle refreshing when appropriate.
     return res;
   },
   update: (id: string, data: any, userId?: string, approvalToken?: string) => {

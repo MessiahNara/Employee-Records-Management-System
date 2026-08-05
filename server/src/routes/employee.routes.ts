@@ -6,6 +6,7 @@ import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { uploadProfilePicture } from '../middleware/upload';
 import fs from 'fs';
 import path from 'path';
+import { getIO } from '../socket';
 
 const router = Router();
 
@@ -374,6 +375,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    getIO()?.emit('employeeUpdated');
     res.status(201).json(employee);
   } catch (error) {
     console.error('Error creating employee:', error);
@@ -538,6 +540,7 @@ router.post('/sync-import', requireSuperadminApproval, async (req: Request, res:
       },
     });
 
+    getIO()?.emit('employeeUpdated');
     return res.json({
       message: 'Import completed successfully',
       upsertedCount: insertedCount + updatedCount,
@@ -628,6 +631,7 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
       details: { changedFields: Object.keys(updateData), values: updateData, oldValues },
     });
 
+    getIO()?.emit('employeeUpdated');
     res.json(employee);
   } catch (error) {
     console.error('Error updating employee:', error);
@@ -839,6 +843,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
         details: { changedFields: Object.keys(updateData), values: updateData, oldValues },
       });
 
+      getIO()?.emit('employeeUpdated');
       res.json(employee);
       return;
     }
@@ -861,6 +866,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
       details: { changedFields: Object.keys(updateData), values: updateData },
     });
 
+    getIO()?.emit('employeeUpdated');
     res.json(employee);
   } catch (error: any) {
     console.error('Error updating employee:', error);
@@ -912,6 +918,7 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
       where: { id },
     });
 
+    getIO()?.emit('employeeUpdated');
     res.json({ 
       message: 'Employee deleted successfully',
       deletedDocuments: employee.documents.length,

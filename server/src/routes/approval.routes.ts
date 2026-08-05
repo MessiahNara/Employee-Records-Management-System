@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import { issueSuperadminApprovalToken } from '../lib/superadminApproval';
 import { createAuditLog } from '../utils/auditHelper';
 import bcrypt from 'bcryptjs';
+import { getIO } from '../socket';
 
 const router = Router();
 
@@ -105,6 +106,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    getIO()?.emit('approvalsUpdated');
     res.status(201).json(request);
   } catch (error) {
     console.error('Error creating approval request:', error);
@@ -176,6 +178,8 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
       },
     });
 
+    getIO()?.emit('approvalsUpdated');
+
     // Return the token and payload so the frontend can execute the action
     res.json({
       approved: true,
@@ -245,6 +249,7 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
       },
     });
 
+    getIO()?.emit('approvalsUpdated');
     res.json({ rejected: true });
   } catch (error) {
     console.error('Error rejecting request:', error);
@@ -257,6 +262,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     await (prisma as any).approvalRequest.delete({ where: { id } });
+    getIO()?.emit('approvalsUpdated');
     res.json({ deleted: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete request' });

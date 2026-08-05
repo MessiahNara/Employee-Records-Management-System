@@ -29,6 +29,9 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
   const [pdfData, setPdfData] = useState<string | null>(null);
   const [isFolderUploading, setIsFolderUploading] = useState(false);
+  const [folderUploadProgress, setFolderUploadProgress] = useState<string | null>(null);
+  const [folderUploadConfirm, setFolderUploadConfirm] = useState<{ files: File[] } | null>(null);
+  const [folderCompressionLevel, setFolderCompressionLevel] = useState<'extreme' | 'recommended' | 'less'>('recommended');
   const [duplicateConfirm, setDuplicateConfirm] = useState<{
     fileName: string;
     onResolve: (action: 'replace' | 'skip', applyToAll: boolean) => void;
@@ -128,7 +131,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   // Get selected documents info for bulk delete
   const selectedDocuments = documents.filter(doc => selectedDocumentIds.has(doc.id));
 
-  const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any) => {
+  const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any, compressionLevel: string = 'recommended', onProgress?: (progressText: string) => void) => {
     try {
       let globalDuplicateAction: 'replace' | 'skip' | null = null;
       let uploadedCount = 0;
@@ -162,7 +165,16 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           }
         }
 
-        await uploadDocument(file, category, aoData, false, replace);
+        await uploadDocument(file, category, aoData, true, replace, compressionLevel, (e: ProgressEvent) => {
+          if (onProgress) {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              onProgress(`Uploading ${file.name}... ${percent}%`);
+            } else {
+              onProgress(`Uploading ${file.name}...`);
+            }
+          }
+        });
         uploadedCount++;
       }
 
@@ -176,13 +188,20 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
       } else if (canceledCount > 0) {
         showToast(`Upload canceled: ${canceledCount} duplicate file(s) skipped.`, 'info');
       }
+
+      // We skipped refresh during the loop, now refresh once globally
+      refreshDocuments();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('employeeUpdated'));
+        window.dispatchEvent(new Event('documentsUpdated'));
+      }
     } catch (err: any) {
       console.error('PDFDocumentsModule: Upload failed:', err);
       showToast(err.message || 'Failed to upload document', 'error');
     }
   };
 
-  const handleFolderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -193,6 +212,16 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
       return;
     }
 
+    setFolderUploadConfirm({ files: pdfFiles });
+    // Reset input so the same folder can be picked again if needed
+    e.target.value = '';
+  };
+
+  const executeFolderUpload = async () => {
+    if (!folderUploadConfirm) return;
+    const pdfFiles = folderUploadConfirm.files;
+    setFolderUploadConfirm(null);
+    
     setIsFolderUploading(true);
     let successCount = 0;
     let failCount = 0;
@@ -221,6 +250,9 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
 
     try {
       let globalDuplicateAction: 'replace' | 'skip' | null = null;
+      
+      const totalFiles = pdfFiles.length;
+      let currentIndex = 0;
 
       for (const file of pdfFiles) {
         const relPath = file.webkitRelativePath || file.name;
@@ -259,7 +291,15 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
         }
 
         try {
-          await uploadDocument(file, resolvedCategory, undefined, true, replace);
+          currentIndex++;
+          await uploadDocument(file, resolvedCategory, undefined, true, replace, folderCompressionLevel, (e: ProgressEvent) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              setFolderUploadProgress(`File ${currentIndex} of ${totalFiles} (${percent}%)`);
+            } else {
+              setFolderUploadProgress(`File ${currentIndex} of ${totalFiles}`);
+            }
+          });
           successCount++;
         } catch (uploadError) {
           console.error(`Failed to upload ${file.name}:`, uploadError);
@@ -267,7 +307,12 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
         }
       }
 
+      // We skipped refresh during the loop, now refresh once globally
       refreshDocuments();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('employeeUpdated'));
+        window.dispatchEvent(new Event('documentsUpdated'));
+      }
 
       let summaryMessage = `Uploaded ${successCount} document(s).`;
       if (canceledCount > 0) {
@@ -287,7 +332,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
       showToast(err.message || 'Error uploading folder.', 'error');
     } finally {
       setIsFolderUploading(false);
-      e.target.value = '';
+      setFolderUploadProgress(null);
     }
   };
 
@@ -366,7 +411,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
                 onClick={() => document.getElementById('folder-upload-input')?.click()}
                 disabled={isFolderUploading}
               >
-                {isFolderUploading ? '⏳ Uploading...' : '📁 Upload Folder'}
+                {isFolderUploading ? (folderUploadProgress || '⏳ Uploading...') : '📁 Upload Folder'}
               </Button>
               <input
                 id="folder-upload-input"
@@ -446,6 +491,61 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           employeeId={employeeId}
           employeeName={employeeName}
         />
+
+        {folderUploadConfirm && (
+          <Modal
+            isOpen={true}
+            onClose={() => setFolderUploadConfirm(null)}
+            title="Confirm Folder Upload"
+          >
+            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <p style={{ margin: 0 }}>Ready to upload <strong>{folderUploadConfirm.files.length}</strong> PDF documents from the selected folder.</p>
+              
+              <div className="upload-modal__field compression-field" style={{ marginTop: 0 }}>
+                <label className="upload-modal__label">Compression level</label>
+                <div className="compression-options">
+                  <div 
+                    className={`compression-option ${folderCompressionLevel === 'extreme' ? 'active' : ''}`}
+                    onClick={() => setFolderCompressionLevel('extreme')}
+                  >
+                    <div className="compression-option-text">
+                      <span className="compression-title">EXTREME COMPRESSION</span>
+                      <span className="compression-desc">Less quality, high compression</span>
+                    </div>
+                    {folderCompressionLevel === 'extreme' && <div className="compression-check">✓</div>}
+                  </div>
+                  
+                  <div 
+                    className={`compression-option ${folderCompressionLevel === 'recommended' ? 'active' : ''}`}
+                    onClick={() => setFolderCompressionLevel('recommended')}
+                  >
+                    <div className="compression-option-text">
+                      <span className="compression-title">RECOMMENDED COMPRESSION</span>
+                      <span className="compression-desc">Good quality, good compression</span>
+                    </div>
+                    {folderCompressionLevel === 'recommended' && <div className="compression-check">✓</div>}
+                  </div>
+                  
+                  <div 
+                    className={`compression-option ${folderCompressionLevel === 'less' ? 'active' : ''}`}
+                    onClick={() => setFolderCompressionLevel('less')}
+                  >
+                    <div className="compression-option-text">
+                      <span className="compression-title">LESS COMPRESSION</span>
+                      <span className="compression-desc">High quality, less compression</span>
+                    </div>
+                    {folderCompressionLevel === 'less' && <div className="compression-check">✓</div>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="upload-modal__actions">
+                <Button variant="ghost" onClick={() => setFolderUploadConfirm(null)}>Cancel</Button>
+                <Button variant="primary" onClick={executeFolderUpload}>Start Upload</Button>
+              </div>
+            </div>
+          </Modal>
+        )}
 
         {duplicateConfirm && (
           <Modal

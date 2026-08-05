@@ -6,8 +6,52 @@ import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { uploadDocumentFile } from '../middleware/upload';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import util from 'util';
 
 const router = Router();
+const execPromise = util.promisify(exec);
+
+async function compressPDF(inputPath: string, level: string = 'recommended'): Promise<string | null> {
+  if (!inputPath.toLowerCase().endsWith('.pdf')) return null;
+  
+  const outputPath = inputPath.replace(/\.pdf$/i, '_compressed.pdf');
+  
+  // Map our UI levels to Ghostscript settings
+  let gsFlags = '-dPDFSETTINGS=/ebook'; // recommended default
+  
+  if (level === 'extreme') {
+    gsFlags = '-dPDFSETTINGS=/screen';
+  } else if (level === 'less') {
+    gsFlags = '-dPDFSETTINGS=/printer';
+  } else if (level === 'recommended') {
+    // ilovepdf-style balance: forces downsampling on anything above 144 DPI (instead of default 1.5x threshold)
+    gsFlags = '-dPDFSETTINGS=/ebook -dColorImageDownsampleThreshold=1.0 -dColorImageResolution=144 -dGrayImageDownsampleThreshold=1.0 -dGrayImageResolution=144';
+  }
+  
+  try {
+    const command = `gswin64c.exe -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 ${gsFlags} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
+    await execPromise(command);
+    
+    if (fs.existsSync(outputPath)) {
+      const inputStats = fs.statSync(inputPath);
+      const outputStats = fs.statSync(outputPath);
+      
+      if (outputStats.size < inputStats.size && outputStats.size > 0) {
+        return outputPath;
+      } else {
+        fs.unlinkSync(outputPath);
+        return null;
+      }
+    }
+  } catch (err) {
+    console.error('[Ghostscript] Error compressing PDF:', err);
+    if (fs.existsSync(outputPath)) {
+      try { fs.unlinkSync(outputPath); } catch (e) {}
+    }
+  }
+  return null;
+}
 
 const toNullableDate = (value: any): Date | null => {
   if (value === undefined || value === null || value === '') {
@@ -181,7 +225,8 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
       recalledOrderTo,
       appointmentFrom,
       appointmentTo,
-      autoRename
+      autoRename,
+      compressionLevel
     } = req.body;
     const uploadedFile = req.file;
 
@@ -279,13 +324,32 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
     const userId = req.headers['x-user-id'] as string || 'system';
     const userName = req.headers['x-user-name'] as string || 'System';
 
+    let finalFileSize = parseInt(fileSize) || uploadedFile.size || 0;
+
+    // Try to compress the PDF
+    try {
+      console.log(`[document] Attempting to compress ${finalFilePath} with level ${compressionLevel}...`);
+      const compressedPath = await compressPDF(finalFilePath, compressionLevel);
+      if (compressedPath) {
+        fs.unlinkSync(finalFilePath);
+        fs.renameSync(compressedPath, finalFilePath);
+        const newStats = fs.statSync(finalFilePath);
+        finalFileSize = newStats.size;
+        console.log(`[document] Successfully compressed PDF. New size: ${finalFileSize}`);
+      } else {
+        console.log(`[document] Compression skipped or didn't reduce size.`);
+      }
+    } catch (compressErr) {
+      console.error('[document] Failed to compress PDF, skipping...', compressErr);
+    }
+
     const document = await prisma.document.create({
       data: {
         employeeId,
         category,
         fileName: finalFileName,
         filePath: finalFilePath,
-        fileSize: parseInt(fileSize) || uploadedFile.size || 0,
+        fileSize: finalFileSize,
         mimeType: mimeType || uploadedFile.mimetype || 'application/pdf',
         uploadedBy: userName,
         aoNumber: aoNumber || null,

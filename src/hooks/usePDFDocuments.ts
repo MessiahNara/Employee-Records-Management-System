@@ -7,7 +7,7 @@ interface UsePDFDocumentsReturn {
   documents: EmployeeDocument[];
   loading: boolean;
   error: string | null;
-  uploadDocument: (file: File, category: DocumentCategory, aoData?: any, skipRefresh?: boolean, replace?: boolean) => Promise<void>;
+  uploadDocument: (file: File, category: DocumentCategory, aoData?: any, skipRefresh?: boolean, replace?: boolean, compressionLevel?: string, onProgress?: (e: ProgressEvent) => void) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
   getDocumentData: (documentId: string) => string | null;
   refreshDocuments: () => void;
@@ -79,7 +79,9 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
     category: DocumentCategory,
     aoData?: any,
     skipRefresh = false,
-    replace = false
+    replace = false,
+    compressionLevel?: string,
+    onProgress?: (e: ProgressEvent) => void
   ): Promise<void> => {
     // Validate file before entering try-catch
     const validation = validatePDFFile(file);
@@ -99,17 +101,24 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
+          autoRename: aoData?.autoRename,
           replace,
+          compressionLevel,
           ...aoData
         },
         currentUser?.id,
         currentUser?.name ||
           [currentUser?.lastName, currentUser?.firstName].filter(Boolean).join(', ') ||
           currentUser?.username ||
-          'Unknown'
+          'Unknown',
+        onProgress
       );
 
       if (!skipRefresh) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('employeeUpdated'));
+          window.dispatchEvent(new Event('documentsUpdated'));
+        }
         try {
           await loadDocuments();
         } catch (refreshErr) {

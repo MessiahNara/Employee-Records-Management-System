@@ -710,10 +710,14 @@ function Users() {
       showToast('You cannot delete your own account.', 'error');
       return;
     }
+    setPendingDeleteUser(user);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!pendingDeleteUser) return;
+    const user = pendingDeleteUser;
     const userName = `${user.lastName}, ${user.firstName}`;
-    if (!window.confirm(`Are you sure you want to delete user ${userName}?`)) {
-      return;
-    }
+    
     try {
       await api.user.delete(user.id);
 
@@ -734,6 +738,8 @@ function Users() {
       fetchUsers();
     } catch (err: any) {
       showToast(err.message || 'Failed to delete user.', 'error');
+    } finally {
+      setPendingDeleteUser(null);
     }
   };
 
@@ -1246,6 +1252,29 @@ function Users() {
           )}
         </div>
       </Modal>
+
+      {/* Delete User Confirm Modal */}
+      {pendingDeleteUser && (
+        <Modal
+          isOpen={true}
+          onClose={() => setPendingDeleteUser(null)}
+          title="Delete User"
+          footer={
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <Button variant="ghost" onClick={() => setPendingDeleteUser(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={confirmDeleteUser}>
+                Delete User
+              </Button>
+            </div>
+          }
+        >
+          <p>
+            Are you sure you want to delete user <strong>{pendingDeleteUser.lastName}, {pendingDeleteUser.firstName}</strong>? This action cannot be undone.
+          </p>
+        </Modal>
+      )}
 
     </div>
   );

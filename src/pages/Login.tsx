@@ -5,7 +5,8 @@ import Input from '../components/ui/Input';
 import { saveAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
-import api from '../services/api';
+import api, { setServerBaseUrl, getApiBaseUrl } from '../services/api';
+import Modal from '../components/ui/Modal';
 import {
   MdFolderSpecial,
   MdShield,
@@ -16,7 +17,8 @@ import {
   MdWarning,
   MdLogin,
   MdLightMode,
-  MdDarkMode
+  MdDarkMode,
+  MdSettings
 } from 'react-icons/md';
 import './Login.css';
 
@@ -37,6 +39,33 @@ function Login() {
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isServerConfigOpen, setIsServerConfigOpen] = useState(false);
+  const [serverUrlInput, setServerUrlInput] = useState('');
+
+  // Pre-fill server URL input with current base URL or default
+  const handleOpenServerConfig = () => {
+    setServerUrlInput(getApiBaseUrl ? getApiBaseUrl() : 'https://127.0.0.1:5000');
+    setIsServerConfigOpen(true);
+  };
+
+  const handleSaveServerConfig = async () => {
+    let urlToSave = serverUrlInput.trim();
+    if (!urlToSave) return;
+    
+    // Auto-add https:// if missing
+    if (!urlToSave.startsWith('http://') && !urlToSave.startsWith('https://')) {
+      urlToSave = 'https://' + urlToSave;
+    }
+    
+    const success = await setServerBaseUrl(urlToSave);
+    if (success) {
+      showWelcomeToast('Server', 'Configured Successfully');
+      setIsServerConfigOpen(false);
+    } else {
+      setLoginError('Failed to save server URL. Make sure you are using the Electron client.');
+      setIsServerConfigOpen(false);
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof LoginFormData, string>> = {};
@@ -160,26 +189,39 @@ function Login() {
 
         {/* Right Side - Modern Login Form */}
         <div className="login__form-container">
-          {/* Top Right Floating Dark Mode Toggle Switch */}
-          <button
-            type="button"
-            className="login__theme-toggle"
-            onClick={toggleTheme}
-            title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? (
-              <>
-                <MdLightMode className="login__theme-icon login__theme-icon--sun" />
-                <span>Light</span>
-              </>
-            ) : (
-              <>
-                <MdDarkMode className="login__theme-icon login__theme-icon--moon" />
-                <span>Dark</span>
-              </>
-            )}
-          </button>
+          {/* Top Right Floating Actions */}
+          <div className="login__top-actions">
+            <button
+              type="button"
+              className="login__theme-toggle"
+              onClick={handleOpenServerConfig}
+              title="Configure Server Address"
+              aria-label="Server Configuration"
+            >
+              <MdSettings className="login__theme-icon" style={{ color: 'var(--text-secondary)' }} />
+              <span>Server</span>
+            </button>
+
+            <button
+              type="button"
+              className="login__theme-toggle"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <MdLightMode className="login__theme-icon login__theme-icon--sun" />
+                  <span>Light</span>
+                </>
+              ) : (
+                <>
+                  <MdDarkMode className="login__theme-icon login__theme-icon--moon" />
+                  <span>Dark</span>
+                </>
+              )}
+            </button>
+          </div>
 
           <div className="login__card">
             <div className="login__header">
@@ -258,6 +300,33 @@ function Login() {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={isServerConfigOpen}
+        onClose={() => setIsServerConfigOpen(false)}
+        title="Server Configuration"
+        size="sm"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <Button variant="ghost" onClick={() => setIsServerConfigOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSaveServerConfig}>Save & Connect</Button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.5rem 0' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            Enter the IP address or domain name of the Server PC to connect. (e.g. <code>https://192.168.1.100:5000</code>)
+          </p>
+          <Input
+            label="Server URL"
+            value={serverUrlInput}
+            onChange={(e) => setServerUrlInput(e.target.value)}
+            placeholder="https://192.168.x.x:5000"
+            fullWidth
+          />
+        </div>
+      </Modal>
+
     </div>
   );
 }

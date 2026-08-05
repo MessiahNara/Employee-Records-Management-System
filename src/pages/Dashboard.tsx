@@ -3671,35 +3671,48 @@ function Dashboard() {
       try {
         const empName = `${selectedEmployee.lastName}, ${selectedEmployee.firstName}`;
 
-        // If there is an AO file, upload it first
+        let payloadToSubmit: any = { ...changedFields };
+
+        // If there is an AO file, attach it to the payload as base64 so it can be uploaded upon approval
         if (aoFile) {
-          await api.document.upload(
-            aoFile,
-            {
-              employeeId: selectedEmployee.id,
-              employeeName: empName,
-              category: 'Administrative Order',
-              fileName: aoFile.name,
-              fileSize: Math.round(aoFile.size / 1024),
-              mimeType: aoFile.type || 'application/pdf',
-              aoNumber: formData.aoNumber,
-              aoYear: formData.aoYear,
-              aoType: formData.aoType,
-              detailedTo: formData.detailedTo,
-              detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
-              detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
-              designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
-              designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
-              designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
-              recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
-              recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
-              recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
-              recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
-              autoRename,
-            },
-            currentUser?.id,
-            `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
-          );
+          try {
+            const aoFileData = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(aoFile);
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+            });
+
+            payloadToSubmit._aoFile = {
+              data: aoFileData,
+              metadata: {
+                employeeId: selectedEmployee.id,
+                employeeName: empName,
+                category: 'Administrative Order',
+                fileName: aoFile.name,
+                fileSize: Math.round(aoFile.size / 1024),
+                mimeType: aoFile.type || 'application/pdf',
+                aoNumber: formData.aoNumber,
+                aoYear: formData.aoYear,
+                aoType: formData.aoType,
+                detailedTo: formData.detailedTo,
+                detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
+                detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
+                designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
+                designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
+                designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
+                recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
+                recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
+                recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
+                recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
+                autoRename,
+              }
+            };
+          } catch (fileErr) {
+            console.error('Failed to encode AO file:', fileErr);
+            showToast('Failed to attach AO file to request.', 'error');
+            return;
+          }
         }
 
         await api.approvals.submit({
@@ -3709,7 +3722,7 @@ function Dashboard() {
           entityType: 'employee',
           entityId: selectedEmployee.id,
           entityName: empName,
-          payload: changedFields,
+          payload: payloadToSubmit,
         });
         handleCloseUpdateEmployeeModal();
         showToast('✅ Update request submitted. Go to Approvals to review and execute.', 'info');
@@ -4522,65 +4535,65 @@ function Dashboard() {
                       emptyMessage="No AO reports matching filters found"
                     />
                   </div>
-                  {reportsForActiveTab.length > 0 && (
-                    <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
-                      <div className="dashboard__page-size">
-                        <span className="dashboard__page-size-label">Rows per page:</span>
-                        {PAGE_SIZE_OPTIONS.map((size) => (
-                          <button
-                            key={size}
-                            className={`dashboard__page-size-btn${reportItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                            onClick={() => {
-                              setReportItemsPerPage(size);
-                              setReportCurrentPage(1);
-                            }}
-                          >
-                            {size}
-                          </button>
-                        ))}
-                      </div>
-                      {reportTotalPages > 1 && (
-                        <div className="dashboard__pagination-controls">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReportCurrentPage(1)}
-                            disabled={reportCurrentPage === 1}
-                          >
-                            First
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReportCurrentPage(reportCurrentPage - 1)}
-                            disabled={reportCurrentPage === 1}
-                          >
-                            Previous
-                          </Button>
-                          <div className="dashboard__pagination-info">
-                            Page {reportCurrentPage} of {reportTotalPages}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReportCurrentPage(reportCurrentPage + 1)}
-                            disabled={reportCurrentPage === reportTotalPages}
-                          >
-                            Next
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setReportCurrentPage(reportTotalPages)}
-                            disabled={reportCurrentPage === reportTotalPages}
-                          >
-                            Last
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
+                {reportsForActiveTab.length > 0 && (
+                  <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
+                    <div className="dashboard__page-size">
+                      <span className="dashboard__page-size-label">Rows per page:</span>
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <button
+                          key={size}
+                          className={`dashboard__page-size-btn${reportItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                          onClick={() => {
+                            setReportItemsPerPage(size);
+                            setReportCurrentPage(1);
+                          }}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                    {reportTotalPages > 1 && (
+                      <div className="dashboard__pagination-controls">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setReportCurrentPage(1)}
+                          disabled={reportCurrentPage === 1}
+                        >
+                          First
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setReportCurrentPage(reportCurrentPage - 1)}
+                          disabled={reportCurrentPage === 1}
+                        >
+                          Previous
+                        </Button>
+                        <div className="dashboard__pagination-info">
+                          Page {reportCurrentPage} of {reportTotalPages}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setReportCurrentPage(reportCurrentPage + 1)}
+                          disabled={reportCurrentPage === reportTotalPages}
+                        >
+                          Next
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setReportCurrentPage(reportTotalPages)}
+                          disabled={reportCurrentPage === reportTotalPages}
+                        >
+                          Last
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card>
             </>
           ) : (
@@ -4766,24 +4779,26 @@ function Dashboard() {
                           emptyMessage="No borrow/return transactions found"
                         />
                       </div>
+                    </div>
 
-                      {borrowTotalPages > 1 && (
-                        <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
-                          <div className="dashboard__page-size">
-                            <span className="dashboard__page-size-label">Rows per page:</span>
-                            {PAGE_SIZE_OPTIONS.map((size) => (
-                              <button
-                                key={size}
-                                className={`dashboard__page-size-btn${borrowItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                                onClick={() => {
-                                  setBorrowItemsPerPage(size);
-                                  setBorrowCurrentPage(1);
-                                }}
-                              >
-                                {size}
-                              </button>
-                            ))}
-                          </div>
+                    {filteredBorrowRows.length > 0 && (
+                      <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
+                        <div className="dashboard__page-size">
+                          <span className="dashboard__page-size-label">Rows per page:</span>
+                          {PAGE_SIZE_OPTIONS.map((size) => (
+                            <button
+                              key={size}
+                              className={`dashboard__page-size-btn${borrowItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                              onClick={() => {
+                                setBorrowItemsPerPage(size);
+                                setBorrowCurrentPage(1);
+                              }}
+                            >
+                              {size}
+                            </button>
+                          ))}
+                        </div>
+                        {borrowTotalPages > 1 && (
                           <div className="dashboard__pagination-controls">
                             <Button
                               variant="ghost"
@@ -4821,9 +4836,9 @@ function Dashboard() {
                               Last
                             </Button>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </Card>

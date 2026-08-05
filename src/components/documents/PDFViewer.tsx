@@ -208,7 +208,7 @@ function PDFViewer({
   }
 
   // Only privileged users get a real src — everyone else sees the locked placeholder
-  const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#zoom=${zoom}` : '';
+  const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#toolbar=0&zoom=${zoom}` : '';
 
   const modalSize = isMaximized ? 'xl' : 'lg';
 
@@ -220,6 +220,7 @@ function PDFViewer({
         title={employeeDocument.fileName}
         size={modalSize}
         isMaximized={isMaximized}
+        noPadding
       >
         <div className={`pdf-viewer ${!canDownloadOrPrint ? 'pdf-viewer--no-print' : ''} ${isMaximized ? 'pdf-viewer--maximized' : ''}`}>
           <div className="pdf-viewer__header">
@@ -236,18 +237,39 @@ function PDFViewer({
             </div>
 
             <div className="pdf-viewer__actions">
-              {/* Window Controls: Minus (Minimize) and Plus (Maximize) */}
+              {/* Zoom Controls */}
+              <button
+                type="button"
+                className="pdf-viewer__window-btn"
+                onClick={handleZoomOut}
+                title="Zoom Out"
+                aria-label="Zoom Out"
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+              >
+                ➖
+              </button>
+              <button
+                type="button"
+                className="pdf-viewer__window-btn"
+                onClick={handleZoomIn}
+                title="Zoom In"
+                aria-label="Zoom In"
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+              >
+                ➕
+              </button>
+
+              {/* Window Controls */}
               <button
                 type="button"
                 className="pdf-viewer__window-btn"
                 onClick={() => setIsMinimized(true)}
                 title="Minimize file viewer"
                 aria-label="Minimize file viewer"
-                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem', marginLeft: '0.5rem' }}
               >
-                ➖
+                🗕
               </button>
-
               <button
                 type="button"
                 className="pdf-viewer__window-btn"
@@ -256,7 +278,7 @@ function PDFViewer({
                 aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
                 style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
               >
-                ➕
+                {isMaximized ? '🗗' : '🗖'}
               </button>
 
               {canDownloadOrPrint ? (

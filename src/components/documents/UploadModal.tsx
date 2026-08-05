@@ -11,7 +11,7 @@ import './UploadModal.css';
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload: (files: File[], category: DocumentCategory, aoData?: any) => Promise<void>;
+  onUpload: (files: File[], category: DocumentCategory, aoData?: any, compressionLevel?: string, onProgress?: (progressText: string) => void) => Promise<void>;
   defaultCategory?: DocumentCategory;
 }
 
@@ -24,6 +24,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
     defaultCategory || 'Personal Information'
   );
   const [isUploading, setIsUploading] = useState(false);
+  const [compressionLevel, setCompressionLevel] = useState<'extreme' | 'recommended' | 'less'>('recommended');
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
@@ -65,6 +66,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
       setSelectedFiles([]);
       setError(null);
       setIsUploading(false);
+      setCompressionLevel('recommended');
       setUploadProgress(null);
       setFieldErrors({});
 
@@ -226,7 +228,9 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
         autoRename,
       } : undefined;
 
-      await onUpload(selectedFiles, selectedCategory, aoData);
+      await onUpload(selectedFiles, selectedCategory, aoData, compressionLevel, (progressText) => {
+        setUploadProgress(progressText);
+      });
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to upload documents');
@@ -580,6 +584,44 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
               )}
             </div>
           )}
+        </div>
+        
+        <div className="upload-modal__field compression-field">
+          <label className="upload-modal__label">Compression level</label>
+          <div className="compression-options">
+            <div 
+              className={`compression-option ${compressionLevel === 'extreme' ? 'active' : ''}`}
+              onClick={() => !isUploading && setCompressionLevel('extreme')}
+            >
+              <div className="compression-option-text">
+                <span className="compression-title">EXTREME COMPRESSION</span>
+                <span className="compression-desc">Less quality, high compression</span>
+              </div>
+              {compressionLevel === 'extreme' && <div className="compression-check">✓</div>}
+            </div>
+            
+            <div 
+              className={`compression-option ${compressionLevel === 'recommended' ? 'active' : ''}`}
+              onClick={() => !isUploading && setCompressionLevel('recommended')}
+            >
+              <div className="compression-option-text">
+                <span className="compression-title">RECOMMENDED COMPRESSION</span>
+                <span className="compression-desc">Good quality, good compression</span>
+              </div>
+              {compressionLevel === 'recommended' && <div className="compression-check">✓</div>}
+            </div>
+            
+            <div 
+              className={`compression-option ${compressionLevel === 'less' ? 'active' : ''}`}
+              onClick={() => !isUploading && setCompressionLevel('less')}
+            >
+              <div className="compression-option-text">
+                <span className="compression-title">LESS COMPRESSION</span>
+                <span className="compression-desc">High quality, less compression</span>
+              </div>
+              {compressionLevel === 'less' && <div className="compression-check">✓</div>}
+            </div>
+          </div>
         </div>
 
         {selectedCategory === 'Administrative Order' && (

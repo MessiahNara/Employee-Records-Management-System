@@ -11,9 +11,10 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   hideCloseButton?: boolean;
   isMaximized?: boolean;
+  noPadding?: boolean;
 }
 
-function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideCloseButton = false, isMaximized = false }: ModalProps) {
+function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideCloseButton = false, isMaximized = false, noPadding = false }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -57,7 +58,6 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
       className={`modal-overlay ${isMaximized ? 'modal-overlay--maximized' : ''}`}
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
     >
       <div
         ref={modalRef}
@@ -78,7 +78,7 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
             )}
           </div>
         )}
-        <div className="modal__body">{children}</div>
+        <div className={`modal__body ${noPadding ? 'modal__body--no-padding' : ''}`}>{children}</div>
         {footer && <div className="modal__footer">{footer}</div>}
       </div>
     </div>,

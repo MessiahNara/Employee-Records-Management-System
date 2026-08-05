@@ -87,6 +87,14 @@ function EmployeeDetails() {
     }
   }, [id]);
 
+  useEffect(() => {
+    const handleUpdate = () => {
+      if (id) fetchEmployee(id);
+    };
+    window.addEventListener('employeeUpdated', handleUpdate);
+    return () => window.removeEventListener('employeeUpdated', handleUpdate);
+  }, [id]);
+
   // If navigated via barcode scan, auto-open the 201 borrow/return modal
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -674,7 +682,49 @@ function EmployeeDetails() {
         )}
 
         {/* Documents Section */}
-        <PDFDocumentsModule employeeId={employee.id} employeeName={`${employee.firstName} ${employee.middleName || ''} ${employee.lastName}`.trim()} />
+        <PDFDocumentsModule 
+          employeeId={employee.id} 
+          employeeName={(() => {
+            let surname = employee.lastName.trim().toUpperCase();
+            let first = employee.firstName.trim().toUpperCase();
+            const middle = employee.middleName ? employee.middleName.trim().toUpperCase() : '';
+
+            let suffix = '';
+            const suffixRegex = /(?:,|\s)+(JR\.?|SR\.?|I{2,3}|IV|V|VI{1,3})$/i;
+
+            let match = surname.match(suffixRegex);
+            if (match) {
+              let rawSuffix = match[1].toUpperCase();
+              if (['JR', 'JR.', 'SR', 'SR.'].includes(rawSuffix)) {
+                suffix = rawSuffix.replace(/\.?$/, '.');
+              } else {
+                suffix = rawSuffix;
+              }
+              surname = surname.replace(suffixRegex, '').trim();
+            } else {
+              match = first.match(suffixRegex);
+              if (match) {
+                let rawSuffix = match[1].toUpperCase();
+                if (['JR', 'JR.', 'SR', 'SR.'].includes(rawSuffix)) {
+                  suffix = rawSuffix.replace(/\.?$/, '.');
+                } else {
+                  suffix = rawSuffix;
+                }
+                first = first.replace(suffixRegex, '').trim();
+              }
+            }
+
+            let formatted = surname;
+            if (suffix) {
+              formatted += `, ${suffix}`;
+            }
+            formatted += `, ${first}`;
+            if (middle) {
+              formatted += ` ${middle}`;
+            }
+            return formatted;
+          })()} 
+        />
       </div>
 
       <Modal

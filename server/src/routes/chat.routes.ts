@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { getIO } from '../socket';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -153,6 +154,7 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
 
+    getIO()?.emit('chatsUpdated');
     res.json(messages);
   } catch (error) {
     console.error('Error fetching chat history:', error);
@@ -201,6 +203,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    getIO()?.emit('chatsUpdated');
     res.status(201).json(message);
   } catch (error) {
     console.error('Error sending private message:', error);
@@ -240,6 +243,7 @@ router.delete('/:recipientId', async (req: Request, res: Response) => {
       }
     });
 
+    getIO()?.emit('chatsUpdated');
     res.json({ message: 'Conversation deleted successfully', count: updateSent.count + updateReceived.count });
   } catch (error) {
     console.error('Error deleting conversation:', error);

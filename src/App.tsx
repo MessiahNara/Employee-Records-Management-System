@@ -18,6 +18,8 @@ import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
 import { getAuthState } from './utils/mockAuth';
+import { initSocketClient, getSocket } from './services/socket';
+import { useEffect } from 'react';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -33,6 +35,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function App() {
   // Note: Using sessionStorage for auth means users are automatically logged out
   // when they close the browser/tab (no additional logic needed)
+  
+  useEffect(() => {
+    initSocketClient();
+    return () => {
+      const socket = getSocket();
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, []);
 
   return (
     <ToastProvider>

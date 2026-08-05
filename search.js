@@ -1,13 +1,16 @@
 const fs = require('fs');
-const content = fs.readFileSync('c:\\Employee Records Management System\\src\\pages\\Dashboard.tsx', 'utf8');
-const lines = content.split('\n');
-let out = '';
-lines.forEach((line, i) => {
-  if (line.includes('handleExport')) {
-    out += `${i+1}: ${line}\n`;
+const path = require('path');
+const search = (dir) => {
+  const files = fs.readdirSync(dir);
+  for (const file of files) {
+    const fp = path.join(dir, file);
+    if (fs.statSync(fp).isDirectory()) search(fp);
+    else if (fp.endsWith('.tsx') || fp.endsWith('.ts')) {
+      const content = fs.readFileSync(fp, 'utf8');
+      if (content.includes('Disposal Appraisal stage') || content.includes('Evaluate & Move to Disposal')) {
+        console.log('FOUND IN:', fp);
+      }
+    }
   }
-  if (line.includes('ExportButton')) {
-    out += `${i+1}: ${line}\n`;
-  }
-});
-fs.writeFileSync('c:\\Employee Records Management System\\search_out.txt', out);
+};
+search('./src');

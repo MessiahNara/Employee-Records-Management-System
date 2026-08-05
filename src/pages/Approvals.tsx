@@ -27,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   download_document: 'Download Document',
   delete_inventory_record: 'Delete Inventory Record',
   bulk_delete_inventory_records: 'Bulk Delete Inventory Records',
+  create_group_chat: 'Create Group Chat',
 };
 
 function Approvals() {
@@ -89,6 +90,14 @@ function Approvals() {
   }, [filter]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchRequests();
+    };
+    window.addEventListener('approvalsUpdated', handleUpdate);
+    return () => window.removeEventListener('approvalsUpdated', handleUpdate);
+  }, [fetchRequests]);
 
   const formatRequestedInfo = (req: any): string => {
     const payload = req.payload || {};
@@ -181,6 +190,9 @@ function Approvals() {
         const actionWord = req.action === 'view_document' ? 'View' : req.action === 'print_document' ? 'Print' : 'Download';
         return `${actionWord}: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}${payload.employeeName ? ` — Employee: ${payload.employeeName}` : ''}${payload.purpose ? ` | Purpose: ${payload.purpose}` : ''}`;
       }
+      case 'create_group_chat': {
+        return `Create Group Chat: "${payload.groupName}" with ${payload.selectedMemberIds?.length || 0} members (${payload.memberNames || 'None'})`;
+      }
       default:
         return req.entityName || req.entityId;
     }
@@ -202,8 +214,39 @@ function Approvals() {
         // Extract only the 'to' values from { from, to } structure
         const flatPayload: any = {};
         for (const [k, v] of Object.entries(payload)) {
+          if (k === '_aoFile') continue;
           flatPayload[k] = (v && typeof v === 'object' && 'to' in (v as any)) ? (v as any).to : v;
         }
+
+        // Upload AO File if present in payload
+        if (payload._aoFile) {
+          try {
+            // Convert base64 back to File
+            const { data, metadata } = payload._aoFile;
+            
+            // Extract content type and base64 string
+            const arr = data.split(',');
+            const mimeMatch = arr[0].match(/:(.*?);/);
+            const mime = mimeMatch ? mimeMatch[1] : metadata.mimeType;
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while(n--){
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            const file = new File([u8arr], metadata.fileName, { type: mime });
+
+            await api.document.upload(
+              file,
+              metadata,
+              requestedBy, // Original requester
+              requestedByName
+            );
+          } catch (uploadError) {
+            console.error("Failed to upload attached AO file during approval execution", uploadError);
+          }
+        }
+
         await api.employee.partialUpdate(entityId, flatPayload, requestedBy, requestedByName, approvalToken);
         break;
       }
@@ -258,6 +301,12 @@ function Approvals() {
       }
       case 'delete_user':
         await api.user.delete(payload.id, approvalToken);
+        break;
+      case 'create_group_chat':
+        // Note: For now, since group chats are completely mocked on the frontend,
+        // we just approve the request. In a full implementation, this would call
+        // the backend to create the persistent group chat database entry.
+        console.log('Group chat approved:', payload.groupName);
         break;
       case 'borrow_201':
         await api.file201.borrow(payload.employeeId, {

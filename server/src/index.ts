@@ -20,6 +20,7 @@ import { validateSession } from './middleware/session';
 import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
 import prisma from './lib/prisma';
 import bcrypt from 'bcryptjs';
+import { initSocket } from './socket';
 
 dotenv.config();
 
@@ -187,7 +188,9 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       key: fs.readFileSync(keyPath),
     };
 
-    https.createServer(httpsOptions, app).listen(Number(PORT), HOST, () => {
+    const server = https.createServer(httpsOptions, app);
+    initSocket(server);
+    server.listen(Number(PORT), HOST, () => {
       console.log(`🚀 Server is running on https://localhost:${PORT}`);
       console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
       console.log(`🔒 Using HTTPS with self-signed certificate`);
@@ -195,7 +198,9 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     });
   } catch (err) {
     console.error('⚠️ Failed to start HTTPS server, falling back to HTTP:', err);
-    app.listen(Number(PORT), HOST, () => {
+    const server = http.createServer(app);
+    initSocket(server);
+    server.listen(Number(PORT), HOST, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
       syncExistingRecordsToDropdownOptions();
@@ -203,7 +208,9 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   }
 } else {
   console.log('ℹ️ SSL certificates not found or incomplete, starting HTTP server...');
-  app.listen(Number(PORT), HOST, () => {
+  const server = http.createServer(app);
+  initSocket(server);
+  server.listen(Number(PORT), HOST, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
     syncExistingRecordsToDropdownOptions();

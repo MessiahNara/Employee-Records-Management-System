@@ -371,7 +371,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
       </div>
 
       <nav className="sidebar__nav" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
           {navGroups.slice(0, -1).map((group, groupIndex) => (
             <div key={groupIndex} className="sidebar__nav-group">
               {!isCollapsed && group.label && (

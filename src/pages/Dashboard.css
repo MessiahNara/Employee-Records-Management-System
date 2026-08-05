@@ -302,6 +302,10 @@
   min-height: 200px;
 }
 
+.dashboard__table-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .dashboard__table-scroll .table-container {
   overflow: visible;
 }

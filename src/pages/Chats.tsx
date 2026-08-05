@@ -128,10 +128,12 @@ function Chats() {
 
     fetchSidebarData();
     const interval = setInterval(fetchSidebarData, 3000);
+    window.addEventListener('chatsUpdated', fetchSidebarData);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      window.removeEventListener('chatsUpdated', fetchSidebarData);
     };
   }, [activeContact]);
 
@@ -180,10 +182,12 @@ function Chats() {
 
     fetchMessages();
     const interval = setInterval(fetchMessages, 3000);
+    window.addEventListener('chatsUpdated', fetchMessages);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      window.removeEventListener('chatsUpdated', fetchMessages);
     };
   }, [activeContact]);
 
@@ -252,7 +256,7 @@ function Chats() {
     });
   };
 
-  const handleCreateGroupChat = () => {
+  const handleCreateGroupChat = async () => {
     if (!groupName.trim()) {
       setGroupWarning('Please enter a group chat name.');
       return;
@@ -266,44 +270,31 @@ function Chats() {
 
     const selectedUsers = allUsers.filter(u => selectedMemberIds.includes(u.id));
     const memberNames = selectedUsers.map(u => `${u.firstName} ${u.lastName}`).join(', ');
-    const creatorName = currentUser ? `${currentUser.firstName || currentUser.name || 'Admin'}` : 'Super Admin';
 
-    const systemMsg: Message = {
-      id: `sys_${Date.now()}`,
-      senderId: 'system',
-      senderName: 'System Notification',
-      recipientId: `group_${Date.now()}`,
-      content: `${creatorName} created group chat "${groupName.trim()}" with ${memberNames}`,
-      read: true,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'create_group_chat',
+        entityType: 'group_chat',
+        entityId: `group_${Date.now()}`,
+        entityName: groupName.trim(),
+        payload: {
+          groupName: groupName.trim(),
+          selectedMemberIds,
+          memberNames,
+        },
+      });
 
-    const newGroupContact: UserContact = {
-      id: systemMsg.recipientId,
-      username: groupName.trim().toLowerCase().replace(/\s+/g, '_'),
-      firstName: groupName.trim(),
-      lastName: `(${selectedMemberIds.length + 1} members)`,
-      role: 'Group Chat',
-      isGroup: true,
-      createdBy: creatorName,
-      members: selectedUsers,
-      lastMessage: {
-        content: `${selectedMemberIds.length + 1} members`,
-        createdAt: systemMsg.createdAt,
-        senderId: 'system'
-      }
-    };
-
-    setActiveContact(newGroupContact);
-    setMessages([systemMsg]);
-    setGroupMessagesStore(prev => ({ ...prev, [newGroupContact.id]: [systemMsg] }));
-    setRecentContacts(prev => [newGroupContact, ...prev]);
-    setShowAddUserModal(false);
-    setIsGroupMode(false);
-    setGroupName('');
-    setSelectedMemberIds([]);
-    setUserSearchQuery('');
-    showToast(`Group chat "${groupName.trim()}" created!`, 'success');
+      setShowAddUserModal(false);
+      setIsGroupMode(false);
+      setGroupName('');
+      setSelectedMemberIds([]);
+      setUserSearchQuery('');
+      showToast('⏳ Group chat creation request submitted to admins for approval!', 'info');
+    } catch (err: any) {
+      showToast(`Failed to request group chat: ${err.message}`, 'error');
+    }
   };
 
   const handleAddGroupMembers = (newMemberIds: string[]) => {

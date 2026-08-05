@@ -82,6 +82,10 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.sidebar__nav-group + .sidebar__nav-group {
+  padding-top: var(--spacing-md);
+}
+
 .sidebar__nav-group-label {
   font-size: var(--font-size-xs);
   font-weight: 600;
@@ -120,6 +124,7 @@
   cursor: pointer;
   white-space: nowrap;
   position: relative;
+  border-left: 3.5px solid transparent;
 }
 
 .sidebar__nav-item-badge {
@@ -153,7 +158,7 @@
   background-color: rgba(59, 130, 246, 0.12);
   color: var(--color-primary);
   font-weight: 600;
-  border-left: 3.5px solid var(--color-primary);
+  border-left-color: var(--color-primary);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }

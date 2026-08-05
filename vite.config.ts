@@ -5,10 +5,10 @@ import path from 'path';
 
 try {
   fs.copyFileSync(
-    path.resolve(__dirname, 'template.xlsx'),
+    path.resolve(__dirname, 'public', 'template.xlsx'),
     path.resolve(__dirname, 'public', 'ao_template.xlsx')
   );
-  console.log('Successfully copied template.xlsx to public/ao_template.xlsx');
+  console.log('Restored ao_template.xlsx successfully from public/template.xlsx');
 } catch (e) {
   console.error('Error copying template:', e);
 }
@@ -38,6 +38,11 @@ export default defineConfig(() => {
         '/uploads': {
           target: 'https://localhost:5000',
           changeOrigin: true,
+          secure: false,
+        },
+        '/socket.io': {
+          target: 'https://localhost:5000',
+          ws: true,
           secure: false,
         },
       },

@@ -10,11 +10,13 @@ import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
 import { getAuthState } from '../utils/mockAuth';
 import { exportAuditLogsToFile } from '../utils/exportUtils';
+import { useToast } from '../contexts/ToastContext';
 import './AuditLogs.css';
 
 const ITEMS_PER_PAGE = 15;
 
 function AuditLogs() {
+  const { showToast } = useToast();
   const currentUser = getAuthState();
   const userRole = currentUser?.role || 'viewer';
   const canDownloadOrPrint = userRole === 'superadmin' || userRole === 'developer' || userRole === 'admin';
@@ -89,7 +91,7 @@ function AuditLogs() {
       setAuditLogs(mappedLogs);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
-      alert('Failed to load audit logs. Please check if the backend server is running.');
+      showToast('Failed to load audit logs. Please check if the backend server is running.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -283,7 +285,7 @@ function AuditLogs() {
                       setPdfData(`${getServerBaseUrl()}/api/documents/${log.entityId}/file`);
                       setIsViewerOpen(true);
                     } catch (err) {
-                      alert('Failed to load file. It might have been deleted or moved.');
+                      showToast('Failed to load file. It might have been deleted or moved.', 'error');
                     }
                   }}
                   className="audit-logs__file-link-btn"

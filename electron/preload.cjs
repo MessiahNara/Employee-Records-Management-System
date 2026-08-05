@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
   platform: process.platform,
   serverUrl: null, // Will be set via IPC
   getServerUrl: () => ipcRenderer.invoke('get-server-url'),
+  setServerUrl: (url) => ipcRenderer.invoke('set-server-url', url),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
   getTemplateFile: () => ipcRenderer.invoke('get-template-file'),
   openFileNatively: (url, filename) => ipcRenderer.invoke('open-file-natively', { url, filename }),

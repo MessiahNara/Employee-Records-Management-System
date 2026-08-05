@@ -47,12 +47,19 @@ function resolveFrontendIndexPath() {
 
 function readClientConfig() {
   try {
+    // Priority 1: Check in userData directory (where UI saves it)
+    const userDataPath = path.join(app.getPath('userData'), 'client-config.json');
+    if (fs.existsSync(userDataPath)) {
+      return JSON.parse(fs.readFileSync(userDataPath, 'utf8'));
+    }
+
+    // Priority 2: Check next to the executable/asar
     const configPath = path.join(__dirname, 'client-config.json');
     if (fs.existsSync(configPath)) {
       return JSON.parse(fs.readFileSync(configPath, 'utf8'));
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.error('[server] Error reading client config:', err);
   }
   return null;
 }
@@ -258,14 +265,31 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.cjs'),
-      zoomFactor: 0.65
+      preload: path.join(__dirname, 'preload.cjs')
     },
     icon: path.join(__dirname, '../public/icon.ico'),
     title: 'HRMDO - EMIS',
     backgroundColor: '#f9fafb',
     show: false
   });
+
+  // Apply default zoom factor safely to avoid zoom resets on window maximize/minimize
+  const applyZoom = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.webContents.setZoomFactor(0.65);
+      } catch (e) {
+        // ignore
+      }
+    }
+  };
+
+  mainWindow.webContents.on('did-finish-load', applyZoom);
+  mainWindow.on('resize', applyZoom);
+  mainWindow.on('restore', applyZoom);
+  mainWindow.on('maximize', applyZoom);
+  mainWindow.on('unmaximize', applyZoom);
+
 
   // Show window when ready to avoid flickering
   mainWindow.once('ready-to-show', () => {
@@ -289,12 +313,6 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Enforce zoom factor on every navigation (login, dashboard, etc.)
-  // Overrides any zoom level persisted by Electron between sessions
-  const enforceZoom = () => mainWindow.webContents.setZoomFactor(0.65);
-  mainWindow.webContents.on('did-finish-load', enforceZoom);
-  mainWindow.webContents.on('did-navigate', enforceZoom);
-  mainWindow.webContents.on('did-navigate-in-page', enforceZoom);
 
   // Load the app
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
@@ -349,6 +367,20 @@ ipcMain.handle('get-template-file', async () => {
 ipcMain.handle('get-server-url', () => {
   console.log('[ipc] Frontend requested server URL:', GLOBAL_SERVER_URL);
   return GLOBAL_SERVER_URL;
+});
+
+// IPC handler for frontend to set server URL dynamically
+ipcMain.handle('set-server-url', (event, url) => {
+  try {
+    console.log('[ipc] Frontend updating server URL to:', url);
+    const configPath = path.join(app.getPath('userData'), 'client-config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ serverUrl: url }));
+    GLOBAL_SERVER_URL = url;
+    return { success: true };
+  } catch (err) {
+    console.error('[ipc] Failed to save server URL:', err);
+    return { success: false, error: err.message };
+  }
 });
 
 // IPC handler to securely fetch and open file in system native app (Acrobat, MS Word)
@@ -466,8 +498,11 @@ app.whenReady().then(() => {
     // Wait for the local backend to be ready before showing the login page.
     // This prevents "Unable to reach the server" errors caused by the UI
     // loading faster than the server process starts.
-    const clientConfig = readClientConfig();
-    if (clientConfig?.serverUrl) {
+    const hasClientConfig = readClientConfig() !== null;
+    const hasServerBundle = fs.existsSync(path.join(process.resourcesPath, 'server.bundle.cjs'));
+    const isClient = hasClientConfig || !hasServerBundle;
+    
+    if (isClient) {
       // Client build pointing at a remote server — load immediately.
       loadFrontend();
     } else {
@@ -480,8 +515,11 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
       if (app.isPackaged) {
-        const clientConfig = readClientConfig();
-        if (clientConfig?.serverUrl) {
+        const hasClientConfig = readClientConfig() !== null;
+        const hasServerBundle = fs.existsSync(path.join(process.resourcesPath, 'server.bundle.cjs'));
+        const isClient = hasClientConfig || !hasServerBundle;
+        
+        if (isClient) {
           loadFrontend();
         } else {
           waitForServer(loadFrontend);

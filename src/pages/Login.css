@@ -149,11 +149,18 @@
   transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Minimalist Floating Dark Mode Pill Switch */
-.login__theme-toggle {
+.login__top-actions {
   position: absolute;
   top: 1.75rem;
   right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 10;
+}
+
+/* Minimalist Floating Dark Mode Pill Switch */
+.login__theme-toggle {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -167,7 +174,6 @@
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 10;
   outline: none;
 }
 

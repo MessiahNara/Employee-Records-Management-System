@@ -183,3 +183,71 @@
   font-size: 0.75rem;
   margin-top: 0.25rem;
 }
+
+/* Compression Level UI */
+.compression-field {
+  margin-top: 1rem;
+}
+
+.compression-options {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.compression-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.125rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  background-color: var(--card-bg, #ffffff);
+  transition: background-color 0.2s ease;
+}
+
+.compression-option:last-child {
+  border-bottom: none;
+}
+
+.compression-option:hover {
+  background-color: var(--hover-bg, #f8f9fa);
+}
+
+.compression-option.active {
+  background-color: #f0f2f5;
+}
+
+.compression-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.compression-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--primary-color, #3b82f6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.compression-desc {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.compression-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  color: white;
+  font-weight: bold;
+  font-size: 0.8rem;
+}
