@@ -118,14 +118,14 @@ function Login() {
       }, 100);
     } catch (error: any) {
       console.error('Login error:', error);
-      const errorMessage = typeof error?.message === 'string' ? error.message : '';
+      const errorMessage = typeof error?.message === 'string' ? error.message : 'An unexpected error occurred.';
 
-      if (errorMessage.includes('timeout') || errorMessage.includes('Unable to reach the server')) {
-        setLoginError(errorMessage);
-      } else if (errorMessage.includes('failed to fetch') || errorMessage.includes('network')) {
+      if (errorMessage.includes('failed to fetch') || errorMessage.includes('network')) {
         setLoginError('Unable to reach the server. Please make sure the backend is running.');
+      } else if (errorMessage === 'Request failed' || errorMessage.includes('HTTP 50')) {
+        setLoginError('Server error occurred during login. Please try again or contact support.');
       } else {
-        setLoginError('Invalid username or password. Please try again.');
+        setLoginError(errorMessage);
       }
     } finally {
       setIsLoading(false);

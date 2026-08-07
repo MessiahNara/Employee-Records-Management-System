@@ -475,18 +475,26 @@ export const employeeApi = {
     appointmentStatus?: string;
     search?: string;
     filter_type?: 'first_name' | 'middle_name' | 'last_name' | 'all';
+    page?: number;
+    limit?: number;
   }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.appointmentStatus) params.append('appointmentStatus', filters.appointmentStatus);
     if (filters?.search) params.append('search', filters.search);
     if (filters?.filter_type) params.append('filter_type', filters.filter_type);
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
     
     const query = params.toString();
-    const employees = await apiRequest<any[]>(`/employees${query ? `?${query}` : ''}`);
+    const result = await apiRequest<any>(`/employees${query ? `?${query}` : ''}`);
     
+    // Check if result is paginated (has data and total)
+    let employees = Array.isArray(result) ? result : (result.data || []);
+    const total = Array.isArray(result) ? result.length : (result.total || 0);
+
     // Map backend fields to frontend fields
-    return employees.map(emp => {
+    const mappedEmployees = employees.map((emp: any) => {
       const rawAoType = String(emp.aoType || '').trim().toLowerCase();
       const aoType = rawAoType === 'detailed'
         ? 'Detailed'
@@ -507,6 +515,11 @@ export const employeeApi = {
         aoType,
       };
     });
+
+    if (filters?.page && filters?.limit) {
+      return { data: mappedEmployees, total };
+    }
+    return mappedEmployees;
   },
   getById: async (id: string) => {
     const employee = await apiRequest<any>(`/employees/${id}`);
@@ -633,7 +646,7 @@ export const employeeApi = {
       body: JSON.stringify({ employees }),
     });
   },
-  getStats: () => apiRequest<any>('/employees/stats/summary'),
+  getStats: () => apiRequest<any>('/employees/stats'),
   deleteReportEntries: (ids: string[]) => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const currentUser = getAuthState();

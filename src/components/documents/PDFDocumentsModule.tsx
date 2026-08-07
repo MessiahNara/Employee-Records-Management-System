@@ -131,14 +131,31 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   // Get selected documents info for bulk delete
   const selectedDocuments = documents.filter(doc => selectedDocumentIds.has(doc.id));
 
-  const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any, compressionLevel: string = 'recommended', onProgress?: (progressText: string) => void) => {
+  const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any | any[], compressionLevel: string = 'recommended', onProgress?: (progressText: string) => void) => {
     try {
       let globalDuplicateAction: 'replace' | 'skip' | null = null;
       let uploadedCount = 0;
       let canceledCount = 0;
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      const aoList = Array.isArray(aoData) ? aoData : (aoData ? [aoData] : []);
+
+      const uploadQueue: { file: File, ao?: any }[] = [];
+
+      if (category === 'Administrative Order') {
+        for (const ao of aoList) {
+          const aoFiles: File[] = ao.files || [];
+          for (const file of aoFiles) {
+            uploadQueue.push({ file, ao });
+          }
+        }
+      } else {
+        for (const file of files) {
+          uploadQueue.push({ file });
+        }
+      }
+
+      for (let i = 0; i < uploadQueue.length; i++) {
+        const { file, ao } = uploadQueue[i];
         const isDuplicate = documents.some(
           (doc) => doc.fileName.toLowerCase() === file.name.toLowerCase() &&
                    doc.category.toLowerCase() === category.toLowerCase()
@@ -165,13 +182,15 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           }
         }
 
-        await uploadDocument(file, category, aoData, true, replace, compressionLevel, (e: ProgressEvent) => {
+        await uploadDocument(file, category, ao, true, replace, compressionLevel, (e: ProgressEvent) => {
           if (onProgress) {
             if (e.lengthComputable) {
               const percent = Math.round((e.loaded / e.total) * 100);
-              onProgress(`Uploading ${file.name}... ${percent}%`);
+              const queueInfo = uploadQueue.length > 1 ? ` (${i + 1}/${uploadQueue.length})` : '';
+              onProgress(`Uploading ${file.name}${queueInfo}... ${percent}%`);
             } else {
-              onProgress(`Uploading ${file.name}...`);
+              const queueInfo = uploadQueue.length > 1 ? ` (${i + 1}/${uploadQueue.length})` : '';
+              onProgress(`Uploading ${file.name}${queueInfo}...`);
             }
           }
         });

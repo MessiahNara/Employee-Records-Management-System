@@ -829,7 +829,9 @@ function Dashboard() {
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
   const [originalEmployeeData, setOriginalEmployeeData] = useState<EmployeeFormData | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // For KPI cards - always shows all data
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [employeeStats, setEmployeeStats] = useState<{ total: number, active: number, inactive: number, documents: number, storageUsed: number }>({ total: 0, active: 0, inactive: 0, documents: 0, storageUsed: 0 });
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // Note: Still used for reports client-side generation
   const [isLoading, setIsLoading] = useState(false);
   const [showAllEmployees, setShowAllEmployees] = useState(false);
 
@@ -1080,14 +1082,23 @@ function Dashboard() {
     localStorage.setItem('showAllEmployees', showAllEmployees.toString());
   }, [showAllEmployees]);
 
-  // Fetch all employees for KPI cards on initial load and listen for updates
+  // Fetch KPI stats on initial load
   useEffect(() => {
-    fetchAllEmployeesForKPI();
-    fetchEmployeeAuditLogs();
-
-    const handleUpdate = () => {
-      fetchAllEmployeesForKPI();
+    fetchEmployeeStats();
+    if (viewMode === 'reports') {
+      fetchAllEmployeesForKPI(); // Only needed for reports tab
       fetchEmployeeAuditLogs();
+    }
+  }, [viewMode]);
+
+  // Listen for updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchEmployeeStats();
+      if (viewMode === 'reports') {
+        fetchAllEmployeesForKPI();
+        fetchEmployeeAuditLogs();
+      }
       fetchEmployees();
     };
 
@@ -1100,16 +1111,25 @@ function Dashboard() {
       window.removeEventListener('approvalsUpdated', handleUpdate);
       window.removeEventListener('documentsUpdated', handleUpdate);
     };
-  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees]);
+  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees, currentPage, itemsPerPage, viewMode]);
 
-  // Fetch all employees for KPI cards (no filters)
+  // Fetch KPI stats
+  const fetchEmployeeStats = async () => {
+    try {
+      const stats = await api.employee.getStats();
+      setEmployeeStats(stats);
+    } catch (error) {
+      console.error('Error fetching employee stats:', error);
+    }
+  };
+
+  // Fetch all employees for reports (Warning: Can be slow with 100k+)
   const fetchAllEmployeesForKPI = async () => {
     try {
       const data = await api.employee.getAll({}); // No filters - get all employees
-      setAllEmployees(data);
+      setAllEmployees(Array.isArray(data) ? data : (data as any).data || []);
     } catch (error) {
-      console.error('Error fetching all employees for KPI:', error);
-      // Don't show error toast for KPI fetch to avoid confusion
+      console.error('Error fetching all employees:', error);
     }
   };
 
@@ -1125,9 +1145,10 @@ function Dashboard() {
     } else {
       // Clear employees when search is empty and not showing all
       setEmployees([]);
+      setTotalEmployees(0);
       setIsLoading(false);
     }
-  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees]);
+  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees, currentPage, itemsPerPage]);
 
   const fetchEmployeeAuditLogs = async () => {
     try {
@@ -1141,7 +1162,10 @@ function Dashboard() {
   const fetchEmployees = async () => {
     try {
       setIsLoading(true);
-      const filters: any = {};
+      const filters: any = {
+        page: currentPage,
+        limit: itemsPerPage
+      };
 
       // Add status filter
       if (statusFilter !== 'all') {
@@ -1154,8 +1178,17 @@ function Dashboard() {
         filters.filter_type = searchFilterType;
       }
 
-      const data = await api.employee.getAll(filters);
-      setEmployees(data);
+      const result = await api.employee.getAll(filters);
+      if (result && (result as any).data) {
+        setEmployees((result as any).data);
+        setTotalEmployees((result as any).total);
+      } else if (Array.isArray(result)) {
+        setEmployees(result);
+        setTotalEmployees(result.length);
+      } else {
+        setEmployees([]);
+        setTotalEmployees(0);
+      }
     } catch (error) {
       console.error('Error fetching employees:', error);
       showToast('Failed to load employees. Please check if the backend server is running.', 'error');
@@ -1164,34 +1197,26 @@ function Dashboard() {
     }
   };
 
-  // Filter employees based on search and filters (now handled by backend)
+  // The filteredEmployees is already paginated by the backend, but we still apply frontend search
+  // if needed for other attributes like positionFunction
   const filteredEmployees = useMemo(() => {
-    // Since filtering is now done on the backend, just return employees
-    // But keep position and office filtering on frontend for now
     return employees.filter((employee) => {
       if (searchQuery.trim()) {
-        // Additional frontend filtering for position and office
         const matchesPosition = employee.positionFunction.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesOffice = employee.officeHospitalName.toLowerCase().includes(searchQuery.toLowerCase());
 
-        // If searching globally, also check position and office
         if (searchFilterType === 'all' && (matchesPosition || matchesOffice)) {
           return true;
         }
       }
-
       return true;
     });
   }, [searchQuery, searchFilterType, employees]);
 
-  // Paginate employees
-  const paginatedEmployees = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredEmployees.slice(startIndex, endIndex);
-  }, [filteredEmployees, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+  // Paginated employees are just filteredEmployees since the backend handles limit/offset
+  const paginatedEmployees = filteredEmployees;
+  
+  const totalPages = Math.ceil(totalEmployees / itemsPerPage);
 
   const reportRows = useMemo<ReportRow[]>(() => {
     // Determine AO type from the DB-persisted aoType field first,
@@ -3405,10 +3430,9 @@ function Dashboard() {
       if (formData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
       if (formData.positionFunction.trim() === '') errors.positionFunction = 'Position/Function cannot be empty';
 
-      // Validate status-dependent fields
+      // Validate status-dependent fields (made optional per request)
       if (formData.status === 'Inactive') {
-        if (!formData.dateOfSeparation) errors.dateOfSeparation = 'Date of separation is required for inactive employees';
-        if (!formData.reasonForSeparation.trim()) errors.reasonForSeparation = 'Reason for separation is required for inactive employees';
+        // Validation removed: Date and Reason for separation are now optional
       }
     } else {
       // For create, all required fields must be filled
@@ -3424,8 +3448,7 @@ function Dashboard() {
       }
 
       if (formData.status === 'Inactive') {
-        if (!formData.dateOfSeparation) errors.dateOfSeparation = 'Date of separation is required';
-        if (!formData.reasonForSeparation.trim()) errors.reasonForSeparation = 'Reason for separation is required';
+        // Validation removed: Date and Reason for separation are now optional
       }
     }
 
@@ -4130,7 +4153,7 @@ function Dashboard() {
           <p className="dashboard__subtitle">
             {viewMode === 'reports'
               ? (reportsTab === 'pulled-out' ? 'View and track all borrowed and returned physical 201 records' : 'Generate administrative reports of employees')
-              : `Manage and track all employee records in the system (${allEmployees.length} employees)`}
+              : `Manage and track all employee records in the system (${employeeStats.total} employees)`}
           </p>
         </div>
         {viewMode !== 'reports' && (
@@ -4167,7 +4190,7 @@ function Dashboard() {
                 <span className="dashboard__kpi-label">Total Employees</span>
               </div>
               <div className="dashboard__kpi-body">
-                <div className="dashboard__kpi-value">{allEmployees.length}</div>
+                <div className="dashboard__kpi-value">{employeeStats.total}</div>
               </div>
             </div>
           </Card>
@@ -4182,7 +4205,7 @@ function Dashboard() {
               </div>
               <div className="dashboard__kpi-body">
                 <div className="dashboard__kpi-value">
-                  {allEmployees.filter(emp => emp.status === 'Active').length}
+                  {employeeStats.active}
                 </div>
               </div>
             </div>
@@ -4198,7 +4221,7 @@ function Dashboard() {
               </div>
               <div className="dashboard__kpi-body">
                 <div className="dashboard__kpi-value">
-                  {allEmployees.filter(emp => emp.status === 'Inactive').length}
+                  {employeeStats.inactive}
                 </div>
               </div>
             </div>
@@ -4214,7 +4237,7 @@ function Dashboard() {
               </div>
               <div className="dashboard__kpi-body">
                 <div className="dashboard__kpi-value">
-                  {allEmployees.reduce((sum, emp) => sum + ((emp as any).documents?.length || 0), 0)}
+                  {employeeStats.documents}
                 </div>
               </div>
             </div>
@@ -4230,10 +4253,7 @@ function Dashboard() {
               </div>
               <div className="dashboard__kpi-body">
                 <div className="dashboard__kpi-value">
-                  {(allEmployees.reduce((sum, emp) => {
-                    const docs = (emp as any).documents || [];
-                    return sum + docs.reduce((docSum: number, doc: any) => docSum + (doc.fileSize || 0), 0);
-                  }, 0) / (1024 * 1024)).toFixed(1)} MB
+                  {(employeeStats.storageUsed / (1024 * 1024)).toFixed(1)} MB
                 </div>
               </div>
             </div>
@@ -4257,9 +4277,8 @@ function Dashboard() {
                 <div className="reports-view__filters-grid">
                   <div className="reports-view__filter-card">
                     <label className="dashboard__filter-label">Search Person</label>
-                    <input
+                    <Input
                       type="text"
-                      className="dashboard__form-input"
                       placeholder="Search by name..."
                       value={reportSearchName}
                       onChange={(e) => setReportSearchName(e.target.value)}
@@ -4292,9 +4311,8 @@ function Dashboard() {
 
                   <div className="reports-view__filter-card">
                     <label className="dashboard__filter-label">AO Number</label>
-                    <input
+                    <Input
                       type="text"
-                      className="dashboard__form-input"
                       placeholder="Search by AO Number..."
                       value={reportAoNumber}
                       onChange={(e) => setReportAoNumber(e.target.value)}
@@ -4609,9 +4627,8 @@ function Dashboard() {
                 <div className="reports-view__filters-grid">
                   <div className="reports-view__filter-card">
                     <label className="dashboard__filter-label">Search</label>
-                    <input
+                    <Input
                       type="text"
-                      className="dashboard__form-input"
                       placeholder="Search borrower, employee, purpose..."
                       value={borrowSearchTerm}
                       onChange={(e) => setBorrowSearchTerm(e.target.value)}

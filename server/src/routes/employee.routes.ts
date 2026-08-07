@@ -85,10 +85,37 @@ const deletePhysicalFiles = async (employeeId: string): Promise<number> => {
   }
 };
 
+// Get KPI stats
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const totalCount = await prisma.employee.count();
+    const activeCount = await prisma.employee.count({
+      where: { status: 'Active' },
+    });
+    const documentsCount = await prisma.document.count();
+    const storageStats = await prisma.document.aggregate({
+      _sum: {
+        fileSize: true
+      }
+    });
+    
+    res.json({
+      total: totalCount,
+      active: activeCount,
+      inactive: totalCount - activeCount,
+      documents: documentsCount,
+      storageUsed: storageStats._sum.fileSize || 0,
+    });
+  } catch (error) {
+    console.error('Error fetching employee stats:', error);
+    res.status(500).json({ error: 'Failed to fetch employee stats' });
+  }
+});
+
 // Get all employees with optional filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, appointmentStatus, search, filter_type } = req.query;
+    const { status, appointmentStatus, search, filter_type, page, limit } = req.query;
 
     const where: any = {};
     if (status) where.status = status as string;
@@ -159,19 +186,41 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
-    const employees = await prisma.employee.findMany({
-      where,
-      include: {
-        documents: true,
-        yellowBox: true,
-      },
-      orderBy: [
-        { lastName: 'asc' },
-        { firstName: 'asc' },
-      ],
-    });
+    let skip: number | undefined;
+    let take: number | undefined;
 
-    res.json(employees);
+    if (page && limit) {
+      const pageNumber = parseInt(page as string, 10);
+      const limitNumber = parseInt(limit as string, 10);
+      
+      if (!isNaN(pageNumber) && !isNaN(limitNumber)) {
+        skip = (pageNumber - 1) * limitNumber;
+        take = limitNumber;
+      }
+    }
+
+    const [employees, total] = await Promise.all([
+      prisma.employee.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          documents: true,
+          yellowBox: true,
+        },
+        orderBy: [
+          { lastName: 'asc' },
+          { firstName: 'asc' },
+        ],
+      }),
+      page && limit ? prisma.employee.count({ where }) : Promise.resolve(0)
+    ]);
+
+    if (page && limit) {
+      res.json({ data: employees, total });
+    } else {
+      res.json(employees);
+    }
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });

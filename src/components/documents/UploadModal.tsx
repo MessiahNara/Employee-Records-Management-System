@@ -15,6 +15,33 @@ interface UploadModalProps {
   defaultCategory?: DocumentCategory;
 }
 
+export interface AOData {
+  aoType: 'Detailed' | 'Designated' | 'Recalled' | '';
+  aoNumber: string;
+  aoYear: string;
+  detailedTo: string;
+  detailedDivision: string;
+  detailedFunction: string;
+  designatedPositionFunction: string;
+  designatedOrderFrom: string;
+  designatedOrderTo: string;
+  recalledFrom: string;
+  recalledTo: string;
+  recalledOrderFrom: string;
+  recalledOrderTo: string;
+  appointmentFrom: string;
+  appointmentTo: string;
+  files: File[];
+  autoRename: boolean;
+}
+
+const defaultAO: AOData = {
+  aoType: '', aoNumber: '', aoYear: '', detailedTo: '', detailedDivision: '',
+  detailedFunction: '', designatedPositionFunction: '', designatedOrderFrom: '',
+  designatedOrderTo: '', recalledFrom: '', recalledTo: '', recalledOrderFrom: '',
+  recalledOrderTo: '', appointmentFrom: '', appointmentTo: '', files: [], autoRename: false,
+};
+
 function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModalProps) {
   const currentUser = getAuthState();
   const isDeveloper = currentUser?.role === 'developer';
@@ -40,25 +67,34 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
   });
 
   // AO specific form fields
-  const [aoType, setAoType] = useState<'Detailed' | 'Designated' | 'Recalled' | ''>('');
-  const [aoNumber, setAoNumber] = useState('');
-  const [aoYear, setAoYear] = useState('');
-  const [detailedTo, setDetailedTo] = useState('');
-  const [detailedDivision, setDetailedDivision] = useState('');
-  const [detailedFunction, setDetailedFunction] = useState('');
-  const [designatedPositionFunction, setDesignatedPositionFunction] = useState('');
-  const [designatedOrderFrom, setDesignatedOrderFrom] = useState('');
-  const [designatedOrderTo, setDesignatedOrderTo] = useState('');
-  const [recalledFrom, setRecalledFrom] = useState('');
-  const [recalledTo, setRecalledTo] = useState('');
-  const [recalledOrderFrom, setRecalledOrderFrom] = useState('');
-  const [recalledOrderTo, setRecalledOrderTo] = useState('');
-  const [appointmentFrom, setAppointmentFrom] = useState('');
-  const [appointmentTo, setAppointmentTo] = useState('');
-  const [autoRename, setAutoRename] = useState(false);
-
-  // Field validation errors
+  const [aoDataList, setAoDataList] = useState<AOData[]>([{ ...defaultAO }]);
+  const [fieldErrorsList, setFieldErrorsList] = useState<Record<string, string>[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const updateAO = (index: number, field: keyof AOData, value: any) => {
+    setAoDataList(prev => {
+      const newList = [...prev];
+      if (field === 'aoType') {
+        newList[index] = { 
+          ...newList[index], 
+          [field]: value as any,
+          detailedTo: '', detailedDivision: '', detailedFunction: '',
+          designatedPositionFunction: '', designatedOrderFrom: '', designatedOrderTo: '',
+          recalledFrom: '', recalledTo: '', recalledOrderFrom: '', recalledOrderTo: '',
+          appointmentFrom: '', appointmentTo: ''
+        };
+      } else {
+        newList[index] = { ...newList[index], [field]: value };
+      }
+      return newList;
+    });
+  };
+
+  const addAO = () => setAoDataList(prev => [...prev, { ...defaultAO }]);
+  const removeAO = (index: number) => {
+    setAoDataList(prev => prev.filter((_, i) => i !== index));
+    setFieldErrorsList(prev => prev.filter((_, i) => i !== index));
+  };
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -70,22 +106,8 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
       setUploadProgress(null);
       setFieldErrors({});
 
-      setAoType('');
-      setAoNumber('');
-      setAoYear('');
-      setDetailedTo('');
-      setDetailedDivision('');
-      setDetailedFunction('');
-      setDesignatedPositionFunction('');
-      setDesignatedOrderFrom('');
-      setDesignatedOrderTo('');
-      setRecalledFrom('');
-      setRecalledTo('');
-      setRecalledOrderFrom('');
-      setRecalledOrderTo('');
-      setAppointmentFrom('');
-      setAppointmentTo('');
-      setAutoRename(false);
+      setAoDataList([{ ...defaultAO }]);
+      setFieldErrorsList([]);
 
       if (defaultCategory) {
         setSelectedCategory(defaultCategory);
@@ -130,70 +152,52 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
   };
 
   const validateForm = () => {
+    let isValid = true;
+    const newErrorsList: Record<string, string>[] = [];
     const errors: Record<string, string> = {};
     
     if (selectedCategory === 'Administrative Order') {
-      if (!aoNumber.trim()) {
-        errors.aoNumber = 'AO Number is required';
-      }
-      if (!aoYear) {
-        errors.aoYear = 'Series (Year) is required';
-      }
-      if (!aoType) {
-        errors.aoType = 'AO Type is required';
-      }
-      
-      if (aoType === 'Detailed') {
-        if (!detailedTo) {
-          errors.detailedTo = 'Detailed/Transferred Office is required';
+      aoDataList.forEach((ao, index) => {
+        const aoErrors: Record<string, string> = {};
+        if (!ao.aoNumber.trim()) aoErrors.aoNumber = 'AO Number is required';
+        if (!ao.aoYear) aoErrors.aoYear = 'Series (Year) is required';
+        if (!ao.aoType) aoErrors.aoType = 'AO Type is required';
+        if (!ao.files || ao.files.length === 0) aoErrors.files = 'At least one PDF file is required';
+        
+        if (ao.aoType === 'Detailed') {
+          if (!ao.detailedTo) aoErrors.detailedTo = 'Detailed/Transferred Office is required';
+          if (!ao.appointmentFrom) aoErrors.appointmentFrom = 'Duration From is required';
+          if (!ao.appointmentTo) aoErrors.appointmentTo = 'Duration To is required';
         }
-        if (!appointmentFrom) {
-          errors.appointmentFrom = 'Duration From is required';
+        
+        if (ao.aoType === 'Designated') {
+          if (!ao.detailedTo) aoErrors.detailedTo = 'Designated Office is required';
+          if (!ao.designatedPositionFunction) aoErrors.designatedPositionFunction = 'Designated Position Function is required';
+          if (!ao.designatedOrderFrom) aoErrors.designatedOrderFrom = 'Duration From is required';
+          if (!ao.designatedOrderTo) aoErrors.designatedOrderTo = 'Duration To is required';
         }
-        if (!appointmentTo) {
-          errors.appointmentTo = 'Duration To is required';
-        }
-      }
-      
-      if (aoType === 'Designated') {
-        if (!detailedTo) {
-          errors.detailedTo = 'Designated Office is required';
-        }
-        if (!designatedPositionFunction) {
-          errors.designatedPositionFunction = 'Designated Position Function is required';
-        }
-        if (!designatedOrderFrom) {
-          errors.designatedOrderFrom = 'Duration From is required';
-        }
-        if (!designatedOrderTo) {
-          errors.designatedOrderTo = 'Duration To is required';
-        }
-      }
 
-      if (aoType === 'Recalled') {
-        if (!recalledFrom) {
-          errors.recalledFrom = 'Recalled from is required';
+        if (ao.aoType === 'Recalled') {
+          if (!ao.recalledFrom) aoErrors.recalledFrom = 'Recalled from is required';
+          if (!ao.recalledTo) aoErrors.recalledTo = 'Recalled to is required';
+          if (!ao.recalledOrderFrom) aoErrors.recalledOrderFrom = 'Duration From is required';
+          if (!ao.recalledOrderTo) aoErrors.recalledOrderTo = 'Duration To is required';
         }
-        if (!recalledTo) {
-          errors.recalledTo = 'Recalled to is required';
-        }
-        if (!recalledOrderFrom) {
-          errors.recalledOrderFrom = 'Duration From is required';
-        }
-        if (!recalledOrderTo) {
-          errors.recalledOrderTo = 'Duration To is required';
-        }
-      }
+        
+        newErrorsList[index] = aoErrors;
+        if (Object.keys(aoErrors).length > 0) isValid = false;
+      });
     }
 
+    setFieldErrorsList(newErrorsList);
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (selectedFiles.length === 0) {
+    if (selectedCategory !== 'Administrative Order' && selectedFiles.length === 0) {
       setError('Please select at least one file');
       return;
     }
@@ -206,27 +210,17 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
     setError(null);
 
     try {
-      const aoData = selectedCategory === 'Administrative Order' ? {
-        aoNumber,
-        aoYear,
-        aoType,
-        detailedTo,
-        detailedDivision,
-        detailedFunction,
-        detailedDate: aoType === 'Detailed' ? appointmentFrom : undefined,
-        detailedOrderFrom: aoType === 'Detailed' ? appointmentFrom : undefined,
-        detailedOrderTo: aoType === 'Detailed' ? appointmentTo : undefined,
-        designatedPositionFunction,
-        designatedOrderFrom: aoType === 'Designated' ? designatedOrderFrom : undefined,
-        designatedOrderTo: aoType === 'Designated' ? designatedOrderTo : undefined,
-        recalledFrom: aoType === 'Recalled' ? recalledFrom : undefined,
-        recalledTo: aoType === 'Recalled' ? recalledTo : undefined,
-        recalledOrderFrom: aoType === 'Recalled' ? recalledOrderFrom : undefined,
-        recalledOrderTo: aoType === 'Recalled' ? recalledOrderTo : undefined,
-        appointmentFrom: aoType === 'Detailed' ? appointmentFrom : undefined,
-        appointmentTo: aoType === 'Detailed' ? appointmentTo : undefined,
-        autoRename,
-      } : undefined;
+      const aoData = selectedCategory === 'Administrative Order' ? aoDataList.map(ao => ({
+        ...ao,
+        detailedDate: ao.aoType === 'Detailed' ? ao.appointmentFrom : undefined,
+        detailedOrderFrom: ao.aoType === 'Detailed' ? ao.appointmentFrom : undefined,
+        detailedOrderTo: ao.aoType === 'Detailed' ? ao.appointmentTo : undefined,
+        designatedOrderFrom: ao.aoType === 'Designated' ? ao.designatedOrderFrom : undefined,
+        designatedOrderTo: ao.aoType === 'Designated' ? ao.designatedOrderTo : undefined,
+        recalledOrderFrom: ao.aoType === 'Recalled' ? ao.recalledOrderFrom : undefined,
+        recalledOrderTo: ao.aoType === 'Recalled' ? ao.recalledOrderTo : undefined,
+        autoRename: ao.autoRename,
+      })) : undefined;
 
       await onUpload(selectedFiles, selectedCategory, aoData, compressionLevel, (progressText) => {
         setUploadProgress(progressText);
@@ -272,294 +266,328 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
 
         {selectedCategory === 'Administrative Order' && (
           <div className="upload-modal__ao-form">
-            <h3 className="upload-modal__section-title">Administrative Order Details</h3>
+            {aoDataList.map((ao, index) => {
+              const currentErrors = fieldErrorsList[index] || {};
+              return (
+                <div key={index} style={{ padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '1rem', backgroundColor: 'var(--bg-secondary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 className="upload-modal__section-title" style={{ margin: 0 }}>Administrative Order Details {aoDataList.length > 1 ? `#${index + 1}` : ''}</h3>
+                    {index > 0 && (
+                      <Button type="button" variant="danger" onClick={() => removeAO(index)} style={{ padding: '0.25rem 0.75rem', height: 'auto' }}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="upload-modal__form-row">
+                    <div className="upload-modal__field upload-modal__field--full">
+                      <label className="upload-modal__label">AO Status</label>
+                      <select
+                        className={`upload-modal__select ${currentErrors.aoType ? 'upload-modal__select--error' : ''}`}
+                        value={ao.aoType}
+                        onChange={(e) => updateAO(index, 'aoType', e.target.value)}
+                        disabled={isUploading}
+                      >
+                        <option value="">Select AO Type</option>
+                        <option value="Detailed">Detailed</option>
+                        <option value="Designated">Designated</option>
+                        <option value="Recalled">Recalled</option>
+                      </select>
+                      {currentErrors.aoType && <span className="upload-modal__field-error">⚠️ {currentErrors.aoType}</span>}
+                    </div>
+                  </div>
+
+                  <div className="upload-modal__form-row">
+                    <Input
+                      id={`ao-number-${index}`}
+                      label="AO Number"
+                      placeholder="Enter Administrative Order number"
+                      value={ao.aoNumber}
+                      onChange={(e) => updateAO(index, 'aoNumber', e.target.value)}
+                      error={currentErrors.aoNumber}
+                      disabled={isUploading}
+                      fullWidth
+                    />
+                    <div className="upload-modal__field">
+                      <label className="upload-modal__label">Series</label>
+                      <select
+                        className={`upload-modal__select ${currentErrors.aoYear ? 'upload-modal__select--error' : ''}`}
+                        value={ao.aoYear}
+                        onChange={(e) => updateAO(index, 'aoYear', e.target.value)}
+                        disabled={isUploading}
+                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                      >
+                        <option value="">Select series year</option>
+                        {dropdownOptions.aoYears.map((year) => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                      </select>
+                      {currentErrors.aoYear && <span className="upload-modal__field-error">⚠️ {currentErrors.aoYear}</span>}
+                    </div>
+                  </div>
+
+                  {ao.aoType === 'Detailed' && (
+                    <>
+                      <div className="upload-modal__field">
+                        <label className="upload-modal__label">Detailed/Transferred Office</label>
+                        <SearchableDropdown
+                          id={`detailedTo-${index}`}
+                          options={dropdownOptions.officeNames}
+                          value={ao.detailedTo}
+                          onChange={(val) => updateAO(index, 'detailedTo', val)}
+                          placeholder="Select or enter office"
+                          disabled={isUploading}
+                          className={currentErrors.detailedTo ? 'searchable-dropdown--error' : ''}
+                        />
+                        {currentErrors.detailedTo && <span className="upload-modal__field-error">⚠️ {currentErrors.detailedTo}</span>}
+                      </div>
+
+                      <div className="upload-modal__field">
+                        <label className="upload-modal__label">Division</label>
+                        <input
+                          className="input"
+                          type="text"
+                          placeholder="Enter division"
+                          value={ao.detailedDivision}
+                          onChange={(e) => updateAO(index, 'detailedDivision', e.target.value)}
+                          disabled={isUploading}
+                        />
+                      </div>
+
+                      <div className="upload-modal__form-row">
+                        <Input
+                          id={`appointment-from-${index}`}
+                          label="Duration of Detailed Order (From)"
+                          type="date"
+                          value={ao.appointmentFrom}
+                          onChange={(e) => updateAO(index, 'appointmentFrom', e.target.value)}
+                          error={currentErrors.appointmentFrom}
+                          disabled={isUploading}
+                          fullWidth
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                          <Input
+                            id={`appointment-to-${index}`}
+                            label="Duration of Detailed Order (To)"
+                            type={ao.appointmentTo === 'Until revoked' ? 'text' : 'date'}
+                            value={ao.appointmentTo}
+                            onChange={(e) => updateAO(index, 'appointmentTo', e.target.value)}
+                            error={currentErrors.appointmentTo}
+                            disabled={isUploading || ao.appointmentTo === 'Until revoked'}
+                            fullWidth
+                          />
+                          <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                              type="checkbox"
+                              id={`detailed-until-revoked-upload-${index}`}
+                              checked={ao.appointmentTo === 'Until revoked'}
+                              onChange={(e) => updateAO(index, 'appointmentTo', e.target.checked ? 'Until revoked' : '')}
+                              disabled={isUploading}
+                            />
+                            <label htmlFor={`detailed-until-revoked-upload-${index}`} style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {ao.aoType === 'Designated' && (
+                    <>
+                      <div className="upload-modal__field">
+                        <label className="upload-modal__label">Designated Office</label>
+                        <SearchableDropdown
+                          id={`designatedOffice-${index}`}
+                          options={dropdownOptions.officeNames}
+                          value={ao.detailedTo}
+                          onChange={(val) => updateAO(index, 'detailedTo', val)}
+                          placeholder="Select or enter designated office"
+                          disabled={isUploading}
+                          className={currentErrors.detailedTo ? 'searchable-dropdown--error' : ''}
+                        />
+                        {currentErrors.detailedTo && <span className="upload-modal__field-error">⚠️ {currentErrors.detailedTo}</span>}
+                      </div>
+
+                      <div className="upload-modal__field">
+                        <label className="upload-modal__label">Designated Position Function</label>
+                        <SearchableDropdown
+                          id={`designatedPositionFunction-${index}`}
+                          options={dropdownOptions.positions}
+                          value={ao.designatedPositionFunction}
+                          onChange={(val) => updateAO(index, 'designatedPositionFunction', val)}
+                          placeholder="Select or enter position function"
+                          disabled={isUploading}
+                          className={currentErrors.designatedPositionFunction ? 'searchable-dropdown--error' : ''}
+                        />
+                        {currentErrors.designatedPositionFunction && <span className="upload-modal__field-error">⚠️ {currentErrors.designatedPositionFunction}</span>}
+                      </div>
+
+                      <div className="upload-modal__form-row">
+                        <Input
+                          id={`designated-order-from-${index}`}
+                          label="Designated Order (From)"
+                          type="date"
+                          value={ao.designatedOrderFrom}
+                          onChange={(e) => updateAO(index, 'designatedOrderFrom', e.target.value)}
+                          error={currentErrors.designatedOrderFrom}
+                          disabled={isUploading}
+                          fullWidth
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                          <Input
+                            id={`designated-order-to-${index}`}
+                            label="Designated Order (To)"
+                            type={ao.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                            value={ao.designatedOrderTo}
+                            onChange={(e) => updateAO(index, 'designatedOrderTo', e.target.value)}
+                            error={currentErrors.designatedOrderTo}
+                            disabled={isUploading || ao.designatedOrderTo === 'Until revoked'}
+                            fullWidth
+                          />
+                          <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                              type="checkbox"
+                              id={`designated-until-revoked-upload-${index}`}
+                              checked={ao.designatedOrderTo === 'Until revoked'}
+                              onChange={(e) => updateAO(index, 'designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                              disabled={isUploading}
+                            />
+                            <label htmlFor={`designated-until-revoked-upload-${index}`} style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {ao.aoType === 'Recalled' && (
+                    <>
+                      <div className="upload-modal__field">
+                        <label className="upload-modal__label">Recalled from</label>
+                        <SearchableDropdown
+                          id={`recalledFrom-${index}`}
+                          options={dropdownOptions.officeNames}
+                          value={ao.recalledFrom}
+                          onChange={(val) => updateAO(index, 'recalledFrom', val)}
+                          placeholder="Select or enter recalled from office"
+                          disabled={isUploading}
+                          className={currentErrors.recalledFrom ? 'searchable-dropdown--error' : ''}
+                        />
+                        {currentErrors.recalledFrom && <span className="upload-modal__field-error">⚠️ {currentErrors.recalledFrom}</span>}
+                      </div>
+
+                      <div className="upload-modal__field">
+                        <label className="upload-modal__label">Recalled to</label>
+                        <SearchableDropdown
+                          id={`recalledTo-${index}`}
+                          options={dropdownOptions.officeNames}
+                          value={ao.recalledTo}
+                          onChange={(val) => updateAO(index, 'recalledTo', val)}
+                          placeholder="Select or enter recalled to office"
+                          disabled={isUploading}
+                          className={currentErrors.recalledTo ? 'searchable-dropdown--error' : ''}
+                        />
+                        {currentErrors.recalledTo && <span className="upload-modal__field-error">⚠️ {currentErrors.recalledTo}</span>}
+                      </div>
+
+                      <div className="upload-modal__form-row">
+                        <Input
+                          id={`recalled-order-from-${index}`}
+                          label="Duration of recalled Order (From)"
+                          type="date"
+                          value={ao.recalledOrderFrom}
+                          onChange={(e) => updateAO(index, 'recalledOrderFrom', e.target.value)}
+                          error={currentErrors.recalledOrderFrom}
+                          disabled={isUploading}
+                          fullWidth
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                          <Input
+                            id={`recalled-order-to-${index}`}
+                            label="Duration of recalled Order (To)"
+                            type={ao.recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
+                            value={ao.recalledOrderTo}
+                            onChange={(e) => updateAO(index, 'recalledOrderTo', e.target.value)}
+                            error={currentErrors.recalledOrderTo}
+                            disabled={isUploading || ao.recalledOrderTo === 'Until revoked'}
+                            fullWidth
+                          />
+                          <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                              type="checkbox"
+                              id={`recalled-until-revoked-upload-${index}`}
+                              checked={ao.recalledOrderTo === 'Until revoked'}
+                              onChange={(e) => updateAO(index, 'recalledOrderTo', e.target.checked ? 'Until revoked' : '')}
+                              disabled={isUploading}
+                            />
+                            <label htmlFor={`recalled-until-revoked-upload-${index}`} style={{ fontSize: '0.85rem' }}>Until revoked</label>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  
+                  <div className="upload-modal__field" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                    <label htmlFor={`file-${index}`} className="upload-modal__label">
+                      Select PDF File(s) for this AO
+                    </label>
+                    <input
+                      id={`file-${index}`}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        updateAO(index, 'files', files);
+                      }}
+                      className="upload-modal__file-input"
+                      disabled={isUploading}
+                    />
+                    {ao.files && ao.files.length > 0 && (
+                      <div className="upload-modal__file-list">
+                        {ao.files.map((file, i) => (
+                          <div key={i} className="upload-modal__file-info">
+                            <span className="upload-modal__file-name">📄 {file.name}</span>
+                            <span className="upload-modal__file-size">{formatFileSize(file.size)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {currentErrors.files && <span className="upload-modal__field-error">⚠️ {currentErrors.files}</span>}
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', paddingLeft: '0.25rem' }}>
+                    <input
+                      type="checkbox"
+                      id={`auto-rename-${index}`}
+                      checked={ao.autoRename}
+                      onChange={(e) => updateAO(index, 'autoRename', e.target.checked)}
+                      disabled={isUploading}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor={`auto-rename-${index}`} className="upload-modal__label" style={{ margin: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', fontWeight: 500, fontSize: '0.85rem' }}>
+                      Auto rename file according to AO details
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
             
-            <div className="upload-modal__form-row">
-              <div className="upload-modal__field upload-modal__field--full">
-                <label htmlFor="ao-type" className="upload-modal__label">
-                  AO Status
-                </label>
-                <select
-                  id="ao-type"
-                  className={`upload-modal__select ${fieldErrors.aoType ? 'upload-modal__select--error' : ''}`}
-                  value={aoType}
-                  onChange={(e) => {
-                    setAoType(e.target.value as any);
-                    setDetailedTo('');
-                    setDetailedDivision('');
-                    setDetailedFunction('');
-                    setDesignatedPositionFunction('');
-                    setDesignatedOrderFrom('');
-                    setDesignatedOrderTo('');
-                    setRecalledFrom('');
-                    setRecalledTo('');
-                    setRecalledOrderFrom('');
-                    setRecalledOrderTo('');
-                    setAppointmentFrom('');
-                    setAppointmentTo('');
-                  }}
-                  disabled={isUploading}
-                >
-                  <option value="">Select AO Type</option>
-                  <option value="Detailed">Detailed</option>
-                  <option value="Designated">Designated</option>
-                  <option value="Recalled">Recalled</option>
-                </select>
-                {fieldErrors.aoType && <span className="upload-modal__field-error">⚠️ {fieldErrors.aoType}</span>}
-              </div>
-            </div>
-
-            <div className="upload-modal__form-row">
-              <Input
-                id="ao-number"
-                label="AO Number"
-                placeholder="Enter Administrative Order number"
-                value={aoNumber}
-                onChange={(e) => setAoNumber(e.target.value)}
-                error={fieldErrors.aoNumber}
-                disabled={isUploading}
-                fullWidth
-              />
-              <div className="upload-modal__field">
-                <label htmlFor="ao-year" className="upload-modal__label">
-                  Series
-                </label>
-                  <select
-                    id="ao-year"
-                    className={`upload-modal__select ${fieldErrors.aoYear ? 'upload-modal__select--error' : ''}`}
-                    value={aoYear}
-                    onChange={(e) => setAoYear(e.target.value)}
-                    disabled={isUploading}
-                    style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="">Select series year</option>
-                    {dropdownOptions.aoYears.map((year) => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                {fieldErrors.aoYear && <span className="upload-modal__field-error">⚠️ {fieldErrors.aoYear}</span>}
-              </div>
-            </div>
-
-            {aoType === 'Detailed' && (
-              <>
-                <div className="upload-modal__field">
-                  <label htmlFor="detailedTo" className="upload-modal__label">
-                    Detailed/Transferred Office
-                  </label>
-                  <SearchableDropdown
-                    id="detailedTo"
-                    options={dropdownOptions.officeNames}
-                    value={detailedTo}
-                    onChange={setDetailedTo}
-                    placeholder="Select or enter office"
-                    disabled={isUploading}
-                    className={fieldErrors.detailedTo ? 'searchable-dropdown--error' : ''}
-                  />
-                  {fieldErrors.detailedTo && <span className="upload-modal__field-error">⚠️ {fieldErrors.detailedTo}</span>}
-                </div>
-
-                <div className="upload-modal__field">
-                  <label htmlFor="detailedDivision" className="upload-modal__label">
-                    Division
-                  </label>
-                  <input
-                    id="detailedDivision"
-                    className="input"
-                    type="text"
-                    placeholder="Enter division"
-                    value={detailedDivision}
-                    onChange={(e) => setDetailedDivision(e.target.value)}
-                    disabled={isUploading}
-                  />
-                </div>
-
-                <div className="upload-modal__form-row">
-                  <Input
-                    id="appointment-from"
-                    label="Duration of Detailed Order (From)"
-                    type="date"
-                    value={appointmentFrom}
-                    onChange={(e) => setAppointmentFrom(e.target.value)}
-                    error={fieldErrors.appointmentFrom}
-                    disabled={isUploading}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="appointment-to"
-                      label="Duration of Detailed Order (To)"
-                      type={appointmentTo === 'Until revoked' ? 'text' : 'date'}
-                      value={appointmentTo}
-                      onChange={(e) => setAppointmentTo(e.target.value)}
-                      error={fieldErrors.appointmentTo}
-                      disabled={isUploading || appointmentTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="detailed-until-revoked-upload"
-                        checked={appointmentTo === 'Until revoked'}
-                        onChange={(e) => setAppointmentTo(e.target.checked ? 'Until revoked' : '')}
-                        disabled={isUploading}
-                      />
-                      <label htmlFor="detailed-until-revoked-upload" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {aoType === 'Designated' && (
-              <>
-                <div className="upload-modal__field">
-                  <label htmlFor="designatedOffice" className="upload-modal__label">
-                    Designated Office
-                  </label>
-                  <SearchableDropdown
-                    id="designatedOffice"
-                    options={dropdownOptions.officeNames}
-                    value={detailedTo}
-                    onChange={setDetailedTo}
-                    placeholder="Select or enter designated office"
-                    disabled={isUploading}
-                    className={fieldErrors.detailedTo ? 'searchable-dropdown--error' : ''}
-                  />
-                  {fieldErrors.detailedTo && <span className="upload-modal__field-error">⚠️ {fieldErrors.detailedTo}</span>}
-                </div>
-
-                <div className="upload-modal__field">
-                  <label htmlFor="designatedPositionFunction" className="upload-modal__label">
-                    Designated Position Function
-                  </label>
-                  <SearchableDropdown
-                    id="designatedPositionFunction"
-                    options={dropdownOptions.positions}
-                    value={designatedPositionFunction}
-                    onChange={setDesignatedPositionFunction}
-                    placeholder="Select or enter position function"
-                    disabled={isUploading}
-                    className={fieldErrors.designatedPositionFunction ? 'searchable-dropdown--error' : ''}
-                  />
-                  {fieldErrors.designatedPositionFunction && <span className="upload-modal__field-error">⚠️ {fieldErrors.designatedPositionFunction}</span>}
-                </div>
-
-                <div className="upload-modal__form-row">
-                  <Input
-                    id="designated-order-from"
-                    label="Designated Order (From)"
-                    type="date"
-                    value={designatedOrderFrom}
-                    onChange={(e) => setDesignatedOrderFrom(e.target.value)}
-                    error={fieldErrors.designatedOrderFrom}
-                    disabled={isUploading}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="designated-order-to"
-                      label="Designated Order (To)"
-                      type={designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={designatedOrderTo}
-                      onChange={(e) => setDesignatedOrderTo(e.target.value)}
-                      error={fieldErrors.designatedOrderTo}
-                      disabled={isUploading || designatedOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="designated-until-revoked-upload"
-                        checked={designatedOrderTo === 'Until revoked'}
-                        onChange={(e) => setDesignatedOrderTo(e.target.checked ? 'Until revoked' : '')}
-                        disabled={isUploading}
-                      />
-                      <label htmlFor="designated-until-revoked-upload" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {aoType === 'Recalled' && (
-              <>
-                <div className="upload-modal__field">
-                  <label htmlFor="recalledFrom" className="upload-modal__label">
-                    Recalled from
-                  </label>
-                  <SearchableDropdown
-                    id="recalledFrom"
-                    options={dropdownOptions.officeNames}
-                    value={recalledFrom}
-                    onChange={setRecalledFrom}
-                    placeholder="Select or enter recalled from office"
-                    disabled={isUploading}
-                    className={fieldErrors.recalledFrom ? 'searchable-dropdown--error' : ''}
-                  />
-                  {fieldErrors.recalledFrom && <span className="upload-modal__field-error">⚠️ {fieldErrors.recalledFrom}</span>}
-                </div>
-
-                <div className="upload-modal__field">
-                  <label htmlFor="recalledTo" className="upload-modal__label">
-                    Recalled to
-                  </label>
-                  <SearchableDropdown
-                    id="recalledTo"
-                    options={dropdownOptions.officeNames}
-                    value={recalledTo}
-                    onChange={setRecalledTo}
-                    placeholder="Select or enter recalled to office"
-                    disabled={isUploading}
-                    className={fieldErrors.recalledTo ? 'searchable-dropdown--error' : ''}
-                  />
-                  {fieldErrors.recalledTo && <span className="upload-modal__field-error">⚠️ {fieldErrors.recalledTo}</span>}
-                </div>
-
-                <div className="upload-modal__form-row">
-                  <Input
-                    id="recalled-order-from"
-                    label="Duration of recalled Order (From)"
-                    type="date"
-                    value={recalledOrderFrom}
-                    onChange={(e) => setRecalledOrderFrom(e.target.value)}
-                    error={fieldErrors.recalledOrderFrom}
-                    disabled={isUploading}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="recalled-order-to"
-                      label="Duration of recalled Order (To)"
-                      type={recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={recalledOrderTo}
-                      onChange={(e) => setRecalledOrderTo(e.target.value)}
-                      error={fieldErrors.recalledOrderTo}
-                      disabled={isUploading || recalledOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="recalled-until-revoked-upload"
-                        checked={recalledOrderTo === 'Until revoked'}
-                        onChange={(e) => setRecalledOrderTo(e.target.checked ? 'Until revoked' : '')}
-                        disabled={isUploading}
-                      />
-                      <label htmlFor="recalled-until-revoked-upload" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-            
+            <Button 
+              type="button" 
+              variant="secondary" 
+              onClick={addAO} 
+              disabled={isUploading}
+              style={{ width: '100%', marginBottom: '1rem', borderStyle: 'dashed' }}
+            >
+              + Add Another AO
+            </Button>
           </div>
         )}
 
-        <div className="upload-modal__field">
-          <label htmlFor="file" className="upload-modal__label">
-            Select PDF File(s)
-          </label>
+        {selectedCategory !== 'Administrative Order' && (
+          <div className="upload-modal__field">
+            <label htmlFor="file" className="upload-modal__label">
+              Select PDF File(s)
+            </label>
           <input
             id="file"
             type="file"
@@ -585,6 +613,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
             </div>
           )}
         </div>
+        )}
         
         <div className="upload-modal__field compression-field">
           <label className="upload-modal__label">Compression level</label>
@@ -624,21 +653,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
           </div>
         </div>
 
-        {selectedCategory === 'Administrative Order' && (
-          <div className="upload-modal__field" style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              id="auto-rename"
-              checked={autoRename}
-              onChange={(e) => setAutoRename(e.target.checked)}
-              disabled={isUploading}
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-            />
-            <label htmlFor="auto-rename" className="upload-modal__label" style={{ margin: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', fontWeight: 500 }}>
-              Auto rename file according to AO details
-            </label>
-          </div>
-        )}
+        {/* Removed auto-rename checkbox from here */}
 
         {error && (
           <div className="upload-modal__error">
@@ -663,9 +678,9 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
           <Button
             type="submit"
             variant="primary"
-            disabled={selectedFiles.length === 0 || isUploading}
+            disabled={isUploading || (selectedCategory !== 'Administrative Order' && selectedFiles.length === 0) || (selectedCategory === 'Administrative Order' && aoDataList.some(ao => !ao.files || ao.files.length === 0))}
           >
-            {isUploading ? 'Uploading...' : `Upload${selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ''}`}
+            {isUploading ? 'Uploading...' : `Upload${selectedCategory !== 'Administrative Order' && selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ''}`}
           </Button>
         </div>
       </form>

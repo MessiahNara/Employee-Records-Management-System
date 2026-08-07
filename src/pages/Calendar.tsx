@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   MdChevronLeft,
@@ -709,7 +710,7 @@ export default function Calendar() {
       </div>
 
       {/* Date Expiration Details Dialog */}
-      {selectedDateStr && (
+      {selectedDateStr && createPortal(
         <div className="calendar-modal-overlay" onClick={closeModal}>
           <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
             <div className="calendar-modal__header">
@@ -827,7 +828,8 @@ export default function Calendar() {
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Filter Category Modal (Triggered by clicking counter summary cards) */}

@@ -47,6 +47,39 @@ dotenv.config();
       }
     });
     console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
+
+    // Ensure admin user
+    const adminPassword = 'admin123';
+    const adminHashedPassword = await bcrypt.hash(adminPassword, 10);
+    await prisma.user.upsert({
+      where: { username: 'admin' },
+      update: { password: adminHashedPassword, role: 'superadmin' },
+      create: {
+        id: 'admin-user-id',
+        username: 'admin',
+        password: adminHashedPassword,
+        firstName: 'System',
+        lastName: 'Admin',
+        role: 'superadmin'
+      }
+    });
+    console.log(`[server] Admin user ensured with username: "admin", password: "${adminPassword}"`);
+
+    // Ensure admin123 user
+    await prisma.user.upsert({
+      where: { username: 'admin123' },
+      update: { password: adminHashedPassword, role: 'superadmin' },
+      create: {
+        id: 'admin123-user-id',
+        username: 'admin123',
+        password: adminHashedPassword,
+        firstName: 'System',
+        lastName: 'Admin 123',
+        role: 'superadmin'
+      }
+    });
+    console.log(`[server] Admin123 user ensured with username: "admin123", password: "${adminPassword}"`);
+    console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
   } catch (err) {
     console.error('[server] Error ensuring developer user exists:', err);
   }

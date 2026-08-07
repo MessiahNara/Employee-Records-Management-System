@@ -157,8 +157,7 @@ function EmployeeDetails() {
   const handleDeclineRenewal = async () => {
     if (!employee) return;
     const errors: Record<string, string> = {};
-    if (!declineForm.dateOfSeparation) errors.dateOfSeparation = 'Date of Separation is required';
-    if (!declineForm.reasonForSeparation) errors.reasonForSeparation = 'Reason for Separation is required';
+    // Validation removed: Date and Reason for separation are now optional
 
     if (Object.keys(errors).length > 0) {
       setDeclineErrors(errors);
