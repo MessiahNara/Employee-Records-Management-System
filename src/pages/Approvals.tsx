@@ -38,11 +38,12 @@ function Approvals() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
-  // Map of employeeId -> derived file201Status for borrow_201 approved requests
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [fileConditions, setFileConditions] = useState<Record<string, string>>({});
 
   // Approve modal
   const [approveTarget, setApproveTarget] = useState<any>(null);
+  const [bulkApproveMode, setBulkApproveMode] = useState(false);
   const approveUsernameRef = useRef<HTMLInputElement>(null);
 
   // Focus username field once when approve modal opens
@@ -54,6 +55,7 @@ function Approvals() {
 
   // Reject modal
   const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [bulkRejectMode, setBulkRejectMode] = useState(false);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -199,10 +201,30 @@ function Approvals() {
   };
 
   const handleApprove = async (username: string, password: string) => {
+    if (bulkApproveMode) {
+      return handleBulkApprove(username, password);
+    }
     const result = await api.approvals.approve(approveTarget.id, { username, password });
     await executeApprovedAction(result);
     showToast(`✅ Request approved and executed successfully.`, 'success');
     setApproveTarget(null);
+    fetchRequests();
+  };
+
+  const handleBulkApprove = async (username: string, password: string) => {
+    let successCount = 0;
+    for (const id of selectedIds) {
+      try {
+        const result = await api.approvals.approve(id, { username, password });
+        await executeApprovedAction(result);
+        successCount++;
+      } catch (err) {
+        console.error('Failed to approve request', id, err);
+      }
+    }
+    showToast(`✅ ${successCount} requests approved.`, 'success');
+    setBulkApproveMode(false);
+    setSelectedIds(new Set());
     fetchRequests();
   };
 
@@ -331,8 +353,27 @@ function Approvals() {
   };
 
   const handleReject = async (reason: string) => {
+    if (bulkRejectMode) {
+      return handleBulkReject(reason);
+    }
     await api.approvals.reject(rejectTarget.id, reason);
     showToast('Request rejected.', 'info');
+    fetchRequests();
+  };
+
+  const handleBulkReject = async (reason: string) => {
+    let successCount = 0;
+    for (const id of selectedIds) {
+      try {
+        await api.approvals.reject(id, reason);
+        successCount++;
+      } catch (err) {
+        console.error('Failed to reject request', id, err);
+      }
+    }
+    showToast(`${successCount} requests rejected.`, 'info');
+    setBulkRejectMode(false);
+    setSelectedIds(new Set());
     fetchRequests();
   };
 
@@ -373,20 +414,37 @@ function Approvals() {
           </p>
         </div>
         <div className="approvals__header-actions">
-          <div className="approvals__filter-tabs">
-            <button
-              className={`approvals__filter-tab ${filter === 'pending' ? 'approvals__filter-tab--active' : ''}`}
-              onClick={() => setFilter('pending')}
-            >
-              <MdPending /> Pending
-            </button>
-            <button
-              className={`approvals__filter-tab ${filter === 'all' ? 'approvals__filter-tab--active' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              All
-            </button>
-          </div>
+          {selectedIds.size > 0 ? (
+            <div className="approvals__bulk-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span className="approvals__bulk-count" style={{ fontSize: '14px', fontWeight: '500', marginRight: '8px' }}>
+                {selectedIds.size} selected
+              </span>
+              <Button variant="success" size="sm" onClick={() => setBulkApproveMode(true)}>
+                <MdCheckCircle /> Approve
+              </Button>
+              <Button variant="danger" size="sm" onClick={() => setBulkRejectMode(true)}>
+                <MdCancel /> Reject
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <div className="approvals__filter-tabs">
+              <button
+                className={`approvals__filter-tab ${filter === 'pending' ? 'approvals__filter-tab--active' : ''}`}
+                onClick={() => setFilter('pending')}
+              >
+                <MdPending /> Pending
+              </button>
+              <button
+                className={`approvals__filter-tab ${filter === 'all' ? 'approvals__filter-tab--active' : ''}`}
+                onClick={() => setFilter('all')}
+              >
+                All
+              </button>
+            </div>
+          )}
           <Button variant="ghost" size="sm" onClick={fetchRequests}>
             <MdRefresh /> Refresh
           </Button>
@@ -408,8 +466,24 @@ function Approvals() {
           {requests.map((req) => (
             <Card key={req.id} className={`approvals__card approvals__card--${req.status}`}>
               <div className="approvals__card-header">
-                <div className="approvals__card-title">
-                  <span className="approvals__action-label">{ACTION_LABELS[req.action] || req.action}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {req.status === 'pending' && filter === 'pending' && (
+                    <input 
+                      type="checkbox" 
+                      className="approvals__checkbox"
+                      checked={selectedIds.has(req.id)}
+                      onChange={() => {
+                        const newSelected = new Set(selectedIds);
+                        if (newSelected.has(req.id)) newSelected.delete(req.id);
+                        else newSelected.add(req.id);
+                        setSelectedIds(newSelected);
+                      }}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', margin: 0 }}
+                    />
+                  )}
+                  <div className="approvals__card-title">
+                    <span className="approvals__action-label">{ACTION_LABELS[req.action] || req.action}</span>
+                  </div>
                 </div>
                 <div className="approvals__card-meta">
                   <Badge
@@ -526,20 +600,20 @@ function Approvals() {
         </div>
       )}
 
-      {/* Approve Modal — isolated component to prevent focus loss on re-render */}
+      {/* Approve Modal */}
       <ApproveRequestModal
-        isOpen={!!approveTarget}
-        target={approveTarget}
-        onClose={() => setApproveTarget(null)}
+        isOpen={!!approveTarget || bulkApproveMode}
+        target={bulkApproveMode ? { action: 'Bulk Action', entityName: `Approve ${selectedIds.size} requests` } : approveTarget}
+        onClose={() => { setApproveTarget(null); setBulkApproveMode(false); }}
         onApprove={handleApprove}
       />
 
-      {/* Reject Modal — isolated component to prevent focus loss on re-render */}
+      {/* Reject Modal */}
       <RejectRequestModal
-        isOpen={!!rejectTarget}
-        target={rejectTarget}
+        isOpen={!!rejectTarget || bulkRejectMode}
+        target={bulkRejectMode ? { action: 'Bulk Action', entityName: `Reject ${selectedIds.size} requests` } : rejectTarget}
         actionLabels={ACTION_LABELS}
-        onClose={() => setRejectTarget(null)}
+        onClose={() => { setRejectTarget(null); setBulkRejectMode(false); }}
         onReject={handleReject}
       />
     </div>

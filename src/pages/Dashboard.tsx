@@ -8,6 +8,8 @@ import SearchBar from '../components/ui/SearchBar';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import File201HistoryModal from '../components/File201HistoryModal';
+import { formatEmployeeNameForFolder } from '../utils/formatUtils';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import SearchableDropdown from '../components/ui/SearchableDropdown';
@@ -3530,7 +3532,7 @@ function Dashboard() {
 
       // If there is an AO file, upload it
       if (aoFile) {
-        const empName = `${formData.lastName}, ${formData.firstName}`;
+        const empName = formatEmployeeNameForFolder(formData.firstName, formData.lastName, formData.middleName);
         try {
           await api.document.upload(
             aoFile,

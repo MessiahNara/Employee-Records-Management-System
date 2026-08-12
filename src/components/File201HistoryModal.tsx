@@ -164,15 +164,13 @@ function File201HistoryModal({ isOpen, onClose, employeeId, employeeName, onStat
                           <span className="file201-history__label">Date Returned:</span>
                           <span className="file201-history__value">{new Date(log.dateReturned).toLocaleString()}</span>
                         </div>
-                        {/* Show Returned By only if different from borrower */}
-                        {log.returnedByName && log.returnedByName !== log.borrowerName && (
+                        {log.returnedByName && (
                           <div className="file201-history__row">
                             <span className="file201-history__label">Returned by:</span>
                             <span className="file201-history__value">{log.returnedByName}</span>
                           </div>
                         )}
-                        {/* Show Received By only if different from releasedBy */}
-                        {log.receivedBy && log.receivedBy !== log.releasedBy && (
+                        {log.receivedBy && (
                           <div className="file201-history__row">
                             <span className="file201-history__label">Received by:</span>
                             <span className="file201-history__value">{log.receivedBy}</span>
