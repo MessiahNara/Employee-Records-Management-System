@@ -1,0 +1,119 @@
+.analytics-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeIn 0.3s ease;
+}
+
+.analytics-header {
+  margin-bottom: 2rem;
+}
+
+.analytics-header h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  margin-bottom: 0.5rem;
+}
+
+.analytics-header p {
+  color: var(--text-secondary, #64748b);
+  font-size: 1rem;
+}
+
+.analytics-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--bg-primary, #ffffff);
+  border-radius: var(--border-radius-lg, 12px);
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.stat-icon {
+  font-size: 2.5rem;
+  padding: 0.75rem;
+  border-radius: 50%;
+}
+
+.stat-icon.blue {
+  color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.stat-icon.green {
+  color: #10b981;
+  background-color: rgba(16, 185, 129, 0.1);
+}
+
+.stat-icon.orange {
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+.stat-icon.purple {
+  color: #8b5cf6;
+  background-color: rgba(139, 92, 246, 0.1);
+}
+
+.stat-details h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  text-transform: uppercase;
+  margin: 0;
+  margin-bottom: 0.25rem;
+}
+
+.stat-details .stat-value {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  margin: 0;
+}
+
+.analytics-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .analytics-charts-grid {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+.chart-card {
+  background: var(--bg-primary, #ffffff);
+  border-radius: var(--border-radius-lg, 12px);
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.chart-card h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  margin-bottom: 1.5rem;
+}
+
+.chart-container {
+  width: 100%;
+  height: 350px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

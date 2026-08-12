@@ -80,6 +80,24 @@ dotenv.config();
     });
     console.log(`[server] Admin123 user ensured with username: "admin123", password: "${adminPassword}"`);
     console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
+
+    // Migration: grant Dashboard Analytics to existing admins
+    const users = await prisma.user.findMany();
+    for (const user of users) {
+      if (user.permissions && typeof user.permissions === 'object' && !Array.isArray(user.permissions)) {
+        const perms: any = user.permissions;
+        if (perms.allowedTabs && !perms.allowedTabs.includes('Dashboard Analytics')) {
+          if (['admin', 'superadmin', 'developer'].includes(user.role)) {
+            perms.allowedTabs.push('Dashboard Analytics');
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { permissions: perms }
+            });
+            console.log(`[server] Granted Dashboard Analytics to user ${user.username}`);
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error('[server] Error ensuring developer user exists:', err);
   }

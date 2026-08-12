@@ -14,6 +14,7 @@ import CalendarActivities from './pages/CalendarActivities';
 import Chats from './pages/Chats';
 import File201 from './pages/File201';
 import InventoryAppraisal from './pages/InventoryAppraisal';
+import Analytics from './pages/Analytics';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
@@ -86,6 +87,14 @@ function App() {
                 element={
                   <RoleProtectedRoute allowedRoles={['developer']}>
                     <Users />
+                  </RoleProtectedRoute>
+                } 
+              />
+              <Route 
+                path="analytics" 
+                element={
+                  <RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'developer']}>
+                    <Analytics />
                   </RoleProtectedRoute>
                 } 
               />

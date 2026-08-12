@@ -4,7 +4,7 @@ import { getAuthState } from '../../utils/mockAuth';
 import {
   MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder,
   MdAssignmentTurnedIn, MdInsertChart, MdInbox, MdCalendarToday,
-  MdExpandMore, MdChevronRight, MdChat, MdInventory
+  MdExpandMore, MdChevronRight, MdChat, MdInventory, MdPieChart
 } from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
@@ -305,6 +305,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   mainItems.push({ path: '/chats', label: 'Chats', icon: MdChat, iconColor: '#8b5cf6', badge: chatUnreadCount });
 
   const adminItems: NavItem[] = [
+    { path: '/analytics', label: 'Dashboard Analytics', icon: MdPieChart, iconColor: '#f43f5e', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['developer'] },
     { path: '/file201', label: 'File Locator', icon: MdFolder, iconColor: '#3b82f6', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/audit-logs', label: 'Audit Logs', icon: MdDescription, iconColor: '#f59e0b', requiredRoles: ['superadmin', 'admin', 'developer'] },
@@ -356,6 +357,10 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
       return false;
     }
     if (currentUser?.permissions?.allowedTabs) {
+      // Backward compatibility: If it's the new Dashboard Analytics tab, and the user already has Dashboard access, let them see it
+      if (item.label === 'Dashboard Analytics' && currentUser.permissions.allowedTabs.includes('Dashboard')) {
+        return true;
+      }
       return currentUser.permissions.allowedTabs.includes(item.label);
     }
     return true;

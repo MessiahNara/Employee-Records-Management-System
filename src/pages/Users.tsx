@@ -66,6 +66,7 @@ const roles: Role[] = [
 
 const ALL_TABS = [
   'Dashboard',
+  'Dashboard Analytics',
   'Inventory and Appraisal',
   'Calendar',
   'Generated Reports',
