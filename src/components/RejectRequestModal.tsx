@@ -57,12 +57,35 @@ function RejectRequestModal({ isOpen, target, actionLabels, onClose, onReject }:
       }
     >
       {target && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-            Rejecting:{' '}
-            <strong>{actionLabels[target.action] || target.action}</strong> for{' '}
-            <strong>{target.entityName || target.entityId}</strong>
-          </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.04)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: 'var(--border-radius-lg)',
+            padding: '1.25rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <div style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                color: 'rgb(239, 68, 68)',
+                borderRadius: '50%',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                fontSize: '0.875rem'
+              }}>
+                !
+              </div>
+              <h4 style={{ margin: 0, color: 'var(--color-danger)', fontSize: '0.875rem', fontWeight: 600 }}>Rejecting Request</h4>
+            </div>
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: '1.4', marginLeft: '2.25rem' }}>
+              <strong>{actionLabels[target.action] || target.action}</strong> for{' '}
+              <strong>{target.entityName || target.entityId}</strong>
+            </div>
+          </div>
           <div>
             <label
               style={{

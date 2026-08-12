@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import ApproveRequestModal from '../components/ApproveRequestModal';
 import RejectRequestModal from '../components/RejectRequestModal';
+import RequestDetailsModal from '../components/RequestDetailsModal';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
@@ -56,6 +57,9 @@ function Approvals() {
   // Reject modal
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [bulkRejectMode, setBulkRejectMode] = useState(false);
+
+  // View Details modal
+  const [viewDetailsTarget, setViewDetailsTarget] = useState<any>(null);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -185,12 +189,12 @@ function Approvals() {
       case 'bulk_delete_inventory_records':
         return `Delete ${payload.count} Inventory Records`;
       case 'borrow_201':
-        return `Borrow 201 of ${payload.employeeName}${payload.borrowerName ? ' — Borrowed By: ' + payload.borrowerName : ''}${payload.purpose ? ' | Purpose: ' + payload.purpose : ''}`;
+        return `Borrow 201 of ${payload.employeeName}${payload.borrowerName ? ' — Borrowed By: ' + payload.borrowerName : ''}`;
       case 'view_document':
       case 'print_document':
       case 'download_document': {
         const actionWord = req.action === 'view_document' ? 'View' : req.action === 'print_document' ? 'Print' : 'Download';
-        return `${actionWord}: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}${payload.employeeName ? ` — Employee: ${payload.employeeName}` : ''}${payload.purpose ? ` | Purpose: ${payload.purpose}` : ''}`;
+        return `${actionWord}: ${payload.fileName || req.entityName}${payload.category ? ` (${payload.category})` : ''}${payload.employeeName ? ` — Employee: ${payload.employeeName}` : ''}`;
       }
       case 'create_group_chat': {
         return `Create Group Chat: "${payload.groupName}" with ${payload.selectedMemberIds?.length || 0} members (${payload.memberNames || 'None'})`;
@@ -464,7 +468,12 @@ function Approvals() {
       ) : (
         <div className="approvals__list">
           {requests.map((req) => (
-            <Card key={req.id} className={`approvals__card approvals__card--${req.status}`}>
+            <Card 
+              key={req.id} 
+              className={`approvals__card approvals__card--${req.status}`}
+              onClick={() => setViewDetailsTarget(req)}
+              style={{ cursor: 'pointer', transition: 'box-shadow 0.2s', padding: '1.5rem' }}
+            >
               <div className="approvals__card-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   {req.status === 'pending' && filter === 'pending' && (
@@ -472,6 +481,7 @@ function Approvals() {
                       type="checkbox" 
                       className="approvals__checkbox"
                       checked={selectedIds.has(req.id)}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => {
                         const newSelected = new Set(selectedIds);
                         if (newSelected.has(req.id)) newSelected.delete(req.id);
@@ -512,8 +522,24 @@ function Approvals() {
                   <span className="approvals__info-label">
                     {req.action === 'update_employee' || req.action === 'update_user' ? 'Updated:' : 'Requested:'}
                   </span>
-                  <span className="approvals__info-value">{formatRequestedInfo(req)}</span>
+                  <span className="approvals__info-value" style={{ 
+                    display: '-webkit-box', 
+                    WebkitLineClamp: 1, 
+                    WebkitBoxOrient: 'vertical', 
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    {formatRequestedInfo(req)}
+                  </span>
                 </div>
+                {req.payload?.purpose && (
+                  <div className="approvals__info-row">
+                    <span className="approvals__info-label">Purpose:</span>
+                    <span className="approvals__info-value" style={{ fontStyle: 'italic' }}>
+                      {req.payload.purpose}
+                    </span>
+                  </div>
+                )}
                 {(req.status === 'approved') && req.approvedByName && (
                   <div className="approvals__info-row">
                     <span className="approvals__info-label">Approved by:</span>
@@ -564,7 +590,7 @@ function Approvals() {
               </div>
 
               {req.status === 'pending' && (
-                <div className="approvals__card-actions">
+                <div className="approvals__card-actions" onClick={(e) => e.stopPropagation()}>
                   <Button
                     variant="success"
                     size="sm"
@@ -589,7 +615,7 @@ function Approvals() {
               )}
 
               {req.status !== 'pending' && currentUser?.role === 'developer' && (
-                <div className="approvals__card-actions">
+                <div className="approvals__card-actions" onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" onClick={() => handleDelete(req.id)}>
                     Delete
                   </Button>
@@ -615,6 +641,28 @@ function Approvals() {
         actionLabels={ACTION_LABELS}
         onClose={() => { setRejectTarget(null); setBulkRejectMode(false); }}
         onReject={handleReject}
+      />
+
+      <RequestDetailsModal
+        isOpen={!!viewDetailsTarget}
+        target={viewDetailsTarget}
+        onClose={() => setViewDetailsTarget(null)}
+        formatRequestedInfo={formatRequestedInfo}
+        ACTION_LABELS={ACTION_LABELS}
+        onApproveClick={() => {
+          if (!viewDetailsTarget) return;
+          if (viewDetailsTarget.requestedBy === currentUser?.id) {
+            showToast('You cannot approve your own request. Another Super Admin or Developer must approve it.', 'warning');
+            return;
+          }
+          setApproveTarget(viewDetailsTarget);
+          setViewDetailsTarget(null);
+        }}
+        onRejectClick={() => {
+          if (!viewDetailsTarget) return;
+          setRejectTarget(viewDetailsTarget);
+          setViewDetailsTarget(null);
+        }}
       />
     </div>
   );

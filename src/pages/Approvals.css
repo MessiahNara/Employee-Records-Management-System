@@ -107,6 +107,11 @@
   border-left: 4px solid var(--border-color) !important;
 }
 
+.approvals__card:hover {
+  background-color: var(--bg-secondary);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
 .approvals__card--pending {
   border-left-color: var(--color-warning, #f59e0b) !important;
 }
