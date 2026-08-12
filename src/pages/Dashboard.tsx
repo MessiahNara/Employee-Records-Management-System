@@ -3085,14 +3085,32 @@ function Dashboard() {
   };
 
   // Checkbox selection handlers
-  const handleSelectAll = () => {
-    if (selectedEmployeeIds.size === filteredEmployees.length) {
+  const handleSelectAll = async () => {
+    if (filteredEmployees.length > 0 && filteredEmployees.every(emp => selectedEmployeeIds.has(emp.id))) {
       // Deselect all
       setSelectedEmployeeIds(new Set());
     } else {
-      // Select all employees across all pages
-      const allIds = new Set(filteredEmployees.map(emp => emp.id));
-      setSelectedEmployeeIds(allIds);
+      // Select all employees across all pages by fetching all matching results
+      try {
+        const filters: any = { limit: 100000 };
+        if (statusFilter !== 'all') filters.status = statusFilter;
+        if (searchQuery.trim()) {
+          filters.search = searchQuery.trim();
+          filters.filter_type = searchFilterType;
+        }
+        
+        const result = await api.employee.getAll(filters);
+        const data = (result as any).data || result;
+        
+        if (Array.isArray(data)) {
+          const allIds = new Set(data.map((emp: any) => emp.id));
+          setSelectedEmployeeIds(allIds);
+          showToast(`Selected all ${allIds.size} matching employees`, 'success');
+        }
+      } catch (error) {
+        console.error('Error fetching all employees for selection:', error);
+        showToast('Failed to select all employees across pages', 'error');
+      }
     }
   };
 
@@ -3139,8 +3157,8 @@ function Dashboard() {
     return employee.aoNumber;
   };
 
-  const isAllSelected = filteredEmployees.length > 0 && selectedEmployeeIds.size === filteredEmployees.length;
-  const isSomeSelected = selectedEmployeeIds.size > 0 && selectedEmployeeIds.size < filteredEmployees.length;
+  const isAllSelected = filteredEmployees.length > 0 && filteredEmployees.every(emp => selectedEmployeeIds.has(emp.id));
+  const isSomeSelected = filteredEmployees.some(emp => selectedEmployeeIds.has(emp.id)) && !isAllSelected;
 
   // Get selected employees info for bulk delete
   const selectedEmployees = employees.filter(emp => selectedEmployeeIds.has(emp.id));
@@ -3150,7 +3168,7 @@ function Dashboard() {
     {
       key: 'checkbox',
       header: (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <input
             type="checkbox"
             checked={isAllSelected}
@@ -3163,22 +3181,9 @@ function Dashboard() {
             className="dashboard__checkbox"
             aria-label="Select all employees"
           />
-          {selectedEmployeeIds.size > 0 && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsBulkDeleteModalOpen(true);
-              }}
-              style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', height: '28px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-            >
-              <MdDelete style={{ fontSize: '0.85rem' }} /> Delete ({selectedEmployeeIds.size})
-            </Button>
-          )}
         </div>
       ),
-      width: selectedEmployeeIds.size > 0 ? '160px' : '5%',
+      width: '5%',
       render: (employee) => (
         <div
           className="dashboard__checkbox-cell"

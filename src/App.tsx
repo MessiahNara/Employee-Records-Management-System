@@ -38,6 +38,13 @@ function App() {
   
   useEffect(() => {
     initSocketClient();
+    
+    // Only apply the zoom fix if we are NOT running inside the Electron app.
+    // The Electron app has its own zoom controls in main.cjs.
+    if (!(window as any).electron) {
+      document.documentElement.style.zoom = '0.65';
+    }
+
     return () => {
       const socket = getSocket();
       if (socket) {
