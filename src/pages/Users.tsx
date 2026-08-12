@@ -775,23 +775,14 @@ function Users() {
 
   // Check if role selection should be disabled
   const isRoleSelectionDisabled = (): boolean => {
-    if (selectedUser && selectedUser.roleId === 'role-1') {
-      return true;
-    }
     return !canAccessUserManagement;
   };
 
   const isRoleOptionDisabled = (targetRoleId: string): boolean => {
-    if (targetRoleId === 'role-1') {
-      return !selectedUser || selectedUser.roleId !== 'role-1';
-    }
     return false;
   };
 
   const getRoleTooltip = (targetRoleId: string): string => {
-    if (targetRoleId === 'role-1' && (!selectedUser || selectedUser.roleId !== 'role-1')) {
-      return 'Super Admin role cannot be assigned';
-    }
     return '';
   };
 

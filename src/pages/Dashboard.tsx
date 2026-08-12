@@ -1372,8 +1372,11 @@ function Dashboard() {
 
     const auditRows: ReportRow[] = [];
 
+    // Optimize employee lookup to prevent O(N^2) performance block
+    const employeesById = new Map(allEmployees.map(emp => [String(emp.id), emp]));
+
     Object.entries(logsByEmployee).forEach(([empId, logs]) => {
-      const emp = allEmployees.find((item) => item.id === empId);
+      const emp = employeesById.get(empId);
       if (!emp) return;
 
       // Exclude employee historical records if they no longer have an active Administrative Order document or AO fields

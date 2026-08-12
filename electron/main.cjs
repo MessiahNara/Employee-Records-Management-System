@@ -273,22 +273,27 @@ function createWindow() {
     show: false
   });
 
-  // Apply default zoom factor safely to avoid zoom resets on window maximize/minimize
+  // Track current zoom to avoid zoom resets on window maximize/minimize
+  let currentZoom = 0.65;
+  
   const applyZoom = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
-        mainWindow.webContents.setZoomFactor(0.65);
+        mainWindow.webContents.setZoomFactor(currentZoom);
       } catch (e) {
         // ignore
       }
     }
   };
 
+  // Listen for user zoom changes (Ctrl +/-) and save it
+  mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      currentZoom = mainWindow.webContents.getZoomFactor();
+    }
+  });
+
   mainWindow.webContents.on('did-finish-load', applyZoom);
-  mainWindow.on('resize', applyZoom);
-  mainWindow.on('restore', applyZoom);
-  mainWindow.on('maximize', applyZoom);
-  mainWindow.on('unmaximize', applyZoom);
 
 
   // Show window when ready to avoid flickering

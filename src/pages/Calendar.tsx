@@ -711,7 +711,7 @@ export default function Calendar() {
 
       {/* Date Expiration Details Dialog */}
       {selectedDateStr && createPortal(
-        <div className="calendar-modal-overlay" onClick={closeModal}>
+        <div className="calendar-modal-overlay">
           <div className="calendar-modal" onClick={(e) => e.stopPropagation()}>
             <div className="calendar-modal__header">
               <div>

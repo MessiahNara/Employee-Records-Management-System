@@ -38,3 +38,6 @@ uploads/
 **/uploads/**
 server/uploads/data/
 *.json.bak
+*.zip
+*.dump
+ERMS-Clean-Update.zip
