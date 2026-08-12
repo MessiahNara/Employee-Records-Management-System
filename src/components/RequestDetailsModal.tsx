@@ -75,9 +75,9 @@ function RequestDetailsModal({ isOpen, target, onClose, formatRequestedInfo, ACT
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time Requested</div>
                 <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
-                  {new Date(target.createdAt).toLocaleString('en-US', {
+                  {target.createdAt ? new Date(target.createdAt).toLocaleString('en-US', {
                     month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                  })}
+                  }) : 'Unknown Date'}
                 </div>
               </div>
 
@@ -174,9 +174,9 @@ function RequestDetailsModal({ isOpen, target, onClose, formatRequestedInfo, ACT
                   <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time</div>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
-                      {new Date(target.updatedAt).toLocaleString('en-US', {
+                      {target.resolvedAt || target.createdAt ? new Date(target.resolvedAt || target.createdAt).toLocaleString('en-US', {
                         month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                      })}
+                      }) : 'Unknown Date'}
                     </div>
                   </div>
                   {target.rejectedReason && (
