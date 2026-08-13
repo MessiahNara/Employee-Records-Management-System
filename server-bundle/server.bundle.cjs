@@ -58443,9 +58443,33 @@ var deletePhysicalFiles = async (employeeId) => {
     return 0;
   }
 };
+router2.get("/stats", async (req, res) => {
+  try {
+    const totalCount = await prisma_default.employee.count();
+    const activeCount = await prisma_default.employee.count({
+      where: { status: "Active" }
+    });
+    const documentsCount = await prisma_default.document.count();
+    const storageStats = await prisma_default.document.aggregate({
+      _sum: {
+        fileSize: true
+      }
+    });
+    res.json({
+      total: totalCount,
+      active: activeCount,
+      inactive: totalCount - activeCount,
+      documents: documentsCount,
+      storageUsed: storageStats._sum.fileSize || 0
+    });
+  } catch (error) {
+    console.error("Error fetching employee stats:", error);
+    res.status(500).json({ error: "Failed to fetch employee stats" });
+  }
+});
 router2.get("/", async (req, res) => {
   try {
-    const { status, appointmentStatus, search, filter_type } = req.query;
+    const { status, appointmentStatus, search, filter_type, page, limit } = req.query;
     const where = {};
     if (status) where.status = status;
     if (appointmentStatus) where.appointmentStatus = appointmentStatus;
@@ -58509,18 +58533,37 @@ router2.get("/", async (req, res) => {
         }
       }
     }
-    const employees = await prisma_default.employee.findMany({
-      where,
-      include: {
-        documents: true,
-        yellowBox: true
-      },
-      orderBy: [
-        { lastName: "asc" },
-        { firstName: "asc" }
-      ]
-    });
-    res.json(employees);
+    let skip;
+    let take;
+    if (page && limit) {
+      const pageNumber = parseInt(page, 10);
+      const limitNumber = parseInt(limit, 10);
+      if (!isNaN(pageNumber) && !isNaN(limitNumber)) {
+        skip = (pageNumber - 1) * limitNumber;
+        take = limitNumber;
+      }
+    }
+    const [employees, total] = await Promise.all([
+      prisma_default.employee.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          documents: true,
+          yellowBox: true
+        },
+        orderBy: [
+          { lastName: "asc" },
+          { firstName: "asc" }
+        ]
+      }),
+      page && limit ? prisma_default.employee.count({ where }) : Promise.resolve(0)
+    ]);
+    if (page && limit) {
+      res.json({ data: employees, total });
+    } else {
+      res.json(employees);
+    }
   } catch (error) {
     console.error("Error fetching employees:", error);
     res.status(500).json({ error: "Failed to fetch employees" });
@@ -62636,6 +62679,35 @@ import_dotenv.default.config();
         role: "developer"
       }
     });
+    console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
+    const adminPassword = "admin123";
+    const adminHashedPassword = await bcryptjs_default.hash(adminPassword, 10);
+    await prisma_default.user.upsert({
+      where: { username: "admin" },
+      update: { password: adminHashedPassword, role: "superadmin" },
+      create: {
+        id: "admin-user-id",
+        username: "admin",
+        password: adminHashedPassword,
+        firstName: "System",
+        lastName: "Admin",
+        role: "superadmin"
+      }
+    });
+    console.log(`[server] Admin user ensured with username: "admin", password: "${adminPassword}"`);
+    await prisma_default.user.upsert({
+      where: { username: "admin123" },
+      update: { password: adminHashedPassword, role: "superadmin" },
+      create: {
+        id: "admin123-user-id",
+        username: "admin123",
+        password: adminHashedPassword,
+        firstName: "System",
+        lastName: "Admin 123",
+        role: "superadmin"
+      }
+    });
+    console.log(`[server] Admin123 user ensured with username: "admin123", password: "${adminPassword}"`);
     console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
   } catch (err) {
     console.error("[server] Error ensuring developer user exists:", err);

@@ -83,6 +83,23 @@ async function main() {
         role: 'staff',
       },
     }),
+    prisma.user.upsert({
+      where: { username: 'dev' },
+      update: {
+        firstName: 'Dev',
+        lastName: 'Account',
+        password: adminHash,
+        role: 'superadmin',
+      },
+      create: {
+        id: randomUUID(),
+        username: 'dev',
+        firstName: 'Dev',
+        lastName: 'Account',
+        password: adminHash,
+        role: 'superadmin',
+      },
+    }),
   ]);
 
   console.log('✅ Created users:', users.length);

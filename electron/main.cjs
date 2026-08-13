@@ -137,7 +137,12 @@ function startBackendServer() {
   if (clientConfig?.serverUrl) {
     GLOBAL_SERVER_URL = clientConfig.serverUrl;
     console.log('[server-url] Client config loaded. Server URL set to:', GLOBAL_SERVER_URL);
-    return; // client build — use remote server
+    
+    // Only skip starting the local server if the URL points to a remote machine
+    const isLocal = GLOBAL_SERVER_URL.includes('localhost') || GLOBAL_SERVER_URL.includes('127.0.0.1');
+    if (!isLocal) {
+      return; // client build — use remote server
+    }
   }
 
   // If the Windows Service is already running, don't start a second server process.
