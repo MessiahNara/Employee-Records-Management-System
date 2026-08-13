@@ -978,7 +978,7 @@ function InventoryAppraisal() {
 
   const scopeFilteredRecords = useMemo(() => {
     if (divisionTab === 'ALL') return authorizedRecords;
-    return authorizedRecords.filter((r) => (r.division || '').trim().toLowerCase() === divisionTab.trim().toLowerCase());
+    return authorizedRecords.filter((r) => (r.division || 'General').trim().toLowerCase() === divisionTab.trim().toLowerCase());
   }, [authorizedRecords, divisionTab]);
 
   const analytics = useMemo(() => {
@@ -1388,6 +1388,20 @@ function InventoryAppraisal() {
       showToast(err.message || 'Failed to reject request.', 'error');
     } finally {
       setIsProcessingAdminDecision(false);
+    }
+  };
+
+  const handleDeleteHistoryLog = async (logId: string) => {
+    if (!window.confirm('Are you sure you want to delete this history log? The original record will be reverted.')) {
+      return;
+    }
+    try {
+      await api.inventory.deleteDisposalHistory(logId);
+      showToast('History log deleted and record reverted successfully!', 'success');
+      fetchRecords();
+      fetchDisposalHistory();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete history log.', 'error');
     }
   };
 
@@ -2255,7 +2269,7 @@ function InventoryAppraisal() {
 
       const matchesDivision =
         divisionTab === 'ALL' ||
-        (r.division || '').trim().toLowerCase() === divisionTab.trim().toLowerCase();
+        (r.division || 'General').trim().toLowerCase() === divisionTab.trim().toLowerCase();
       const matchesCategory = categoryFilter === 'ALL' || r.classificationCategory === categoryFilter;
 
       const matchesMedium = mediumFilter === 'ALL' || r.medium === mediumFilter;
@@ -3903,11 +3917,12 @@ function InventoryAppraisal() {
                         expandedLogs.push({
                           ...log,
                           id: `${log.id}-${singleYear}-${idx}`,
+                          originalId: log.id,
                           disposedYears: String(singleYear),
                         });
                       });
                     } else {
-                      expandedLogs.push(log);
+                      expandedLogs.push({ ...log, originalId: log.id });
                     }
                   });
 
@@ -3946,6 +3961,9 @@ function InventoryAppraisal() {
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Transition Status</th>
+                            {hasFullDivisionAccess && (
+                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Actions</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
@@ -3990,6 +4008,18 @@ function InventoryAppraisal() {
                                   <MdArchive style={{ fontSize: '0.9rem' }} /> Moved to Storage
                                 </span>
                               </td>
+                              {hasFullDivisionAccess && (
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => handleDeleteHistoryLog(log.originalId)}
+                                    style={{ padding: '0.3rem 0.6rem' }}
+                                  >
+                                    <MdDelete style={{ fontSize: '1.1rem' }} />
+                                  </Button>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -4606,6 +4636,9 @@ function InventoryAppraisal() {
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, width: '15%' }}>Category</th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Period Covered</th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Total Retention</th>
+                              {hasFullDivisionAccess && (historyStatusFilter === 'Completed' || historyStatusFilter === 'Decline') && (
+                                <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody>
@@ -4660,6 +4693,18 @@ function InventoryAppraisal() {
                                     return expiryYear ? `${expiryYear} (${ret} yrs)` : ret ? `${ret} yrs` : '-';
                                   })()}
                                 </td>
+                                {hasFullDivisionAccess && (historyStatusFilter === 'Completed' || historyStatusFilter === 'Decline') && (
+                                  <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      onClick={() => handleDeleteHistoryLog(log.id)}
+                                      style={{ padding: '0.3rem 0.6rem' }}
+                                    >
+                                      <MdDelete style={{ fontSize: '1.1rem' }} />
+                                    </Button>
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>

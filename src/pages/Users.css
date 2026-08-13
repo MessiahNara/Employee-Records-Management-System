@@ -298,7 +298,7 @@
 .users__password-toggle {
   position: absolute;
   right: var(--spacing-md);
-  top: 38px;
+  top: 24px;
   background: none;
   border: none;
   cursor: pointer;

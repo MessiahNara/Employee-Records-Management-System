@@ -12,7 +12,7 @@ export interface DisposalRecord {
 export const generateDisposalWord = async (records: DisposalRecord[], volume: string, telephone: string) => {
   try {
     // 1. Fetch the template
-    const response = await fetch('/NAP-FORM-3-Template.docx');
+    const response = await fetch('./NAP-FORM-3-Template.docx');
     if (!response.ok) {
       throw new Error(`Failed to load template: ${response.statusText}. Ensure NAP-FORM-3-Template.docx exists in the public/ folder`);
     }

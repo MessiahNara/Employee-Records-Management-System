@@ -56,6 +56,7 @@ function Settings() {
   const [recordLocations, setRecordLocations] = useState<string[]>([]);
   const [dispositionProvisions, setDispositionProvisions] = useState<string[]>([]);
   const [itemNumbers, setItemNumbers] = useState<string[]>([]);
+  const [prdsGrdsOptions, setPrdsGrdsOptions] = useState<string[]>([]);
   const [divisions, setDivisions] = useState<string[]>([]);
   const [classificationCategories, setClassificationCategories] = useState<string[]>([]);
   const [subCategories, setSubCategories] = useState<string[]>([]);
@@ -66,6 +67,7 @@ function Settings() {
   const [newRecordLocation, setNewRecordLocation] = useState('');
   const [newDispositionProvision, setNewDispositionProvision] = useState('');
   const [newItemNumber, setNewItemNumber] = useState('');
+  const [newPrdsGrds, setNewPrdsGrds] = useState('');
   const [newDivision, setNewDivision] = useState('');
   const [newClassificationCategory, setNewClassificationCategory] = useState('');
   const [newSubCategory, setNewSubCategory] = useState('');
@@ -126,6 +128,7 @@ function Settings() {
       setRecordLocations((settings as any).recordLocations ?? []);
       setDispositionProvisions((settings as any).dispositionProvisions ?? []);
       setItemNumbers((settings as any).itemNumbers ?? []);
+      setPrdsGrdsOptions((settings as any).prdsGrds ?? []);
       setDivisions((settings as any).divisions ?? []);
       setClassificationCategories((settings as any).classificationCategories ?? []);
       setSubCategories((settings as any).subCategories ?? []);
@@ -174,7 +177,7 @@ function Settings() {
     setIsSavingDropdowns(true);
     try {
       await api.systemSettings.updateDropdownOptions(
-        { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation },
+        { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, prdsGrds: prdsGrdsOptions, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation },
         currentUser?.role || ''
       );
       showToast('Dropdown options saved successfully!', 'success');
@@ -1176,6 +1179,33 @@ function Settings() {
                           </span>
                         ))}
                         {itemNumbers.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
+                      </div>
+                    </div>
+
+                    {/* PRDS/GRDS */}
+                    <div className="settings__dropdown-section">
+                      <h3 className="settings__dropdown-title">PRDS/GRDS</h3>
+                      <div className="settings__dropdown-add">
+                        <input
+                          type="text"
+                          className="settings__form-input"
+                          placeholder="Add new PRDS/GRDS option..."
+                          value={newPrdsGrds}
+                          onChange={(e) => setNewPrdsGrds(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem(prdsGrdsOptions, setPrdsGrdsOptions, newPrdsGrds, setNewPrdsGrds))}
+                        />
+                        <Button variant="secondary" size="sm" onClick={() => addItem(prdsGrdsOptions, setPrdsGrdsOptions, newPrdsGrds, setNewPrdsGrds)}>
+                          + Add
+                        </Button>
+                      </div>
+                      <div className="settings__dropdown-tags">
+                        {prdsGrdsOptions.map((item) => (
+                          <span key={item} className="settings__dropdown-tag">
+                            {item}
+                            <button className="settings__dropdown-tag-remove" onClick={() => removeItem(prdsGrdsOptions, setPrdsGrdsOptions, item)}>&times;</button>
+                          </span>
+                        ))}
+                        {prdsGrdsOptions.length === 0 && <span className="settings__dropdown-empty">No options yet</span>}
                       </div>
                     </div>
 
