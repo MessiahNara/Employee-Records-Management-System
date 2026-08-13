@@ -866,10 +866,10 @@ export const systemSettingsApi = {
       body: JSON.stringify(data),
     }),
   updateDropdownOptions: (
-    options: { appointmentStatuses?: string[]; officeNames?: string[]; positions?: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears?: string[]; reasonsForSeparation?: string[] },
+    options: { appointmentStatuses?: string[]; officeNames?: string[]; positions?: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; prdsGrds?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears?: string[]; reasonsForSeparation?: string[] },
     userRole: string
   ) =>
-    apiRequest<{ appointmentStatuses: string[]; officeNames: string[]; positions: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears: string[]; reasonsForSeparation: string[]; message: string }>(
+    apiRequest<{ appointmentStatuses: string[]; officeNames: string[]; positions: string[]; recordLocations?: string[]; dispositionProvisions?: string[]; itemNumbers?: string[]; prdsGrds?: string[]; divisions?: string[]; classificationCategories?: string[]; subCategories?: string[]; aoYears: string[]; reasonsForSeparation: string[]; message: string }>(
       '/system-settings/dropdown-options',
       {
         method: 'PUT',
