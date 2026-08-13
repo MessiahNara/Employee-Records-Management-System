@@ -1141,6 +1141,8 @@ export const inventoryApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ logIds, newStatus }),
     }),
+  deleteDisposalHistory: (id: string) =>
+    apiRequest<any>(`/inventory/disposal-history/${id}`, { method: 'DELETE' }),
   logDisposal: (data: {
     recordId: string;
     seriesTitle: string;

@@ -128,6 +128,16 @@ function getSubCategoriesFilePath(): string {
   return path.join(dataDir, 'sub_categories.json');
 }
 
+function getPrdsGrdsFilePath(): string {
+  const dataDir = process.env.UPLOADS_DIR
+    ? path.join(process.env.UPLOADS_DIR, 'data')
+    : path.join(__dirname, '../../uploads/data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'prds_grds.json');
+}
+
 const DEFAULT_DISPOSITION_PROVISIONS = [
   'Dispose after completion of audit',
   'Permanent',
@@ -141,6 +151,13 @@ const DEFAULT_ITEM_NUMBERS = [
   'Item 3',
   'Item 4',
   'Item 5'
+];
+
+const DEFAULT_PRDS_GRDS = [
+  'GRDS 2009',
+  'GRDS 2021',
+  'GRDS',
+  'PRDS'
 ];
 
 const DEFAULT_DIVISIONS = [
@@ -226,6 +243,30 @@ export function saveItemNumbers(items: string[]): void {
     fs.writeFileSync(file, JSON.stringify(items, null, 2), 'utf8');
   } catch (err) {
     console.error('Failed to save item numbers:', err);
+  }
+}
+
+export function getPrdsGrds(): string[] {
+  try {
+    const file = getPrdsGrdsFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, JSON.stringify(DEFAULT_PRDS_GRDS, null, 2), 'utf8');
+      return DEFAULT_PRDS_GRDS;
+    }
+    const raw = fs.readFileSync(file, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_PRDS_GRDS;
+  } catch {
+    return DEFAULT_PRDS_GRDS;
+  }
+}
+
+export function savePrdsGrds(items: string[]): void {
+  try {
+    const file = getPrdsGrdsFilePath();
+    fs.writeFileSync(file, JSON.stringify(items, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save prds grds:', err);
   }
 }
 
@@ -319,6 +360,7 @@ router.get('/', async (req: Request, res: Response) => {
       recordLocations: getRecordLocations(),
       dispositionProvisions: getDispositionProvisions(),
       itemNumbers: getItemNumbers(),
+      prdsGrds: getPrdsGrds(),
       divisions: getDivisions(),
       classificationCategories: getClassificationCategories(),
       subCategories: getSubCategories(),
@@ -374,7 +416,7 @@ router.put('/', requireSuperAdmin, async (req: Request, res: Response) => {
 // PUT /api/system-settings/dropdown-options - Update dropdown lists (Developer role only)
 router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: Response) => {
   try {
-    const { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation } = req.body;
+    const { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, prdsGrds, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation } = req.body;
     const updateData: any = {};
     if (Array.isArray(appointmentStatuses)) updateData.appointmentStatuses = appointmentStatuses;
     if (Array.isArray(officeNames)) updateData.officeNames = officeNames;
@@ -384,6 +426,7 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
     if (Array.isArray(recordLocations)) saveRecordLocations(recordLocations);
     if (Array.isArray(dispositionProvisions)) saveDispositionProvisions(dispositionProvisions);
     if (Array.isArray(itemNumbers)) saveItemNumbers(itemNumbers);
+    if (Array.isArray(prdsGrds)) savePrdsGrds(prdsGrds);
     if (Array.isArray(divisions)) saveDivisions(divisions);
     if (Array.isArray(classificationCategories)) saveClassificationCategories(classificationCategories);
     if (Array.isArray(subCategories)) saveSubCategories(subCategories);
@@ -402,6 +445,7 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
       recordLocations: getRecordLocations(),
       dispositionProvisions: getDispositionProvisions(),
       itemNumbers: getItemNumbers(),
+      prdsGrds: getPrdsGrds(),
       divisions: getDivisions(),
       classificationCategories: getClassificationCategories(),
       subCategories: getSubCategories(),

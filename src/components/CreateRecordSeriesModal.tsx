@@ -115,6 +115,7 @@ function CreateRecordSeriesModal({
   const [locationOptions, setLocationOptions] = useState<string[]>([]);
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([]);
   const [itemNoOptions, setItemNoOptions] = useState<string[]>([]);
+  const [prdsGrdsOptions, setPrdsGrdsOptions] = useState<string[]>([]);
   const [divisionOptions, setDivisionOptions] = useState<string[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [subCategoryOptions, setSubCategoryOptions] = useState<string[]>([]);
@@ -134,6 +135,10 @@ function CreateRecordSeriesModal({
           const items = (settings as any)?.itemNumbers;
           if (Array.isArray(items)) {
             setItemNoOptions(items);
+          }
+          const prds = (settings as any)?.prdsGrds;
+          if (Array.isArray(prds)) {
+            setPrdsGrdsOptions(prds);
           }
           const divs = (settings as any)?.divisions;
           if (Array.isArray(divs)) {
@@ -311,7 +316,7 @@ function CreateRecordSeriesModal({
                 PRDS/GRDS
               </label>
               <SearchableDropdown
-                options={['GRDS 2009', 'GRDS 2021', 'GRDS', 'PRDS']}
+                options={prdsGrdsOptions.length > 0 ? prdsGrdsOptions : ['GRDS 2009', 'GRDS 2021', 'GRDS', 'PRDS']}
                 value={formData.prdsGrds || ''}
                 onChange={(val) => setFormData(prev => ({ ...prev, prdsGrds: val }))}
                 placeholder="Select or type PRDS/GRDS"

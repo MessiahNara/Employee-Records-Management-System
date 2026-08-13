@@ -767,6 +767,130 @@ router.post('/disposal-history/update-status', async (req: Request, res: Respons
   }
 });
 
+// POST bulk delete disposal history logs
+router.post('/disposal-history/bulk-delete', async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+
+    let logs = readDisposalHistory();
+    let records = readRecords();
+    let recordsModified = false;
+    let logsModified = false;
+
+    ids.forEach((id: string) => {
+      const logIndex = logs.findIndex((l: any) => l.id === id);
+      if (logIndex !== -1) {
+        const log = logs[logIndex];
+        const record = records.find((r: any) => r.id === log.recordId);
+        
+        if (record) {
+          const isStorageLog = String(log.disposedYears).includes('Storage');
+          if (isStorageLog) {
+            record.retentionStage = 'Active';
+            record.frequencyOfUse = 'Active';
+            record.storageStartDate = undefined;
+            if (log.previousInclusiveDates) {
+              record.inclusiveDates = log.previousInclusiveDates;
+            }
+            recordsModified = true;
+          } else if (log.status === 'Completed' || log.status === 'Decline') {
+            const yearToRemove = parseInt(log.disposedYears, 10);
+            if (!isNaN(yearToRemove)) {
+              let currentDates = String(record.inclusiveDates || '');
+              if (!currentDates.includes(yearToRemove.toString())) {
+                currentDates = currentDates ? `${currentDates}, ${yearToRemove}` : yearToRemove.toString();
+                const parts = currentDates.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+                const sorted = parts.sort((a, b) => a - b).join(', ');
+                record.inclusiveDates = sorted || currentDates;
+              }
+              if (record.retentionStage === 'Disposed') {
+                record.retentionStage = 'Storage';
+              }
+              recordsModified = true;
+            }
+          }
+        }
+        logs.splice(logIndex, 1);
+        logsModified = true;
+      }
+    });
+
+    if (logsModified) saveDisposalHistory(logs);
+    if (recordsModified) saveRecords(records);
+
+    res.json({ success: true, message: 'Logs deleted successfully' });
+  } catch (err: any) {
+    console.error('Error bulk deleting disposal history logs:', err);
+    res.status(500).json({ error: 'Failed to bulk delete disposal history logs' });
+  }
+});
+
+// DELETE disposal history log (and revert record state)
+router.delete('/disposal-history/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let logs = readDisposalHistory();
+    const logIndex = logs.findIndex((l: any) => l.id === id);
+
+    if (logIndex === -1) {
+      return res.status(404).json({ error: 'Log not found' });
+    }
+
+    const log = logs[logIndex];
+    let records = readRecords();
+    const record = records.find((r: any) => r.id === log.recordId);
+    let recordsModified = false;
+
+    if (record) {
+      const isStorageLog = String(log.disposedYears).includes('Storage');
+      if (isStorageLog) {
+        // Revert Storage Log
+        record.retentionStage = 'Active';
+        record.frequencyOfUse = 'Active';
+        record.storageStartDate = undefined;
+        if (log.previousInclusiveDates) {
+          record.inclusiveDates = log.previousInclusiveDates;
+        }
+        recordsModified = true;
+      } else if (log.status === 'Completed' || log.status === 'Decline') {
+        // Revert Disposal Log
+        const yearToRemove = parseInt(log.disposedYears, 10);
+        if (!isNaN(yearToRemove)) {
+          let currentDates = String(record.inclusiveDates || '');
+          if (!currentDates.includes(yearToRemove.toString())) {
+            // Add it back
+            currentDates = currentDates ? `${currentDates}, ${yearToRemove}` : yearToRemove.toString();
+            // Sort dates
+            const parts = currentDates.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+            const sorted = parts.sort((a, b) => a - b).join(', ');
+            record.inclusiveDates = sorted || currentDates;
+          }
+          if (record.retentionStage === 'Disposed') {
+            record.retentionStage = 'Storage';
+          }
+          recordsModified = true;
+        }
+      }
+    }
+
+    // Remove the log
+    logs.splice(logIndex, 1);
+    saveDisposalHistory(logs);
+
+    if (recordsModified) {
+      saveRecords(records);
+    }
+
+    res.json({ success: true, message: 'Log deleted successfully' });
+  } catch (err: any) {
+    console.error('Error deleting disposal history log:', err);
+    res.status(500).json({ error: 'Failed to delete disposal history log' });
+  }
+});
+
 // POST reject an inventory request (Admin action)
 router.post('/requests/:id/reject', async (req: Request, res: Response) => {
   try {
@@ -833,7 +957,16 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const records = readRecords();
-    const newId = `INV-${new Date().getFullYear()}-${String(records.length + 1).padStart(3, '0')}`;
+    const currentYear = new Date().getFullYear();
+    const prefix = `INV-${currentYear}-`;
+    const maxSeq = records.reduce((max, r) => {
+      if (r.id.startsWith(prefix)) {
+        const seq = parseInt(r.id.slice(prefix.length), 10);
+        return (!isNaN(seq) && seq > max) ? seq : max;
+      }
+      return max;
+    }, 0);
+    const newId = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
 
     const activeYrs = Number(activeDeskYrs) || 0;
     const storYrs = Number(storageYrs) || 0;
