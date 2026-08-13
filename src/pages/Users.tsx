@@ -313,29 +313,31 @@ function Users() {
         const canEdit = canEditUser(user);
         const canDelete = canDeleteUser(user);
         return (canEdit || canDelete) ? (
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             {canEdit && (
               <Button
                 variant="success"
                 size="sm"
+                style={{ width: '100%', textAlign: 'center', justifyContent: 'center' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleEditUser(user);
                 }}
               >
-                <MdEdit style={{ marginRight: '0.25rem' }} /> Update
+                Update
               </Button>
             )}
             {canDelete && (
               <Button
                 variant="danger"
                 size="sm"
+                style={{ width: '100%', textAlign: 'center', justifyContent: 'center' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDeleteClick(user);
                 }}
               >
-                <MdDelete style={{ marginRight: '0.25rem' }} /> Delete
+                Delete
               </Button>
             )}
           </div>

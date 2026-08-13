@@ -3272,26 +3272,26 @@ function Dashboard() {
             <Button
               variant="success"
               size="sm"
-              style={{ minWidth: '80px' }}
+              style={{ minWidth: '80px', textAlign: 'center', justifyContent: 'center' }}
               onClick={(e) => {
                 e.stopPropagation();
                 handleOpenUpdateEmployeeModal(employee);
               }}
             >
-              <MdEdit /> Update
+              Update
             </Button>
           )}
           {canDelete && (
             <Button
               variant="danger"
               size="sm"
-              style={{ minWidth: '80px' }}
+              style={{ minWidth: '80px', textAlign: 'center', justifyContent: 'center' }}
               onClick={(e) => {
                 e.stopPropagation();
                 handleOpenDeleteConfirmModal(employee);
               }}
             >
-              <MdDelete /> Delete
+              Delete
             </Button>
           )}
           {!canUpdate && !canDelete && (
