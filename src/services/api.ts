@@ -1039,6 +1039,27 @@ export const chatsApi = {
   getMessages: (recipientId: string) => apiRequest<any[]>(`/chats?recipientId=${recipientId}`),
   getUnreadCounts: () => apiRequest<Record<string, number>>('/chats/unread'),
   getRecentContacts: () => apiRequest<any[]>('/chats/recent'),
+  getGroups: () => apiRequest<any[]>('/chats/groups'),
+  createGroup: (data: { id?: string; name: string; creatorId?: string; creatorName?: string; memberIds: string[] }) =>
+    apiRequest<any>('/chats/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  addGroupMembers: (groupId: string, memberIds: string[]) =>
+    apiRequest<any>(`/chats/groups/${groupId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberIds }),
+    }),
+  removeGroupMember: (groupId: string, memberId: string) =>
+    apiRequest<any>(`/chats/groups/${groupId}/members/${memberId}`, {
+      method: 'DELETE',
+    }),
+  deleteGroup: (groupId: string) =>
+    apiRequest<any>(`/chats/groups/${groupId}`, {
+      method: 'DELETE',
+    }),
   sendMessage: (recipientId: string, content: string) =>
     apiRequest<any>('/chats', {
       method: 'POST',
@@ -1141,8 +1162,14 @@ export const inventoryApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ logIds, newStatus }),
     }),
-  deleteDisposalHistory: (id: string) =>
-    apiRequest<any>(`/inventory/disposal-history/${id}`, { method: 'DELETE' }),
+  deleteDisposalHistory: (id: string, year?: string) =>
+      apiRequest<any>(`/inventory/disposal-history/${id}${year ? `?year=${year}` : ''}`, { method: 'DELETE' }),
+  bulkDeleteDisposalHistory: (ids: string[]) =>
+      apiRequest<any>('/inventory/disposal-history/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      }),
   logDisposal: (data: {
     recordId: string;
     seriesTitle: string;

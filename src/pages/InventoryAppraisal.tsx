@@ -42,6 +42,7 @@ export interface InventoryRecord {
   disposalStatus: 'Safe for Disposal' | 'Under Retention' | 'Permanent';
   retentionStage?: 'Active' | 'Storage' | 'Disposed';
   storageStartDate?: string;
+  stagedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -136,7 +137,7 @@ export function formatYearsListToDatesString(years: number[], isOngoing: boolean
 const exportStagedRecordsToCSV = (records: any[], type: 'Storage' | 'Disposal') => {
   const headers = ['Date & Time', 'Item No.', 'Record Series', 'Division', 'Category', 'Year'];
   const rows = records.map(r => [
-    new Date(r.createdAt || Date.now()).toLocaleString(),
+    new Date(r.stagedAt || r.createdAt || Date.now()).toLocaleString(),
     (r.prdsGrds || '') + ' ' + (r.itemNo || ''),
     r.seriesTitle,
     r.division || 'General',
@@ -360,31 +361,28 @@ export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number
   if (!datesStr || !activeDeskYrs || activeDeskYrs <= 0) return null;
 
   const currentYear = new Date().getFullYear();
-  const matches = datesStr.match(/\b\d{4}\b/g);
-  if (!matches || matches.length === 0) return null;
+  const covered = extractCoveredYears(datesStr);
+  if (covered.years.length === 0) return null;
 
-  const years = matches.map(Number);
-  const startYear = Math.min(...years);
+  const eligibleYears = covered.years.filter(yr => (currentYear - yr) >= activeDeskYrs);
+  if (eligibleYears.length === 0) return null;
+
+  const startYear = Math.min(...eligibleYears);
   const elapsedYears = currentYear - startYear;
 
-  if (elapsedYears >= activeDeskYrs) {
-    return {
-      startYear,
-      currentYear,
-      elapsedYears,
-      activeDeskYrs,
-      isDeskPeriodReached: true,
-    };
-  }
-
-  return null;
+  return {
+    startYear,
+    currentYear,
+    elapsedYears,
+    activeDeskYrs,
+    isDeskPeriodReached: true,
+    eligibleYears,
+  };
 }
 
 export function getOngoingDisposalInfo(datesStr: any, totalRetention: any, retentionStage?: any, frequencyOfUse?: any, storageYrs?: any) {
   const stage = String(retentionStage || '').trim().toLowerCase();
   if (stage === 'disposed') return null;
-
-  const safeStorageYrs = Number(storageYrs) || 0;
 
   const safeDatesStr = String(datesStr || '');
   const safeTotalRetention = Number(totalRetention) || 0;
@@ -836,6 +834,15 @@ function InventoryAppraisal() {
     }
   }, [stagedDisposalRecords]);
 
+  // Reset selected history checkboxes when switching sub-tabs, filter statuses, or closing modals
+  useEffect(() => {
+    setHistorySelectedIds([]);
+  }, [historyStatusFilter, disposalModalTab, showDisposalManagementModal]);
+
+  useEffect(() => {
+    setStorageHistorySelectedIds([]);
+  }, [storageModalTab, showStorageManagementModal]);
+
   // Send request pop-out modal states
   const [showSendStoragePopout, setShowSendStoragePopout] = useState(false);
   const [showSendDisposalPopout, setShowSendDisposalPopout] = useState(false);
@@ -907,6 +914,8 @@ function InventoryAppraisal() {
   }, [currentUser, userPermissions]);
 
   const hasFullDivisionAccess = allowedDivisions.includes('ALL');
+  const isAdmin = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'superadmin';
+  const canDeleteHistory = isAdmin && hasFullDivisionAccess;
 
   const isDivisionAllowed = useCallback((div: string | undefined) => {
     if (hasFullDivisionAccess) return true;
@@ -929,10 +938,17 @@ function InventoryAppraisal() {
     return rawDisposalLogs.filter((log: any) => isDivisionAllowed(log.division));
   }, [rawDisposalLogs, hasFullDivisionAccess, isDivisionAllowed]);
 
-  // Filter raw records based on user's authorized division scope
+  // Filter raw records based on user's authorized division scope (excluding fully disposed records)
   const authorizedRecords = useMemo(() => {
-    if (hasFullDivisionAccess) return records;
-    return records.filter((r) => {
+    const activeRecords = records.filter((r) => {
+      if (r.retentionStage === 'Disposed') return false;
+      const cleanDates = String(r.inclusiveDates || '').trim().toLowerCase();
+      if (cleanDates === 'disposed' || cleanDates === '') return false;
+      return true;
+    });
+
+    if (hasFullDivisionAccess) return activeRecords;
+    return activeRecords.filter((r) => {
       const recDiv = (r.division || 'General').trim().toLowerCase();
       return allowedDivisions.some((d: string) => d.trim().toLowerCase() === recDiv);
     });
@@ -960,12 +976,15 @@ function InventoryAppraisal() {
   const [singleStorageRecord, setSingleStorageRecord] = useState<InventoryRecord | null>(null);
   const [showAnnualNoticeModal, setShowAnnualNoticeModal] = useState(false);
   const [showStorageHistoryModal, setShowStorageHistoryModal] = useState(false);
-  const [showDisposalHistoryModal, setShowDisposalHistoryModal] = useState(false);
   const [storageSearchQuery, setStorageSearchQuery] = useState('');
   const [historyDivisionFilter, setHistoryDivisionFilter] = useState('ALL');
   const [historyCategoryFilter, setHistoryCategoryFilter] = useState('ALL');
   const [storageDivisionFilter, setStorageDivisionFilter] = useState('ALL');
   const [storageCategoryFilter, setStorageCategoryFilter] = useState('ALL');
+  const [storageHistorySelectedIds, setStorageHistorySelectedIds] = useState<string[]>([]);
+  const [showBulkDeleteHistoryModal, setShowBulkDeleteHistoryModal] = useState(false);
+  const [historyDeleteTarget, setHistoryDeleteTarget] = useState<'storage' | 'disposal'>('storage');
+  const [isDeletingHistoryLogs, setIsDeletingHistoryLogs] = useState(false);
 
 
   const storageLogs = useMemo(() => {
@@ -1051,6 +1070,8 @@ function InventoryAppraisal() {
 
   const activeDeskEligibleRecords = useMemo(() => {
     return scopeFilteredRecords.filter(r => {
+      if (r.appraisalCategory === 'Permanent') return false;
+      if (Number(r.storageYrs) <= 0) return false;
       const activeDeskInfoRaw = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
       if (!activeDeskInfoRaw) return false;
       const covered = extractCoveredYears(r.inclusiveDates);
@@ -1064,19 +1085,11 @@ function InventoryAppraisal() {
 
   const disposalEligibleRecords = useMemo(() => {
     return scopeFilteredRecords.filter(r => {
+      if (r.appraisalCategory === 'Permanent') return false;
       const disposalInfoRaw = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs));
-      if (!disposalInfoRaw) return false;
-      const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
-        const isDisposed = disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
-        const requiresStorage = Number(r.storageYrs) > 0;
-        const isStored = storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
-        
-        // It's eligible for disposal IF it's not yet disposed AND (it doesn't require storage OR it is already confirmed in storage)
-        return !isDisposed && (!requiresStorage || isStored);
-      });
-      return hasUndisposed;
+      return disposalInfoRaw !== null;
     });
-  }, [scopeFilteredRecords, disposalOnlyLogs, storageLogs]);
+  }, [scopeFilteredRecords]);
 
   useEffect(() => {
     if (records.length > 0) {
@@ -1091,7 +1104,7 @@ function InventoryAppraisal() {
   const handleMoveToStorage = (record: InventoryRecord) => {
     setStagedStorageRecords((prev) => {
       if (prev.some((r) => r.id === record.id)) return prev;
-      return [...prev, record];
+      return [...prev, { ...record, stagedAt: new Date().toISOString() }];
     });
     showToast(`"${record.seriesTitle}" staged in Storage Management under Confirmation of Storage tab.`, 'info');
   };
@@ -1221,18 +1234,20 @@ function InventoryAppraisal() {
 
   const openStorageRequestModal = (recs: InventoryRecord[]) => {
     setStagedStorageRecords((prev) => {
-      const newRecs = recs.filter((r) => !prev.some((p) => p.id === r.id));
+      const newRecs = recs
+        .filter((r) => !prev.some((p) => p.id === r.id))
+        .map((r) => ({ ...r, stagedAt: r.stagedAt || new Date().toISOString() }));
       return [...prev, ...newRecs];
     });
     showToast(`${recs.length} record(s) staged in Storage Management under Confirmation of Storage tab.`, 'info');
   };
 
   const openDisposalRequestModal = (recs: InventoryRecord[]) => {
-    recs.forEach((record) => {
-      setStagedDisposalRecords((prev) => {
-        if (prev.some((r) => r.id === record.id)) return prev;
-        return [...prev, record];
-      });
+    setStagedDisposalRecords((prev) => {
+      const newRecs = recs
+        .filter((r) => !prev.some((p) => p.id === r.id))
+        .map((r) => ({ ...r, stagedAt: r.stagedAt || new Date().toISOString() }));
+      return [...prev, ...newRecs];
     });
     showToast(`${recs.length} record(s) staged in Disposal Management under Confirmation of Disposal tab.`, 'info');
   };
@@ -1392,6 +1407,10 @@ function InventoryAppraisal() {
   };
 
   const handleDeleteHistoryLog = async (logId: string) => {
+    if (!canDeleteHistory) {
+      showToast('Unauthorized: Only administrators with access to all divisions can delete history logs.', 'error');
+      return;
+    }
     if (!window.confirm('Are you sure you want to delete this history log? The original record will be reverted.')) {
       return;
     }
@@ -1402,6 +1421,32 @@ function InventoryAppraisal() {
       fetchDisposalHistory();
     } catch (err: any) {
       showToast(err.message || 'Failed to delete history log.', 'error');
+    }
+  };
+
+  const confirmBulkDeleteHistory = async () => {
+    if (!canDeleteHistory) {
+      showToast('Unauthorized: Only administrators with access to all divisions can delete history logs.', 'error');
+      return;
+    }
+    const targetIds = historyDeleteTarget === 'storage' ? storageHistorySelectedIds : historySelectedIds;
+    if (targetIds.length === 0) return;
+    setIsDeletingHistoryLogs(true);
+    try {
+      await api.inventory.bulkDeleteDisposalHistory(targetIds);
+      showToast(`Successfully deleted ${targetIds.length} history logs and reverted records.`, 'success');
+      if (historyDeleteTarget === 'storage') {
+        setStorageHistorySelectedIds([]);
+      } else {
+        setHistorySelectedIds([]);
+      }
+      setShowBulkDeleteHistoryModal(false);
+      fetchRecords();
+      fetchDisposalHistory();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to bulk delete history logs.', 'error');
+    } finally {
+      setIsDeletingHistoryLogs(false);
     }
   };
 
@@ -2946,28 +2991,23 @@ function InventoryAppraisal() {
                         {subGrp.items.map((r, rIdx) => {
                           const isPermanent = r.appraisalCategory === 'Permanent';
                           const isSelected = selectedIds.includes(r.id);
-                          const activeDeskInfoRaw = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
+
                           let activeDeskInfo = null;
-                          if (activeDeskInfoRaw) {
-                            const covered = extractCoveredYears(r.inclusiveDates);
-                            const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(r.activeDeskYrs));
-                            const hasUnstored = eligibleYrs.some(yr => {
-                              return !storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
-                            });
-                            if (hasUnstored) activeDeskInfo = activeDeskInfoRaw;
+                          if (!isPermanent && Number(r.storageYrs) > 0) {
+                            const activeDeskInfoRaw = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
+                            if (activeDeskInfoRaw) {
+                              const covered = extractCoveredYears(r.inclusiveDates);
+                              const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(r.activeDeskYrs));
+                              const hasUnstored = eligibleYrs.some(yr => {
+                                return !storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
+                              });
+                              if (hasUnstored) activeDeskInfo = activeDeskInfoRaw;
+                            }
                           }
 
-                          const disposalInfoRaw = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs));
-                          let disposalInfo = null;
-                          if (disposalInfoRaw) {
-                            const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
-                              const isDisposed = disposalOnlyLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
-                              const requiresStorage = Number(r.storageYrs) > 0;
-                              const isStored = storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
-                              return !isDisposed && (!requiresStorage || isStored);
-                            });
-                            if (hasUndisposed) disposalInfo = disposalInfoRaw;
-                          }
+                          const disposalInfo = !isPermanent
+                            ? getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs))
+                            : null;
 
                           return (
                             <tr
@@ -3579,7 +3619,7 @@ function InventoryAppraisal() {
                                   />
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                  {new Date(r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                                  {new Date(r.stagedAt || r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
                                   {r.prdsGrds && r.itemNo ? (
@@ -3899,17 +3939,17 @@ function InventoryAppraisal() {
                 {(() => {
                   const expandedLogs: any[] = [];
                   storageLogs.forEach((log) => {
-                    const yearsStr = String(log.disposedYears || '').trim();
+                    const cleanYearsStr = String(log.disposedYears || '').replace(/Moved to Storage:\s*/i, '').trim();
                     let yearList: number[] = [];
 
-                    if (yearsStr.includes('-')) {
-                      const parts = yearsStr.split('-').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+                    if (cleanYearsStr.includes('-')) {
+                      const parts = cleanYearsStr.split('-').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
                       if (parts.length === 2 && parts[0] <= parts[1]) {
                         for (let y = parts[0]; y <= parts[1]; y++) yearList.push(y);
                       }
                     }
                     if (yearList.length === 0) {
-                      yearList = (yearsStr.match(/\b\d{4}\b/g) || []).map((n) => parseInt(n, 10));
+                      yearList = (cleanYearsStr.match(/\b\d{4}\b/g) || []).map((n) => parseInt(n, 10));
                     }
 
                     if (yearList.length > 1) {
@@ -3918,11 +3958,18 @@ function InventoryAppraisal() {
                           ...log,
                           id: `${log.id}-${singleYear}-${idx}`,
                           originalId: log.id,
+                          targetYear: singleYear,
                           disposedYears: String(singleYear),
                         });
                       });
                     } else {
-                      expandedLogs.push({ ...log, originalId: log.id });
+                      expandedLogs.push({
+                        ...log,
+                        id: log.id,
+                        originalId: log.id,
+                        targetYear: yearList[0],
+                        disposedYears: yearList[0] ? String(yearList[0]) : (cleanYearsStr || log.disposedYears),
+                      });
                     }
                   });
 
@@ -3953,6 +4000,36 @@ function InventoryAppraisal() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
                           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                            {canDeleteHistory && (
+                              <th style={{ padding: '0.65rem 0.85rem', width: 'auto', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={storageHistorySelectedIds.length > 0 && storageHistorySelectedIds.length === filtered.length}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setStorageHistorySelectedIds(filtered.map(l => l.id));
+                                      } else {
+                                        setStorageHistorySelectedIds([]);
+                                      }
+                                    }}
+                                  />
+                                  {storageHistorySelectedIds.length > 0 && (
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem', height: 'auto', whiteSpace: 'nowrap' }}
+                                      onClick={() => {
+                                        setHistoryDeleteTarget('storage');
+                                        setShowBulkDeleteHistoryModal(true);
+                                      }}
+                                    >
+                                      <MdDeleteSweep style={{ fontSize: '1rem', marginRight: '0.2rem' }} /> Delete ({storageHistorySelectedIds.length})
+                                    </Button>
+                                  )}
+                                </div>
+                              </th>
+                            )}
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
@@ -3961,14 +4038,26 @@ function InventoryAppraisal() {
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Period Covered</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Transition Status</th>
-                            {hasFullDivisionAccess && (
-                              <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center' }}>Actions</th>
-                            )}
                           </tr>
                         </thead>
                         <tbody>
                           {filtered.map((log) => (
                             <tr key={`storage-log-${log.id}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              {canDeleteHistory && (
+                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={storageHistorySelectedIds.includes(log.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setStorageHistorySelectedIds(prev => [...prev, log.id]);
+                                      } else {
+                                        setStorageHistorySelectedIds(prev => prev.filter(id => id !== log.id));
+                                      }
+                                    }}
+                                  />
+                                </td>
+                              )}
                               <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                               </td>
@@ -4008,18 +4097,6 @@ function InventoryAppraisal() {
                                   <MdArchive style={{ fontSize: '0.9rem' }} /> Moved to Storage
                                 </span>
                               </td>
-                              {hasFullDivisionAccess && (
-                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                                  <Button
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() => handleDeleteHistoryLog(log.originalId)}
-                                    style={{ padding: '0.3rem 0.6rem' }}
-                                  >
-                                    <MdDelete style={{ fontSize: '1.1rem' }} />
-                                  </Button>
-                                </td>
-                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -4218,7 +4295,7 @@ function InventoryAppraisal() {
                                   />
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                  {new Date(r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                                  {new Date(r.stagedAt || r.createdAt || Date.now()).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: 'var(--color-primary)' }}>
                                   {r.prdsGrds && r.itemNo ? (
@@ -4614,8 +4691,8 @@ function InventoryAppraisal() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                           <thead>
                             <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                              <th style={{ padding: '0.65rem 0.85rem', width: '40px', textAlign: 'center' }}>
-                                {historyStatusFilter === 'Pending' && (
+                              <th style={{ padding: '0.65rem 0.85rem', width: 'auto', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%' }}>
                                   <input
                                     type="checkbox"
                                     checked={historySelectedIds.length > 0 && historySelectedIds.length === filteredLogs.length}
@@ -4627,7 +4704,20 @@ function InventoryAppraisal() {
                                       }
                                     }}
                                   />
-                                )}
+                                  {canDeleteHistory && historySelectedIds.length > 0 && (
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem', height: 'auto', whiteSpace: 'nowrap' }}
+                                      onClick={() => {
+                                        setHistoryDeleteTarget('disposal');
+                                        setShowBulkDeleteHistoryModal(true);
+                                      }}
+                                    >
+                                      <MdDeleteSweep style={{ fontSize: '1rem', marginRight: '0.2rem' }} /> Delete ({historySelectedIds.length})
+                                    </Button>
+                                  )}
+                                </div>
                               </th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>Date & Time</th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>Item No.</th>
@@ -4636,28 +4726,23 @@ function InventoryAppraisal() {
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, width: '15%' }}>Category</th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Period Covered</th>
                               <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Total Retention</th>
-                              {hasFullDivisionAccess && (historyStatusFilter === 'Completed' || historyStatusFilter === 'Decline') && (
-                                <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
-                              )}
                             </tr>
                           </thead>
                           <tbody>
                             {filteredLogs.map((log) => (
                               <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                                  {historyStatusFilter === 'Pending' && (
-                                    <input
-                                      type="checkbox"
-                                      checked={historySelectedIds.includes(log.id)}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setHistorySelectedIds(prev => [...prev, log.id]);
-                                        } else {
-                                          setHistorySelectedIds(prev => prev.filter(id => id !== log.id));
-                                        }
-                                      }}
-                                    />
-                                  )}
+                                  <input
+                                    type="checkbox"
+                                    checked={historySelectedIds.includes(log.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setHistorySelectedIds(prev => [...prev, log.id]);
+                                      } else {
+                                        setHistorySelectedIds(prev => prev.filter(id => id !== log.id));
+                                      }
+                                    }}
+                                  />
                                 </td>
                                 <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
                                   {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
@@ -4693,18 +4778,6 @@ function InventoryAppraisal() {
                                     return expiryYear ? `${expiryYear} (${ret} yrs)` : ret ? `${ret} yrs` : '-';
                                   })()}
                                 </td>
-                                {hasFullDivisionAccess && (historyStatusFilter === 'Completed' || historyStatusFilter === 'Decline') && (
-                                  <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                                    <Button
-                                      variant="danger"
-                                      size="sm"
-                                      onClick={() => handleDeleteHistoryLog(log.id)}
-                                      style={{ padding: '0.3rem 0.6rem' }}
-                                    >
-                                      <MdDelete style={{ fontSize: '1.1rem' }} />
-                                    </Button>
-                                  </td>
-                                )}
                               </tr>
                             ))}
                           </tbody>
@@ -5247,93 +5320,7 @@ function InventoryAppraisal() {
         );
       })()}
 
-      {/* Evaluate Disposal Modal */}
-      {showEvaluateModal && (
-        <Modal
-          isOpen={showEvaluateModal}
-          onClose={() => setShowEvaluateModal(false)}
-          title={`Evaluate Disposal Records (${disposalEligibleRecords.length})`}
-          size="xl"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
-              <strong>Total Retention Period Reached:</strong> The following record series have completed their designated retention period. Transitioning a record to <strong>Disposal</strong> starts the disposal appraisal process.
-            </div>
 
-            {disposalEligibleRecords.length === 0 ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                No records currently eligible for disposal evaluation.
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Item No.</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Record Series</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Division</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Category</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Inclusive Dates</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Total Retention</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {disposalEligibleRecords.map((record) => {
-                      const info = getOngoingDisposalInfo(record.inclusiveDates, Number(record.totalRetention), record.retentionStage, record.frequencyOfUse, Number(record.storageYrs));
-                      return (
-                        <tr key={record.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                            {record.prdsGrds && record.itemNo ? (
-                              <div>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{record.prdsGrds}</div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)' }}>{record.itemNo}</div>
-                              </div>
-                            ) : (
-                              record.prdsGrds || record.itemNo || '-'
-                            )}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem' }}>
-                            <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{cleanSeriesTitle(record.seriesTitle)}</div>
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem' }}>{record.division || 'General'}</td>
-                          <td style={{ padding: '0.75rem 0.85rem', color: 'var(--text-secondary)' }}>{record.classificationCategory || '-'}</td>
-                          <td style={{ padding: '0.75rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {formatDynamicDates(record.inclusiveDates)}
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>
-                            {record.totalRetention} Year(s)
-                          </td>
-                          <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                              <Button
-                                variant="danger"
-                                style={{ fontSize: '0.78rem', padding: '0.35rem 0.65rem', background: '#dc2626', borderColor: '#dc2626' }}
-                                onClick={() => {
-                                  setEvaluatingRecord({ record, info });
-                                  setShowEvaluateModal(false);
-                                }}
-                              >
-                                Evaluate & Dispose ➔
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-              <Button variant="secondary" onClick={() => setShowEvaluateModal(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
 
       {/* NAP Form 1 View Modal */}
@@ -5482,14 +5469,7 @@ function InventoryAppraisal() {
 
             {/* Disposal Alert inside viewing modal */}
             {(() => {
-              const disposalInfoRaw = getOngoingDisposalInfo(viewingRecord.inclusiveDates, Number(viewingRecord.totalRetention), viewingRecord.retentionStage, viewingRecord.frequencyOfUse, Number(viewingRecord.storageYrs));
-              let disposalInfo = null;
-              if (disposalInfoRaw) {
-                const hasUndisposed = disposalInfoRaw.eligibleYears.some(yr => {
-                  return !disposalOnlyLogs.some(log => (log.recordId === viewingRecord.id || log.id === viewingRecord.id) && String(log.disposedYears || '').includes(yr.toString()) && log.status !== 'Decline');
-                });
-                if (hasUndisposed) disposalInfo = disposalInfoRaw;
-              }
+              const disposalInfo = getOngoingDisposalInfo(viewingRecord.inclusiveDates, Number(viewingRecord.totalRetention), viewingRecord.retentionStage, viewingRecord.frequencyOfUse, Number(viewingRecord.storageYrs));
 
               if (disposalInfo !== null) {
                 return (
@@ -6347,6 +6327,45 @@ function InventoryAppraisal() {
                 style={{ width: '100%', height: '100%', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'white' }}
                 title="NAP Form 3 Preview"
               />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk Delete History Modal */}
+      {showBulkDeleteHistoryModal && (
+        <Modal
+          isOpen={showBulkDeleteHistoryModal}
+          onClose={() => !isDeletingHistoryLogs && setShowBulkDeleteHistoryModal(false)}
+          title="Confirm Bulk Delete History"
+        >
+          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#ef4444' }}>
+              <MdWarning style={{ fontSize: '1.75rem', flexShrink: 0 }} />
+              <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                Are you sure you want to delete {historyDeleteTarget === 'storage' ? storageHistorySelectedIds.length : historySelectedIds.length} selected history logs?
+              </div>
+            </div>
+
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+              This action will revert the original records back to their previous stage. This action cannot be undone.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+              <Button
+                variant="secondary"
+                onClick={() => setShowBulkDeleteHistoryModal(false)}
+                disabled={isDeletingHistoryLogs}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={confirmBulkDeleteHistory}
+                loading={isDeletingHistoryLogs}
+              >
+                Confirm Delete ({(historyDeleteTarget === 'storage' ? storageHistorySelectedIds : historySelectedIds).length})
+              </Button>
             </div>
           </div>
         </Modal>

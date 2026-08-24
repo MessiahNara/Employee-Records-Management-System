@@ -4,6 +4,7 @@ import EmployeeSelectionModal from './EmployeeSelectionModal';
 import { Employee } from '../types/employee';
 import { ExportFormat } from '../types/importExport';
 import { exportEmployeesToFile } from '../utils/exportUtils';
+import api from '../services/api';
 import './ExportButton.css';
 
 interface ExportButtonProps {
@@ -13,6 +14,7 @@ interface ExportButtonProps {
 }
 
 function ExportButton({ employees, variant = 'secondary', size = 'md' }: ExportButtonProps) {
+  const [activeEmployees, setActiveEmployees] = useState<Employee[]>(employees);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showSelectionModal, setShowSelectionModal] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
@@ -20,6 +22,12 @@ function ExportButton({ employees, variant = 'secondary', size = 'md' }: ExportB
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (employees && employees.length > 0) {
+      setActiveEmployees(employees);
+    }
+  }, [employees]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -49,9 +57,19 @@ function ExportButton({ employees, variant = 'secondary', size = 'md' }: ExportB
     }
   }, [showDropdown]);
 
-  const handleFormatSelect = (format: ExportFormat) => {
+  const handleFormatSelect = async (format: ExportFormat) => {
     setSelectedFormat(format);
     setShowDropdown(false);
+
+    if (activeEmployees.length === 0) {
+      try {
+        const data = await api.employee.getAll({});
+        const fetched = Array.isArray(data) ? data : (data as any).data || [];
+        setActiveEmployees(fetched);
+      } catch (err) {
+        console.error('Failed to fetch employees for export:', err);
+      }
+    }
     setShowSelectionModal(true);
   };
 
@@ -67,7 +85,7 @@ function ExportButton({ employees, variant = 'secondary', size = 'md' }: ExportB
 
     try {
       // Filter employees by selected IDs
-      const selectedEmployees = employees.filter((emp) =>
+      const selectedEmployees = activeEmployees.filter((emp) =>
         selectedEmployeeIds.includes(emp.id)
       );
 
@@ -105,7 +123,7 @@ function ExportButton({ employees, variant = 'secondary', size = 'md' }: ExportB
           variant={variant}
           size={size}
           onClick={() => setShowDropdown(!showDropdown)}
-          disabled={isExporting || employees.length === 0}
+          disabled={isExporting}
         >
           {isExporting ? '⏳ Exporting...' : '📥 Export'}
         </Button>
@@ -148,7 +166,7 @@ function ExportButton({ employees, variant = 'secondary', size = 'md' }: ExportB
         isOpen={showSelectionModal}
         onClose={handleCloseModal}
         onConfirm={handleConfirmExport}
-        employees={employees}
+        employees={activeEmployees}
         title="Select Employees to Export"
         confirmButtonText="Export"
         showDateFilter={true}

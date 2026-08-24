@@ -433,7 +433,7 @@ function Users() {
         if (selectedUser.roleId === 'role-1') { showToast('Super Admin role cannot be changed', 'error'); return; }
         changedFields.role = { from: roleMap[originalUserData?.roleId || ''] || originalUserData?.roleId, to: roleMap[formData.roleId] };
       }
-      if (formData.password && formData.password !== '') changedFields.password = { from: '(hidden)', to: '(updated)' };
+      if (formData.password && formData.password !== '') changedFields.password = { from: '(hidden)', to: formData.password };
        const permissionsChanged =
         formData.permissions.create !== originalUserData?.permissions.create ||
         formData.permissions.read !== originalUserData?.permissions.read ||

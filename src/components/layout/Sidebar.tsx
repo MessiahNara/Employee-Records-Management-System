@@ -66,7 +66,8 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
   // Poll pending approvals count every 5 seconds (admins/superadmins) & listen for updates
   useEffect(() => {
-    if (!isSuperAdminOrDeveloper) return;
+    const isAnyAdmin = userRole === 'superadmin' || userRole === 'admin' || userRole === 'developer';
+    if (!isAnyAdmin) return;
 
     const fetch = () => {
       api.approvals.getPendingCount()
@@ -76,12 +77,12 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
     fetch();
     window.addEventListener('approvalsUpdated', fetch);
-    const interval = setInterval(fetch, 5000);
+    const interval = setInterval(fetch, 4000);
     return () => {
       window.removeEventListener('approvalsUpdated', fetch);
       clearInterval(interval);
     };
-  }, [isSuperAdminOrDeveloper]);
+  }, [userRole]);
 
   // Poll staff's own pending requests count every 5 seconds & listen for updates
   useEffect(() => {
@@ -98,7 +99,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
     fetchMyCount();
     window.addEventListener('approvalsUpdated', fetchMyCount);
-    const interval = setInterval(fetchMyCount, 5000);
+    const interval = setInterval(fetchMyCount, 4000);
     return () => {
       window.removeEventListener('approvalsUpdated', fetchMyCount);
       clearInterval(interval);
@@ -206,7 +207,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     }
   };
 
-  // Poll unread chat counts every 5 seconds to show badge next to "Chats" tab
+  // Poll unread chat counts and listen for instant chat updates
   useEffect(() => {
     if (!currentUser?.id) return;
 
@@ -216,7 +217,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     const fetchChatUnread = () => {
       api.chats.getUnreadCounts()
         .then((counts) => {
-          const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+          const total = Object.values(counts || {}).reduce((sum, count) => sum + count, 0);
           if (total > lastCountRef.current && !isInitialLoad) {
             playNotificationSound();
           }
@@ -228,9 +229,11 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     };
 
     fetchChatUnread();
-    const interval = setInterval(fetchChatUnread, 5000);
+    window.addEventListener('chatsUpdated', fetchChatUnread);
+    const interval = setInterval(fetchChatUnread, 3000);
 
     return () => {
+      window.removeEventListener('chatsUpdated', fetchChatUnread);
       clearInterval(interval);
     };
   }, [currentUser?.id]);

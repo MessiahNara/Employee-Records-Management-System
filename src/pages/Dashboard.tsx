@@ -1084,11 +1084,11 @@ function Dashboard() {
     localStorage.setItem('showAllEmployees', showAllEmployees.toString());
   }, [showAllEmployees]);
 
-  // Fetch KPI stats on initial load
+  // Fetch KPI stats and all employees on initial load
   useEffect(() => {
     fetchEmployeeStats();
+    fetchAllEmployeesForKPI();
     if (viewMode === 'reports') {
-      fetchAllEmployeesForKPI(); // Only needed for reports tab
       fetchEmployeeAuditLogs();
     }
   }, [viewMode]);
@@ -1097,8 +1097,8 @@ function Dashboard() {
   useEffect(() => {
     const handleUpdate = () => {
       fetchEmployeeStats();
+      fetchAllEmployeesForKPI();
       if (viewMode === 'reports') {
-        fetchAllEmployeesForKPI();
         fetchEmployeeAuditLogs();
       }
       fetchEmployees();

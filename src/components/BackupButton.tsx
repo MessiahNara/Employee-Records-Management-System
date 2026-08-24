@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Button from './ui/Button';
 import EmployeeSelectionModal from './EmployeeSelectionModal';
 import { Employee } from '../types/employee';
 import { generateBackup } from '../utils/backupUtils';
+import api from '../services/api';
 import './BackupButton.css';
 
 interface BackupButtonProps {
@@ -12,11 +13,30 @@ interface BackupButtonProps {
 }
 
 function BackupButton({ employees, variant = 'secondary', size = 'md' }: BackupButtonProps) {
+  const [activeEmployees, setActiveEmployees] = useState<Employee[]>(employees);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showSelectionModal, setShowSelectionModal] = useState(false);
 
-  const handleOpenModal = () => {
+  useEffect(() => {
+    if (employees && employees.length > 0) {
+      setActiveEmployees(employees);
+    }
+  }, [employees]);
+
+  const handleOpenModal = async () => {
+    if (activeEmployees.length === 0) {
+      setIsBackingUp(true);
+      try {
+        const data = await api.employee.getAll({});
+        const fetched = Array.isArray(data) ? data : (data as any).data || [];
+        setActiveEmployees(fetched);
+      } catch (err) {
+        console.error('Failed to load employees for backup:', err);
+      } finally {
+        setIsBackingUp(false);
+      }
+    }
     setShowSelectionModal(true);
   };
 
@@ -31,7 +51,7 @@ function BackupButton({ employees, variant = 'secondary', size = 'md' }: BackupB
 
     try {
       // Filter employees by selected IDs
-      const selectedEmployees = employees.filter((emp) =>
+      const selectedEmployees = activeEmployees.filter((emp) =>
         selectedEmployeeIds.includes(emp.id)
       );
 
@@ -59,7 +79,7 @@ function BackupButton({ employees, variant = 'secondary', size = 'md' }: BackupB
           variant={variant}
           size={size}
           onClick={handleOpenModal}
-          disabled={isBackingUp || employees.length === 0}
+          disabled={isBackingUp}
         >
           {isBackingUp ? '⏳ Creating Backup...' : '💾 Backup'}
         </Button>
@@ -76,7 +96,7 @@ function BackupButton({ employees, variant = 'secondary', size = 'md' }: BackupB
         isOpen={showSelectionModal}
         onClose={handleCloseModal}
         onConfirm={handleConfirmBackup}
-        employees={employees}
+        employees={activeEmployees}
         title="Select Employees for Backup"
         confirmButtonText="Create Backup"
         showDateFilter={true}

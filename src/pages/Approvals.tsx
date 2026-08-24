@@ -329,10 +329,13 @@ function Approvals() {
         await api.user.delete(payload.id, approvalToken);
         break;
       case 'create_group_chat':
-        // Note: For now, since group chats are completely mocked on the frontend,
-        // we just approve the request. In a full implementation, this would call
-        // the backend to create the persistent group chat database entry.
-        console.log('Group chat approved:', payload.groupName);
+        await api.chats.createGroup({
+          id: entityId || `group_${Date.now()}`,
+          name: payload.groupName || entityName,
+          creatorId: requestedBy || payload.creatorId,
+          creatorName: (approveTarget as any)?.requestedByName || payload.creatorName || 'User',
+          memberIds: payload.selectedMemberIds || payload.members || payload.memberIds || [],
+        });
         break;
       case 'borrow_201':
         await api.file201.borrow(payload.employeeId, {

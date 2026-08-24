@@ -489,9 +489,43 @@ router.post('/requests', async (req: Request, res: Response) => {
   }
 });
 
-function calculateNewInclusiveDates(currentDatesStr: string, yearsToRemove: number[]): { newDatesStr: string, isDisposed: boolean } {
-  const currentYear = new Date().getFullYear();
-  const yearsStr = String(currentDatesStr || '').trim();
+function formatYearsToRanges(years: number[], hasPresent: boolean = false, currentYear: number = new Date().getFullYear()): string {
+  const uniqueSorted = [...new Set(years)].filter((y) => !isNaN(y)).sort((a, b) => a - b);
+  if (uniqueSorted.length === 0) {
+    return '';
+  }
+
+  const groups: number[][] = [];
+  let currentGroup: number[] = [uniqueSorted[0]];
+  for (let i = 1; i < uniqueSorted.length; i++) {
+    if (uniqueSorted[i] === uniqueSorted[i - 1] + 1) {
+      currentGroup.push(uniqueSorted[i]);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [uniqueSorted[i]];
+    }
+  }
+  groups.push(currentGroup);
+
+  const formatted = groups.map((g, idx) => {
+    const isLastGroup = idx === groups.length - 1;
+    const gStart = g[0];
+    const gEnd = g[g.length - 1];
+    if (g.length === 1) {
+      return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
+    } else {
+      return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
+    }
+  });
+
+  return formatted.join(', ');
+}
+
+function extractYearsFromInclusiveDates(datesStr: string, currentYear: number = new Date().getFullYear()): { years: number[], hasPresent: boolean } {
+  const yearsStr = String(datesStr || '').trim();
+  if (!yearsStr || yearsStr.toLowerCase() === 'disposed' || yearsStr.toLowerCase() === 'n/a') {
+    return { years: [], hasPresent: false };
+  }
   const hasPresent = /present/i.test(yearsStr);
   let allYears: number[] = [];
 
@@ -519,35 +553,18 @@ function calculateNewInclusiveDates(currentDatesStr: string, yearsToRemove: numb
     }
   });
 
-  const remainingYears = allYears.filter((y) => !yearsToRemove.includes(y)).sort((a, b) => a - b);
+  return { years: [...new Set(allYears)].sort((a, b) => a - b), hasPresent };
+}
+
+function calculateNewInclusiveDates(currentDatesStr: string, yearsToRemove: number[]): { newDatesStr: string, isDisposed: boolean } {
+  const currentYear = new Date().getFullYear();
+  const { years: allYears, hasPresent } = extractYearsFromInclusiveDates(currentDatesStr, currentYear);
+  const remainingYears = allYears.filter((y) => !yearsToRemove.includes(y));
   if (remainingYears.length === 0) {
     return { newDatesStr: 'Disposed', isDisposed: true };
   }
 
-  const groups: number[][] = [];
-  let currentGroup: number[] = [remainingYears[0]];
-  for (let i = 1; i < remainingYears.length; i++) {
-    if (remainingYears[i] === remainingYears[i - 1] + 1) {
-      currentGroup.push(remainingYears[i]);
-    } else {
-      groups.push(currentGroup);
-      currentGroup = [remainingYears[i]];
-    }
-  }
-  groups.push(currentGroup);
-
-  const formatted = groups.map((g, idx) => {
-    const isLastGroup = idx === groups.length - 1;
-    const gStart = g[0];
-    const gEnd = g[g.length - 1];
-    if (g.length === 1) {
-      return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart}`;
-    } else {
-      return (hasPresent && isLastGroup && gEnd === currentYear) ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
-    }
-  });
-
-  return { newDatesStr: formatted.join(', '), isDisposed: false };
+  return { newDatesStr: formatYearsToRanges(remainingYears, hasPresent, currentYear), isDisposed: false };
 }
 
 // POST confirm / approve an inventory request (Admin action)
@@ -613,12 +630,14 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
 
         if (targetStage === 'Storage') {
           if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
-            const { isDisposed } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
+            const { newDatesStr, isDisposed } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
 
             if (isDisposed) {
               r.retentionStage = 'Storage';
               r.storageStartDate = new Date().toISOString();
               r.frequencyOfUse = 'Inactive';
+            } else {
+              r.inclusiveDates = newDatesStr;
             }
           } else {
             r.retentionStage = 'Storage';
@@ -627,27 +646,49 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
           }
 
           const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
-          const actionYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(', ') : (previousInclusiveDates || targetStage);
-
-          logs.unshift({
-            id: `DISP-${baseTimestamp}-${logs.length}`,
-            status: 'Completed',
-            recordId: r.id,
-            seriesTitle: r.seriesTitle,
-            prdsGrds: r.prdsGrds,
-            itemNo: r.itemNo,
-            division: r.division || 'General',
-            classificationCategory: r.classificationCategory || 'General',
-            subCategory: r.subCategory || '',
-            disposedYears: `Moved to Storage: ${actionYearsDisplay}`,
-            previousInclusiveDates: previousInclusiveDates,
-            newInclusiveDates: newInclusiveDates,
-            disposedAt: new Date().toISOString(),
-            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
-            reason: reqItem.reason,
-            attachmentUrl: reqItem.attachmentUrl,
-            attachmentName: reqItem.attachmentName,
-          } as any);
+          if (sortedTargetYears.length > 0) {
+            sortedTargetYears.forEach((year, idx) => {
+              logs.unshift({
+                id: `DISP-${baseTimestamp}-${logs.length}-${idx}`,
+                status: 'Completed',
+                recordId: r.id,
+                seriesTitle: r.seriesTitle,
+                prdsGrds: r.prdsGrds,
+                itemNo: r.itemNo,
+                division: r.division || 'General',
+                classificationCategory: r.classificationCategory || 'General',
+                subCategory: r.subCategory || '',
+                disposedYears: `Moved to Storage: ${year}`,
+                previousInclusiveDates: previousInclusiveDates,
+                newInclusiveDates: r.inclusiveDates,
+                disposedAt: new Date().toISOString(),
+                disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+                reason: reqItem.reason,
+                attachmentUrl: reqItem.attachmentUrl,
+                attachmentName: reqItem.attachmentName,
+              } as any);
+            });
+          } else {
+            logs.unshift({
+              id: `DISP-${baseTimestamp}-${logs.length}`,
+              status: 'Completed',
+              recordId: r.id,
+              seriesTitle: r.seriesTitle,
+              prdsGrds: r.prdsGrds,
+              itemNo: r.itemNo,
+              division: r.division || 'General',
+              classificationCategory: r.classificationCategory || 'General',
+              subCategory: r.subCategory || '',
+              disposedYears: `Moved to Storage: ${previousInclusiveDates}`,
+              previousInclusiveDates: previousInclusiveDates,
+              newInclusiveDates: r.inclusiveDates,
+              disposedAt: new Date().toISOString(),
+              disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+              reason: reqItem.reason,
+              attachmentUrl: reqItem.attachmentUrl,
+              attachmentName: reqItem.attachmentName,
+            } as any);
+          }
 
         } else {
           // targetStage === 'Disposed'
@@ -780,48 +821,104 @@ router.post('/disposal-history/bulk-delete', async (req: Request, res: Response)
     let recordsModified = false;
     let logsModified = false;
 
-    ids.forEach((id: string) => {
-      const logIndex = logs.findIndex((l: any) => l.id === id);
+    // Process each requested id (direct ID or synthetic/expanded ID)
+    for (const rawId of ids) {
+      let logIndex = logs.findIndex((l: any) => l.id === rawId);
+      let targetYear: number | undefined;
+
+      if (logIndex === -1) {
+        // Match by prefix for expanded synthetic IDs: e.g. "DISP-1787536305394-148-2020-0"
+        for (let i = 0; i < logs.length; i++) {
+          const l = logs[i];
+          if (rawId.startsWith(l.id)) {
+            logIndex = i;
+            const rest = rawId.slice(l.id.length);
+            const yMatch = rest.match(/\b(19\d{2}|20\d{2})\b/);
+            if (yMatch) targetYear = parseInt(yMatch[1], 10);
+            break;
+          }
+        }
+      }
+
       if (logIndex !== -1) {
         const log = logs[logIndex];
         const record = records.find((r: any) => r.id === log.recordId);
-        
-        if (record) {
-          const isStorageLog = String(log.disposedYears).includes('Storage');
-          if (isStorageLog) {
-            record.retentionStage = 'Active';
-            record.frequencyOfUse = 'Active';
-            record.storageStartDate = undefined;
-            if (log.previousInclusiveDates) {
-              record.inclusiveDates = log.previousInclusiveDates;
-            }
-            recordsModified = true;
-          } else if (log.status === 'Completed' || log.status === 'Decline') {
-            const yearToRemove = parseInt(log.disposedYears, 10);
-            if (!isNaN(yearToRemove)) {
-              let currentDates = String(record.inclusiveDates || '');
-              if (!currentDates.includes(yearToRemove.toString())) {
-                currentDates = currentDates ? `${currentDates}, ${yearToRemove}` : yearToRemove.toString();
-                const parts = currentDates.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-                const sorted = parts.sort((a, b) => a - b).join(', ');
-                record.inclusiveDates = sorted || currentDates;
-              }
-              if (record.retentionStage === 'Disposed') {
-                record.retentionStage = 'Storage';
-              }
-              recordsModified = true;
-            }
+
+        // Determine years to revert
+        let yearsToRevert: number[] = [];
+        if (targetYear) {
+          yearsToRevert = [targetYear];
+        } else {
+          const rawYears = String(log.disposedYears || '').replace(/Moved to Storage:\s*/i, '');
+          yearsToRevert = extractYearsFromInclusiveDates(rawYears).years;
+          if (yearsToRevert.length === 0 && log.previousInclusiveDates) {
+            const prevYears = extractYearsFromInclusiveDates(log.previousInclusiveDates).years;
+            const currYears = record ? extractYearsFromInclusiveDates(record.inclusiveDates).years : [];
+            yearsToRevert = prevYears.filter(y => !currYears.includes(y));
+            if (yearsToRevert.length === 0) yearsToRevert = prevYears;
           }
         }
-        logs.splice(logIndex, 1);
-        logsModified = true;
+
+        if (record && yearsToRevert.length > 0) {
+          const { years: currentYears, hasPresent } = extractYearsFromInclusiveDates(String(record.inclusiveDates || ''));
+          const logHasPresent = /present/i.test(String(log.previousInclusiveDates || ''));
+          const combinedYears = [...new Set([...currentYears, ...yearsToRevert])].sort((a, b) => a - b);
+
+          record.inclusiveDates = formatYearsToRanges(combinedYears, hasPresent || logHasPresent);
+
+          const isStorageLog = String(log.disposedYears).includes('Storage');
+          if (isStorageLog) {
+            const otherStorageLogs = logs.filter((l: any, idx: number) =>
+              idx !== logIndex &&
+              l.recordId === record.id &&
+              String(l.disposedYears).includes('Storage') &&
+              !ids.some(delId => delId === l.id || delId.startsWith(l.id))
+            );
+            if (otherStorageLogs.length === 0) {
+              record.retentionStage = 'Active';
+              record.frequencyOfUse = 'Active';
+              record.storageStartDate = undefined;
+            }
+          } else {
+            if (record.retentionStage === 'Disposed') {
+              const hasStorageLog = logs.some((l: any, idx: number) =>
+                idx !== logIndex &&
+                l.recordId === record.id &&
+                String(l.disposedYears).includes('Storage') &&
+                !ids.some(delId => delId === l.id || delId.startsWith(l.id))
+              );
+              record.retentionStage = hasStorageLog ? 'Storage' : 'Active';
+              record.frequencyOfUse = 'Active';
+            }
+          }
+          recordsModified = true;
+        }
+
+        // Remove single year from log or remove entire log
+        if (targetYear && log.disposedYears) {
+          const allLogYears = extractYearsFromInclusiveDates(log.disposedYears.replace(/Moved to Storage:\s*/i, '')).years;
+          const remainingLogYears = allLogYears.filter(y => y !== targetYear);
+          if (remainingLogYears.length > 0) {
+            const isStorage = String(log.disposedYears).includes('Storage');
+            log.disposedYears = isStorage
+              ? `Moved to Storage: ${remainingLogYears.sort((a, b) => a - b).join(', ')}`
+              : remainingLogYears.sort((a, b) => a - b).join(', ');
+            logsModified = true;
+          } else {
+            logs.splice(logIndex, 1);
+            logsModified = true;
+          }
+        } else {
+          logs.splice(logIndex, 1);
+          logsModified = true;
+        }
       }
-    });
+    }
 
     if (logsModified) saveDisposalHistory(logs);
     if (recordsModified) saveRecords(records);
 
-    res.json({ success: true, message: 'Logs deleted successfully' });
+    res.json({ success: true, message: 'Logs deleted and records reverted successfully' });
   } catch (err: any) {
     console.error('Error bulk deleting disposal history logs:', err);
     res.status(500).json({ error: 'Failed to bulk delete disposal history logs' });
@@ -832,59 +929,107 @@ router.post('/disposal-history/bulk-delete', async (req: Request, res: Response)
 router.delete('/disposal-history/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const yearToRemoveParam = req.query.year ? parseInt(String(req.query.year), 10) : NaN;
+
     let logs = readDisposalHistory();
-    const logIndex = logs.findIndex((l: any) => l.id === id);
+    let records = readRecords();
+    let recordsModified = false;
+    let logsModified = false;
+
+    let logIndex = logs.findIndex((l: any) => l.id === id);
+    let targetYear = !isNaN(yearToRemoveParam) ? yearToRemoveParam : undefined;
+
+    if (logIndex === -1) {
+      for (let i = 0; i < logs.length; i++) {
+        const l = logs[i];
+        if (id.startsWith(l.id)) {
+          logIndex = i;
+          const rest = id.slice(l.id.length);
+          const yMatch = rest.match(/\b(19\d{2}|20\d{2})\b/);
+          if (yMatch) targetYear = parseInt(yMatch[1], 10);
+          break;
+        }
+      }
+    }
 
     if (logIndex === -1) {
       return res.status(404).json({ error: 'Log not found' });
     }
 
     const log = logs[logIndex];
-    let records = readRecords();
     const record = records.find((r: any) => r.id === log.recordId);
-    let recordsModified = false;
 
-    if (record) {
-      const isStorageLog = String(log.disposedYears).includes('Storage');
-      if (isStorageLog) {
-        // Revert Storage Log
-        record.retentionStage = 'Active';
-        record.frequencyOfUse = 'Active';
-        record.storageStartDate = undefined;
-        if (log.previousInclusiveDates) {
-          record.inclusiveDates = log.previousInclusiveDates;
-        }
-        recordsModified = true;
-      } else if (log.status === 'Completed' || log.status === 'Decline') {
-        // Revert Disposal Log
-        const yearToRemove = parseInt(log.disposedYears, 10);
-        if (!isNaN(yearToRemove)) {
-          let currentDates = String(record.inclusiveDates || '');
-          if (!currentDates.includes(yearToRemove.toString())) {
-            // Add it back
-            currentDates = currentDates ? `${currentDates}, ${yearToRemove}` : yearToRemove.toString();
-            // Sort dates
-            const parts = currentDates.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-            const sorted = parts.sort((a, b) => a - b).join(', ');
-            record.inclusiveDates = sorted || currentDates;
-          }
-          if (record.retentionStage === 'Disposed') {
-            record.retentionStage = 'Storage';
-          }
-          recordsModified = true;
-        }
+    let yearsToRevert: number[] = [];
+    if (targetYear) {
+      yearsToRevert = [targetYear];
+    } else {
+      const rawYears = String(log.disposedYears || '').replace(/Moved to Storage:\s*/i, '');
+      yearsToRevert = extractYearsFromInclusiveDates(rawYears).years;
+      if (yearsToRevert.length === 0 && log.previousInclusiveDates) {
+        const prevYears = extractYearsFromInclusiveDates(log.previousInclusiveDates).years;
+        const currYears = record ? extractYearsFromInclusiveDates(record.inclusiveDates).years : [];
+        yearsToRevert = prevYears.filter(y => !currYears.includes(y));
+        if (yearsToRevert.length === 0) yearsToRevert = prevYears;
       }
     }
 
-    // Remove the log
-    logs.splice(logIndex, 1);
-    saveDisposalHistory(logs);
+    if (record && yearsToRevert.length > 0) {
+      const { years: currentYears, hasPresent } = extractYearsFromInclusiveDates(String(record.inclusiveDates || ''));
+      const logHasPresent = /present/i.test(String(log.previousInclusiveDates || ''));
+      const combinedYears = [...new Set([...currentYears, ...yearsToRevert])].sort((a, b) => a - b);
 
-    if (recordsModified) {
-      saveRecords(records);
+      record.inclusiveDates = formatYearsToRanges(combinedYears, hasPresent || logHasPresent);
+
+      const isStorageLog = String(log.disposedYears).includes('Storage');
+      if (isStorageLog) {
+        const otherStorageLogs = logs.filter((l: any, idx: number) =>
+          idx !== logIndex &&
+          l.recordId === record.id &&
+          String(l.disposedYears).includes('Storage') &&
+          l.id !== id && !id.startsWith(l.id)
+        );
+        if (otherStorageLogs.length === 0) {
+          record.retentionStage = 'Active';
+          record.frequencyOfUse = 'Active';
+          record.storageStartDate = undefined;
+        }
+      } else {
+        if (record.retentionStage === 'Disposed') {
+          const hasStorageLog = logs.some((l: any, idx: number) =>
+            idx !== logIndex &&
+            l.recordId === record.id &&
+            String(l.disposedYears).includes('Storage') &&
+            l.id !== id && !id.startsWith(l.id)
+          );
+          record.retentionStage = hasStorageLog ? 'Storage' : 'Active';
+          record.frequencyOfUse = 'Active';
+        }
+      }
+      recordsModified = true;
     }
 
-    res.json({ success: true, message: 'Log deleted successfully' });
+    if (targetYear && log.disposedYears) {
+      const allLogYears = extractYearsFromInclusiveDates(log.disposedYears.replace(/Moved to Storage:\s*/i, '')).years;
+      const remainingLogYears = allLogYears.filter(y => y !== targetYear);
+      if (remainingLogYears.length > 0) {
+        const isStorage = String(log.disposedYears).includes('Storage');
+        log.disposedYears = isStorage
+          ? `Moved to Storage: ${remainingLogYears.sort((a, b) => a - b).join(', ')}`
+          : remainingLogYears.sort((a, b) => a - b).join(', ');
+        logsModified = true;
+      } else {
+        logs.splice(logIndex, 1);
+        logsModified = true;
+      }
+    } else {
+      logs.splice(logIndex, 1);
+      logsModified = true;
+    }
+
+    if (logsModified) saveDisposalHistory(logs);
+    if (recordsModified) saveRecords(records);
+
+    res.json({ success: true, message: 'Log deleted and record reverted successfully' });
   } catch (err: any) {
     console.error('Error deleting disposal history log:', err);
     res.status(500).json({ error: 'Failed to delete disposal history log' });
