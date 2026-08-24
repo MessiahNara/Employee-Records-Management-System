@@ -3,10 +3,15 @@ import prisma from '../lib/prisma';
 
 const router = Router();
 
-// GET /api/file201/logs/all — get all borrow logs in the database
+// GET /api/file201/logs/all — get all borrow logs in the database (excludes RSP transfers)
 router.get('/logs/all', async (req: Request, res: Response) => {
   try {
     const logs = await (prisma as any).file201BorrowLog.findMany({
+      where: {
+        action: {
+          not: 'transfer_rsp',
+        },
+      },
       include: {
         employee: {
           select: {
@@ -65,6 +70,146 @@ router.get('/:employeeId/active', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/file201/:employeeId/active-rsp — get active RSP transfer record
+router.get('/:employeeId/active-rsp', async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const active = await (prisma as any).file201BorrowLog.findFirst({
+      where: { employeeId, action: 'transfer_rsp', dateReturned: null },
+      orderBy: { dateBorrowed: 'desc' },
+    });
+    res.json(active || null);
+  } catch (error) {
+    console.error('Error fetching active RSP record:', error);
+    res.status(500).json({ error: 'Failed to fetch active RSP record' });
+  }
+});
+
+// POST /api/file201/:employeeId/transfer-rsp — record transfer to RSP
+router.post('/:employeeId/transfer-rsp', async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const {
+      receivedBy,
+      releasedBy,
+      receivedPosition,
+      receivedOffice,
+      purpose,
+    } = req.body;
+
+    if (!receivedBy || !receivedBy.trim()) {
+      return res.status(400).json({ error: 'Received By is required' });
+    }
+    if (!releasedBy || !releasedBy.trim()) {
+      return res.status(400).json({ error: 'Released By is required' });
+    }
+
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    // Check if not already transferred to RSP
+    const alreadyTransferred = await (prisma as any).file201BorrowLog.findFirst({
+      where: { employeeId, action: 'transfer_rsp', dateReturned: null },
+    });
+    if (alreadyTransferred) {
+      return res.status(409).json({ error: 'This 201 file is already transferred to RSP' });
+    }
+
+    const log = await (prisma as any).file201BorrowLog.create({
+      data: {
+        employeeId,
+        action: 'transfer_rsp',
+        borrowerName: receivedBy.trim(),
+        borrowerPosition: receivedPosition || null,
+        borrowerOffice: receivedOffice || null,
+        purpose: purpose?.trim() || null,
+        releasedBy: releasedBy.trim(),
+        dateBorrowed: new Date(),
+      },
+    });
+
+    const currentStatus = employee.file201Status || 'Available';
+    const conditions = currentStatus.split(',').map((s: string) => s.trim()).filter(Boolean);
+    if (!conditions.includes('Transferred to RSP')) {
+      conditions.push('Transferred to RSP');
+    }
+    const newStatus = conditions.join(', ');
+
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { file201Status: newStatus },
+    });
+
+    res.status(201).json(log);
+  } catch (error) {
+    console.error('Error recording RSP transfer:', error);
+    res.status(500).json({ error: 'Failed to record transfer to RSP' });
+  }
+});
+
+// POST /api/file201/:employeeId/return-rsp — record return from RSP
+router.post('/:employeeId/return-rsp', async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const {
+      logId,
+      returnedByName,
+      receivedBy,
+      fileCondition,
+      remarks,
+    } = req.body;
+
+    if (!returnedByName || !returnedByName.trim()) {
+      return res.status(400).json({ error: 'Returned By is required' });
+    }
+    if (!receivedBy || !receivedBy.trim()) {
+      return res.status(400).json({ error: 'Received By is required' });
+    }
+
+    const whereClause: any = { employeeId, action: 'transfer_rsp', dateReturned: null };
+    if (logId) whereClause.id = logId;
+
+    const activeRsp = await (prisma as any).file201BorrowLog.findFirst({
+      where: whereClause,
+      orderBy: { dateBorrowed: 'desc' },
+    });
+
+    if (!activeRsp) {
+      return res.status(404).json({ error: 'No active RSP transfer record found for this employee' });
+    }
+
+    const updated = await (prisma as any).file201BorrowLog.update({
+      where: { id: activeRsp.id },
+      data: {
+        dateReturned: new Date(),
+        fileCondition: fileCondition || 'Complete',
+        remarks: remarks?.trim() || null,
+        returnedByName: returnedByName.trim(),
+        receivedBy: receivedBy.trim(),
+      },
+    });
+
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+    const currentStatus = employee?.file201Status || 'Available';
+    const remaining = currentStatus
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter((c: string) => c && c !== 'Transferred to RSP');
+    if (remaining.length === 0) remaining.push('Available');
+    const newFile201Status = remaining.join(', ');
+
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { file201Status: newFile201Status },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error recording return from RSP:', error);
+    res.status(500).json({ error: 'Failed to record return from RSP' });
+  }
+});
+
 // POST /api/file201/:employeeId/borrow — record a borrow
 router.post('/:employeeId/borrow', async (req: Request, res: Response) => {
   try {
@@ -109,10 +254,14 @@ router.post('/:employeeId/borrow', async (req: Request, res: Response) => {
       },
     });
 
-    // Update employee 201 status
+    // Update employee 201 status preserving Transferred to RSP
+    const currentStatus = employee.file201Status || 'Available';
+    const isTransferred = currentStatus.includes('Transferred to RSP');
+    const newStatus = isTransferred ? 'Borrowed, Transferred to RSP' : 'Borrowed';
+
     await prisma.employee.update({
       where: { id: employeeId },
-      data: { file201Status: 'Borrowed' },
+      data: { file201Status: newStatus },
     });
 
     res.status(201).json(log);
@@ -160,16 +309,20 @@ router.post('/:employeeId/return', async (req: Request, res: Response) => {
       },
     });
 
-    // Update employee 201 status based on file condition
+    // Update employee 201 status based on file condition preserving Transferred to RSP
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+    const currentStatus = employee?.file201Status || 'Available';
+    const isTransferred = currentStatus.includes('Transferred to RSP');
+
     const resolvedCondition = fileCondition || 'Complete';
-    let newFile201Status: string;
+    let baseStatus = 'Available';
     if (resolvedCondition === 'Damaged') {
-      newFile201Status = 'Damaged';
+      baseStatus = 'Damaged';
     } else if (resolvedCondition === 'Incomplete') {
-      newFile201Status = 'Incomplete';
-    } else {
-      newFile201Status = 'Available';
+      baseStatus = 'Incomplete';
     }
+
+    const newFile201Status = isTransferred ? `${baseStatus}, Transferred to RSP` : baseStatus;
 
     await prisma.employee.update({
       where: { id: employeeId },

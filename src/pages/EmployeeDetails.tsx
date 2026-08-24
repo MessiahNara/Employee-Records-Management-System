@@ -8,6 +8,8 @@ import PDFDocumentsModule from '../components/documents/PDFDocumentsModule';
 import EmployeeBarcode from '../components/EmployeeBarcode';
 import File201Modal from '../components/File201Modal';
 import File201HistoryModal from '../components/File201HistoryModal';
+import File201RspModal from '../components/File201RspModal';
+import File201RspHistoryModal from '../components/File201RspHistoryModal';
 import '../components/File201Modal.css';
 import '../components/File201HistoryModal.css';
 import { Employee } from '../types/employee';
@@ -28,7 +30,11 @@ function EmployeeDetails() {
   const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
   const [showChangePhotoConfirm, setShowChangePhotoConfirm] = useState(false);
   const [show201Modal, setShow201Modal] = useState(false);
+  const [showRspModal, setShowRspModal] = useState(false);
   const [show201History, setShow201History] = useState(false);
+  const [showRspHistory, setShowRspHistory] = useState(false);
+  const [hasActiveRsp, setHasActiveRsp] = useState(false);
+  const [hasActiveBorrow, setHasActiveBorrow] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const { showToast } = useToast();
@@ -80,6 +86,7 @@ function EmployeeDetails() {
   const userRole = currentUser?.role || 'viewer';
   const canEditEmployee = userRole === 'superadmin' || userRole === 'developer' || userRole === 'admin' ||
     ((userRole === 'staff') && !!currentUser?.permissions?.update);
+  const canManageRsp = userRole === 'superadmin' || userRole === 'developer';
 
   useEffect(() => {
     if (id) {
@@ -139,6 +146,19 @@ function EmployeeDetails() {
     }
   }, [employee, hasActionedRenewal]);
 
+  const fetchActive201Status = async (empId: string) => {
+    try {
+      const [rspActive, borrowActive] = await Promise.all([
+        api.file201.getActiveRsp(empId).catch(() => null),
+        api.file201.getActive(empId).catch(() => null),
+      ]);
+      setHasActiveRsp(!!rspActive);
+      setHasActiveBorrow(!!borrowActive);
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchEmployee = async (employeeId: string) => {
     try {
       setIsLoading(true);
@@ -146,6 +166,7 @@ function EmployeeDetails() {
       setEmployee(data);
       setProfilePicture(data.profilePicture);
       setNotFound(false);
+      fetchActive201Status(employeeId);
     } catch (error) {
       console.error('Error fetching employee:', error);
       setNotFound(true);
@@ -401,78 +422,114 @@ function EmployeeDetails() {
               {employee.firstName} {employee.middleName} {employee.lastName}
             </h1>
             <p className="employee-details__subtitle">{employee.positionFunction}</p>
-            <div className="employee-details__meta-fields">
-              <div className="employee-details__meta-field">
-                <span className="employee-details__meta-label">201 File Location:</span>
-                <span className="employee-details__meta-value">
-                  {employee.yellowBox ? (
-                    <button 
-                      onClick={() => navigate(`/file201?highlight=${employee.yellowBox!.id}`)}
-                      className="employee-details__location-link-btn"
-                      title="Click to view and highlight this box"
-                    >
-                      Box {employee.yellowBox.boxLabel} ({employee.yellowBox.office})
-                    </button>
-                  ) : (
-                    employee.fileboxLocation || <span className="employee-details__meta-empty">—</span>
-                  )}
-                </span>
-              </div>
-              <div className="employee-details__meta-field">
-                <span className="employee-details__meta-label">201 File Status:</span>
-                <div className="employee-details__status-badges">
-                  {(() => {
-                    const status = employee.file201Status || 'Available';
-                    // Multi-condition: e.g. "Incomplete,Damaged"
-                    const conditions = status.split(',').map((s: string) => s.trim()).filter(Boolean);
-                    const nonCompleteConditions = conditions.filter((c: string) => c !== 'Available' && c !== 'Borrowed' && c !== 'Complete');
+            {(() => {
+              const rawStatus = employee.file201Status || 'Available';
+              const conditions = rawStatus.split(',').map((s: string) => s.trim()).filter(Boolean);
+              const isTransferredToRsp = hasActiveRsp || conditions.some((c: string) => c.toLowerCase().includes('rsp'));
+              const isBorrowed = hasActiveBorrow || conditions.includes('Borrowed');
+              const nonCompleteConditions = conditions.filter((c: string) => c !== 'Available' && c !== 'Borrowed' && c !== 'Complete' && !c.toLowerCase().includes('rsp'));
 
-                    if (status === 'Borrowed') {
-                      return (
-                        <button
-                          className="employee-details__status-btn employee-details__status-btn--borrowed"
-                          onClick={() => setShow201History(true)}
-                          title="Click to view borrow history"
-                        >
-                          Borrowed
-                        </button>
-                      );
-                    }
+              return (
+                <>
+                  <div className="employee-details__meta-fields">
+                    <div className="employee-details__meta-field">
+                      <span className="employee-details__meta-label">201 File Location:</span>
+                      <span className="employee-details__meta-value">
+                        {employee.yellowBox ? (
+                          <button 
+                            onClick={() => navigate(`/file201?highlight=${employee.yellowBox!.id}`)}
+                            className="employee-details__location-link-btn"
+                            title="Click to view and highlight this box"
+                          >
+                            Box {employee.yellowBox.boxLabel} ({employee.yellowBox.office})
+                          </button>
+                        ) : (
+                          employee.fileboxLocation || <span className="employee-details__meta-empty">—</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="employee-details__meta-field">
+                      <span className="employee-details__meta-label">201 File Status:</span>
+                      <div className="employee-details__status-badges">
+                        {(() => {
+                          const badges: JSX.Element[] = [];
 
-                    if (nonCompleteConditions.length > 0) {
-                      return nonCompleteConditions.map((cond: string) => (
-                        <button
-                          key={cond}
-                          className={`employee-details__status-btn employee-details__status-btn--${cond.toLowerCase()}`}
-                          onClick={() => setShow201History(true)}
-                          title="Click to view borrow history"
-                        >
-                          {cond}
-                        </button>
-                      ));
-                    }
+                          if (isBorrowed) {
+                            badges.push(
+                              <button
+                                key="borrowed"
+                                className="employee-details__status-btn employee-details__status-btn--borrowed"
+                                onClick={() => setShow201History(true)}
+                                title="Click to view borrow history"
+                              >
+                                Borrowed
+                              </button>
+                            );
+                          } else if (nonCompleteConditions.length > 0) {
+                            nonCompleteConditions.forEach((cond) => {
+                              badges.push(
+                                <button
+                                  key={cond}
+                                  className={`employee-details__status-btn employee-details__status-btn--${cond.toLowerCase()}`}
+                                  onClick={() => setShow201History(true)}
+                                  title="Click to view history"
+                                >
+                                  {cond}
+                                </button>
+                              );
+                            });
+                          } else {
+                            badges.push(
+                              <button
+                                key="available"
+                                className="employee-details__status-btn employee-details__status-btn--available"
+                                onClick={() => setShow201History(true)}
+                                title="Click to view history"
+                              >
+                                Available
+                              </button>
+                            );
+                          }
 
-                    return (
+                          if (isTransferredToRsp) {
+                            badges.push(
+                              <button
+                                key="rsp"
+                                className="employee-details__status-btn employee-details__status-btn--rsp"
+                                onClick={() => setShow201History(true)}
+                                title="Click to view 201 File History"
+                              >
+                                Transferred to RSP
+                              </button>
+                            );
+                          }
+
+                          return badges;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="employee-details__actions-group">
+                    {canEditEmployee && (
                       <button
-                        className="employee-details__status-btn employee-details__status-btn--available"
-                        onClick={() => setShow201History(true)}
-                        title="Click to view borrow history"
+                        className="employee-details__borrow-btn"
+                        onClick={() => setShow201Modal(true)}
                       >
-                        Available
+                        {isBorrowed ? '📥 Return 201 File' : '📤 Borrow 201 File'}
                       </button>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-            {canEditEmployee && (
-              <button
-                className="employee-details__borrow-btn"
-                onClick={() => setShow201Modal(true)}
-              >
-                {employee.file201Status === 'Borrowed' ? '📥 Return 201 File' : '📤 Borrow 201 File'}
-              </button>
-            )}
+                    )}
+                    {canManageRsp && (
+                      <button
+                        className={`employee-details__rsp-btn ${isTransferredToRsp ? 'employee-details__rsp-btn--return' : ''}`}
+                        onClick={() => setShowRspModal(true)}
+                      >
+                        {isTransferredToRsp ? '📥 Returned back to Records' : '🔄 Transferred to RSP'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
         {/* Barcode on the right */}
@@ -1034,8 +1091,21 @@ function EmployeeDetails() {
         employeeName={`${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`}
         fileLocation={employee.fileboxLocation}
         currentStatus={employee.file201Status || 'Available'}
-        onStatusChanged={(newStatus) => {
-          setEmployee((prev) => prev ? { ...prev, file201Status: newStatus } : prev);
+        onStatusChanged={() => {
+          fetchEmployee(employee.id);
+        }}
+      />
+
+      {/* Transferred to RSP Modal */}
+      <File201RspModal
+        isOpen={showRspModal}
+        onClose={() => setShowRspModal(false)}
+        employeeId={employee.id}
+        employeeName={`${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`}
+        fileLocation={employee.fileboxLocation}
+        isTransferred={hasActiveRsp || (employee.file201Status || '').toLowerCase().includes('rsp')}
+        onStatusChanged={() => {
+          fetchEmployee(employee.id);
         }}
       />
 
@@ -1045,9 +1115,17 @@ function EmployeeDetails() {
         onClose={() => setShow201History(false)}
         employeeId={employee.id}
         employeeName={`${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`}
-        onStatusChanged={(newStatus) => {
-          setEmployee((prev) => prev ? { ...prev, file201Status: newStatus } : prev);
+        onStatusChanged={() => {
+          fetchEmployee(employee.id);
         }}
+      />
+
+      {/* Transferred to RSP History Modal */}
+      <File201RspHistoryModal
+        isOpen={showRspHistory}
+        onClose={() => setShowRspHistory(false)}
+        employeeId={employee.id}
+        employeeName={`${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`}
       />
     </div>
   );

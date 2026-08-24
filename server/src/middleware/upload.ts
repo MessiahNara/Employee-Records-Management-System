@@ -2,12 +2,12 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure uploads directory exists
-// In production (Electron), UPLOADS_DIR env var points to a writable userData path.
-// In dev mode, fall back to the source-relative path.
-const uploadsDir = process.env.UPLOADS_DIR
-  ? path.join(process.env.UPLOADS_DIR, 'profile-pictures')
-  : path.join(__dirname, '../../uploads/profile-pictures');
+const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+const DEFAULT_UPLOADS_BASE = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
+const baseUploadsDir = process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
+
+// Ensure base directories exist
+const uploadsDir = path.join(baseUploadsDir, 'profile-pictures');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -55,14 +55,11 @@ export const uploadProfilePicture = multer({
 
 // ── Document file upload ──────────────────────────────────────────────────────
 
-const documentsDir = process.env.UPLOADS_DIR
-  ? path.join(process.env.UPLOADS_DIR, 'documents')
-  : path.join(__dirname, '../../uploads/documents');
+const documentsDir = path.join(baseUploadsDir, 'documents');
 
 console.log('[upload] Document upload configuration:');
-console.log(`  - UPLOADS_DIR env: ${process.env.UPLOADS_DIR}`);
-console.log(`  - documentsDir resolved: ${documentsDir}`);
-console.log(`  - __dirname: ${__dirname}`);
+console.log(`  - baseUploadsDir: ${baseUploadsDir}`);
+console.log(`  - documentsDir: ${documentsDir}`);
 
 if (!fs.existsSync(documentsDir)) {
   fs.mkdirSync(documentsDir, { recursive: true });
@@ -122,9 +119,6 @@ export const uploadDocumentFile = multer({
 
 const inventoryStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    const baseUploadsDir = process.env.UPLOADS_DIR
-      ? process.env.UPLOADS_DIR
-      : path.join(__dirname, '../../uploads');
     const destDir = path.join(baseUploadsDir, 'inventory');
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });

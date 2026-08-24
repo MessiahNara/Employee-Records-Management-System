@@ -23,6 +23,7 @@ const ACTION_LABELS: Record<string, string> = {
   update_user: 'Update User',
   delete_user: 'Delete User',
   borrow_201: 'Borrow 201 File',
+  transfer_rsp: 'Transfer to RSP',
   view_document: 'View Document',
   print_document: 'Print Document',
   download_document: 'Download Document',
@@ -190,6 +191,8 @@ function Approvals() {
         return `Delete ${payload.count} Inventory Records`;
       case 'borrow_201':
         return `Borrow 201 of ${payload.employeeName}${payload.borrowerName ? ' — Borrowed By: ' + payload.borrowerName : ''}`;
+      case 'transfer_rsp':
+        return `Transfer 201 of ${payload.employeeName} to RSP${payload.receivedBy ? ' — Received By: ' + payload.receivedBy : ''}`;
       case 'view_document':
       case 'print_document':
       case 'download_document': {
@@ -344,6 +347,15 @@ function Approvals() {
           borrowerOffice: payload.borrowerOffice || undefined,
           purpose: payload.purpose || undefined,
           releasedBy: payload.releasedBy,
+        });
+        break;
+      case 'transfer_rsp':
+        await api.file201.transferRsp(payload.employeeId, {
+          receivedBy: payload.receivedBy,
+          releasedBy: payload.releasedBy,
+          receivedPosition: payload.receivedPosition || undefined,
+          receivedOffice: payload.receivedOffice || undefined,
+          purpose: payload.purpose || undefined,
         });
         break;
       case 'view_document':

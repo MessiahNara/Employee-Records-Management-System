@@ -167,7 +167,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static files from uploads directory
-const uploadsPath = process.env.UPLOADS_DIR || path.join(__dirname, '../uploads');
+const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+const DEFAULT_UPLOADS_BASE = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
+const uploadsPath = process.env.UPLOADS_DIR || (fs.existsSync(DEFAULT_UPLOADS_BASE) ? DEFAULT_UPLOADS_BASE : path.join(__dirname, '../uploads'));
 app.use('/uploads', express.static(uploadsPath, {
   setHeaders: (res, filePath) => {
     if (filePath.toLowerCase().endsWith('.pdf')) {
@@ -216,6 +218,25 @@ app.use('/api/inventory', inventoryRoutes);
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// Global Express error handler middleware
+app.use((err: any, req: Request, res: Response, next: any) => {
+  console.error('[server] Express error intercepted:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 400).json({
+    error: err.message || 'An error occurred while processing the request',
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[server] Uncaught Exception intercepted (prevented crash):', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[server] Unhandled Rejection intercepted at:', promise, 'reason:', reason);
 });
 
 // Serve frontend static files for network clients (production only)

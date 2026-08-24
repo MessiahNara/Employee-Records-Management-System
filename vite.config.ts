@@ -12,6 +12,17 @@ try {
 } catch (e) {
   console.error('Error copying template:', e);
 }
+
+try {
+  const rootTemplate = path.resolve(__dirname, 'NAP-FORM-3-Template.docx');
+  const pubTemplate = path.resolve(__dirname, 'public', 'NAP-FORM-3-Template.docx');
+  if (fs.existsSync(rootTemplate) && !fs.existsSync(pubTemplate)) {
+    fs.copyFileSync(rootTemplate, pubTemplate);
+    console.log('Copied NAP-FORM-3-Template.docx to public/');
+  }
+} catch (e) {
+  console.error('Error copying NAP-FORM-3 template:', e);
+}
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig(() => {

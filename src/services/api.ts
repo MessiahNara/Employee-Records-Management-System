@@ -952,6 +952,9 @@ export const file201Api = {
   getActive: (employeeId: string) =>
     apiRequest<any | null>(`/file201/${encodeURIComponent(employeeId)}/active`),
 
+  getActiveRsp: (employeeId: string) =>
+    apiRequest<any | null>(`/file201/${encodeURIComponent(employeeId)}/active-rsp`),
+
   borrow: (employeeId: string, data: {
     borrowerName: string;
     borrowerPosition?: string;
@@ -961,6 +964,32 @@ export const file201Api = {
     releasedBy?: string;
   }) =>
     apiRequest<any>(`/file201/${encodeURIComponent(employeeId)}/borrow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+
+  transferRsp: (employeeId: string, data: {
+    receivedBy: string;
+    releasedBy: string;
+    receivedPosition?: string;
+    receivedOffice?: string;
+    purpose?: string;
+  }) =>
+    apiRequest<any>(`/file201/${encodeURIComponent(employeeId)}/transfer-rsp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+
+  returnRsp: (employeeId: string, data: {
+    logId?: string;
+    returnedByName: string;
+    receivedBy: string;
+    fileCondition?: string;
+    remarks?: string;
+  }) =>
+    apiRequest<any>(`/file201/${encodeURIComponent(employeeId)}/return-rsp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

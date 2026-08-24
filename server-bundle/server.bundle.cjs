@@ -57276,7 +57276,10 @@ var prisma_default = prisma;
 var import_multer = __toESM(require_multer());
 var import_path = __toESM(require("path"));
 var import_fs = __toESM(require("fs"));
-var uploadsDir = process.env.UPLOADS_DIR ? import_path.default.join(process.env.UPLOADS_DIR, "profile-pictures") : import_path.default.join(__dirname, "../../uploads/profile-pictures");
+var PROGRAM_DATA = process.env.PROGRAMDATA || "C:\\ProgramData";
+var DEFAULT_UPLOADS_BASE = import_path.default.join(PROGRAM_DATA, "ERMS", "uploads");
+var baseUploadsDir = process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
+var uploadsDir = import_path.default.join(baseUploadsDir, "profile-pictures");
 if (!import_fs.default.existsSync(uploadsDir)) {
   import_fs.default.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -57312,11 +57315,10 @@ var uploadProfilePicture = (0, import_multer.default)({
   storage,
   fileFilter
 });
-var documentsDir = process.env.UPLOADS_DIR ? import_path.default.join(process.env.UPLOADS_DIR, "documents") : import_path.default.join(__dirname, "../../uploads/documents");
+var documentsDir = import_path.default.join(baseUploadsDir, "documents");
 console.log("[upload] Document upload configuration:");
-console.log(`  - UPLOADS_DIR env: ${process.env.UPLOADS_DIR}`);
-console.log(`  - documentsDir resolved: ${documentsDir}`);
-console.log(`  - __dirname: ${__dirname}`);
+console.log(`  - baseUploadsDir: ${baseUploadsDir}`);
+console.log(`  - documentsDir: ${documentsDir}`);
 if (!import_fs.default.existsSync(documentsDir)) {
   import_fs.default.mkdirSync(documentsDir, { recursive: true });
   console.log(`[upload] Created documentsDir at: ${documentsDir}`);
@@ -57358,7 +57360,6 @@ var uploadDocumentFile = (0, import_multer.default)({
 });
 var inventoryStorage = import_multer.default.diskStorage({
   destination: (_req, _file, cb) => {
-    const baseUploadsDir = process.env.UPLOADS_DIR ? process.env.UPLOADS_DIR : import_path.default.join(__dirname, "../../uploads");
     const destDir = import_path.default.join(baseUploadsDir, "inventory");
     if (!import_fs.default.existsSync(destDir)) {
       import_fs.default.mkdirSync(destDir, { recursive: true });
@@ -59548,37 +59549,108 @@ var import_path4 = __toESM(require("path"));
 var import_child_process = require("child_process");
 var import_util = __toESM(require("util"));
 var router3 = (0, import_express3.Router)();
-var execPromise = import_util.default.promisify(import_child_process.exec);
+var execFilePromise = import_util.default.promisify(import_child_process.execFile);
+function findGhostscriptExecutable() {
+  if (process.env.GHOSTSCRIPT_PATH && import_fs4.default.existsSync(process.env.GHOSTSCRIPT_PATH)) {
+    return process.env.GHOSTSCRIPT_PATH;
+  }
+  const bases = ["C:\\Program Files\\gs", "C:\\Program Files (x86)\\gs"];
+  for (const base of bases) {
+    if (import_fs4.default.existsSync(base)) {
+      try {
+        const dirs = import_fs4.default.readdirSync(base).sort().reverse();
+        for (const dir of dirs) {
+          const bin64 = import_path4.default.join(base, dir, "bin", "gswin64c.exe");
+          if (import_fs4.default.existsSync(bin64)) return bin64;
+          const bin32 = import_path4.default.join(base, dir, "bin", "gswin32c.exe");
+          if (import_fs4.default.existsSync(bin32)) return bin32;
+        }
+      } catch (_) {
+      }
+    }
+  }
+  const commonLocations = [
+    "C:\\Program Files\\gs\\gs10.03.0\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs10.02.1\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs10.02.0\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs10.01.2\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs10.01.1\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs10.00.0\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs9.56.1\\bin\\gswin64c.exe",
+    "C:\\Program Files\\gs\\gs9.55.0\\bin\\gswin64c.exe"
+  ];
+  for (const loc of commonLocations) {
+    if (import_fs4.default.existsSync(loc)) return loc;
+  }
+  return "gswin64c.exe";
+}
 async function compressPDF(inputPath, level = "recommended") {
   if (!inputPath.toLowerCase().endsWith(".pdf")) return null;
-  const outputPath = inputPath.replace(/\.pdf$/i, "_compressed.pdf");
-  let gsFlags = "-dPDFSETTINGS=/ebook";
+  const outputPath = inputPath.replace(/\.pdf$/i, `_compressed_${Date.now()}.pdf`);
+  const gsPath = findGhostscriptExecutable();
+  let args = [
+    "-sDEVICE=pdfwrite",
+    "-dCompatibilityLevel=1.4",
+    "-dNOPAUSE",
+    "-dQUIET",
+    "-dBATCH"
+  ];
   if (level === "extreme") {
-    gsFlags = "-dPDFSETTINGS=/screen";
+    args.push(
+      "-dPDFSETTINGS=/screen",
+      "-dColorImageDownsampleThreshold=1.0",
+      "-dColorImageResolution=72",
+      "-dGrayImageDownsampleThreshold=1.0",
+      "-dGrayImageResolution=72",
+      "-dMonoImageDownsampleThreshold=1.0",
+      "-dMonoImageResolution=150"
+    );
   } else if (level === "less") {
-    gsFlags = "-dPDFSETTINGS=/printer";
-  } else if (level === "recommended") {
-    gsFlags = "-dPDFSETTINGS=/ebook -dColorImageDownsampleThreshold=1.0 -dColorImageResolution=144 -dGrayImageDownsampleThreshold=1.0 -dGrayImageResolution=144";
+    args.push(
+      "-dPDFSETTINGS=/printer",
+      "-dColorImageDownsampleThreshold=1.0",
+      "-dColorImageResolution=200",
+      "-dGrayImageDownsampleThreshold=1.0",
+      "-dGrayImageResolution=200",
+      "-dMonoImageDownsampleThreshold=1.0",
+      "-dMonoImageResolution=300"
+    );
+  } else {
+    args.push(
+      "-dPDFSETTINGS=/ebook",
+      "-dColorImageDownsampleThreshold=1.0",
+      "-dColorImageResolution=120",
+      "-dGrayImageDownsampleThreshold=1.0",
+      "-dGrayImageResolution=120",
+      "-dMonoImageDownsampleThreshold=1.0",
+      "-dMonoImageResolution=200"
+    );
   }
+  args.push(`-sOutputFile=${outputPath}`, inputPath);
   try {
-    const command = `gswin64c.exe -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 ${gsFlags} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
-    await execPromise(command);
+    console.log(`[Ghostscript] Executing: "${gsPath}" with level ${level}`);
+    await execFilePromise(gsPath, args);
     if (import_fs4.default.existsSync(outputPath)) {
       const inputStats = import_fs4.default.statSync(inputPath);
       const outputStats = import_fs4.default.statSync(outputPath);
+      console.log(`[Ghostscript] Input size: ${inputStats.size} bytes | Output size: ${outputStats.size} bytes`);
       if (outputStats.size < inputStats.size && outputStats.size > 0) {
         return outputPath;
       } else {
-        import_fs4.default.unlinkSync(outputPath);
+        console.log("[Ghostscript] Compression did not reduce file size. Retaining original.");
+        try {
+          import_fs4.default.unlinkSync(outputPath);
+        } catch (_) {
+        }
         return null;
       }
     }
   } catch (err) {
-    console.error("[Ghostscript] Error compressing PDF:", err);
+    console.error("[Ghostscript] Error compressing PDF:", err?.message || err);
     if (import_fs4.default.existsSync(outputPath)) {
       try {
         import_fs4.default.unlinkSync(outputPath);
-      } catch (e) {
+      } catch (_) {
       }
     }
   }
@@ -59618,13 +59690,7 @@ router3.get("/", async (req, res) => {
     const documents = await prisma_default.document.findMany({
       where,
       include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        }
+        employee: true
       },
       orderBy: {
         createdAt: "desc"
@@ -59688,17 +59754,38 @@ router3.get("/:id/file", async (req, res) => {
       res.setHeader("Content-Length", buffer.length);
       return res.end(buffer);
     }
-    if (!import_fs4.default.existsSync(document2.filePath)) {
+    let resolvedPath = document2.filePath;
+    if (!import_fs4.default.existsSync(resolvedPath)) {
+      const PROGRAM_DATA3 = process.env.PROGRAMDATA || "C:\\ProgramData";
+      const defaultDocsBase = import_path4.default.join(PROGRAM_DATA3, "ERMS", "uploads", "documents");
+      const relIdx = document2.filePath.indexOf("documents");
+      if (relIdx !== -1) {
+        const subPath = document2.filePath.substring(relIdx + 9);
+        const candidate = import_path4.default.join(defaultDocsBase, subPath);
+        if (import_fs4.default.existsSync(candidate)) {
+          resolvedPath = candidate;
+        }
+      }
+    }
+    if (!import_fs4.default.existsSync(resolvedPath)) {
       return res.status(404).json({ error: "File not found on disk" });
     }
     res.setHeader("Content-Type", mimeType);
-    import_fs4.default.createReadStream(document2.filePath).pipe(res);
+    import_fs4.default.createReadStream(resolvedPath).pipe(res);
   } catch (error) {
     console.error("Error serving document file:", error);
     res.status(500).json({ error: "Failed to serve file" });
   }
 });
-router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
+router3.post("/", (req, res, next) => {
+  uploadDocumentFile.single("file")(req, res, (err) => {
+    if (err) {
+      console.error("[document] Multer upload error:", err);
+      return res.status(400).json({ error: err.message || "Corrupted file or invalid upload format" });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     const {
       employeeId,
@@ -59735,12 +59822,53 @@ router3.post("/", uploadDocumentFile.single("file"), async (req, res) => {
       size: uploadedFile?.size
     });
     if (!employeeId || !category || !fileName || !uploadedFile) {
-      if (uploadedFile) import_fs4.default.unlinkSync(uploadedFile.path);
+      if (uploadedFile?.path && import_fs4.default.existsSync(uploadedFile.path)) {
+        try {
+          import_fs4.default.unlinkSync(uploadedFile.path);
+        } catch (_) {
+        }
+      }
       return res.status(400).json({ error: "Missing required fields or file" });
+    }
+    if (uploadedFile.size === 0) {
+      if (uploadedFile.path && import_fs4.default.existsSync(uploadedFile.path)) {
+        try {
+          import_fs4.default.unlinkSync(uploadedFile.path);
+        } catch (_) {
+        }
+      }
+      return res.status(400).json({ error: `File "${fileName}" is empty or corrupted (0 bytes).` });
+    }
+    try {
+      const fd = import_fs4.default.openSync(uploadedFile.path, "r");
+      const buffer = Buffer.alloc(5);
+      import_fs4.default.readSync(fd, buffer, 0, 5, 0);
+      import_fs4.default.closeSync(fd);
+      const header = buffer.toString("ascii");
+      if (!header.startsWith("%PDF")) {
+        try {
+          import_fs4.default.unlinkSync(uploadedFile.path);
+        } catch (_) {
+        }
+        return res.status(400).json({ error: `File "${fileName}" is not a valid PDF or is corrupted.` });
+      }
+    } catch (headerErr) {
+      if (uploadedFile.path && import_fs4.default.existsSync(uploadedFile.path)) {
+        try {
+          import_fs4.default.unlinkSync(uploadedFile.path);
+        } catch (_) {
+        }
+      }
+      return res.status(400).json({ error: `File "${fileName}" cannot be read and is corrupted.` });
     }
     const employee = await prisma_default.employee.findUnique({ where: { id: employeeId } });
     if (!employee) {
-      import_fs4.default.unlinkSync(uploadedFile.path);
+      if (uploadedFile.path && import_fs4.default.existsSync(uploadedFile.path)) {
+        try {
+          import_fs4.default.unlinkSync(uploadedFile.path);
+        } catch (_) {
+        }
+      }
       return res.status(404).json({ error: "Employee not found" });
     }
     let finalFileName = fileName;
@@ -60738,6 +60866,11 @@ var router6 = (0, import_express6.Router)();
 router6.get("/logs/all", async (req, res) => {
   try {
     const logs = await prisma_default.file201BorrowLog.findMany({
+      where: {
+        action: {
+          not: "transfer_rsp"
+        }
+      },
       include: {
         employee: {
           select: {
@@ -60791,6 +60924,121 @@ router6.get("/:employeeId/active", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch active borrow record" });
   }
 });
+router6.get("/:employeeId/active-rsp", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const active = await prisma_default.file201BorrowLog.findFirst({
+      where: { employeeId, action: "transfer_rsp", dateReturned: null },
+      orderBy: { dateBorrowed: "desc" }
+    });
+    res.json(active || null);
+  } catch (error) {
+    console.error("Error fetching active RSP record:", error);
+    res.status(500).json({ error: "Failed to fetch active RSP record" });
+  }
+});
+router6.post("/:employeeId/transfer-rsp", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const {
+      receivedBy,
+      releasedBy,
+      receivedPosition,
+      receivedOffice,
+      purpose
+    } = req.body;
+    if (!receivedBy || !receivedBy.trim()) {
+      return res.status(400).json({ error: "Received By is required" });
+    }
+    if (!releasedBy || !releasedBy.trim()) {
+      return res.status(400).json({ error: "Released By is required" });
+    }
+    const employee = await prisma_default.employee.findUnique({ where: { id: employeeId } });
+    if (!employee) return res.status(404).json({ error: "Employee not found" });
+    const alreadyTransferred = await prisma_default.file201BorrowLog.findFirst({
+      where: { employeeId, action: "transfer_rsp", dateReturned: null }
+    });
+    if (alreadyTransferred) {
+      return res.status(409).json({ error: "This 201 file is already transferred to RSP" });
+    }
+    const log = await prisma_default.file201BorrowLog.create({
+      data: {
+        employeeId,
+        action: "transfer_rsp",
+        borrowerName: receivedBy.trim(),
+        borrowerPosition: receivedPosition || null,
+        borrowerOffice: receivedOffice || null,
+        purpose: purpose?.trim() || null,
+        releasedBy: releasedBy.trim(),
+        dateBorrowed: /* @__PURE__ */ new Date()
+      }
+    });
+    const currentStatus = employee.file201Status || "Available";
+    const conditions = currentStatus.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!conditions.includes("Transferred to RSP")) {
+      conditions.push("Transferred to RSP");
+    }
+    const newStatus = conditions.join(", ");
+    await prisma_default.employee.update({
+      where: { id: employeeId },
+      data: { file201Status: newStatus }
+    });
+    res.status(201).json(log);
+  } catch (error) {
+    console.error("Error recording RSP transfer:", error);
+    res.status(500).json({ error: "Failed to record transfer to RSP" });
+  }
+});
+router6.post("/:employeeId/return-rsp", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const {
+      logId,
+      returnedByName,
+      receivedBy,
+      fileCondition,
+      remarks
+    } = req.body;
+    if (!returnedByName || !returnedByName.trim()) {
+      return res.status(400).json({ error: "Returned By is required" });
+    }
+    if (!receivedBy || !receivedBy.trim()) {
+      return res.status(400).json({ error: "Received By is required" });
+    }
+    const whereClause = { employeeId, action: "transfer_rsp", dateReturned: null };
+    if (logId) whereClause.id = logId;
+    const activeRsp = await prisma_default.file201BorrowLog.findFirst({
+      where: whereClause,
+      orderBy: { dateBorrowed: "desc" }
+    });
+    if (!activeRsp) {
+      return res.status(404).json({ error: "No active RSP transfer record found for this employee" });
+    }
+    const updated = await prisma_default.file201BorrowLog.update({
+      where: { id: activeRsp.id },
+      data: {
+        dateReturned: /* @__PURE__ */ new Date(),
+        fileCondition: fileCondition || "Complete",
+        remarks: remarks?.trim() || null,
+        returnedByName: returnedByName.trim(),
+        receivedBy: receivedBy.trim()
+      }
+    });
+    const employee = await prisma_default.employee.findUnique({ where: { id: employeeId } });
+    const currentStatus = employee?.file201Status || "Available";
+    const remaining = currentStatus.split(",").map((s) => s.trim()).filter((c) => c && c !== "Transferred to RSP");
+    if (remaining.length === 0) remaining.push("Available");
+    const newFile201Status = remaining.join(", ");
+    await prisma_default.employee.update({
+      where: { id: employeeId },
+      data: { file201Status: newFile201Status }
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error recording return from RSP:", error);
+    res.status(500).json({ error: "Failed to record return from RSP" });
+  }
+});
 router6.post("/:employeeId/borrow", async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -60826,9 +61074,12 @@ router6.post("/:employeeId/borrow", async (req, res) => {
         dateBorrowed: /* @__PURE__ */ new Date()
       }
     });
+    const currentStatus = employee.file201Status || "Available";
+    const isTransferred = currentStatus.includes("Transferred to RSP");
+    const newStatus = isTransferred ? "Borrowed, Transferred to RSP" : "Borrowed";
     await prisma_default.employee.update({
       where: { id: employeeId },
-      data: { file201Status: "Borrowed" }
+      data: { file201Status: newStatus }
     });
     res.status(201).json(log);
   } catch (error) {
@@ -60866,15 +61117,17 @@ router6.post("/:employeeId/return", async (req, res) => {
         receivedBy: receivedBy || null
       }
     });
+    const employee = await prisma_default.employee.findUnique({ where: { id: employeeId } });
+    const currentStatus = employee?.file201Status || "Available";
+    const isTransferred = currentStatus.includes("Transferred to RSP");
     const resolvedCondition = fileCondition || "Complete";
-    let newFile201Status;
+    let baseStatus = "Available";
     if (resolvedCondition === "Damaged") {
-      newFile201Status = "Damaged";
+      baseStatus = "Damaged";
     } else if (resolvedCondition === "Incomplete") {
-      newFile201Status = "Incomplete";
-    } else {
-      newFile201Status = "Available";
+      baseStatus = "Incomplete";
     }
+    const newFile201Status = isTransferred ? `${baseStatus}, Transferred to RSP` : baseStatus;
     await prisma_default.employee.update({
       where: { id: employeeId },
       data: { file201Status: newFile201Status }
@@ -63536,7 +63789,9 @@ app.get("/api/dump-template", async (req, res) => {
 app.use((0, import_cors.default)());
 app.use(import_express12.default.json({ limit: "50mb" }));
 app.use(import_express12.default.urlencoded({ extended: true, limit: "50mb" }));
-var uploadsPath = process.env.UPLOADS_DIR || import_path8.default.join(__dirname, "../uploads");
+var PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+var DEFAULT_UPLOADS_BASE2 = import_path8.default.join(PROGRAM_DATA2, "ERMS", "uploads");
+var uploadsPath = process.env.UPLOADS_DIR || (import_fs8.default.existsSync(DEFAULT_UPLOADS_BASE2) ? DEFAULT_UPLOADS_BASE2 : import_path8.default.join(__dirname, "../uploads"));
 app.use("/uploads", import_express12.default.static(uploadsPath, {
   setHeaders: (res, filePath) => {
     if (filePath.toLowerCase().endsWith(".pdf")) {
@@ -63577,6 +63832,21 @@ app.use("/api/yellow-boxes", yellowBox_routes_default);
 app.use("/api/inventory", inventory_routes_default);
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
+});
+app.use((err, req, res, next) => {
+  console.error("[server] Express error intercepted:", err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 400).json({
+    error: err.message || "An error occurred while processing the request"
+  });
+});
+process.on("uncaughtException", (err) => {
+  console.error("[server] Uncaught Exception intercepted (prevented crash):", err);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[server] Unhandled Rejection intercepted at:", promise, "reason:", reason);
 });
 var frontendDist = process.env.FRONTEND_DIST;
 if (frontendDist && import_fs8.default.existsSync(frontendDist)) {

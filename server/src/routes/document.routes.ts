@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { createAuditLog, getEmployeeName } from '../utils/auditHelper';
 import { checkAndAddDropdownOptions } from '../utils/dropdownOptionsHelper';
@@ -6,48 +6,121 @@ import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { uploadDocumentFile } from '../middleware/upload';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 
 const router = Router();
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
+
+function findGhostscriptExecutable(): string {
+  if (process.env.GHOSTSCRIPT_PATH && fs.existsSync(process.env.GHOSTSCRIPT_PATH)) {
+    return process.env.GHOSTSCRIPT_PATH;
+  }
+
+  const bases = ['C:\\Program Files\\gs', 'C:\\Program Files (x86)\\gs'];
+  for (const base of bases) {
+    if (fs.existsSync(base)) {
+      try {
+        const dirs = fs.readdirSync(base).sort().reverse();
+        for (const dir of dirs) {
+          const bin64 = path.join(base, dir, 'bin', 'gswin64c.exe');
+          if (fs.existsSync(bin64)) return bin64;
+          const bin32 = path.join(base, dir, 'bin', 'gswin32c.exe');
+          if (fs.existsSync(bin32)) return bin32;
+        }
+      } catch (_) {}
+    }
+  }
+
+  const commonLocations = [
+    'C:\\Program Files\\gs\\gs10.03.0\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs10.02.1\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs10.02.0\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs10.01.2\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs10.01.1\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs10.00.0\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs9.56.1\\bin\\gswin64c.exe',
+    'C:\\Program Files\\gs\\gs9.55.0\\bin\\gswin64c.exe',
+  ];
+
+  for (const loc of commonLocations) {
+    if (fs.existsSync(loc)) return loc;
+  }
+
+  return 'gswin64c.exe';
+}
 
 async function compressPDF(inputPath: string, level: string = 'recommended'): Promise<string | null> {
   if (!inputPath.toLowerCase().endsWith('.pdf')) return null;
   
-  const outputPath = inputPath.replace(/\.pdf$/i, '_compressed.pdf');
+  const outputPath = inputPath.replace(/\.pdf$/i, `_compressed_${Date.now()}.pdf`);
+  const gsPath = findGhostscriptExecutable();
   
-  // Map our UI levels to Ghostscript settings
-  let gsFlags = '-dPDFSETTINGS=/ebook'; // recommended default
-  
+  let args: string[] = [
+    '-sDEVICE=pdfwrite',
+    '-dCompatibilityLevel=1.4',
+    '-dNOPAUSE',
+    '-dQUIET',
+    '-dBATCH',
+  ];
+
   if (level === 'extreme') {
-    gsFlags = '-dPDFSETTINGS=/screen';
+    args.push(
+      '-dPDFSETTINGS=/screen',
+      '-dColorImageDownsampleThreshold=1.0',
+      '-dColorImageResolution=72',
+      '-dGrayImageDownsampleThreshold=1.0',
+      '-dGrayImageResolution=72',
+      '-dMonoImageDownsampleThreshold=1.0',
+      '-dMonoImageResolution=150'
+    );
   } else if (level === 'less') {
-    gsFlags = '-dPDFSETTINGS=/printer';
-  } else if (level === 'recommended') {
-    // ilovepdf-style balance: forces downsampling on anything above 144 DPI (instead of default 1.5x threshold)
-    gsFlags = '-dPDFSETTINGS=/ebook -dColorImageDownsampleThreshold=1.0 -dColorImageResolution=144 -dGrayImageDownsampleThreshold=1.0 -dGrayImageResolution=144';
+    args.push(
+      '-dPDFSETTINGS=/printer',
+      '-dColorImageDownsampleThreshold=1.0',
+      '-dColorImageResolution=200',
+      '-dGrayImageDownsampleThreshold=1.0',
+      '-dGrayImageResolution=200',
+      '-dMonoImageDownsampleThreshold=1.0',
+      '-dMonoImageResolution=300'
+    );
+  } else {
+    // recommended default
+    args.push(
+      '-dPDFSETTINGS=/ebook',
+      '-dColorImageDownsampleThreshold=1.0',
+      '-dColorImageResolution=120',
+      '-dGrayImageDownsampleThreshold=1.0',
+      '-dGrayImageResolution=120',
+      '-dMonoImageDownsampleThreshold=1.0',
+      '-dMonoImageResolution=200'
+    );
   }
+
+  args.push(`-sOutputFile=${outputPath}`, inputPath);
   
   try {
-    const command = `gswin64c.exe -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 ${gsFlags} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
-    await execPromise(command);
+    console.log(`[Ghostscript] Executing: "${gsPath}" with level ${level}`);
+    await execFilePromise(gsPath, args);
     
     if (fs.existsSync(outputPath)) {
       const inputStats = fs.statSync(inputPath);
       const outputStats = fs.statSync(outputPath);
       
+      console.log(`[Ghostscript] Input size: ${inputStats.size} bytes | Output size: ${outputStats.size} bytes`);
+      
       if (outputStats.size < inputStats.size && outputStats.size > 0) {
         return outputPath;
       } else {
-        fs.unlinkSync(outputPath);
+        console.log('[Ghostscript] Compression did not reduce file size. Retaining original.');
+        try { fs.unlinkSync(outputPath); } catch (_) {}
         return null;
       }
     }
-  } catch (err) {
-    console.error('[Ghostscript] Error compressing PDF:', err);
+  } catch (err: any) {
+    console.error('[Ghostscript] Error compressing PDF:', err?.message || err);
     if (fs.existsSync(outputPath)) {
-      try { fs.unlinkSync(outputPath); } catch (e) {}
+      try { fs.unlinkSync(outputPath); } catch (_) {}
     }
   }
   return null;
@@ -98,13 +171,7 @@ router.get('/', async (req: Request, res: Response) => {
     const documents = await prisma.document.findMany({
       where,
       include: {
-        employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
+        employee: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -186,12 +253,27 @@ router.get('/:id/file', async (req: Request, res: Response) => {
     }
 
     // New: filePath is an absolute path on disk
-    if (!fs.existsSync(document.filePath)) {
+    let resolvedPath = document.filePath;
+    if (!fs.existsSync(resolvedPath)) {
+      const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+      const defaultDocsBase = path.join(PROGRAM_DATA, 'ERMS', 'uploads', 'documents');
+      
+      const relIdx = document.filePath.indexOf('documents');
+      if (relIdx !== -1) {
+        const subPath = document.filePath.substring(relIdx + 9);
+        const candidate = path.join(defaultDocsBase, subPath);
+        if (fs.existsSync(candidate)) {
+          resolvedPath = candidate;
+        }
+      }
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
       return res.status(404).json({ error: 'File not found on disk' });
     }
 
     res.setHeader('Content-Type', mimeType);
-    fs.createReadStream(document.filePath).pipe(res);
+    fs.createReadStream(resolvedPath).pipe(res);
   } catch (error) {
     console.error('Error serving document file:', error);
     res.status(500).json({ error: 'Failed to serve file' });
@@ -199,7 +281,15 @@ router.get('/:id/file', async (req: Request, res: Response) => {
 });
 
 // Create document (multipart/form-data with actual file)
-router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Response) => {
+router.post('/', (req: Request, res: Response, next: NextFunction) => {
+  uploadDocumentFile.single('file')(req, res, (err: any) => {
+    if (err) {
+      console.error('[document] Multer upload error:', err);
+      return res.status(400).json({ error: err.message || 'Corrupted file or invalid upload format' });
+    }
+    next();
+  });
+}, async (req: Request, res: Response) => {
   try {
     const {
       employeeId,
@@ -238,14 +328,43 @@ router.post('/', uploadDocumentFile.single('file'), async (req: Request, res: Re
     });
 
     if (!employeeId || !category || !fileName || !uploadedFile) {
-      // Clean up file if validation fails
-      if (uploadedFile) fs.unlinkSync(uploadedFile.path);
+      if (uploadedFile?.path && fs.existsSync(uploadedFile.path)) {
+        try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
+      }
       return res.status(400).json({ error: 'Missing required fields or file' });
+    }
+
+    // Verify file is not empty
+    if (uploadedFile.size === 0) {
+      if (uploadedFile.path && fs.existsSync(uploadedFile.path)) {
+        try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
+      }
+      return res.status(400).json({ error: `File "${fileName}" is empty or corrupted (0 bytes).` });
+    }
+
+    // Verify PDF magic header '%PDF'
+    try {
+      const fd = fs.openSync(uploadedFile.path, 'r');
+      const buffer = Buffer.alloc(5);
+      fs.readSync(fd, buffer, 0, 5, 0);
+      fs.closeSync(fd);
+      const header = buffer.toString('ascii');
+      if (!header.startsWith('%PDF')) {
+        try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
+        return res.status(400).json({ error: `File "${fileName}" is not a valid PDF or is corrupted.` });
+      }
+    } catch (headerErr: any) {
+      if (uploadedFile.path && fs.existsSync(uploadedFile.path)) {
+        try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
+      }
+      return res.status(400).json({ error: `File "${fileName}" cannot be read and is corrupted.` });
     }
 
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
     if (!employee) {
-      fs.unlinkSync(uploadedFile.path);
+      if (uploadedFile.path && fs.existsSync(uploadedFile.path)) {
+        try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
+      }
       return res.status(404).json({ error: 'Employee not found' });
     }
 

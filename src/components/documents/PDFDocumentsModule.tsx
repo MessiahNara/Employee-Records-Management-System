@@ -31,6 +31,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   const [isFolderUploading, setIsFolderUploading] = useState(false);
   const [folderUploadProgress, setFolderUploadProgress] = useState<string | null>(null);
   const [folderUploadConfirm, setFolderUploadConfirm] = useState<{ files: File[] } | null>(null);
+  const [folderUploadErrors, setFolderUploadErrors] = useState<{ name: string; error: string }[]>([]);
   const [folderCompressionLevel, setFolderCompressionLevel] = useState<'extreme' | 'recommended' | 'less'>('recommended');
   const [duplicateConfirm, setDuplicateConfirm] = useState<{
     fileName: string;
@@ -242,9 +243,11 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
     setFolderUploadConfirm(null);
     
     setIsFolderUploading(true);
+    setFolderUploadErrors([]);
     let successCount = 0;
     let failCount = 0;
     let canceledCount = 0;
+    const failedFiles: { name: string; error: string }[] = [];
 
     // Define category mappings matching folder names
     const getCategoryFromPath = (pathString: string): DocumentCategory => {
@@ -320,11 +323,15 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
             }
           });
           successCount++;
-        } catch (uploadError) {
+        } catch (uploadError: any) {
+          const errorMsg = uploadError?.response?.data?.error || uploadError?.message || uploadError?.error || 'Upload failed';
           console.error(`Failed to upload ${file.name}:`, uploadError);
+          failedFiles.push({ name: file.name, error: errorMsg });
           failCount++;
         }
       }
+
+      setFolderUploadErrors(failedFiles);
 
       // We skipped refresh during the loop, now refresh once globally
       refreshDocuments();
@@ -335,16 +342,18 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
 
       let summaryMessage = `Uploaded ${successCount} document(s).`;
       if (canceledCount > 0) {
-        summaryMessage += ` Canceled ${canceledCount} duplicate(s).`;
+        summaryMessage += ` Skipped ${canceledCount} duplicate(s).`;
       }
       if (failCount > 0) {
-        summaryMessage += ` Failed ${failCount} document(s).`;
+        const errorPreview = failedFiles.slice(0, 3).map(f => `"${f.name}" (${f.error})`).join(', ');
+        const extra = failedFiles.length > 3 ? ` and ${failedFiles.length - 3} more` : '';
+        summaryMessage += ` Failed (${failCount}): ${errorPreview}${extra}`;
       }
 
       if (failCount === 0) {
         showToast(summaryMessage, 'success');
       } else {
-        showToast(summaryMessage, 'warning');
+        showToast(summaryMessage, 'error');
       }
     } catch (err: any) {
       console.error('Folder upload error:', err);
@@ -445,6 +454,36 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
             </div>
           )}
         </div>
+
+        {folderUploadErrors.length > 0 && (
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid var(--color-danger, #ef4444)',
+            borderRadius: '8px',
+            padding: '0.85rem 1rem',
+            marginBottom: '1rem',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <span style={{ fontWeight: 700, color: 'var(--color-danger, #ef4444)', fontSize: '0.9rem' }}>
+                ⚠️ {folderUploadErrors.length} file(s) failed during folder upload:
+              </span>
+              <button
+                onClick={() => setFolderUploadErrors([])}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem' }}
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+              {folderUploadErrors.map((item, idx) => (
+                <li key={idx} style={{ marginBottom: '3px' }}>
+                  <strong>{item.name}</strong>: <span style={{ color: 'var(--color-danger, #dc2626)' }}>{item.error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {error && (
           <div className="pdf-documents-module__error">

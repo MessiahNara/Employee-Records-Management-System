@@ -13,12 +13,10 @@
   ; Small delay to let sc.exe finish
   Sleep 2000
 
-  ; Install service via NSSM
-  nsExec::ExecToLog '"$INSTDIR\resources\service\nssm.exe" install ERMSBackendServer "$INSTDIR\resources\service\nssm.exe"'
+  ; Install service via NSSM with node.exe
+  nsExec::ExecToLog '"$INSTDIR\resources\service\nssm.exe" install ERMSBackendServer node.exe'
   Pop $0
-
-  ; Use node.exe to run the runner script
-  nsExec::ExecToLog 'cmd.exe /C ""$INSTDIR\resources\service\nssm.exe" install ERMSBackendServer node.exe"'
+  nsExec::ExecToLog '"$INSTDIR\resources\service\nssm.exe" set ERMSBackendServer Application node.exe'
   Pop $0
   nsExec::ExecToLog '"$INSTDIR\resources\service\nssm.exe" set ERMSBackendServer AppParameters "\"$INSTDIR\resources\service\service-runner.cjs\""'
   Pop $0

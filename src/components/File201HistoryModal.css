@@ -24,6 +24,11 @@
   background-color: rgba(245, 158, 11, 0.05);
 }
 
+.file201-history__item--rsp {
+  border-left-color: #8b5cf6;
+  background-color: rgba(139, 92, 246, 0.05);
+}
+
 .file201-history__item--returned {
   border-left-color: var(--color-success, #10b981);
   background-color: rgba(16, 185, 129, 0.05);
@@ -48,6 +53,16 @@
 .file201-history__badge--borrowed {
   background-color: rgba(245, 158, 11, 0.15);
   color: var(--color-warning, #b45309);
+}
+
+.file201-history__badge--rsp {
+  background-color: rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+}
+
+.file201-history__badge--rsp-returned {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--color-success, #065f46);
 }
 
 .file201-history__badge--returned {

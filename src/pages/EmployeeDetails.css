@@ -406,24 +406,74 @@
   border-color: rgba(239, 68, 68, 0.5);
 }
 
-/* end of file */
+.employee-details__status-btn--rsp {
+  background-color: rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+  border-color: rgba(139, 92, 246, 0.3);
+}
 
-/* ── Borrow/Return 201 File button ──────────────────────────────────────────── */
-.employee-details__borrow-btn {
+/* ── Actions Group & 201 File Buttons ──────────────────────────────────────────── */
+.employee-details__actions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-top: var(--spacing-sm);
-  padding: 10px 24px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.employee-details__borrow-btn {
+  padding: 9px 20px;
   border-radius: var(--border-radius);
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   background-color: var(--color-primary);
   color: #fff;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .employee-details__borrow-btn:hover {
-  opacity: 0.85;
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.employee-details__rsp-btn {
+  padding: 9px 20px;
+  border-radius: var(--border-radius);
+  font-size: 0.92rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #fff;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(124, 58, 237, 0.25);
+}
+
+.employee-details__rsp-btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(124, 58, 237, 0.35);
+}
+
+.employee-details__rsp-btn--return {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.25);
+}
+
+.employee-details__rsp-btn--return:hover {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  box-shadow: 0 4px 8px rgba(5, 150, 105, 0.35);
 }
 
 .employee-details__location-link-btn {

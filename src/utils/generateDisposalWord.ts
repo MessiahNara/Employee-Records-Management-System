@@ -1,6 +1,7 @@
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
+import { NAP_FORM_3_TEMPLATE_BASE64 } from './napForm3TemplateBase64';
 
 export interface DisposalRecord {
   itemNo: string;
@@ -9,14 +10,49 @@ export interface DisposalRecord {
   retention: string;
 }
 
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function loadTemplateBuffer(): Promise<ArrayBuffer> {
+  const paths = [
+    './NAP-FORM-3-Template.docx',
+    '/NAP-FORM-3-Template.docx',
+    'NAP-FORM-3-Template.docx',
+  ];
+
+  for (const p of paths) {
+    try {
+      const response = await fetch(p);
+      if (response.ok) {
+        const buf = await response.arrayBuffer();
+        if (buf && buf.byteLength > 100) {
+          return buf;
+        }
+      }
+    } catch {
+      // Continue to next path or base64 fallback
+    }
+  }
+
+  // Guaranteed fallback: embedded template
+  if (NAP_FORM_3_TEMPLATE_BASE64) {
+    return base64ToArrayBuffer(NAP_FORM_3_TEMPLATE_BASE64);
+  }
+
+  throw new Error('Failed to load NAP Form 3 Word template.');
+}
+
 export const generateDisposalWord = async (records: DisposalRecord[], volume: string, telephone: string) => {
   try {
-    // 1. Fetch the template
-    const response = await fetch('./NAP-FORM-3-Template.docx');
-    if (!response.ok) {
-      throw new Error(`Failed to load template: ${response.statusText}. Ensure NAP-FORM-3-Template.docx exists in the public/ folder`);
-    }
-    const templateData = await response.arrayBuffer();
+    // 1. Fetch or load the template
+    const templateData = await loadTemplateBuffer();
 
     // 2. Load into PizZip
     const zip = new PizZip(templateData);

@@ -14,11 +14,22 @@ interface UsePDFDocumentsReturn {
 }
 
 // Helper to validate PDF file
-const validatePDFFile = (file: File): { valid: boolean; error?: string } => {
+const validatePDFFile = async (file: File): Promise<{ valid: boolean; error?: string }> => {
   if (!file) return { valid: false, error: 'No file selected' };
-  if (file.type !== 'application/pdf') return { valid: false, error: 'Only PDF files are allowed' };
-  if (!file.name.toLowerCase().endsWith('.pdf')) return { valid: false, error: 'File must have .pdf extension' };
-  if (file.size === 0) return { valid: false, error: 'File is empty' };
+  if (!file.name.toLowerCase().endsWith('.pdf')) return { valid: false, error: `File "${file.name}" must have a .pdf extension` };
+  if (file.size === 0) return { valid: false, error: `File "${file.name}" is empty (0 bytes)` };
+  
+  // Verify PDF header %PDF in browser
+  try {
+    const slice = file.slice(0, 5);
+    const text = await slice.text();
+    if (!text.startsWith('%PDF')) {
+      return { valid: false, error: `File "${file.name}" is corrupted or not a valid PDF` };
+    }
+  } catch (e) {
+    return { valid: false, error: `File "${file.name}" could not be read (corrupted)` };
+  }
+
   return { valid: true };
 };
 
@@ -84,7 +95,7 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
     onProgress?: (e: ProgressEvent) => void
   ): Promise<void> => {
     // Validate file before entering try-catch
-    const validation = validatePDFFile(file);
+    const validation = await validatePDFFile(file);
     if (!validation.valid) {
       throw new Error(validation.error || 'Invalid file');
     }
