@@ -1290,8 +1290,8 @@ var require_node = __commonJS({
           }
           break;
         case "FILE":
-          var fs8 = require("fs");
-          stream2 = new fs8.SyncWriteStream(fd2, { autoClose: false });
+          var fs9 = require("fs");
+          stream2 = new fs9.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -14078,11 +14078,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path8) {
-      if (!path8 || typeof path8 !== "string") {
+    function lookup(path9) {
+      if (!path9 || typeof path9 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path8).toLowerCase().substr(1);
+      var extension2 = extname("x." + path9).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -17590,7 +17590,7 @@ var require_path_to_regexp = __commonJS({
   "server/node_modules/path-to-regexp/index.js"(exports2, module2) {
     module2.exports = pathToRegexp;
     var MATCHING_GROUP_REGEXP = /\\.|\((?:\?<(.*?)>)?(?!\?)/g;
-    function pathToRegexp(path8, keys, options) {
+    function pathToRegexp(path9, keys, options) {
       options = options || {};
       keys = keys || [];
       var strict = options.strict;
@@ -17604,8 +17604,8 @@ var require_path_to_regexp = __commonJS({
       var pos = 0;
       var backtrack = "";
       var m;
-      if (path8 instanceof RegExp) {
-        while (m = MATCHING_GROUP_REGEXP.exec(path8.source)) {
+      if (path9 instanceof RegExp) {
+        while (m = MATCHING_GROUP_REGEXP.exec(path9.source)) {
           if (m[0][0] === "\\") continue;
           keys.push({
             name: m[1] || name++,
@@ -17613,18 +17613,18 @@ var require_path_to_regexp = __commonJS({
             offset: m.index
           });
         }
-        return path8;
+        return path9;
       }
-      if (Array.isArray(path8)) {
-        path8 = path8.map(function(value) {
+      if (Array.isArray(path9)) {
+        path9 = path9.map(function(value) {
           return pathToRegexp(value, keys, options).source;
         });
-        return new RegExp(path8.join("|"), flags);
+        return new RegExp(path9.join("|"), flags);
       }
-      if (typeof path8 !== "string") {
+      if (typeof path9 !== "string") {
         throw new TypeError("path must be a string, array of strings, or regular expression");
       }
-      path8 = path8.replace(
+      path9 = path9.replace(
         /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
         function(match, slash, format, key, capture, star, optional, offset) {
           if (match[0] === "\\") {
@@ -17641,7 +17641,7 @@ var require_path_to_regexp = __commonJS({
           if (slash || format) {
             backtrack = "";
           } else {
-            backtrack += path8.slice(pos, offset);
+            backtrack += path9.slice(pos, offset);
           }
           pos = offset + match.length;
           if (match === "*") {
@@ -17671,7 +17671,7 @@ var require_path_to_regexp = __commonJS({
           return result;
         }
       );
-      while (m = MATCHING_GROUP_REGEXP.exec(path8)) {
+      while (m = MATCHING_GROUP_REGEXP.exec(path9)) {
         if (m[0][0] === "\\") continue;
         if (keysOffset + i === keys.length || keys[keysOffset + i].offset > m.index) {
           keys.splice(keysOffset + i, 0, {
@@ -17683,13 +17683,13 @@ var require_path_to_regexp = __commonJS({
         }
         i++;
       }
-      path8 += strict ? "" : path8[path8.length - 1] === "/" ? "?" : "/?";
+      path9 += strict ? "" : path9[path9.length - 1] === "/" ? "?" : "/?";
       if (end) {
-        path8 += "$";
-      } else if (path8[path8.length - 1] !== "/") {
-        path8 += lookahead ? "(?=/|$)" : "(?:/|$)";
+        path9 += "$";
+      } else if (path9[path9.length - 1] !== "/") {
+        path9 += lookahead ? "(?=/|$)" : "(?:/|$)";
       }
-      return new RegExp("^" + path8, flags);
+      return new RegExp("^" + path9, flags);
     }
   }
 });
@@ -17702,19 +17702,19 @@ var require_layer = __commonJS({
     var debug = require_src()("express:router:layer");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     module2.exports = Layer;
-    function Layer(path8, options, fn) {
+    function Layer(path9, options, fn) {
       if (!(this instanceof Layer)) {
-        return new Layer(path8, options, fn);
+        return new Layer(path9, options, fn);
       }
-      debug("new %o", path8);
+      debug("new %o", path9);
       var opts = options || {};
       this.handle = fn;
       this.name = fn.name || "<anonymous>";
       this.params = void 0;
       this.path = void 0;
-      this.regexp = pathRegexp(path8, this.keys = [], opts);
-      this.regexp.fast_star = path8 === "*";
-      this.regexp.fast_slash = path8 === "/" && opts.end === false;
+      this.regexp = pathRegexp(path9, this.keys = [], opts);
+      this.regexp.fast_star = path9 === "*";
+      this.regexp.fast_slash = path9 === "/" && opts.end === false;
     }
     Layer.prototype.handle_error = function handle_error(error, req, res, next) {
       var fn = this.handle;
@@ -17738,20 +17738,20 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.match = function match(path8) {
+    Layer.prototype.match = function match(path9) {
       var match2;
-      if (path8 != null) {
+      if (path9 != null) {
         if (this.regexp.fast_slash) {
           this.params = {};
           this.path = "";
           return true;
         }
         if (this.regexp.fast_star) {
-          this.params = { "0": decode_param(path8) };
-          this.path = path8;
+          this.params = { "0": decode_param(path9) };
+          this.path = path9;
           return true;
         }
-        match2 = this.regexp.exec(path8);
+        match2 = this.regexp.exec(path9);
       }
       if (!match2) {
         this.params = void 0;
@@ -17844,10 +17844,10 @@ var require_route = __commonJS({
     var slice = Array.prototype.slice;
     var toString = Object.prototype.toString;
     module2.exports = Route;
-    function Route(path8) {
-      this.path = path8;
+    function Route(path9) {
+      this.path = path9;
       this.stack = [];
-      debug("new %o", path8);
+      debug("new %o", path9);
       this.methods = {};
     }
     Route.prototype._handles_method = function _handles_method(method) {
@@ -18059,8 +18059,8 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        var path8 = getPathname(req);
-        if (path8 == null) {
+        var path9 = getPathname(req);
+        if (path9 == null) {
           return done(layerError);
         }
         var layer;
@@ -18068,7 +18068,7 @@ var require_router = __commonJS({
         var route;
         while (match !== true && idx < stack.length) {
           layer = stack[idx++];
-          match = matchLayer(layer, path8);
+          match = matchLayer(layer, path9);
           route = layer.route;
           if (typeof match !== "boolean") {
             layerError = layerError || match;
@@ -18106,18 +18106,18 @@ var require_router = __commonJS({
           } else if (route) {
             layer.handle_request(req, res, next);
           } else {
-            trim_prefix(layer, layerError, layerPath, path8);
+            trim_prefix(layer, layerError, layerPath, path9);
           }
           sync = 0;
         });
       }
-      function trim_prefix(layer, layerError, layerPath, path8) {
+      function trim_prefix(layer, layerError, layerPath, path9) {
         if (layerPath.length !== 0) {
-          if (layerPath !== path8.slice(0, layerPath.length)) {
+          if (layerPath !== path9.slice(0, layerPath.length)) {
             next(layerError);
             return;
           }
-          var c = path8[layerPath.length];
+          var c = path9[layerPath.length];
           if (c && c !== "/" && c !== ".") return next(layerError);
           debug("trim prefix (%s) from url %s", layerPath, req.url);
           removed = layerPath;
@@ -18195,7 +18195,7 @@ var require_router = __commonJS({
     };
     proto.use = function use(fn) {
       var offset = 0;
-      var path8 = "/";
+      var path9 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -18203,7 +18203,7 @@ var require_router = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path8 = fn;
+          path9 = fn;
         }
       }
       var callbacks = flatten(slice.call(arguments, offset));
@@ -18215,8 +18215,8 @@ var require_router = __commonJS({
         if (typeof fn !== "function") {
           throw new TypeError("Router.use() requires a middleware function but got a " + gettype(fn));
         }
-        debug("use %o %s", path8, fn.name || "<anonymous>");
-        var layer = new Layer(path8, {
+        debug("use %o %s", path9, fn.name || "<anonymous>");
+        var layer = new Layer(path9, {
           sensitive: this.caseSensitive,
           strict: false,
           end: false
@@ -18226,9 +18226,9 @@ var require_router = __commonJS({
       }
       return this;
     };
-    proto.route = function route(path8) {
-      var route2 = new Route(path8);
-      var layer = new Layer(path8, {
+    proto.route = function route(path9) {
+      var route2 = new Route(path9);
+      var layer = new Layer(path9, {
         sensitive: this.caseSensitive,
         strict: this.strict,
         end: true
@@ -18238,8 +18238,8 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      proto[method] = function(path8) {
-        var route = this.route(path8);
+      proto[method] = function(path9) {
+        var route = this.route(path9);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
@@ -18275,9 +18275,9 @@ var require_router = __commonJS({
       }
       return toString.call(obj).replace(objectRegExp, "$1");
     }
-    function matchLayer(layer, path8) {
+    function matchLayer(layer, path9) {
       try {
-        return layer.match(path8);
+        return layer.match(path9);
       } catch (err) {
         return err;
       }
@@ -18395,13 +18395,13 @@ var require_view = __commonJS({
   "server/node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
     var debug = require_src()("express:view");
-    var path8 = require("path");
-    var fs8 = require("fs");
-    var dirname = path8.dirname;
-    var basename = path8.basename;
-    var extname = path8.extname;
-    var join = path8.join;
-    var resolve = path8.resolve;
+    var path9 = require("path");
+    var fs9 = require("fs");
+    var dirname = path9.dirname;
+    var basename = path9.basename;
+    var extname = path9.extname;
+    var join = path9.join;
+    var resolve = path9.resolve;
     module2.exports = View;
     function View(name, options) {
       var opts = options || {};
@@ -18430,17 +18430,17 @@ var require_view = __commonJS({
       this.path = this.lookup(fileName);
     }
     View.prototype.lookup = function lookup(name) {
-      var path9;
+      var path10;
       var roots = [].concat(this.root);
       debug('lookup "%s"', name);
-      for (var i = 0; i < roots.length && !path9; i++) {
+      for (var i = 0; i < roots.length && !path10; i++) {
         var root = roots[i];
         var loc = resolve(root, name);
         var dir = dirname(loc);
         var file = basename(loc);
-        path9 = this.resolve(dir, file);
+        path10 = this.resolve(dir, file);
       }
-      return path9;
+      return path10;
     };
     View.prototype.render = function render(options, callback) {
       debug('render "%s"', this.path);
@@ -18448,21 +18448,21 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file) {
       var ext = this.ext;
-      var path9 = join(dir, file);
-      var stat = tryStat(path9);
+      var path10 = join(dir, file);
+      var stat = tryStat(path10);
       if (stat && stat.isFile()) {
-        return path9;
+        return path10;
       }
-      path9 = join(dir, basename(file, ext), "index" + ext);
-      stat = tryStat(path9);
+      path10 = join(dir, basename(file, ext), "index" + ext);
+      stat = tryStat(path10);
       if (stat && stat.isFile()) {
-        return path9;
+        return path10;
       }
     };
-    function tryStat(path9) {
-      debug('stat "%s"', path9);
+    function tryStat(path10) {
+      debug('stat "%s"', path10);
       try {
-        return fs8.statSync(path9);
+        return fs9.statSync(path10);
       } catch (e) {
         return void 0;
       }
@@ -18816,8 +18816,8 @@ var require_types = __commonJS({
 // server/node_modules/mime/mime.js
 var require_mime = __commonJS({
   "server/node_modules/mime/mime.js"(exports2, module2) {
-    var path8 = require("path");
-    var fs8 = require("fs");
+    var path9 = require("path");
+    var fs9 = require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
       this.extensions = /* @__PURE__ */ Object.create(null);
@@ -18838,7 +18838,7 @@ var require_mime = __commonJS({
     };
     Mime.prototype.load = function(file) {
       this._loading = file;
-      var map = {}, content = fs8.readFileSync(file, "ascii"), lines = content.split(/[\r\n]+/);
+      var map = {}, content = fs9.readFileSync(file, "ascii"), lines = content.split(/[\r\n]+/);
       lines.forEach(function(line) {
         var fields = line.replace(/\s*#.*|^\s*|\s*$/g, "").split(/\s+/);
         map[fields.shift()] = fields;
@@ -18846,8 +18846,8 @@ var require_mime = __commonJS({
       this.define(map);
       this._loading = null;
     };
-    Mime.prototype.lookup = function(path9, fallback) {
-      var ext = path9.replace(/^.*[\.\/\\]/, "").toLowerCase();
+    Mime.prototype.lookup = function(path10, fallback) {
+      var ext = path10.replace(/^.*[\.\/\\]/, "").toLowerCase();
       return this.types[ext] || fallback || this.default_type;
     };
     Mime.prototype.extension = function(mimeType) {
@@ -19076,33 +19076,33 @@ var require_send = __commonJS({
     var escapeHtml = require_escape_html();
     var etag = require_etag();
     var fresh = require_fresh();
-    var fs8 = require("fs");
+    var fs9 = require("fs");
     var mime = require_mime();
     var ms = require_ms2();
     var onFinished = require_on_finished();
     var parseRange = require_range_parser();
-    var path8 = require("path");
+    var path9 = require("path");
     var statuses = require_statuses();
     var Stream = require("stream");
     var util2 = require("util");
-    var extname = path8.extname;
-    var join = path8.join;
-    var normalize = path8.normalize;
-    var resolve = path8.resolve;
-    var sep = path8.sep;
+    var extname = path9.extname;
+    var join = path9.join;
+    var normalize = path9.normalize;
+    var resolve = path9.resolve;
+    var sep = path9.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module2.exports = send;
     module2.exports.mime = mime;
-    function send(req, path9, options) {
-      return new SendStream(req, path9, options);
+    function send(req, path10, options) {
+      return new SendStream(req, path10, options);
     }
-    function SendStream(req, path9, options) {
+    function SendStream(req, path10, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
-      this.path = path9;
+      this.path = path10;
       this.req = req;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
@@ -19148,8 +19148,8 @@ var require_send = __commonJS({
       this._index = index2;
       return this;
     }, "send.index: pass index as option");
-    SendStream.prototype.root = function root(path9) {
-      this._root = resolve(String(path9));
+    SendStream.prototype.root = function root(path10) {
+      this._root = resolve(String(path10));
       debug("root %s", this._root);
       return this;
     };
@@ -19262,10 +19262,10 @@ var require_send = __commonJS({
       var lastModified = this.res.getHeader("Last-Modified");
       return parseHttpDate(lastModified) <= parseHttpDate(ifRange);
     };
-    SendStream.prototype.redirect = function redirect(path9) {
+    SendStream.prototype.redirect = function redirect(path10) {
       var res = this.res;
       if (hasListeners(this, "directory")) {
-        this.emit("directory", res, path9);
+        this.emit("directory", res, path10);
         return;
       }
       if (this.hasTrailingSlash()) {
@@ -19285,42 +19285,42 @@ var require_send = __commonJS({
     SendStream.prototype.pipe = function pipe(res) {
       var root = this._root;
       this.res = res;
-      var path9 = decode(this.path);
-      if (path9 === -1) {
+      var path10 = decode(this.path);
+      if (path10 === -1) {
         this.error(400);
         return res;
       }
-      if (~path9.indexOf("\0")) {
+      if (~path10.indexOf("\0")) {
         this.error(400);
         return res;
       }
       var parts;
       if (root !== null) {
-        if (path9) {
-          path9 = normalize("." + sep + path9);
+        if (path10) {
+          path10 = normalize("." + sep + path10);
         }
-        if (UP_PATH_REGEXP.test(path9)) {
-          debug('malicious path "%s"', path9);
+        if (UP_PATH_REGEXP.test(path10)) {
+          debug('malicious path "%s"', path10);
           this.error(403);
           return res;
         }
-        parts = path9.split(sep);
-        path9 = normalize(join(root, path9));
+        parts = path10.split(sep);
+        path10 = normalize(join(root, path10));
       } else {
-        if (UP_PATH_REGEXP.test(path9)) {
-          debug('malicious path "%s"', path9);
+        if (UP_PATH_REGEXP.test(path10)) {
+          debug('malicious path "%s"', path10);
           this.error(403);
           return res;
         }
-        parts = normalize(path9).split(sep);
-        path9 = resolve(path9);
+        parts = normalize(path10).split(sep);
+        path10 = resolve(path10);
       }
       if (containsDotFile(parts)) {
         var access = this._dotfiles;
         if (access === void 0) {
           access = parts[parts.length - 1][0] === "." ? this._hidden ? "allow" : "ignore" : "allow";
         }
-        debug('%s dotfile "%s"', access, path9);
+        debug('%s dotfile "%s"', access, path10);
         switch (access) {
           case "allow":
             break;
@@ -19334,13 +19334,13 @@ var require_send = __commonJS({
         }
       }
       if (this._index.length && this.hasTrailingSlash()) {
-        this.sendIndex(path9);
+        this.sendIndex(path10);
         return res;
       }
-      this.sendFile(path9);
+      this.sendFile(path10);
       return res;
     };
-    SendStream.prototype.send = function send2(path9, stat) {
+    SendStream.prototype.send = function send2(path10, stat) {
       var len = stat.size;
       var options = this.options;
       var opts = {};
@@ -19352,9 +19352,9 @@ var require_send = __commonJS({
         this.headersAlreadySent();
         return;
       }
-      debug('pipe "%s"', path9);
-      this.setHeader(path9, stat);
-      this.type(path9);
+      debug('pipe "%s"', path10);
+      this.setHeader(path10, stat);
+      this.type(path10);
       if (this.isConditionalGET()) {
         if (this.isPreconditionFailure()) {
           this.error(412);
@@ -19403,28 +19403,28 @@ var require_send = __commonJS({
         res.end();
         return;
       }
-      this.stream(path9, opts);
+      this.stream(path10, opts);
     };
-    SendStream.prototype.sendFile = function sendFile(path9) {
+    SendStream.prototype.sendFile = function sendFile(path10) {
       var i = 0;
       var self2 = this;
-      debug('stat "%s"', path9);
-      fs8.stat(path9, function onstat(err, stat) {
-        if (err && err.code === "ENOENT" && !extname(path9) && path9[path9.length - 1] !== sep) {
+      debug('stat "%s"', path10);
+      fs9.stat(path10, function onstat(err, stat) {
+        if (err && err.code === "ENOENT" && !extname(path10) && path10[path10.length - 1] !== sep) {
           return next(err);
         }
         if (err) return self2.onStatError(err);
-        if (stat.isDirectory()) return self2.redirect(path9);
-        self2.emit("file", path9, stat);
-        self2.send(path9, stat);
+        if (stat.isDirectory()) return self2.redirect(path10);
+        self2.emit("file", path10, stat);
+        self2.send(path10, stat);
       });
       function next(err) {
         if (self2._extensions.length <= i) {
           return err ? self2.onStatError(err) : self2.error(404);
         }
-        var p = path9 + "." + self2._extensions[i++];
+        var p = path10 + "." + self2._extensions[i++];
         debug('stat "%s"', p);
-        fs8.stat(p, function(err2, stat) {
+        fs9.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self2.emit("file", p, stat);
@@ -19432,7 +19432,7 @@ var require_send = __commonJS({
         });
       }
     };
-    SendStream.prototype.sendIndex = function sendIndex(path9) {
+    SendStream.prototype.sendIndex = function sendIndex(path10) {
       var i = -1;
       var self2 = this;
       function next(err) {
@@ -19440,9 +19440,9 @@ var require_send = __commonJS({
           if (err) return self2.onStatError(err);
           return self2.error(404);
         }
-        var p = join(path9, self2._index[i]);
+        var p = join(path10, self2._index[i]);
         debug('stat "%s"', p);
-        fs8.stat(p, function(err2, stat) {
+        fs9.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self2.emit("file", p, stat);
@@ -19451,10 +19451,10 @@ var require_send = __commonJS({
       }
       next();
     };
-    SendStream.prototype.stream = function stream(path9, options) {
+    SendStream.prototype.stream = function stream(path10, options) {
       var self2 = this;
       var res = this.res;
-      var stream2 = fs8.createReadStream(path9, options);
+      var stream2 = fs9.createReadStream(path10, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -19469,10 +19469,10 @@ var require_send = __commonJS({
         self2.emit("end");
       });
     };
-    SendStream.prototype.type = function type(path9) {
+    SendStream.prototype.type = function type(path10) {
       var res = this.res;
       if (res.getHeader("Content-Type")) return;
-      var type2 = mime.lookup(path9);
+      var type2 = mime.lookup(path10);
       if (!type2) {
         debug("no content-type");
         return;
@@ -19481,9 +19481,9 @@ var require_send = __commonJS({
       debug("content-type %s", type2);
       res.setHeader("Content-Type", type2 + (charset ? "; charset=" + charset : ""));
     };
-    SendStream.prototype.setHeader = function setHeader(path9, stat) {
+    SendStream.prototype.setHeader = function setHeader(path10, stat) {
       var res = this.res;
-      this.emit("headers", res, path9, stat);
+      this.emit("headers", res, path10, stat);
       if (this._acceptRanges && !res.getHeader("Accept-Ranges")) {
         debug("accept ranges");
         res.setHeader("Accept-Ranges", "bytes");
@@ -19542,9 +19542,9 @@ var require_send = __commonJS({
       }
       return err instanceof Error ? createError(status, err, { expose: false }) : createError(status, err);
     }
-    function decode(path9) {
+    function decode(path10) {
       try {
-        return decodeURIComponent(path9);
+        return decodeURIComponent(path10);
       } catch (err) {
         return -1;
       }
@@ -20453,10 +20453,10 @@ var require_utils2 = __commonJS({
     var querystring = require("querystring");
     exports2.etag = createETagGenerator({ weak: false });
     exports2.wetag = createETagGenerator({ weak: true });
-    exports2.isAbsolute = function(path8) {
-      if ("/" === path8[0]) return true;
-      if (":" === path8[1] && ("\\" === path8[2] || "/" === path8[2])) return true;
-      if ("\\\\" === path8.substring(0, 2)) return true;
+    exports2.isAbsolute = function(path9) {
+      if ("/" === path9[0]) return true;
+      if (":" === path9[1] && ("\\" === path9[2] || "/" === path9[2])) return true;
+      if ("\\\\" === path9.substring(0, 2)) return true;
     };
     exports2.flatten = deprecate.function(
       flatten,
@@ -20667,7 +20667,7 @@ var require_application = __commonJS({
     };
     app2.use = function use(fn) {
       var offset = 0;
-      var path8 = "/";
+      var path9 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -20675,7 +20675,7 @@ var require_application = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path8 = fn;
+          path9 = fn;
         }
       }
       var fns = flatten(slice.call(arguments, offset));
@@ -20686,12 +20686,12 @@ var require_application = __commonJS({
       var router12 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router12.use(path8, fn2);
+          return router12.use(path9, fn2);
         }
-        debug(".use app under %s", path8);
-        fn2.mountpath = path8;
+        debug(".use app under %s", path9);
+        fn2.mountpath = path9;
         fn2.parent = this;
-        router12.use(path8, function mounted_app(req, res, next) {
+        router12.use(path9, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -20703,9 +20703,9 @@ var require_application = __commonJS({
       }, this);
       return this;
     };
-    app2.route = function route(path8) {
+    app2.route = function route(path9) {
       this.lazyrouter();
-      return this._router.route(path8);
+      return this._router.route(path9);
     };
     app2.engine = function engine(ext, fn) {
       if (typeof fn !== "function") {
@@ -20756,7 +20756,7 @@ var require_application = __commonJS({
       }
       return this;
     };
-    app2.path = function path8() {
+    app2.path = function path9() {
       return this.parent ? this.parent.path() + this.mountpath : "";
     };
     app2.enabled = function enabled(setting) {
@@ -20772,19 +20772,19 @@ var require_application = __commonJS({
       return this.set(setting, false);
     };
     methods.forEach(function(method) {
-      app2[method] = function(path8) {
+      app2[method] = function(path9) {
         if (method === "get" && arguments.length === 1) {
-          return this.set(path8);
+          return this.set(path9);
         }
         this.lazyrouter();
-        var route = this._router.route(path8);
+        var route = this._router.route(path9);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
     });
-    app2.all = function all(path8) {
+    app2.all = function all(path9) {
       this.lazyrouter();
-      var route = this._router.route(path8);
+      var route = this._router.route(path9);
       var args = slice.call(arguments, 1);
       for (var i = 0; i < methods.length; i++) {
         route[methods[i]].apply(route, args);
@@ -21543,7 +21543,7 @@ var require_request = __commonJS({
       var subdomains2 = !isIP(hostname) ? hostname.split(".").reverse() : [hostname];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path8() {
+    defineGetter(req, "path", function path9() {
       return parse(this).pathname;
     });
     defineGetter(req, "hostname", function hostname() {
@@ -21865,7 +21865,7 @@ var require_response = __commonJS({
     var http2 = require("http");
     var isAbsolute = require_utils2().isAbsolute;
     var onFinished = require_on_finished();
-    var path8 = require("path");
+    var path9 = require("path");
     var statuses = require_statuses();
     var merge = require_utils_merge();
     var sign = require_cookie_signature().sign;
@@ -21874,9 +21874,9 @@ var require_response = __commonJS({
     var setCharset = require_utils2().setCharset;
     var cookie = require_cookie();
     var send = require_send();
-    var extname = path8.extname;
+    var extname = path9.extname;
     var mime = send.mime;
-    var resolve = path8.resolve;
+    var resolve = path9.resolve;
     var vary = require_vary();
     var res = Object.create(http2.ServerResponse.prototype);
     module2.exports = res;
@@ -22052,26 +22052,26 @@ var require_response = __commonJS({
       this.type("txt");
       return this.send(body);
     };
-    res.sendFile = function sendFile(path9, options, callback) {
+    res.sendFile = function sendFile(path10, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
       var next = req.next;
       var opts = options || {};
-      if (!path9) {
+      if (!path10) {
         throw new TypeError("path argument is required to res.sendFile");
       }
-      if (typeof path9 !== "string") {
+      if (typeof path10 !== "string") {
         throw new TypeError("path must be a string to res.sendFile");
       }
       if (typeof options === "function") {
         done = options;
         opts = {};
       }
-      if (!opts.root && !isAbsolute(path9)) {
+      if (!opts.root && !isAbsolute(path10)) {
         throw new TypeError("path must be absolute or specify root to res.sendFile");
       }
-      var pathname = encodeURI(path9);
+      var pathname = encodeURI(path10);
       var file = send(req, pathname, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
@@ -22081,7 +22081,7 @@ var require_response = __commonJS({
         }
       });
     };
-    res.sendfile = function(path9, options, callback) {
+    res.sendfile = function(path10, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
@@ -22091,7 +22091,7 @@ var require_response = __commonJS({
         done = options;
         opts = {};
       }
-      var file = send(req, path9, opts);
+      var file = send(req, path10, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -22104,7 +22104,7 @@ var require_response = __commonJS({
       res.sendfile,
       "res.sendfile: Use res.sendFile instead"
     );
-    res.download = function download(path9, filename, options, callback) {
+    res.download = function download(path10, filename, options, callback) {
       var done = callback;
       var name = filename;
       var opts = options || null;
@@ -22121,7 +22121,7 @@ var require_response = __commonJS({
         opts = filename;
       }
       var headers = {
-        "Content-Disposition": contentDisposition(name || path9)
+        "Content-Disposition": contentDisposition(name || path10)
       };
       if (opts && opts.headers) {
         var keys = Object.keys(opts.headers);
@@ -22134,7 +22134,7 @@ var require_response = __commonJS({
       }
       opts = Object.create(opts);
       opts.headers = headers;
-      var fullPath = !opts.root ? resolve(path9) : path9;
+      var fullPath = !opts.root ? resolve(path10) : path10;
       return this.sendFile(fullPath, opts, done);
     };
     res.contentType = res.type = function contentType(type) {
@@ -22434,11 +22434,11 @@ var require_serve_static = __commonJS({
         }
         var forwardError = !fallthrough;
         var originalUrl = parseUrl.original(req);
-        var path8 = parseUrl(req).pathname;
-        if (path8 === "/" && originalUrl.pathname.substr(-1) !== "/") {
-          path8 = "";
+        var path9 = parseUrl(req).pathname;
+        if (path9 === "/" && originalUrl.pathname.substr(-1) !== "/") {
+          path9 = "";
         }
-        var stream = send(req, path8, opts);
+        var stream = send(req, path9, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -22923,8 +22923,8 @@ var require_package = __commonJS({
 // server/node_modules/dotenv/lib/main.js
 var require_main = __commonJS({
   "server/node_modules/dotenv/lib/main.js"(exports2, module2) {
-    var fs8 = require("fs");
-    var path8 = require("path");
+    var fs9 = require("fs");
+    var path9 = require("path");
     var os = require("os");
     var crypto3 = require("crypto");
     var packageJson = require_package();
@@ -23032,7 +23032,7 @@ var require_main = __commonJS({
       if (options && options.path && options.path.length > 0) {
         if (Array.isArray(options.path)) {
           for (const filepath of options.path) {
-            if (fs8.existsSync(filepath)) {
+            if (fs9.existsSync(filepath)) {
               possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
             }
           }
@@ -23040,15 +23040,15 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path8.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path9.resolve(process.cwd(), ".env.vault");
       }
-      if (fs8.existsSync(possibleVaultPath)) {
+      if (fs9.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
       }
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path8.join(os.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path9.join(os.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug = Boolean(options && options.debug);
@@ -23065,7 +23065,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path8.resolve(process.cwd(), ".env");
+      const dotenvPath = path9.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       const debug = Boolean(options && options.debug);
       const quiet = options && "quiet" in options ? options.quiet : true;
@@ -23089,13 +23089,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path9 of optionPaths) {
+      for (const path10 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs8.readFileSync(path9, { encoding }));
+          const parsed = DotenvModule.parse(fs9.readFileSync(path10, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e) {
           if (debug) {
-            _debug(`Failed to load ${path9} ${e.message}`);
+            _debug(`Failed to load ${path10} ${e.message}`);
           }
           lastError = e;
         }
@@ -23110,7 +23110,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative = path8.relative(process.cwd(), filePath);
+            const relative = path9.relative(process.cwd(), filePath);
             shortPaths.push(relative);
           } catch (e) {
             if (debug) {
@@ -23582,18 +23582,18 @@ var require_utils3 = __commonJS({
       if (decode)
         return decode(data, hint);
     }
-    function basename(path8) {
-      if (typeof path8 !== "string")
+    function basename(path9) {
+      if (typeof path9 !== "string")
         return "";
-      for (let i = path8.length - 1; i >= 0; --i) {
-        switch (path8.charCodeAt(i)) {
+      for (let i = path9.length - 1; i >= 0; --i) {
+        switch (path9.charCodeAt(i)) {
           case 47:
           case 92:
-            path8 = path8.slice(i + 1);
-            return path8 === ".." || path8 === "." ? "" : path8;
+            path9 = path9.slice(i + 1);
+            return path9 === ".." || path9 === "." ? "" : path9;
         }
       }
-      return path8 === ".." || path8 === "." ? "" : path8;
+      return path9 === ".." || path9 === "." ? "" : path9;
     }
     var TOKEN = [
       0,
@@ -27436,9 +27436,9 @@ var require_make_middleware = __commonJS({
 // server/node_modules/multer/storage/disk.js
 var require_disk = __commonJS({
   "server/node_modules/multer/storage/disk.js"(exports2, module2) {
-    var fs8 = require("fs");
+    var fs9 = require("fs");
     var os = require("os");
-    var path8 = require("path");
+    var path9 = require("path");
     var crypto3 = require("crypto");
     function getFilename(req, file, cb) {
       crypto3.randomBytes(16, function(err, raw) {
@@ -27451,7 +27451,7 @@ var require_disk = __commonJS({
     function DiskStorage(opts) {
       this.getFilename = opts.filename || getFilename;
       if (typeof opts.destination === "string") {
-        fs8.mkdirSync(opts.destination, { recursive: true });
+        fs9.mkdirSync(opts.destination, { recursive: true });
         this.getDestination = function($0, $1, cb) {
           cb(null, opts.destination);
         };
@@ -27465,8 +27465,8 @@ var require_disk = __commonJS({
         if (err) return cb(err);
         that.getFilename(req, file, function(err2, filename) {
           if (err2) return cb(err2);
-          var finalPath = path8.join(destination, filename);
-          var outStream = fs8.createWriteStream(finalPath);
+          var finalPath = path9.join(destination, filename);
+          var outStream = fs9.createWriteStream(finalPath);
           file.stream.pipe(outStream);
           outStream.on("error", cb);
           outStream.on("finish", function() {
@@ -27481,11 +27481,11 @@ var require_disk = __commonJS({
       });
     };
     DiskStorage.prototype._removeFile = function _removeFile(req, file, cb) {
-      var path9 = file.path;
+      var path10 = file.path;
       delete file.destination;
       delete file.filename;
       delete file.path;
-      fs8.unlink(path9, cb);
+      fs9.unlink(path10, cb);
     };
     module2.exports = function(opts) {
       return new DiskStorage(opts);
@@ -37365,11 +37365,11 @@ var require_server = __commonJS({
        * @protected
        */
       _computePath(options) {
-        let path8 = (options.path || "/engine.io").replace(/\/$/, "");
+        let path9 = (options.path || "/engine.io").replace(/\/$/, "");
         if (options.addTrailingSlash !== false) {
-          path8 += "/";
+          path9 += "/";
         }
-        return path8;
+        return path9;
       }
       /**
        * Returns a list of available transports for upgrade given a certain transport.
@@ -37885,10 +37885,10 @@ var require_server = __commonJS({
        * @param {Object} options
        */
       attach(server, options = {}) {
-        const path8 = this._computePath(options);
+        const path9 = this._computePath(options);
         const destroyUpgradeTimeout = options.destroyUpgradeTimeout || 1e3;
         function check(req) {
-          return path8 === req.url.slice(0, path8.length);
+          return path9 === req.url.slice(0, path9.length);
         }
         const listeners = server.listeners("request").slice(0);
         server.removeAllListeners("request");
@@ -37896,7 +37896,7 @@ var require_server = __commonJS({
         server.on("listening", this.init.bind(this));
         server.on("request", (req, res) => {
           if (check(req)) {
-            debug('intercepting request for path "%s"', path8);
+            debug('intercepting request for path "%s"', path9);
             this.handleRequest(req, res);
           } else {
             let i = 0;
@@ -38736,8 +38736,8 @@ var require_userver = __commonJS({
        * @param options
        */
       attach(app2, options = {}) {
-        const path8 = this._computePath(options);
-        app2.any(path8, this.handleRequest.bind(this)).ws(path8, {
+        const path9 = this._computePath(options);
+        app2.any(path9, this.handleRequest.bind(this)).ws(path9, {
           compression: options.compression,
           idleTimeout: options.idleTimeout,
           maxBackpressure: options.maxBackpressure,
@@ -45105,7 +45105,7 @@ var require_dist2 = __commonJS({
     var zlib_1 = require("zlib");
     var accepts = require_accepts();
     var stream_1 = require("stream");
-    var path8 = require("path");
+    var path9 = require("path");
     var engine_io_1 = require_engine_io();
     var client_1 = require_client();
     var events_1 = require("events");
@@ -45300,7 +45300,7 @@ var require_dist2 = __commonJS({
             res.writeHeader("cache-control", "public, max-age=0");
             res.writeHeader("content-type", "application/" + (isMap ? "json" : "javascript") + "; charset=utf-8");
             res.writeHeader("etag", expectedEtag);
-            const filepath = path8.join(__dirname, "../client-dist/", filename);
+            const filepath = path9.join(__dirname, "../client-dist/", filename);
             (0, uws_1.serveFile)(res, filepath);
           });
         }
@@ -45382,7 +45382,7 @@ var require_dist2 = __commonJS({
        * @private
        */
       static sendFile(filename, req, res) {
-        const readStream = (0, fs_1.createReadStream)(path8.join(__dirname, "../client-dist/", filename));
+        const readStream = (0, fs_1.createReadStream)(path9.join(__dirname, "../client-dist/", filename));
         const encoding = accepts(req).encodings(["br", "gzip", "deflate"]);
         const onError = (err) => {
           if (err) {
@@ -48684,8 +48684,8 @@ var require_utils4 = __commonJS({
       var result = transform[inputType][outputType](input);
       return result;
     };
-    exports2.resolve = function(path8) {
-      var parts = path8.split("/");
+    exports2.resolve = function(path9) {
+      var parts = path9.split("/");
       var result = [];
       for (var index = 0; index < parts.length; index++) {
         var part = parts[index];
@@ -54515,18 +54515,18 @@ var require_object = __commonJS({
       var object = new ZipObject(name, zipObjectContent, o);
       this.files[name] = object;
     };
-    var parentFolder = function(path8) {
-      if (path8.slice(-1) === "/") {
-        path8 = path8.substring(0, path8.length - 1);
+    var parentFolder = function(path9) {
+      if (path9.slice(-1) === "/") {
+        path9 = path9.substring(0, path9.length - 1);
       }
-      var lastSlash = path8.lastIndexOf("/");
-      return lastSlash > 0 ? path8.substring(0, lastSlash) : "";
+      var lastSlash = path9.lastIndexOf("/");
+      return lastSlash > 0 ? path9.substring(0, lastSlash) : "";
     };
-    var forceTrailingSlash = function(path8) {
-      if (path8.slice(-1) !== "/") {
-        path8 += "/";
+    var forceTrailingSlash = function(path9) {
+      if (path9.slice(-1) !== "/") {
+        path9 += "/";
       }
-      return path8;
+      return path9;
     };
     var folderAdd = function(name, createFolders) {
       createFolders = typeof createFolders !== "undefined" ? createFolders : defaults.createFolders;
@@ -55534,8 +55534,8 @@ module.exports = __toCommonJS(src_exports);
 var import_express12 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_dotenv = __toESM(require_main());
-var import_path7 = __toESM(require("path"));
-var import_fs7 = __toESM(require("fs"));
+var import_path8 = __toESM(require("path"));
+var import_fs8 = __toESM(require("fs"));
 var import_http = __toESM(require("http"));
 var import_https = __toESM(require("https"));
 
@@ -58298,7 +58298,15 @@ async function checkAndAddDropdownOptions(data) {
 }
 async function syncExistingRecordsToDropdownOptions() {
   try {
-    console.log("[settings] Starting database check to sync existing offices and positions to dynamic settings...");
+    const settings = await prisma_default.systemSetting.findFirst();
+    const hasOffices = Array.isArray(settings?.officeNames) && settings.officeNames.length > 0;
+    const hasPositions = Array.isArray(settings?.positions) && settings.positions.length > 0;
+    const hasStatuses = Array.isArray(settings?.appointmentStatuses) && settings.appointmentStatuses.length > 0;
+    if (hasOffices && hasPositions && hasStatuses) {
+      console.log("[settings] Dropdown options already initialized in database. Skipping startup sync.");
+      return;
+    }
+    console.log("[settings] Initializing dynamic dropdown options from existing records...");
     const employees = await prisma_default.employee.findMany({
       select: {
         officeName: true,
@@ -60301,12 +60309,41 @@ var requireDeveloperRole = (req, res, next) => {
   }
   next();
 };
-function getRecordLocationsFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path5.default.join(process.env.UPLOADS_DIR, "data") : import_path5.default.join(__dirname, "../../uploads/data");
-  if (!import_fs5.default.existsSync(dataDir)) {
-    import_fs5.default.mkdirSync(dataDir, { recursive: true });
+function getDataDir() {
+  const customUploads = process.env.UPLOADS_DIR;
+  if (customUploads) {
+    const p = import_path5.default.join(customUploads, "data");
+    if (!import_fs5.default.existsSync(p)) import_fs5.default.mkdirSync(p, { recursive: true });
+    return p;
   }
-  return import_path5.default.join(dataDir, "record_locations.json");
+  const programData = process.env.PROGRAMDATA || "C:\\ProgramData";
+  const defaultDir = import_path5.default.join(programData, "ERMS", "uploads", "data");
+  try {
+    if (!import_fs5.default.existsSync(defaultDir)) import_fs5.default.mkdirSync(defaultDir, { recursive: true });
+    return defaultDir;
+  } catch {
+    const localDir = import_path5.default.join(__dirname, "../../uploads/data");
+    if (!import_fs5.default.existsSync(localDir)) import_fs5.default.mkdirSync(localDir, { recursive: true });
+    return localDir;
+  }
+}
+function getMigratedFilePath(fileName) {
+  const targetDir = getDataDir();
+  const targetFile = import_path5.default.join(targetDir, fileName);
+  if (!import_fs5.default.existsSync(targetFile)) {
+    const legacyFile = import_path5.default.join(__dirname, "../../uploads/data", fileName);
+    if (import_fs5.default.existsSync(legacyFile)) {
+      try {
+        import_fs5.default.copyFileSync(legacyFile, targetFile);
+      } catch (err) {
+        console.error(`Failed to migrate ${fileName}:`, err);
+      }
+    }
+  }
+  return targetFile;
+}
+function getRecordLocationsFilePath() {
+  return getMigratedFilePath("record_locations.json");
 }
 function getRecordLocations() {
   try {
@@ -60331,39 +60368,22 @@ function saveRecordLocations(locs) {
   }
 }
 function getDispositionProvisionsFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path5.default.join(process.env.UPLOADS_DIR, "data") : import_path5.default.join(__dirname, "../../uploads/data");
-  if (!import_fs5.default.existsSync(dataDir)) {
-    import_fs5.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path5.default.join(dataDir, "disposition_provisions.json");
+  return getMigratedFilePath("disposition_provisions.json");
 }
 function getItemNumbersFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path5.default.join(process.env.UPLOADS_DIR, "data") : import_path5.default.join(__dirname, "../../uploads/data");
-  if (!import_fs5.default.existsSync(dataDir)) {
-    import_fs5.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path5.default.join(dataDir, "item_numbers.json");
+  return getMigratedFilePath("item_numbers.json");
 }
 function getDivisionsFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path5.default.join(process.env.UPLOADS_DIR, "data") : import_path5.default.join(__dirname, "../../uploads/data");
-  if (!import_fs5.default.existsSync(dataDir)) {
-    import_fs5.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path5.default.join(dataDir, "divisions.json");
+  return getMigratedFilePath("divisions.json");
 }
 function getClassificationCategoriesFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path5.default.join(process.env.UPLOADS_DIR, "data") : import_path5.default.join(__dirname, "../../uploads/data");
-  if (!import_fs5.default.existsSync(dataDir)) {
-    import_fs5.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path5.default.join(dataDir, "classification_categories.json");
+  return getMigratedFilePath("classification_categories.json");
 }
 function getSubCategoriesFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path5.default.join(process.env.UPLOADS_DIR, "data") : import_path5.default.join(__dirname, "../../uploads/data");
-  if (!import_fs5.default.existsSync(dataDir)) {
-    import_fs5.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path5.default.join(dataDir, "sub_categories.json");
+  return getMigratedFilePath("sub_categories.json");
+}
+function getPrdsGrdsFilePath() {
+  return getMigratedFilePath("prds_grds.json");
 }
 var DEFAULT_DISPOSITION_PROVISIONS = [
   "Dispose after completion of audit",
@@ -60377,6 +60397,12 @@ var DEFAULT_ITEM_NUMBERS = [
   "Item 3",
   "Item 4",
   "Item 5"
+];
+var DEFAULT_PRDS_GRDS = [
+  "GRDS 2009",
+  "GRDS 2021",
+  "GRDS",
+  "PRDS"
 ];
 var DEFAULT_DIVISIONS = [
   "ADMINISTRATIVE",
@@ -60457,6 +60483,28 @@ function saveItemNumbers(items) {
     console.error("Failed to save item numbers:", err);
   }
 }
+function getPrdsGrds() {
+  try {
+    const file = getPrdsGrdsFilePath();
+    if (!import_fs5.default.existsSync(file)) {
+      import_fs5.default.writeFileSync(file, JSON.stringify(DEFAULT_PRDS_GRDS, null, 2), "utf8");
+      return DEFAULT_PRDS_GRDS;
+    }
+    const raw = import_fs5.default.readFileSync(file, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : DEFAULT_PRDS_GRDS;
+  } catch {
+    return DEFAULT_PRDS_GRDS;
+  }
+}
+function savePrdsGrds(items) {
+  try {
+    const file = getPrdsGrdsFilePath();
+    import_fs5.default.writeFileSync(file, JSON.stringify(items, null, 2), "utf8");
+  } catch (err) {
+    console.error("Failed to save prds grds:", err);
+  }
+}
 function getDivisions() {
   try {
     const file = getDivisionsFilePath();
@@ -60528,7 +60576,39 @@ router5.get("/", async (req, res) => {
     let settings = await prisma2.systemSetting.findFirst();
     if (!settings) {
       settings = await prisma2.systemSetting.create({
-        data: { idleTimeout: null, autoRename: false }
+        data: {
+          idleTimeout: null,
+          autoRename: false,
+          recordLocations: getRecordLocations(),
+          dispositionProvisions: getDispositionProvisions(),
+          itemNumbers: getItemNumbers(),
+          prdsGrds: getPrdsGrds(),
+          divisions: getDivisions(),
+          classificationCategories: getClassificationCategories(),
+          subCategories: getSubCategories()
+        }
+      });
+    }
+    const recordLocations = settings.recordLocations ?? getRecordLocations();
+    const dispositionProvisions = settings.dispositionProvisions ?? getDispositionProvisions();
+    const itemNumbers = settings.itemNumbers ?? getItemNumbers();
+    const prdsGrds = settings.prdsGrds ?? getPrdsGrds();
+    const divisions = settings.divisions ?? getDivisions();
+    const classificationCategories = settings.classificationCategories ?? getClassificationCategories();
+    const subCategories = settings.subCategories ?? getSubCategories();
+    if (!settings.recordLocations || !settings.dispositionProvisions || !settings.itemNumbers || !settings.prdsGrds || !settings.divisions || !settings.classificationCategories || !settings.subCategories) {
+      await prisma2.systemSetting.update({
+        where: { id: settings.id },
+        data: {
+          recordLocations,
+          dispositionProvisions,
+          itemNumbers,
+          prdsGrds,
+          divisions,
+          classificationCategories,
+          subCategories
+        }
+      }).catch(() => {
       });
     }
     res.json({
@@ -60537,12 +60617,13 @@ router5.get("/", async (req, res) => {
       appointmentStatuses: settings.appointmentStatuses ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: settings.officeNames ?? [],
       positions: settings.positions ?? [],
-      recordLocations: getRecordLocations(),
-      dispositionProvisions: getDispositionProvisions(),
-      itemNumbers: getItemNumbers(),
-      divisions: getDivisions(),
-      classificationCategories: getClassificationCategories(),
-      subCategories: getSubCategories(),
+      recordLocations,
+      dispositionProvisions,
+      itemNumbers,
+      prdsGrds,
+      divisions,
+      classificationCategories,
+      subCategories,
       aoYears: settings.aoYears ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: settings.reasonsForSeparation ?? DEFAULT_REASONS_FOR_SEPARATION
     });
@@ -60588,19 +60669,41 @@ router5.put("/", requireSuperAdmin, async (req, res) => {
 });
 router5.put("/dropdown-options", requireDeveloperRole, async (req, res) => {
   try {
-    const { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation } = req.body;
+    const { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, prdsGrds, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation } = req.body;
     const updateData = {};
     if (Array.isArray(appointmentStatuses)) updateData.appointmentStatuses = appointmentStatuses;
     if (Array.isArray(officeNames)) updateData.officeNames = officeNames;
     if (Array.isArray(positions)) updateData.positions = positions;
     if (Array.isArray(aoYears)) updateData.aoYears = aoYears;
     if (Array.isArray(reasonsForSeparation)) updateData.reasonsForSeparation = reasonsForSeparation;
-    if (Array.isArray(recordLocations)) saveRecordLocations(recordLocations);
-    if (Array.isArray(dispositionProvisions)) saveDispositionProvisions(dispositionProvisions);
-    if (Array.isArray(itemNumbers)) saveItemNumbers(itemNumbers);
-    if (Array.isArray(divisions)) saveDivisions(divisions);
-    if (Array.isArray(classificationCategories)) saveClassificationCategories(classificationCategories);
-    if (Array.isArray(subCategories)) saveSubCategories(subCategories);
+    if (Array.isArray(recordLocations)) {
+      updateData.recordLocations = recordLocations;
+      saveRecordLocations(recordLocations);
+    }
+    if (Array.isArray(dispositionProvisions)) {
+      updateData.dispositionProvisions = dispositionProvisions;
+      saveDispositionProvisions(dispositionProvisions);
+    }
+    if (Array.isArray(itemNumbers)) {
+      updateData.itemNumbers = itemNumbers;
+      saveItemNumbers(itemNumbers);
+    }
+    if (Array.isArray(prdsGrds)) {
+      updateData.prdsGrds = prdsGrds;
+      savePrdsGrds(prdsGrds);
+    }
+    if (Array.isArray(divisions)) {
+      updateData.divisions = divisions;
+      saveDivisions(divisions);
+    }
+    if (Array.isArray(classificationCategories)) {
+      updateData.classificationCategories = classificationCategories;
+      saveClassificationCategories(classificationCategories);
+    }
+    if (Array.isArray(subCategories)) {
+      updateData.subCategories = subCategories;
+      saveSubCategories(subCategories);
+    }
     let settings = await prisma2.systemSetting.findFirst();
     if (settings) {
       settings = await prisma2.systemSetting.update({ where: { id: settings.id }, data: updateData });
@@ -60611,12 +60714,13 @@ router5.put("/dropdown-options", requireDeveloperRole, async (req, res) => {
       appointmentStatuses: settings.appointmentStatuses ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: settings.officeNames ?? [],
       positions: settings.positions ?? [],
-      recordLocations: getRecordLocations(),
-      dispositionProvisions: getDispositionProvisions(),
-      itemNumbers: getItemNumbers(),
-      divisions: getDivisions(),
-      classificationCategories: getClassificationCategories(),
-      subCategories: getSubCategories(),
+      recordLocations: settings.recordLocations ?? getRecordLocations(),
+      dispositionProvisions: settings.dispositionProvisions ?? getDispositionProvisions(),
+      itemNumbers: settings.itemNumbers ?? getItemNumbers(),
+      prdsGrds: settings.prdsGrds ?? getPrdsGrds(),
+      divisions: settings.divisions ?? getDivisions(),
+      classificationCategories: settings.classificationCategories ?? getClassificationCategories(),
+      subCategories: settings.subCategories ?? getSubCategories(),
       aoYears: settings.aoYears ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: settings.reasonsForSeparation ?? DEFAULT_REASONS_FOR_SEPARATION,
       message: "Dropdown options updated successfully"
@@ -61175,8 +61279,92 @@ var activity_routes_default = router8;
 // server/src/routes/chat.routes.ts
 var import_express9 = __toESM(require_express2());
 var import_client4 = require("@prisma/client");
+var import_fs6 = __toESM(require("fs"));
+var import_path6 = __toESM(require("path"));
 var router9 = (0, import_express9.Router)();
 var prisma4 = new import_client4.PrismaClient();
+function getDataDir2() {
+  const customUploads = process.env.UPLOADS_DIR;
+  if (customUploads) {
+    const p = import_path6.default.join(customUploads, "data");
+    if (!import_fs6.default.existsSync(p)) import_fs6.default.mkdirSync(p, { recursive: true });
+    return p;
+  }
+  const programData = process.env.PROGRAMDATA || "C:\\ProgramData";
+  const defaultDir = import_path6.default.join(programData, "ERMS", "uploads", "data");
+  try {
+    if (!import_fs6.default.existsSync(defaultDir)) import_fs6.default.mkdirSync(defaultDir, { recursive: true });
+    return defaultDir;
+  } catch {
+    const localDir = import_path6.default.join(__dirname, "../../uploads/data");
+    if (!import_fs6.default.existsSync(localDir)) import_fs6.default.mkdirSync(localDir, { recursive: true });
+    return localDir;
+  }
+}
+function getMigratedFilePath2(fileName) {
+  const targetDir = getDataDir2();
+  const targetFile = import_path6.default.join(targetDir, fileName);
+  if (!import_fs6.default.existsSync(targetFile)) {
+    const legacyFile = import_path6.default.join(__dirname, "../../uploads/data", fileName);
+    if (import_fs6.default.existsSync(legacyFile)) {
+      try {
+        import_fs6.default.copyFileSync(legacyFile, targetFile);
+      } catch (err) {
+        console.error(`Failed to migrate ${fileName}:`, err);
+      }
+    }
+  }
+  return targetFile;
+}
+function getGroupsFilePath() {
+  return getMigratedFilePath2("group_chats.json");
+}
+function readGroupChats() {
+  try {
+    const file = getGroupsFilePath();
+    if (!import_fs6.default.existsSync(file)) {
+      import_fs6.default.writeFileSync(file, "[]", "utf-8");
+      return [];
+    }
+    const data = import_fs6.default.readFileSync(file, "utf-8");
+    return JSON.parse(data || "[]");
+  } catch (err) {
+    console.error("Error reading group_chats.json:", err);
+    return [];
+  }
+}
+function saveGroupChats(groups) {
+  try {
+    const file = getGroupsFilePath();
+    import_fs6.default.writeFileSync(file, JSON.stringify(groups, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error saving group_chats.json:", err);
+  }
+}
+function getReadsFilePath() {
+  return getMigratedFilePath2("group_chat_reads.json");
+}
+function readGroupChatReads() {
+  try {
+    const file = getReadsFilePath();
+    if (!import_fs6.default.existsSync(file)) {
+      import_fs6.default.writeFileSync(file, "{}", "utf-8");
+      return {};
+    }
+    const data = import_fs6.default.readFileSync(file, "utf-8");
+    return JSON.parse(data || "{}");
+  } catch (err) {
+    return {};
+  }
+}
+function saveGroupChatReads(reads) {
+  try {
+    const file = getReadsFilePath();
+    import_fs6.default.writeFileSync(file, JSON.stringify(reads, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error saving group_chat_reads.json:", err);
+  }
+}
 router9.get("/unread", async (req, res) => {
   const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
   if (!userId) {
@@ -61197,10 +61385,233 @@ router9.get("/unread", async (req, res) => {
       acc[curr.senderId] = curr._count.id;
       return acc;
     }, {});
+    const allGroups = readGroupChats();
+    const userGroups = allGroups.filter((g) => Array.isArray(g.memberIds) && g.memberIds.includes(userId));
+    const reads = readGroupChatReads();
+    for (const group of userGroups) {
+      const lastReadIso = reads[`${userId}_${group.id}`] || group.createdAt;
+      const groupUnreadCount = await prisma4.chatMessage.count({
+        where: {
+          recipientId: group.id,
+          senderId: { not: userId },
+          createdAt: { gt: new Date(lastReadIso) }
+        }
+      });
+      if (groupUnreadCount > 0) {
+        counts[group.id] = groupUnreadCount;
+      }
+    }
     res.json(counts);
   } catch (error) {
     console.error("Error fetching unread chat counts:", error);
     res.status(500).json({ error: "Failed to fetch unread chat counts" });
+  }
+});
+router9.get("/groups", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID not provided" });
+  }
+  try {
+    const allGroups = readGroupChats();
+    const userGroups = allGroups.filter((g) => Array.isArray(g.memberIds) && g.memberIds.includes(userId));
+    const allMemberIds = Array.from(new Set(userGroups.flatMap((g) => g.memberIds || [])));
+    const memberUsers = await prisma4.user.findMany({
+      where: { id: { in: allMemberIds } },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        profilePicture: true
+      }
+    });
+    const userMap = new Map(memberUsers.map((u) => [u.id, u]));
+    const result = await Promise.all(
+      userGroups.map(async (group) => {
+        const lastMsg = await prisma4.chatMessage.findFirst({
+          where: { recipientId: group.id },
+          orderBy: { createdAt: "desc" }
+        });
+        const members = (group.memberIds || []).map((mId) => userMap.get(mId) || { id: mId, username: mId, firstName: "User", lastName: "" });
+        return {
+          id: group.id,
+          username: group.name,
+          firstName: group.name,
+          lastName: "",
+          role: "Group Chat",
+          isGroup: true,
+          creatorId: group.creatorId,
+          creatorName: group.creatorName,
+          members,
+          lastMessage: lastMsg ? {
+            content: `${lastMsg.senderName}: ${lastMsg.content}`,
+            createdAt: lastMsg.createdAt,
+            senderId: lastMsg.senderId,
+            senderName: lastMsg.senderName
+          } : null
+        };
+      })
+    );
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching group chats:", error);
+    res.status(500).json({ error: "Failed to fetch group chats" });
+  }
+});
+router9.post("/groups", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const { id, name, creatorId, creatorName, memberIds } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: "Group name is required" });
+  }
+  try {
+    const actorId = creatorId || userId || "system";
+    let actorName = creatorName;
+    if (!actorName && actorId !== "system") {
+      const u = await prisma4.user.findUnique({ where: { id: actorId }, select: { firstName: true, lastName: true } });
+      if (u) actorName = `${u.firstName} ${u.lastName}`.trim();
+    }
+    const groups = readGroupChats();
+    const existingIndex = groups.findIndex((g) => g.id === id);
+    const members = Array.from(/* @__PURE__ */ new Set([actorId, ...memberIds || []]));
+    const groupObj = {
+      id: id || `group_${Date.now()}`,
+      name: name.trim(),
+      creatorId: actorId,
+      creatorName: actorName || "User",
+      memberIds: members,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (existingIndex >= 0) {
+      groups[existingIndex] = { ...groups[existingIndex], ...groupObj };
+    } else {
+      groups.unshift(groupObj);
+    }
+    saveGroupChats(groups);
+    await prisma4.chatMessage.create({
+      data: {
+        senderId: "system",
+        senderName: "System",
+        recipientId: groupObj.id,
+        content: `Group "${groupObj.name}" was created by ${groupObj.creatorName}`,
+        read: true
+      }
+    });
+    getIO()?.emit("chatsUpdated");
+    res.status(201).json(groupObj);
+  } catch (error) {
+    console.error("Error creating group chat:", error);
+    res.status(500).json({ error: "Failed to create group chat" });
+  }
+});
+router9.post("/groups/:id/members", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const { id } = req.params;
+  const { memberIds } = req.body;
+  if (!Array.isArray(memberIds) || memberIds.length === 0) {
+    return res.status(400).json({ error: "memberIds array is required" });
+  }
+  try {
+    const groups = readGroupChats();
+    const group = groups.find((g) => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: "Group chat not found" });
+    }
+    if (userId && !group.memberIds.includes(userId)) {
+      return res.status(403).json({ error: "Forbidden: You are not a member of this group" });
+    }
+    const addedUsers = await prisma4.user.findMany({
+      where: { id: { in: memberIds } },
+      select: { firstName: true, lastName: true }
+    });
+    const addedNames = addedUsers.map((u) => `${u.firstName} ${u.lastName}`.trim()).join(", ");
+    group.memberIds = Array.from(/* @__PURE__ */ new Set([...group.memberIds, ...memberIds]));
+    group.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    saveGroupChats(groups);
+    let actorName = "A member";
+    if (userId) {
+      const u = await prisma4.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      if (u) actorName = `${u.firstName} ${u.lastName}`.trim();
+    }
+    await prisma4.chatMessage.create({
+      data: {
+        senderId: "system",
+        senderName: "System",
+        recipientId: group.id,
+        content: `${actorName} added ${addedNames || "new members"} to the group chat`,
+        read: true
+      }
+    });
+    getIO()?.emit("chatsUpdated");
+    res.json(group);
+  } catch (error) {
+    console.error("Error adding members to group:", error);
+    res.status(500).json({ error: "Failed to add members to group" });
+  }
+});
+router9.delete("/groups/:id/members/:memberId", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const { id, memberId } = req.params;
+  try {
+    const groups = readGroupChats();
+    const group = groups.find((g) => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: "Group chat not found" });
+    }
+    if (userId && !group.memberIds.includes(userId)) {
+      return res.status(403).json({ error: "Forbidden: You are not a member of this group" });
+    }
+    const removedUser = await prisma4.user.findUnique({
+      where: { id: memberId },
+      select: { firstName: true, lastName: true }
+    });
+    const removedName = removedUser ? `${removedUser.firstName} ${removedUser.lastName}`.trim() : "a member";
+    group.memberIds = group.memberIds.filter((m) => m !== memberId);
+    group.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    saveGroupChats(groups);
+    let actorName = "A member";
+    if (userId) {
+      const u = await prisma4.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      if (u) actorName = `${u.firstName} ${u.lastName}`.trim();
+    }
+    await prisma4.chatMessage.create({
+      data: {
+        senderId: "system",
+        senderName: "System",
+        recipientId: group.id,
+        content: memberId === userId ? `${actorName} left the group chat` : `${actorName} removed ${removedName} from the group chat`,
+        read: true
+      }
+    });
+    getIO()?.emit("chatsUpdated");
+    res.json(group);
+  } catch (error) {
+    console.error("Error removing member from group:", error);
+    res.status(500).json({ error: "Failed to remove member from group" });
+  }
+});
+router9.delete("/groups/:id", async (req, res) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const { id } = req.params;
+  try {
+    let groups = readGroupChats();
+    const group = groups.find((g) => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: "Group chat not found" });
+    }
+    groups = groups.filter((g) => g.id !== id);
+    saveGroupChats(groups);
+    await prisma4.chatMessage.deleteMany({
+      where: { recipientId: id }
+    });
+    getIO()?.emit("chatsUpdated");
+    res.json({ message: "Group chat deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting group chat:", error);
+    res.status(500).json({ error: "Failed to delete group chat" });
   }
 });
 router9.get("/recent", async (req, res) => {
@@ -61210,19 +61621,18 @@ router9.get("/recent", async (req, res) => {
   }
   try {
     const sentTo = await prisma4.chatMessage.findMany({
-      where: { senderId: userId, deletedBySender: false },
+      where: { senderId: userId, deletedBySender: false, NOT: { recipientId: { startsWith: "group_" } } },
       select: { recipientId: true },
       distinct: ["recipientId"]
     });
     const receivedFrom = await prisma4.chatMessage.findMany({
-      where: { recipientId: userId, deletedByRecipient: false },
+      where: { recipientId: userId, deletedByRecipient: false, NOT: { senderId: { startsWith: "group_" } } },
       select: { senderId: true },
       distinct: ["senderId"]
     });
-    const contactIds = Array.from(/* @__PURE__ */ new Set([
-      ...sentTo.map((m) => m.recipientId),
-      ...receivedFrom.map((m) => m.senderId)
-    ]));
+    const contactIds = Array.from(
+      /* @__PURE__ */ new Set([...sentTo.map((m) => m.recipientId), ...receivedFrom.map((m) => m.senderId)])
+    ).filter((id) => id !== "system" && !id.startsWith("group_"));
     const contacts = await prisma4.user.findMany({
       where: { id: { in: contactIds } },
       select: {
@@ -61250,6 +61660,7 @@ router9.get("/recent", async (req, res) => {
         });
         return {
           ...contact,
+          isGroup: false,
           lastMessage: lastMsg ? {
             content: lastMsg.content,
             createdAt: lastMsg.createdAt,
@@ -61258,12 +61669,54 @@ router9.get("/recent", async (req, res) => {
         };
       })
     );
-    contactsWithLastMessage.sort((a, b) => {
+    const allGroups = readGroupChats();
+    const userGroups = allGroups.filter((g) => Array.isArray(g.memberIds) && g.memberIds.includes(userId));
+    const allMemberIds = Array.from(new Set(userGroups.flatMap((g) => g.memberIds || [])));
+    const memberUsers = await prisma4.user.findMany({
+      where: { id: { in: allMemberIds } },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        profilePicture: true
+      }
+    });
+    const userMap = new Map(memberUsers.map((u) => [u.id, u]));
+    const groupContacts = await Promise.all(
+      userGroups.map(async (group) => {
+        const lastMsg = await prisma4.chatMessage.findFirst({
+          where: { recipientId: group.id },
+          orderBy: { createdAt: "desc" }
+        });
+        const members = (group.memberIds || []).map((mId) => userMap.get(mId) || { id: mId, username: mId, firstName: "User", lastName: "" });
+        return {
+          id: group.id,
+          username: group.name,
+          firstName: group.name,
+          lastName: "",
+          role: "Group Chat",
+          isGroup: true,
+          creatorId: group.creatorId,
+          creatorName: group.creatorName,
+          members,
+          lastMessage: lastMsg ? {
+            content: `${lastMsg.senderName}: ${lastMsg.content}`,
+            createdAt: lastMsg.createdAt,
+            senderId: lastMsg.senderId,
+            senderName: lastMsg.senderName
+          } : null
+        };
+      })
+    );
+    const allConversations = [...contactsWithLastMessage, ...groupContacts];
+    allConversations.sort((a, b) => {
       const timeA = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
       const timeB = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
       return timeB - timeA;
     });
-    res.json(contactsWithLastMessage);
+    res.json(allConversations);
   } catch (error) {
     console.error("Error fetching recent chat contacts:", error);
     res.status(500).json({ error: "Failed to fetch recent chat contacts" });
@@ -61279,6 +61732,27 @@ router9.get("/", async (req, res) => {
     return res.status(400).json({ error: "recipientId query parameter is required" });
   }
   try {
+    const isGroup = recipientId.startsWith("group_");
+    if (isGroup) {
+      const groups = readGroupChats();
+      const group = groups.find((g) => g.id === recipientId);
+      if (!group || !Array.isArray(group.memberIds) || !group.memberIds.includes(userId)) {
+        return res.status(403).json({ error: "Forbidden: You are not an approved member of this group chat" });
+      }
+      const reads = readGroupChatReads();
+      reads[`${userId}_${recipientId}`] = (/* @__PURE__ */ new Date()).toISOString();
+      saveGroupChatReads(reads);
+      const messages2 = await prisma4.chatMessage.findMany({
+        where: {
+          recipientId
+        },
+        orderBy: {
+          createdAt: "asc"
+        }
+      });
+      getIO()?.emit("chatsUpdated");
+      return res.json(messages2);
+    }
     const messages = await prisma4.chatMessage.findMany({
       where: {
         OR: [
@@ -61320,6 +61794,7 @@ router9.post("/", async (req, res) => {
     return res.status(400).json({ error: "Message content is required" });
   }
   try {
+    const isGroup = recipientId.startsWith("group_");
     const sender = await prisma4.user.findUnique({
       where: { id: userId },
       select: {
@@ -61331,6 +61806,24 @@ router9.post("/", async (req, res) => {
       return res.status(404).json({ error: "Sender user not found" });
     }
     const senderName = `${sender.firstName} ${sender.lastName}`.trim() || "User";
+    if (isGroup) {
+      const groups = readGroupChats();
+      const group = groups.find((g) => g.id === recipientId);
+      if (!group || !Array.isArray(group.memberIds) || !group.memberIds.includes(userId)) {
+        return res.status(403).json({ error: "Forbidden: You are not a member of this group chat" });
+      }
+      const message2 = await prisma4.chatMessage.create({
+        data: {
+          senderId: userId,
+          senderName,
+          recipientId,
+          content: content.trim(),
+          read: true
+        }
+      });
+      getIO()?.emit("chatsUpdated");
+      return res.status(201).json(message2);
+    }
     const message = await prisma4.chatMessage.create({
       data: {
         senderId: userId,
@@ -61343,7 +61836,7 @@ router9.post("/", async (req, res) => {
     getIO()?.emit("chatsUpdated");
     res.status(201).json(message);
   } catch (error) {
-    console.error("Error sending private message:", error);
+    console.error("Error sending message:", error);
     res.status(500).json({ error: "Failed to send message" });
   }
 });
@@ -61357,6 +61850,17 @@ router9.delete("/:recipientId", async (req, res) => {
     return res.status(400).json({ error: "recipientId is required" });
   }
   try {
+    const isGroup = recipientId.startsWith("group_");
+    if (isGroup) {
+      const groups = readGroupChats();
+      const group = groups.find((g) => g.id === recipientId);
+      if (group) {
+        group.memberIds = group.memberIds.filter((m) => m !== userId);
+        saveGroupChats(groups);
+      }
+      getIO()?.emit("chatsUpdated");
+      return res.json({ message: "Left group chat successfully" });
+    }
     const updateSent = await prisma4.chatMessage.updateMany({
       where: { senderId: userId, recipientId },
       data: { deletedBySender: true }
@@ -61700,8 +62204,8 @@ var yellowBox_routes_default = router10;
 
 // server/src/routes/inventory.routes.ts
 var import_express11 = __toESM(require_express2());
-var import_fs6 = __toESM(require("fs"));
-var import_path6 = __toESM(require("path"));
+var import_fs7 = __toESM(require("fs"));
+var import_path7 = __toESM(require("path"));
 var router11 = (0, import_express11.Router)();
 async function getUserInfo(req) {
   const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"] || req.body?.userId;
@@ -61794,22 +62298,51 @@ function syncSubCategoryOption(subCategoryName) {
     console.error("Error syncing sub category option:", err);
   }
 }
-function getDataFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path6.default.join(process.env.UPLOADS_DIR, "data") : import_path6.default.join(__dirname, "../../uploads/data");
-  if (!import_fs6.default.existsSync(dataDir)) {
-    import_fs6.default.mkdirSync(dataDir, { recursive: true });
+function getDataDir3() {
+  const customUploads = process.env.UPLOADS_DIR;
+  if (customUploads) {
+    const p = import_path7.default.join(customUploads, "data");
+    if (!import_fs7.default.existsSync(p)) import_fs7.default.mkdirSync(p, { recursive: true });
+    return p;
   }
-  return import_path6.default.join(dataDir, "inventory_records.json");
+  const programData = process.env.PROGRAMDATA || "C:\\ProgramData";
+  const defaultDir = import_path7.default.join(programData, "ERMS", "uploads", "data");
+  try {
+    if (!import_fs7.default.existsSync(defaultDir)) import_fs7.default.mkdirSync(defaultDir, { recursive: true });
+    return defaultDir;
+  } catch {
+    const localDir = import_path7.default.join(__dirname, "../../uploads/data");
+    if (!import_fs7.default.existsSync(localDir)) import_fs7.default.mkdirSync(localDir, { recursive: true });
+    return localDir;
+  }
+}
+function getMigratedFilePath3(fileName) {
+  const targetDir = getDataDir3();
+  const targetFile = import_path7.default.join(targetDir, fileName);
+  if (!import_fs7.default.existsSync(targetFile)) {
+    const legacyFile = import_path7.default.join(__dirname, "../../uploads/data", fileName);
+    if (import_fs7.default.existsSync(legacyFile)) {
+      try {
+        import_fs7.default.copyFileSync(legacyFile, targetFile);
+      } catch (err) {
+        console.error(`Failed to migrate ${fileName}:`, err);
+      }
+    }
+  }
+  return targetFile;
+}
+function getDataFilePath() {
+  return getMigratedFilePath3("inventory_records.json");
 }
 var defaultInitialRecords = [];
 function readRecords() {
   try {
     const filePath = getDataFilePath();
-    if (!import_fs6.default.existsSync(filePath)) {
-      import_fs6.default.writeFileSync(filePath, JSON.stringify(defaultInitialRecords, null, 2), "utf8");
+    if (!import_fs7.default.existsSync(filePath)) {
+      import_fs7.default.writeFileSync(filePath, JSON.stringify(defaultInitialRecords, null, 2), "utf8");
       return defaultInitialRecords;
     }
-    const rawData = import_fs6.default.readFileSync(filePath, "utf8");
+    const rawData = import_fs7.default.readFileSync(filePath, "utf8");
     return JSON.parse(rawData);
   } catch (error) {
     console.error("Failed to read inventory records:", error);
@@ -61819,7 +62352,7 @@ function readRecords() {
 function saveRecords(records) {
   try {
     const filePath = getDataFilePath();
-    import_fs6.default.writeFileSync(filePath, JSON.stringify(records, null, 2), "utf8");
+    import_fs7.default.writeFileSync(filePath, JSON.stringify(records, null, 2), "utf8");
   } catch (error) {
     console.error("Failed to save inventory records:", error);
   }
@@ -61951,20 +62484,16 @@ router11.post("/disposal-history", async (req, res) => {
   }
 });
 function getInventoryRequestsFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path6.default.join(process.env.UPLOADS_DIR, "data") : import_path6.default.join(__dirname, "../../uploads/data");
-  if (!import_fs6.default.existsSync(dataDir)) {
-    import_fs6.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path6.default.join(dataDir, "inventory_requests.json");
+  return getMigratedFilePath3("inventory_requests.json");
 }
 function readInventoryRequests() {
   try {
     const filePath = getInventoryRequestsFilePath();
-    if (!import_fs6.default.existsSync(filePath)) {
+    if (!import_fs7.default.existsSync(filePath)) {
       saveInventoryRequests([]);
       return [];
     }
-    const raw = import_fs6.default.readFileSync(filePath, "utf8");
+    const raw = import_fs7.default.readFileSync(filePath, "utf8");
     const reqs = JSON.parse(raw);
     return Array.isArray(reqs) ? reqs : [];
   } catch (err) {
@@ -61975,7 +62504,7 @@ function readInventoryRequests() {
 function saveInventoryRequests(reqs) {
   try {
     const filePath = getInventoryRequestsFilePath();
-    import_fs6.default.writeFileSync(filePath, JSON.stringify(reqs, null, 2), "utf8");
+    import_fs7.default.writeFileSync(filePath, JSON.stringify(reqs, null, 2), "utf8");
   } catch (err) {
     console.error("Failed to save inventory requests:", err);
   }
@@ -62078,9 +62607,39 @@ router11.post("/requests", async (req, res) => {
     res.status(500).json({ error: err.message || "Failed to submit request" });
   }
 });
-function calculateNewInclusiveDates(currentDatesStr, yearsToRemove) {
-  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-  const yearsStr = String(currentDatesStr || "").trim();
+function formatYearsToRanges(years, hasPresent = false, currentYear = (/* @__PURE__ */ new Date()).getFullYear()) {
+  const uniqueSorted = [...new Set(years)].filter((y) => !isNaN(y)).sort((a, b) => a - b);
+  if (uniqueSorted.length === 0) {
+    return "";
+  }
+  const groups = [];
+  let currentGroup = [uniqueSorted[0]];
+  for (let i = 1; i < uniqueSorted.length; i++) {
+    if (uniqueSorted[i] === uniqueSorted[i - 1] + 1) {
+      currentGroup.push(uniqueSorted[i]);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [uniqueSorted[i]];
+    }
+  }
+  groups.push(currentGroup);
+  const formatted = groups.map((g, idx) => {
+    const isLastGroup = idx === groups.length - 1;
+    const gStart = g[0];
+    const gEnd = g[g.length - 1];
+    if (g.length === 1) {
+      return hasPresent && isLastGroup && gEnd === currentYear ? `${gStart} - Present` : `${gStart}`;
+    } else {
+      return hasPresent && isLastGroup && gEnd === currentYear ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
+    }
+  });
+  return formatted.join(", ");
+}
+function extractYearsFromInclusiveDates(datesStr, currentYear = (/* @__PURE__ */ new Date()).getFullYear()) {
+  const yearsStr = String(datesStr || "").trim();
+  if (!yearsStr || yearsStr.toLowerCase() === "disposed" || yearsStr.toLowerCase() === "n/a") {
+    return { years: [], hasPresent: false };
+  }
   const hasPresent = /present/i.test(yearsStr);
   let allYears = [];
   const segments = yearsStr.split(",").map((s) => s.trim());
@@ -62106,32 +62665,16 @@ function calculateNewInclusiveDates(currentDatesStr, yearsToRemove) {
       }
     }
   });
-  const remainingYears = allYears.filter((y) => !yearsToRemove.includes(y)).sort((a, b) => a - b);
+  return { years: [...new Set(allYears)].sort((a, b) => a - b), hasPresent };
+}
+function calculateNewInclusiveDates(currentDatesStr, yearsToRemove) {
+  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+  const { years: allYears, hasPresent } = extractYearsFromInclusiveDates(currentDatesStr, currentYear);
+  const remainingYears = allYears.filter((y) => !yearsToRemove.includes(y));
   if (remainingYears.length === 0) {
     return { newDatesStr: "Disposed", isDisposed: true };
   }
-  const groups = [];
-  let currentGroup = [remainingYears[0]];
-  for (let i = 1; i < remainingYears.length; i++) {
-    if (remainingYears[i] === remainingYears[i - 1] + 1) {
-      currentGroup.push(remainingYears[i]);
-    } else {
-      groups.push(currentGroup);
-      currentGroup = [remainingYears[i]];
-    }
-  }
-  groups.push(currentGroup);
-  const formatted = groups.map((g, idx) => {
-    const isLastGroup = idx === groups.length - 1;
-    const gStart = g[0];
-    const gEnd = g[g.length - 1];
-    if (g.length === 1) {
-      return hasPresent && isLastGroup && gEnd === currentYear ? `${gStart} - Present` : `${gStart}`;
-    } else {
-      return hasPresent && isLastGroup && gEnd === currentYear ? `${gStart} - Present` : `${gStart} - ${gEnd}`;
-    }
-  });
-  return { newDatesStr: formatted.join(", "), isDisposed: false };
+  return { newDatesStr: formatYearsToRanges(remainingYears, hasPresent, currentYear), isDisposed: false };
 }
 router11.post("/requests/:id/confirm", async (req, res) => {
   try {
@@ -62185,11 +62728,13 @@ router11.post("/requests/:id/confirm", async (req, res) => {
         const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
         if (targetStage === "Storage") {
           if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
-            const { isDisposed } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
+            const { newDatesStr, isDisposed } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
             if (isDisposed) {
               r.retentionStage = "Storage";
               r.storageStartDate = (/* @__PURE__ */ new Date()).toISOString();
               r.frequencyOfUse = "Inactive";
+            } else {
+              r.inclusiveDates = newDatesStr;
             }
           } else {
             r.retentionStage = "Storage";
@@ -62197,26 +62742,49 @@ router11.post("/requests/:id/confirm", async (req, res) => {
             r.frequencyOfUse = "Inactive";
           }
           const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
-          const actionYearsDisplay = sortedTargetYears.length > 0 ? sortedTargetYears.join(", ") : previousInclusiveDates || targetStage;
-          logs.unshift({
-            id: `DISP-${baseTimestamp}-${logs.length}`,
-            status: "Completed",
-            recordId: r.id,
-            seriesTitle: r.seriesTitle,
-            prdsGrds: r.prdsGrds,
-            itemNo: r.itemNo,
-            division: r.division || "General",
-            classificationCategory: r.classificationCategory || "General",
-            subCategory: r.subCategory || "",
-            disposedYears: `Moved to Storage: ${actionYearsDisplay}`,
-            previousInclusiveDates,
-            newInclusiveDates,
-            disposedAt: (/* @__PURE__ */ new Date()).toISOString(),
-            disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
-            reason: reqItem.reason,
-            attachmentUrl: reqItem.attachmentUrl,
-            attachmentName: reqItem.attachmentName
-          });
+          if (sortedTargetYears.length > 0) {
+            sortedTargetYears.forEach((year, idx) => {
+              logs.unshift({
+                id: `DISP-${baseTimestamp}-${logs.length}-${idx}`,
+                status: "Completed",
+                recordId: r.id,
+                seriesTitle: r.seriesTitle,
+                prdsGrds: r.prdsGrds,
+                itemNo: r.itemNo,
+                division: r.division || "General",
+                classificationCategory: r.classificationCategory || "General",
+                subCategory: r.subCategory || "",
+                disposedYears: `Moved to Storage: ${year}`,
+                previousInclusiveDates,
+                newInclusiveDates: r.inclusiveDates,
+                disposedAt: (/* @__PURE__ */ new Date()).toISOString(),
+                disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+                reason: reqItem.reason,
+                attachmentUrl: reqItem.attachmentUrl,
+                attachmentName: reqItem.attachmentName
+              });
+            });
+          } else {
+            logs.unshift({
+              id: `DISP-${baseTimestamp}-${logs.length}`,
+              status: "Completed",
+              recordId: r.id,
+              seriesTitle: r.seriesTitle,
+              prdsGrds: r.prdsGrds,
+              itemNo: r.itemNo,
+              division: r.division || "General",
+              classificationCategory: r.classificationCategory || "General",
+              subCategory: r.subCategory || "",
+              disposedYears: `Moved to Storage: ${previousInclusiveDates}`,
+              previousInclusiveDates,
+              newInclusiveDates: r.inclusiveDates,
+              disposedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
+              reason: reqItem.reason,
+              attachmentUrl: reqItem.attachmentUrl,
+              attachmentName: reqItem.attachmentName
+            });
+          }
         } else {
           const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
           if (sortedTargetYears.length > 0) {
@@ -62323,6 +62891,187 @@ router11.post("/disposal-history/update-status", async (req, res) => {
     res.status(500).json({ error: "Failed to update disposal history status" });
   }
 });
+router11.post("/disposal-history/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids array is required" });
+    }
+    let logs = readDisposalHistory();
+    let records = readRecords();
+    let recordsModified = false;
+    let logsModified = false;
+    for (const rawId of ids) {
+      let logIndex = logs.findIndex((l) => l.id === rawId);
+      let targetYear;
+      if (logIndex === -1) {
+        for (let i = 0; i < logs.length; i++) {
+          const l = logs[i];
+          if (rawId.startsWith(l.id)) {
+            logIndex = i;
+            const rest = rawId.slice(l.id.length);
+            const yMatch = rest.match(/\b(19\d{2}|20\d{2})\b/);
+            if (yMatch) targetYear = parseInt(yMatch[1], 10);
+            break;
+          }
+        }
+      }
+      if (logIndex !== -1) {
+        const log = logs[logIndex];
+        const record = records.find((r) => r.id === log.recordId);
+        let yearsToRevert = [];
+        if (targetYear) {
+          yearsToRevert = [targetYear];
+        } else {
+          const rawYears = String(log.disposedYears || "").replace(/Moved to Storage:\s*/i, "");
+          yearsToRevert = extractYearsFromInclusiveDates(rawYears).years;
+          if (yearsToRevert.length === 0 && log.previousInclusiveDates) {
+            const prevYears = extractYearsFromInclusiveDates(log.previousInclusiveDates).years;
+            const currYears = record ? extractYearsFromInclusiveDates(record.inclusiveDates).years : [];
+            yearsToRevert = prevYears.filter((y) => !currYears.includes(y));
+            if (yearsToRevert.length === 0) yearsToRevert = prevYears;
+          }
+        }
+        if (record && yearsToRevert.length > 0) {
+          const { years: currentYears, hasPresent } = extractYearsFromInclusiveDates(String(record.inclusiveDates || ""));
+          const logHasPresent = /present/i.test(String(log.previousInclusiveDates || ""));
+          const combinedYears = [.../* @__PURE__ */ new Set([...currentYears, ...yearsToRevert])].sort((a, b) => a - b);
+          record.inclusiveDates = formatYearsToRanges(combinedYears, hasPresent || logHasPresent);
+          const isStorageLog = String(log.disposedYears).includes("Storage");
+          if (isStorageLog) {
+            const otherStorageLogs = logs.filter(
+              (l, idx) => idx !== logIndex && l.recordId === record.id && String(l.disposedYears).includes("Storage") && !ids.some((delId) => delId === l.id || delId.startsWith(l.id))
+            );
+            if (otherStorageLogs.length === 0) {
+              record.retentionStage = "Active";
+              record.frequencyOfUse = "Active";
+              record.storageStartDate = void 0;
+            }
+          } else {
+            if (record.retentionStage === "Disposed") {
+              const hasStorageLog = logs.some(
+                (l, idx) => idx !== logIndex && l.recordId === record.id && String(l.disposedYears).includes("Storage") && !ids.some((delId) => delId === l.id || delId.startsWith(l.id))
+              );
+              record.retentionStage = hasStorageLog ? "Storage" : "Active";
+              record.frequencyOfUse = "Active";
+            }
+          }
+          recordsModified = true;
+        }
+        if (targetYear && log.disposedYears) {
+          const allLogYears = extractYearsFromInclusiveDates(log.disposedYears.replace(/Moved to Storage:\s*/i, "")).years;
+          const remainingLogYears = allLogYears.filter((y) => y !== targetYear);
+          if (remainingLogYears.length > 0) {
+            const isStorage = String(log.disposedYears).includes("Storage");
+            log.disposedYears = isStorage ? `Moved to Storage: ${remainingLogYears.sort((a, b) => a - b).join(", ")}` : remainingLogYears.sort((a, b) => a - b).join(", ");
+            logsModified = true;
+          } else {
+            logs.splice(logIndex, 1);
+            logsModified = true;
+          }
+        } else {
+          logs.splice(logIndex, 1);
+          logsModified = true;
+        }
+      }
+    }
+    if (logsModified) saveDisposalHistory(logs);
+    if (recordsModified) saveRecords(records);
+    res.json({ success: true, message: "Logs deleted and records reverted successfully" });
+  } catch (err) {
+    console.error("Error bulk deleting disposal history logs:", err);
+    res.status(500).json({ error: "Failed to bulk delete disposal history logs" });
+  }
+});
+router11.delete("/disposal-history/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const yearToRemoveParam = req.query.year ? parseInt(String(req.query.year), 10) : NaN;
+    let logs = readDisposalHistory();
+    let records = readRecords();
+    let recordsModified = false;
+    let logsModified = false;
+    let logIndex = logs.findIndex((l) => l.id === id);
+    let targetYear = !isNaN(yearToRemoveParam) ? yearToRemoveParam : void 0;
+    if (logIndex === -1) {
+      for (let i = 0; i < logs.length; i++) {
+        const l = logs[i];
+        if (id.startsWith(l.id)) {
+          logIndex = i;
+          const rest = id.slice(l.id.length);
+          const yMatch = rest.match(/\b(19\d{2}|20\d{2})\b/);
+          if (yMatch) targetYear = parseInt(yMatch[1], 10);
+          break;
+        }
+      }
+    }
+    if (logIndex === -1) {
+      return res.status(404).json({ error: "Log not found" });
+    }
+    const log = logs[logIndex];
+    const record = records.find((r) => r.id === log.recordId);
+    let yearsToRevert = [];
+    if (targetYear) {
+      yearsToRevert = [targetYear];
+    } else {
+      const rawYears = String(log.disposedYears || "").replace(/Moved to Storage:\s*/i, "");
+      yearsToRevert = extractYearsFromInclusiveDates(rawYears).years;
+      if (yearsToRevert.length === 0 && log.previousInclusiveDates) {
+        const prevYears = extractYearsFromInclusiveDates(log.previousInclusiveDates).years;
+        const currYears = record ? extractYearsFromInclusiveDates(record.inclusiveDates).years : [];
+        yearsToRevert = prevYears.filter((y) => !currYears.includes(y));
+        if (yearsToRevert.length === 0) yearsToRevert = prevYears;
+      }
+    }
+    if (record && yearsToRevert.length > 0) {
+      const { years: currentYears, hasPresent } = extractYearsFromInclusiveDates(String(record.inclusiveDates || ""));
+      const logHasPresent = /present/i.test(String(log.previousInclusiveDates || ""));
+      const combinedYears = [.../* @__PURE__ */ new Set([...currentYears, ...yearsToRevert])].sort((a, b) => a - b);
+      record.inclusiveDates = formatYearsToRanges(combinedYears, hasPresent || logHasPresent);
+      const isStorageLog = String(log.disposedYears).includes("Storage");
+      if (isStorageLog) {
+        const otherStorageLogs = logs.filter(
+          (l, idx) => idx !== logIndex && l.recordId === record.id && String(l.disposedYears).includes("Storage") && l.id !== id && !id.startsWith(l.id)
+        );
+        if (otherStorageLogs.length === 0) {
+          record.retentionStage = "Active";
+          record.frequencyOfUse = "Active";
+          record.storageStartDate = void 0;
+        }
+      } else {
+        if (record.retentionStage === "Disposed") {
+          const hasStorageLog = logs.some(
+            (l, idx) => idx !== logIndex && l.recordId === record.id && String(l.disposedYears).includes("Storage") && l.id !== id && !id.startsWith(l.id)
+          );
+          record.retentionStage = hasStorageLog ? "Storage" : "Active";
+          record.frequencyOfUse = "Active";
+        }
+      }
+      recordsModified = true;
+    }
+    if (targetYear && log.disposedYears) {
+      const allLogYears = extractYearsFromInclusiveDates(log.disposedYears.replace(/Moved to Storage:\s*/i, "")).years;
+      const remainingLogYears = allLogYears.filter((y) => y !== targetYear);
+      if (remainingLogYears.length > 0) {
+        const isStorage = String(log.disposedYears).includes("Storage");
+        log.disposedYears = isStorage ? `Moved to Storage: ${remainingLogYears.sort((a, b) => a - b).join(", ")}` : remainingLogYears.sort((a, b) => a - b).join(", ");
+        logsModified = true;
+      } else {
+        logs.splice(logIndex, 1);
+        logsModified = true;
+      }
+    } else {
+      logs.splice(logIndex, 1);
+      logsModified = true;
+    }
+    if (logsModified) saveDisposalHistory(logs);
+    if (recordsModified) saveRecords(records);
+    res.json({ success: true, message: "Log deleted and record reverted successfully" });
+  } catch (err) {
+    console.error("Error deleting disposal history log:", err);
+    res.status(500).json({ error: "Failed to delete disposal history log" });
+  }
+});
 router11.post("/requests/:id/reject", async (req, res) => {
   try {
     const { id } = req.params;
@@ -62379,7 +63128,16 @@ router11.post("/", async (req, res) => {
       return res.status(400).json({ error: "Please fill in all required fields (Series Title, Dates, Volume, Location)." });
     }
     const records = readRecords();
-    const newId = `INV-${(/* @__PURE__ */ new Date()).getFullYear()}-${String(records.length + 1).padStart(3, "0")}`;
+    const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const prefix = `INV-${currentYear}-`;
+    const maxSeq = records.reduce((max, r) => {
+      if (r.id.startsWith(prefix)) {
+        const seq = parseInt(r.id.slice(prefix.length), 10);
+        return !isNaN(seq) && seq > max ? seq : max;
+      }
+      return max;
+    }, 0);
+    const newId = `${prefix}${String(maxSeq + 1).padStart(3, "0")}`;
     const activeYrs = Number(activeDeskYrs) || 0;
     const storYrs = Number(storageYrs) || 0;
     const totalRetention = activeYrs + storYrs;
@@ -62584,21 +63342,17 @@ router11.delete("/:id", async (req, res) => {
   }
 });
 function getDisposalHistoryFilePath() {
-  const dataDir = process.env.UPLOADS_DIR ? import_path6.default.join(process.env.UPLOADS_DIR, "data") : import_path6.default.join(__dirname, "../../uploads/data");
-  if (!import_fs6.default.existsSync(dataDir)) {
-    import_fs6.default.mkdirSync(dataDir, { recursive: true });
-  }
-  return import_path6.default.join(dataDir, "disposal_history.json");
+  return getMigratedFilePath3("disposal_history.json");
 }
 var defaultDisposalHistory = [];
 function readDisposalHistory() {
   try {
     const filePath = getDisposalHistoryFilePath();
-    if (!import_fs6.default.existsSync(filePath)) {
+    if (!import_fs7.default.existsSync(filePath)) {
       saveDisposalHistory(defaultDisposalHistory);
       return defaultDisposalHistory;
     }
-    const raw = import_fs6.default.readFileSync(filePath, "utf8");
+    const raw = import_fs7.default.readFileSync(filePath, "utf8");
     const logs = JSON.parse(raw);
     if (!Array.isArray(logs) || logs.length === 0) {
       saveDisposalHistory(defaultDisposalHistory);
@@ -62613,7 +63367,7 @@ function readDisposalHistory() {
 function saveDisposalHistory(logs) {
   try {
     const filePath = getDisposalHistoryFilePath();
-    import_fs6.default.writeFileSync(filePath, JSON.stringify(logs, null, 2), "utf8");
+    import_fs7.default.writeFileSync(filePath, JSON.stringify(logs, null, 2), "utf8");
   } catch (err) {
     console.error("Failed to save disposal history:", err);
   }
@@ -62709,6 +63463,22 @@ import_dotenv.default.config();
     });
     console.log(`[server] Admin123 user ensured with username: "admin123", password: "${adminPassword}"`);
     console.log(`[server] Developer user ensured with username: "${devUsername}", password: "${devPassword}"`);
+    const users = await prisma_default.user.findMany();
+    for (const user of users) {
+      if (user.permissions && typeof user.permissions === "object" && !Array.isArray(user.permissions)) {
+        const perms = user.permissions;
+        if (perms.allowedTabs && !perms.allowedTabs.includes("Dashboard Analytics")) {
+          if (["admin", "superadmin", "developer"].includes(user.role)) {
+            perms.allowedTabs.push("Dashboard Analytics");
+            await prisma_default.user.update({
+              where: { id: user.id },
+              data: { permissions: perms }
+            });
+            console.log(`[server] Granted Dashboard Analytics to user ${user.username}`);
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error("[server] Error ensuring developer user exists:", err);
   }
@@ -62727,21 +63497,21 @@ try {
   const dest2 = "c:\\Employee Records Management System\\public\\template.xlsx";
   const dest3 = "c:\\Employee Records Management System\\public\\NAP FORM 1 (FORMAT).xlsx";
   const dest4 = "c:\\Employee Records Management System\\public\\NAP FORM 1 (Sample Format).xlsx";
-  if (import_fs7.default.existsSync(srcF_sample)) {
-    import_fs7.default.copyFileSync(srcF_sample, dest2);
-    import_fs7.default.copyFileSync(srcF_sample, dest4);
+  if (import_fs8.default.existsSync(srcF_sample)) {
+    import_fs8.default.copyFileSync(srcF_sample, dest2);
+    import_fs8.default.copyFileSync(srcF_sample, dest4);
   }
-  if (import_fs7.default.existsSync(srcF_format)) {
-    import_fs7.default.copyFileSync(srcF_format, dest1);
-    import_fs7.default.copyFileSync(srcF_format, dest3);
+  if (import_fs8.default.existsSync(srcF_format)) {
+    import_fs8.default.copyFileSync(srcF_format, dest1);
+    import_fs8.default.copyFileSync(srcF_format, dest3);
     console.log("[server] Copied templates to public/ directory");
   }
 } catch (e) {
   console.error("[server] Copy template error:", e);
 }
 app.get("/api/nap-template", (req, res) => {
-  const filePath = import_path7.default.resolve("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
-  if (import_fs7.default.existsSync(filePath)) {
+  const filePath = import_path8.default.resolve("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
+  if (import_fs8.default.existsSync(filePath)) {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.sendFile(filePath);
   } else {
@@ -62750,9 +63520,9 @@ app.get("/api/nap-template", (req, res) => {
 });
 app.get("/api/dump-template", async (req, res) => {
   try {
-    const fs8 = require("fs");
+    const fs9 = require("fs");
     const JSZip = require_lib7();
-    const data = fs8.readFileSync("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
+    const data = fs9.readFileSync("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
     const zip = await JSZip.loadAsync(data);
     const sheet = await zip.file("xl/worksheets/sheet1.xml").async("text");
     let strings = "";
@@ -62766,7 +63536,7 @@ app.get("/api/dump-template", async (req, res) => {
 app.use((0, import_cors.default)());
 app.use(import_express12.default.json({ limit: "50mb" }));
 app.use(import_express12.default.urlencoded({ extended: true, limit: "50mb" }));
-var uploadsPath = process.env.UPLOADS_DIR || import_path7.default.join(__dirname, "../uploads");
+var uploadsPath = process.env.UPLOADS_DIR || import_path8.default.join(__dirname, "../uploads");
 app.use("/uploads", import_express12.default.static(uploadsPath, {
   setHeaders: (res, filePath) => {
     if (filePath.toLowerCase().endsWith(".pdf")) {
@@ -62809,19 +63579,19 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
 var frontendDist = process.env.FRONTEND_DIST;
-if (frontendDist && import_fs7.default.existsSync(frontendDist)) {
+if (frontendDist && import_fs8.default.existsSync(frontendDist)) {
   app.use(import_express12.default.static(frontendDist));
   app.get("*", (_req, res) => {
-    res.sendFile(import_path7.default.join(frontendDist, "index.html"));
+    res.sendFile(import_path8.default.join(frontendDist, "index.html"));
   });
 }
-var certPath = process.env.SSL_CERT_PATH || import_path7.default.join(__dirname, "../certs/server-cert.pem");
-var keyPath = process.env.SSL_KEY_PATH || import_path7.default.join(__dirname, "../certs/server-key.pem");
-if (import_fs7.default.existsSync(certPath) && import_fs7.default.existsSync(keyPath)) {
+var certPath = process.env.SSL_CERT_PATH || import_path8.default.join(__dirname, "../certs/server-cert.pem");
+var keyPath = process.env.SSL_KEY_PATH || import_path8.default.join(__dirname, "../certs/server-key.pem");
+if (import_fs8.default.existsSync(certPath) && import_fs8.default.existsSync(keyPath)) {
   try {
     const httpsOptions = {
-      cert: import_fs7.default.readFileSync(certPath),
-      key: import_fs7.default.readFileSync(keyPath)
+      cert: import_fs8.default.readFileSync(certPath),
+      key: import_fs8.default.readFileSync(keyPath)
     };
     const server = import_https.default.createServer(httpsOptions, app);
     initSocket(server);

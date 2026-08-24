@@ -82,7 +82,18 @@ export async function checkAndAddDropdownOptions(data: {
 
 export async function syncExistingRecordsToDropdownOptions() {
   try {
-    console.log('[settings] Starting database check to sync existing offices and positions to dynamic settings...');
+    const settings = await prisma.systemSetting.findFirst();
+    const hasOffices = Array.isArray(settings?.officeNames) && (settings.officeNames as string[]).length > 0;
+    const hasPositions = Array.isArray(settings?.positions) && (settings.positions as string[]).length > 0;
+    const hasStatuses = Array.isArray(settings?.appointmentStatuses) && (settings.appointmentStatuses as string[]).length > 0;
+
+    // If dropdown options are already initialized and populated in DB, do not re-scan to avoid resurrecting deleted options
+    if (hasOffices && hasPositions && hasStatuses) {
+      console.log('[settings] Dropdown options already initialized in database. Skipping startup sync.');
+      return;
+    }
+
+    console.log('[settings] Initializing dynamic dropdown options from existing records...');
     
     // Fetch unique fields from Employee table
     const employees = await prisma.employee.findMany({

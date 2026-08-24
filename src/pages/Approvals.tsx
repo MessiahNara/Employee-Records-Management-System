@@ -233,7 +233,7 @@ function Approvals() {
   };
 
   const executeApprovedAction = async (result: any) => {
-    const { action, entityId, payload, approvalToken, requestedBy, requestedByName, approverName } = result;
+    const { action, entityId, entityName, payload, approvalToken, requestedBy, requestedByName, approverName } = result;
 
     switch (action) {
       case 'update_employee': {

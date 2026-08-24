@@ -42,14 +42,44 @@ const requireDeveloperRole = (req: Request, res: Response, next: Function) => {
 import fs from 'fs';
 import path from 'path';
 
-function getRecordLocationsFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+function getDataDir(): string {
+  const customUploads = process.env.UPLOADS_DIR;
+  if (customUploads) {
+    const p = path.join(customUploads, 'data');
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+    return p;
   }
-  return path.join(dataDir, 'record_locations.json');
+  const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  const defaultDir = path.join(programData, 'ERMS', 'uploads', 'data');
+  try {
+    if (!fs.existsSync(defaultDir)) fs.mkdirSync(defaultDir, { recursive: true });
+    return defaultDir;
+  } catch {
+    const localDir = path.join(__dirname, '../../uploads/data');
+    if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+    return localDir;
+  }
+}
+
+// Migrate legacy file if destination does not exist yet
+function getMigratedFilePath(fileName: string): string {
+  const targetDir = getDataDir();
+  const targetFile = path.join(targetDir, fileName);
+  if (!fs.existsSync(targetFile)) {
+    const legacyFile = path.join(__dirname, '../../uploads/data', fileName);
+    if (fs.existsSync(legacyFile)) {
+      try {
+        fs.copyFileSync(legacyFile, targetFile);
+      } catch (err) {
+        console.error(`Failed to migrate ${fileName}:`, err);
+      }
+    }
+  }
+  return targetFile;
+}
+
+function getRecordLocationsFilePath(): string {
+  return getMigratedFilePath('record_locations.json');
 }
 
 const DEFAULT_RECORD_LOCATIONS: string[] = [];
@@ -79,63 +109,27 @@ export function saveRecordLocations(locs: string[]): void {
 }
 
 function getDispositionProvisionsFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'disposition_provisions.json');
+  return getMigratedFilePath('disposition_provisions.json');
 }
 
 function getItemNumbersFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'item_numbers.json');
+  return getMigratedFilePath('item_numbers.json');
 }
 
 function getDivisionsFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'divisions.json');
+  return getMigratedFilePath('divisions.json');
 }
 
 function getClassificationCategoriesFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'classification_categories.json');
+  return getMigratedFilePath('classification_categories.json');
 }
 
 function getSubCategoriesFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'sub_categories.json');
+  return getMigratedFilePath('sub_categories.json');
 }
 
 function getPrdsGrdsFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'prds_grds.json');
+  return getMigratedFilePath('prds_grds.json');
 }
 
 const DEFAULT_DISPOSITION_PROVISIONS = [
@@ -345,25 +339,69 @@ export function saveSubCategories(subs: string[]): void {
 // GET /api/system-settings
 router.get('/', async (req: Request, res: Response) => {
   try {
-    let settings = await prisma.systemSetting.findFirst();
+    let settings: any = await prisma.systemSetting.findFirst();
     if (!settings) {
       settings = await prisma.systemSetting.create({
-        data: { idleTimeout: null, autoRename: false },
+        data: {
+          idleTimeout: null,
+          autoRename: false,
+          recordLocations: getRecordLocations(),
+          dispositionProvisions: getDispositionProvisions(),
+          itemNumbers: getItemNumbers(),
+          prdsGrds: getPrdsGrds(),
+          divisions: getDivisions(),
+          classificationCategories: getClassificationCategories(),
+          subCategories: getSubCategories(),
+        } as any,
       });
     }
+
+    // Read from DB with fallback to JSON files / defaults, and backfill DB if missing
+    const recordLocations = (settings.recordLocations as string[] | null) ?? getRecordLocations();
+    const dispositionProvisions = (settings.dispositionProvisions as string[] | null) ?? getDispositionProvisions();
+    const itemNumbers = (settings.itemNumbers as string[] | null) ?? getItemNumbers();
+    const prdsGrds = (settings.prdsGrds as string[] | null) ?? getPrdsGrds();
+    const divisions = (settings.divisions as string[] | null) ?? getDivisions();
+    const classificationCategories = (settings.classificationCategories as string[] | null) ?? getClassificationCategories();
+    const subCategories = (settings.subCategories as string[] | null) ?? getSubCategories();
+
+    // Auto backfill if DB didn't have them yet
+    if (
+      !settings.recordLocations ||
+      !settings.dispositionProvisions ||
+      !settings.itemNumbers ||
+      !settings.prdsGrds ||
+      !settings.divisions ||
+      !settings.classificationCategories ||
+      !settings.subCategories
+    ) {
+      await prisma.systemSetting.update({
+        where: { id: settings.id },
+        data: {
+          recordLocations: recordLocations,
+          dispositionProvisions: dispositionProvisions,
+          itemNumbers: itemNumbers,
+          prdsGrds: prdsGrds,
+          divisions: divisions,
+          classificationCategories: classificationCategories,
+          subCategories: subCategories,
+        } as any,
+      }).catch(() => {});
+    }
+
     res.json({
       idleTimeout: settings.idleTimeout,
       autoRename: settings.autoRename,
       appointmentStatuses: (settings.appointmentStatuses as string[] | null) ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: (settings.officeNames as string[] | null) ?? [],
       positions: (settings.positions as string[] | null) ?? [],
-      recordLocations: getRecordLocations(),
-      dispositionProvisions: getDispositionProvisions(),
-      itemNumbers: getItemNumbers(),
-      prdsGrds: getPrdsGrds(),
-      divisions: getDivisions(),
-      classificationCategories: getClassificationCategories(),
-      subCategories: getSubCategories(),
+      recordLocations,
+      dispositionProvisions,
+      itemNumbers,
+      prdsGrds,
+      divisions,
+      classificationCategories,
+      subCategories,
       aoYears: (settings.aoYears as string[] | null) ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: (settings.reasonsForSeparation as string[] | null) ?? DEFAULT_REASONS_FOR_SEPARATION,
     });
@@ -423,15 +461,36 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
     if (Array.isArray(positions)) updateData.positions = positions;
     if (Array.isArray(aoYears)) updateData.aoYears = aoYears;
     if (Array.isArray(reasonsForSeparation)) updateData.reasonsForSeparation = reasonsForSeparation;
-    if (Array.isArray(recordLocations)) saveRecordLocations(recordLocations);
-    if (Array.isArray(dispositionProvisions)) saveDispositionProvisions(dispositionProvisions);
-    if (Array.isArray(itemNumbers)) saveItemNumbers(itemNumbers);
-    if (Array.isArray(prdsGrds)) savePrdsGrds(prdsGrds);
-    if (Array.isArray(divisions)) saveDivisions(divisions);
-    if (Array.isArray(classificationCategories)) saveClassificationCategories(classificationCategories);
-    if (Array.isArray(subCategories)) saveSubCategories(subCategories);
+    if (Array.isArray(recordLocations)) {
+      updateData.recordLocations = recordLocations;
+      saveRecordLocations(recordLocations);
+    }
+    if (Array.isArray(dispositionProvisions)) {
+      updateData.dispositionProvisions = dispositionProvisions;
+      saveDispositionProvisions(dispositionProvisions);
+    }
+    if (Array.isArray(itemNumbers)) {
+      updateData.itemNumbers = itemNumbers;
+      saveItemNumbers(itemNumbers);
+    }
+    if (Array.isArray(prdsGrds)) {
+      updateData.prdsGrds = prdsGrds;
+      savePrdsGrds(prdsGrds);
+    }
+    if (Array.isArray(divisions)) {
+      updateData.divisions = divisions;
+      saveDivisions(divisions);
+    }
+    if (Array.isArray(classificationCategories)) {
+      updateData.classificationCategories = classificationCategories;
+      saveClassificationCategories(classificationCategories);
+    }
+    if (Array.isArray(subCategories)) {
+      updateData.subCategories = subCategories;
+      saveSubCategories(subCategories);
+    }
 
-    let settings = await prisma.systemSetting.findFirst();
+    let settings: any = await prisma.systemSetting.findFirst();
     if (settings) {
       settings = await prisma.systemSetting.update({ where: { id: settings.id }, data: updateData });
     } else {
@@ -442,13 +501,13 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
       appointmentStatuses: (settings.appointmentStatuses as string[] | null) ?? DEFAULT_APPOINTMENT_STATUSES,
       officeNames: (settings.officeNames as string[] | null) ?? [],
       positions: (settings.positions as string[] | null) ?? [],
-      recordLocations: getRecordLocations(),
-      dispositionProvisions: getDispositionProvisions(),
-      itemNumbers: getItemNumbers(),
-      prdsGrds: getPrdsGrds(),
-      divisions: getDivisions(),
-      classificationCategories: getClassificationCategories(),
-      subCategories: getSubCategories(),
+      recordLocations: (settings.recordLocations as string[] | null) ?? getRecordLocations(),
+      dispositionProvisions: (settings.dispositionProvisions as string[] | null) ?? getDispositionProvisions(),
+      itemNumbers: (settings.itemNumbers as string[] | null) ?? getItemNumbers(),
+      prdsGrds: (settings.prdsGrds as string[] | null) ?? getPrdsGrds(),
+      divisions: (settings.divisions as string[] | null) ?? getDivisions(),
+      classificationCategories: (settings.classificationCategories as string[] | null) ?? getClassificationCategories(),
+      subCategories: (settings.subCategories as string[] | null) ?? getSubCategories(),
       aoYears: (settings.aoYears as string[] | null) ?? DEFAULT_AO_YEARS,
       reasonsForSeparation: (settings.reasonsForSeparation as string[] | null) ?? DEFAULT_REASONS_FOR_SEPARATION,
       message: 'Dropdown options updated successfully',

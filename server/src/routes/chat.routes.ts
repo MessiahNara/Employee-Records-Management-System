@@ -7,7 +7,44 @@ import { getIO } from '../socket';
 const router = Router();
 const prisma = new PrismaClient();
 
-const GROUPS_FILE = path.join(__dirname, '../../uploads/data/group_chats.json');
+function getDataDir(): string {
+  const customUploads = process.env.UPLOADS_DIR;
+  if (customUploads) {
+    const p = path.join(customUploads, 'data');
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+    return p;
+  }
+  const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  const defaultDir = path.join(programData, 'ERMS', 'uploads', 'data');
+  try {
+    if (!fs.existsSync(defaultDir)) fs.mkdirSync(defaultDir, { recursive: true });
+    return defaultDir;
+  } catch {
+    const localDir = path.join(__dirname, '../../uploads/data');
+    if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+    return localDir;
+  }
+}
+
+function getMigratedFilePath(fileName: string): string {
+  const targetDir = getDataDir();
+  const targetFile = path.join(targetDir, fileName);
+  if (!fs.existsSync(targetFile)) {
+    const legacyFile = path.join(__dirname, '../../uploads/data', fileName);
+    if (fs.existsSync(legacyFile)) {
+      try {
+        fs.copyFileSync(legacyFile, targetFile);
+      } catch (err) {
+        console.error(`Failed to migrate ${fileName}:`, err);
+      }
+    }
+  }
+  return targetFile;
+}
+
+function getGroupsFilePath(): string {
+  return getMigratedFilePath('group_chats.json');
+}
 
 export interface GroupChat {
   id: string;
@@ -21,13 +58,12 @@ export interface GroupChat {
 
 function readGroupChats(): GroupChat[] {
   try {
-    if (!fs.existsSync(GROUPS_FILE)) {
-      const dir = path.dirname(GROUPS_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(GROUPS_FILE, '[]', 'utf-8');
+    const file = getGroupsFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, '[]', 'utf-8');
       return [];
     }
-    const data = fs.readFileSync(GROUPS_FILE, 'utf-8');
+    const data = fs.readFileSync(file, 'utf-8');
     return JSON.parse(data || '[]');
   } catch (err) {
     console.error('Error reading group_chats.json:', err);
@@ -37,25 +73,25 @@ function readGroupChats(): GroupChat[] {
 
 function saveGroupChats(groups: GroupChat[]) {
   try {
-    const dir = path.dirname(GROUPS_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(GROUPS_FILE, JSON.stringify(groups, null, 2), 'utf-8');
+    const file = getGroupsFilePath();
+    fs.writeFileSync(file, JSON.stringify(groups, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error saving group_chats.json:', err);
   }
 }
 
-const READS_FILE = path.join(__dirname, '../../uploads/data/group_chat_reads.json');
+function getReadsFilePath(): string {
+  return getMigratedFilePath('group_chat_reads.json');
+}
 
 function readGroupChatReads(): Record<string, string> {
   try {
-    if (!fs.existsSync(READS_FILE)) {
-      const dir = path.dirname(READS_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(READS_FILE, '{}', 'utf-8');
+    const file = getReadsFilePath();
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, '{}', 'utf-8');
       return {};
     }
-    const data = fs.readFileSync(READS_FILE, 'utf-8');
+    const data = fs.readFileSync(file, 'utf-8');
     return JSON.parse(data || '{}');
   } catch (err) {
     return {};
@@ -64,9 +100,8 @@ function readGroupChatReads(): Record<string, string> {
 
 function saveGroupChatReads(reads: Record<string, string>) {
   try {
-    const dir = path.dirname(READS_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(READS_FILE, JSON.stringify(reads, null, 2), 'utf-8');
+    const file = getReadsFilePath();
+    fs.writeFileSync(file, JSON.stringify(reads, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error saving group_chat_reads.json:', err);
   }

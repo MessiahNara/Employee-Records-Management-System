@@ -38,6 +38,13 @@ model SystemSetting {
   positions           Json?    // Custom position/function options
   aoYears             Json?    // Custom series year options
   reasonsForSeparation Json?   // Custom reason for separation options
+  recordLocations     Json?    // Custom inventory record locations
+  dispositionProvisions Json?  // Custom disposition provisions
+  itemNumbers         Json?    // Custom item numbers
+  prdsGrds            Json?    // Custom PRDS/GRDS options
+  divisions           Json?    // Custom inventory divisions
+  classificationCategories Json? // Custom classification categories
+  subCategories       Json?    // Custom sub categories
   autoRename          Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

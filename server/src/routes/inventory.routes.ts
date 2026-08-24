@@ -108,15 +108,44 @@ function syncSubCategoryOption(subCategoryName: string) {
   }
 }
 
+function getDataDir(): string {
+  const customUploads = process.env.UPLOADS_DIR;
+  if (customUploads) {
+    const p = path.join(customUploads, 'data');
+    if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+    return p;
+  }
+  const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  const defaultDir = path.join(programData, 'ERMS', 'uploads', 'data');
+  try {
+    if (!fs.existsSync(defaultDir)) fs.mkdirSync(defaultDir, { recursive: true });
+    return defaultDir;
+  } catch {
+    const localDir = path.join(__dirname, '../../uploads/data');
+    if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+    return localDir;
+  }
+}
+
+function getMigratedFilePath(fileName: string): string {
+  const targetDir = getDataDir();
+  const targetFile = path.join(targetDir, fileName);
+  if (!fs.existsSync(targetFile)) {
+    const legacyFile = path.join(__dirname, '../../uploads/data', fileName);
+    if (fs.existsSync(legacyFile)) {
+      try {
+        fs.copyFileSync(legacyFile, targetFile);
+      } catch (err) {
+        console.error(`Failed to migrate ${fileName}:`, err);
+      }
+    }
+  }
+  return targetFile;
+}
+
 // Persistent JSON storage file location
 function getDataFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'inventory_records.json');
+  return getMigratedFilePath('inventory_records.json');
 }
 
 export interface InventoryRecord {
@@ -346,13 +375,7 @@ export interface InventoryRequest {
 }
 
 function getInventoryRequestsFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'inventory_requests.json');
+  return getMigratedFilePath('inventory_requests.json');
 }
 
 function readInventoryRequests(): InventoryRequest[] {
@@ -1368,13 +1391,7 @@ export interface DisposalLog {
 }
 
 function getDisposalHistoryFilePath(): string {
-  const dataDir = process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'data')
-    : path.join(__dirname, '../../uploads/data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  return path.join(dataDir, 'disposal_history.json');
+  return getMigratedFilePath('disposal_history.json');
 }
 
 const defaultDisposalHistory: DisposalLog[] = [];

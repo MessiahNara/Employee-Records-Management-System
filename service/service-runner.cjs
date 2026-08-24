@@ -25,14 +25,19 @@ const ENV_PATH     = path.join(RESOURCES, '.env');
 const CERT_PATH    = path.join(RESOURCES, 'certs', 'server-cert.pem');
 const KEY_PATH     = path.join(RESOURCES, 'certs', 'server-key.pem');
 const PRISMA_ENGINE = path.join(RESOURCES, 'node_modules', '.prisma', 'client', 'query-engine-windows.exe');
-const UPLOADS_DIR  = path.join(INSTALL_DIR, 'uploads');
-const LOG_PATH     = path.join(INSTALL_DIR, 'service.log');
+const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+const UPLOADS_DIR  = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
+const LOG_PATH     = path.join(PROGRAM_DATA, 'ERMS', 'service.log');
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   process.stdout.write(line);
-  try { fs.appendFileSync(LOG_PATH, line); } catch (_) {}
+  try {
+    const logDir = path.dirname(LOG_PATH);
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(LOG_PATH, line);
+  } catch (_) {}
 }
 
 // ── Validate required files ───────────────────────────────────────────────────
@@ -45,10 +50,35 @@ if (!fs.existsSync(CERT_PATH) || !fs.existsSync(KEY_PATH)) {
   process.exit(1);
 }
 
-// ── Ensure uploads directories exist ─────────────────────────────────────────
+// ── Recursive copy helper for migrations ──────────────────────────────────────
+function copyDirRecursiveSync(src, dest) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursiveSync(srcPath, destPath);
+    } else if (!fs.existsSync(destPath)) {
+      try {
+        fs.copyFileSync(srcPath, destPath);
+      } catch (_) {}
+    }
+  }
+}
+
+// ── Ensure uploads directories exist and migrate legacy files ──────────────────
 try {
   fs.mkdirSync(path.join(UPLOADS_DIR, 'profile-pictures'), { recursive: true });
   fs.mkdirSync(path.join(UPLOADS_DIR, 'documents'),        { recursive: true });
+  fs.mkdirSync(path.join(UPLOADS_DIR, 'data'),             { recursive: true });
+
+  const legacyUploads = path.join(INSTALL_DIR, 'uploads');
+  if (fs.existsSync(legacyUploads) && path.resolve(legacyUploads) !== path.resolve(UPLOADS_DIR)) {
+    copyDirRecursiveSync(legacyUploads, UPLOADS_DIR);
+    log(`Migrated legacy uploads from ${legacyUploads} to ${UPLOADS_DIR}`);
+  }
   log(`Uploads directory ready: ${UPLOADS_DIR}`);
 } catch (err) {
   log(`WARNING: Could not create uploads dir: ${err.message}`);

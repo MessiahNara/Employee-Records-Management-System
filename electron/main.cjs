@@ -131,6 +131,56 @@ function isServiceRunning() {
   }
 }
 
+function copyDirRecursiveSync(src, dest) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursiveSync(srcPath, destPath);
+    } else if (!fs.existsSync(destPath)) {
+      try {
+        fs.copyFileSync(srcPath, destPath);
+      } catch (e) {
+        console.warn('[migration] Failed to copy', srcPath, e.message);
+      }
+    }
+  }
+}
+
+function resolveUploadsDir() {
+  const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  let uploadsDir = path.join(programData, 'ERMS', 'uploads');
+  try {
+    fs.mkdirSync(path.join(uploadsDir, 'profile-pictures'), { recursive: true });
+    fs.mkdirSync(path.join(uploadsDir, 'documents'), { recursive: true });
+    fs.mkdirSync(path.join(uploadsDir, 'data'), { recursive: true });
+    console.log('[server] ✅ Uploads directory ready at ProgramData:', uploadsDir);
+  } catch (err) {
+    console.warn('[server] ⚠️ Could not use ProgramData uploads dir, falling back to userData:', err.message);
+    uploadsDir = path.join(app.getPath('userData'), 'uploads');
+    fs.mkdirSync(path.join(uploadsDir, 'profile-pictures'), { recursive: true });
+    fs.mkdirSync(path.join(uploadsDir, 'documents'), { recursive: true });
+    fs.mkdirSync(path.join(uploadsDir, 'data'), { recursive: true });
+    console.log('[server] ✅ Uploads directory ready at userData:', uploadsDir);
+  }
+
+  // Migrate any legacy uploads from app installation directory if present
+  try {
+    const legacyUploads = path.join(path.dirname(process.execPath), 'uploads');
+    if (fs.existsSync(legacyUploads) && path.resolve(legacyUploads) !== path.resolve(uploadsDir)) {
+      copyDirRecursiveSync(legacyUploads, uploadsDir);
+      console.log('[migration] Checked and migrated legacy uploads from', legacyUploads);
+    }
+  } catch (err) {
+    console.warn('[migration] Legacy uploads check warning:', err.message);
+  }
+
+  return uploadsDir;
+}
+
 function startBackendServer() {
   if (!app.isPackaged) return;
   const clientConfig = readClientConfig();
@@ -160,16 +210,7 @@ function startBackendServer() {
   }
 
   const frontendDist = resolveFrontendDistPath();
-
-  // Store uploads alongside the install path (app runs as admin so Program Files is writable)
-  const uploadsDir = path.join(path.dirname(process.execPath), 'uploads');
-  try {
-    fs.mkdirSync(path.join(uploadsDir, 'profile-pictures'), { recursive: true });
-    fs.mkdirSync(path.join(uploadsDir, 'documents'), { recursive: true });
-    console.log('[server] ✅ Uploads directory ready:', uploadsDir);
-  } catch (err) {
-    console.warn('[server] ⚠️ Could not create uploads dir at', uploadsDir, '-', err.message);
-  }
+  const uploadsDir = resolveUploadsDir();
 
   serverProcess = utilityProcess.fork(serverBundlePath, [], {
     cwd: process.resourcesPath,
