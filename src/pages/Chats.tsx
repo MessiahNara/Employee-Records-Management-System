@@ -528,8 +528,8 @@ function Chats() {
                     }}
                   >
                     <div className="contact-item__avatar-container">
-                      <div className="contact-item__avatar" style={contact.isGroup ? { backgroundColor: '#4f46e5' } : {}}>
-                        {contact.isGroup ? <MdGroup size={20} /> : getInitials(contact.firstName, contact.lastName)}
+                      <div className={`contact-item__avatar ${contact.isGroup ? 'contact-item__avatar--group' : ''}`}>
+                        {contact.isGroup ? <MdGroup size={22} style={{ color: '#ffffff' }} /> : getInitials(contact.firstName, contact.lastName)}
                       </div>
                       {!contact.isGroup && checkIsOnline(contact.lastActive) && <span className="online-indicator" />}
                     </div>
@@ -562,8 +562,8 @@ function Chats() {
               <div className="chats-main__header">
                 <div className="chats-main__header-info">
                   <div className="chats-main__avatar-container">
-                    <div className="chats-main__contact-avatar" style={activeContact.isGroup ? { backgroundColor: '#4f46e5' } : {}}>
-                      {activeContact.isGroup ? <MdGroup size={22} /> : getInitials(activeContact.firstName, activeContact.lastName)}
+                    <div className={`chats-main__contact-avatar ${activeContact.isGroup ? 'chats-main__contact-avatar--group' : ''}`}>
+                      {activeContact.isGroup ? <MdGroup size={24} style={{ color: '#ffffff' }} /> : getInitials(activeContact.firstName, activeContact.lastName)}
                     </div>
                     {!activeContact.isGroup && checkIsOnline(activeContact.lastActive) && <span className="online-indicator" />}
                   </div>

@@ -386,10 +386,30 @@
   border: 1px solid var(--border-color);
 }
 
+.contact-item__avatar--group {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(67, 56, 202, 0.6) !important;
+  box-shadow: 0 2px 5px rgba(99, 102, 241, 0.3);
+}
+
+.chats-main__contact-avatar--group {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(67, 56, 202, 0.6) !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
 .contact-item--active .contact-item__avatar {
   background: var(--color-primary);
   color: #ffffff;
   border-color: var(--color-primary);
+}
+
+.contact-item--active .contact-item__avatar--group {
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%) !important;
+  color: #ffffff !important;
+  border-color: #3730a3 !important;
 }
 
 .contact-item__info {

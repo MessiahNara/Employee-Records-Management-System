@@ -914,7 +914,7 @@ function InventoryAppraisal() {
   }, [currentUser, userPermissions]);
 
   const hasFullDivisionAccess = allowedDivisions.includes('ALL');
-  const isAdmin = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'superadmin';
+  const isAdmin = currentUser?.role?.toLowerCase() === 'admin' || currentUser?.role?.toLowerCase() === 'superadmin' || currentUser?.role?.toLowerCase() === 'developer';
   const canDeleteHistory = isAdmin && hasFullDivisionAccess;
 
   const isDivisionAllowed = useCallback((div: string | undefined) => {
@@ -4000,36 +4000,34 @@ function InventoryAppraisal() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
                           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                            {canDeleteHistory && (
-                              <th style={{ padding: '0.65rem 0.85rem', width: 'auto', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={storageHistorySelectedIds.length > 0 && storageHistorySelectedIds.length === filtered.length}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setStorageHistorySelectedIds(filtered.map(l => l.id));
-                                      } else {
-                                        setStorageHistorySelectedIds([]);
-                                      }
+                            <th style={{ padding: '0.65rem 0.85rem', width: 'auto', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={storageHistorySelectedIds.length > 0 && storageHistorySelectedIds.length === filtered.length}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setStorageHistorySelectedIds(filtered.map(l => l.id));
+                                    } else {
+                                      setStorageHistorySelectedIds([]);
+                                    }
+                                  }}
+                                />
+                                {canDeleteHistory && storageHistorySelectedIds.length > 0 && (
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem', height: 'auto', whiteSpace: 'nowrap' }}
+                                    onClick={() => {
+                                      setHistoryDeleteTarget('storage');
+                                      setShowBulkDeleteHistoryModal(true);
                                     }}
-                                  />
-                                  {storageHistorySelectedIds.length > 0 && (
-                                    <Button
-                                      variant="danger"
-                                      size="sm"
-                                      style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem', height: 'auto', whiteSpace: 'nowrap' }}
-                                      onClick={() => {
-                                        setHistoryDeleteTarget('storage');
-                                        setShowBulkDeleteHistoryModal(true);
-                                      }}
-                                    >
-                                      <MdDeleteSweep style={{ fontSize: '1rem', marginRight: '0.2rem' }} /> Delete ({storageHistorySelectedIds.length})
-                                    </Button>
-                                  )}
-                                </div>
-                              </th>
-                            )}
+                                  >
+                                    <MdDeleteSweep style={{ fontSize: '1rem', marginRight: '0.2rem' }} /> Delete ({storageHistorySelectedIds.length})
+                                  </Button>
+                                )}
+                              </div>
+                            </th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Date & Time</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Item No.</th>
                             <th style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Record Series</th>
@@ -4043,21 +4041,19 @@ function InventoryAppraisal() {
                         <tbody>
                           {filtered.map((log) => (
                             <tr key={`storage-log-${log.id}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                              {canDeleteHistory && (
-                                <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={storageHistorySelectedIds.includes(log.id)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setStorageHistorySelectedIds(prev => [...prev, log.id]);
-                                      } else {
-                                        setStorageHistorySelectedIds(prev => prev.filter(id => id !== log.id));
-                                      }
-                                    }}
-                                  />
-                                </td>
-                              )}
+                              <td style={{ padding: '0.75rem 0.85rem', textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={storageHistorySelectedIds.includes(log.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setStorageHistorySelectedIds(prev => [...prev, log.id]);
+                                    } else {
+                                      setStorageHistorySelectedIds(prev => prev.filter(id => id !== log.id));
+                                    }
+                                  }}
+                                />
+                              </td>
                               <td style={{ padding: '0.75rem 0.85rem', whiteSpace: 'nowrap', color: 'var(--text-primary)', fontWeight: 600 }}>
                                 {new Date(log.disposedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                               </td>
