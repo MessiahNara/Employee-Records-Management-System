@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -22,6 +22,8 @@ import {
 } from 'react-icons/md';
 import './Login.css';
 
+const CLIENT_VERSION = 'v1.5.0';
+
 interface LoginFormData {
   username: string;
   password: string;
@@ -41,6 +43,26 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isServerConfigOpen, setIsServerConfigOpen] = useState(false);
   const [serverUrlInput, setServerUrlInput] = useState('');
+  const [serverVersion, setServerVersion] = useState<string>('v1.5.0');
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+  const checkServerHealth = () => {
+    setServerStatus('checking');
+    api.healthCheck()
+      .then((res) => {
+        setServerVersion(res.version ? `v${res.version.replace(/^v/, '')}` : 'v1.5.0');
+        setServerStatus('online');
+      })
+      .catch(() => {
+        setServerStatus('offline');
+      });
+  };
+
+  useEffect(() => {
+    checkServerHealth();
+    const interval = setInterval(checkServerHealth, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Pre-fill server URL input with current base URL or default
   const handleOpenServerConfig = () => {
@@ -61,6 +83,7 @@ function Login() {
     if (success) {
       showWelcomeToast('Server', 'Configured Successfully');
       setIsServerConfigOpen(false);
+      checkServerHealth();
     } else {
       setLoginError('Failed to save server URL. Make sure you are using the Electron client.');
       setIsServerConfigOpen(false);
@@ -326,6 +349,57 @@ function Login() {
           />
         </div>
       </Modal>
+
+      {/* Bottom-Right System Version Indicator */}
+      <div
+        className="login__version-badge"
+        onClick={handleOpenServerConfig}
+        title="Click to view/change Server Configuration"
+        style={{
+          position: 'fixed',
+          bottom: '1rem',
+          right: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          padding: '0.4rem 0.85rem',
+          background: 'var(--bg-secondary, rgba(255, 255, 255, 0.85))',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '9999px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
+          fontSize: '0.75rem',
+          color: 'var(--text-secondary)',
+          zIndex: 10,
+          userSelect: 'none',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Client:</span> {CLIENT_VERSION}
+        </span>
+        <span style={{ color: 'var(--border-color)' }}>•</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Server:</span>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.3rem',
+            color: serverStatus === 'online' ? '#10b981' : serverStatus === 'offline' ? '#ef4444' : '#f59e0b',
+            fontWeight: 600,
+          }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: serverStatus === 'online' ? '#10b981' : serverStatus === 'offline' ? '#ef4444' : '#f59e0b',
+              display: 'inline-block',
+            }} />
+            {serverVersion}
+          </span>
+        </span>
+      </div>
 
     </div>
   );

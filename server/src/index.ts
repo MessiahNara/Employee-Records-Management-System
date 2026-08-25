@@ -217,7 +217,7 @@ app.use('/api/inventory', inventoryRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', message: 'Server is running' });
+  res.json({ status: 'ok', message: 'Server is running', version: '1.5.0' });
 });
 
 // Global Express error handler middleware

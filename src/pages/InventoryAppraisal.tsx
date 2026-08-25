@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
@@ -1054,13 +1054,13 @@ function InventoryAppraisal() {
     const divCounts: Record<string, number> = {};
     const divsToInit = hasFullDivisionAccess ? systemDivisions : allowedDivisions;
     divsToInit.forEach(d => { if (d !== 'ALL') divCounts[d] = 0; });
-    
+
     completedDisposals.forEach(log => {
       const d = log.division || 'General';
       if (d !== 'General' && divCounts[d] === undefined) divCounts[d] = 0;
       divCounts[d] = (divCounts[d] || 0) + 1;
     });
-    
+
     const divisionStats = Object.keys(divCounts).map(d => ({
       name: d,
       count: divCounts[d],
@@ -2721,7 +2721,7 @@ function InventoryAppraisal() {
 
                 <div className="dashboard-stat-item">
                   <div className="dashboard-stat-header">
-                    <span>As Needed</span>
+                    <span>As the need arises</span>
                     <span className="dashboard-stat-badge">{analytics.frequencyCounts['As the need arises']}</span>
                   </div>
                   <div className="dashboard-progress-track">

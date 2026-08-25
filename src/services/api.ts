@@ -952,7 +952,7 @@ export const approvalApi = {
 };
 
 // Health check
-export const healthCheck = () => apiRequest<{ status: string; message: string }>('/health');
+export const healthCheck = () => apiRequest<{ status: string; message: string; version?: string }>('/health');
 
 // 201 File Borrow/Return API
 export const file201Api = {

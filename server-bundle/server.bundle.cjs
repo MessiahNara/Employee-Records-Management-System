@@ -64012,7 +64012,7 @@ app.use("/api/chats", chat_routes_default);
 app.use("/api/yellow-boxes", yellowBox_routes_default);
 app.use("/api/inventory", inventory_routes_default);
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", message: "Server is running" });
+  res.json({ status: "ok", message: "Server is running", version: "1.5.0" });
 });
 app.use((err, req, res, next) => {
   console.error("[server] Express error intercepted:", err);
