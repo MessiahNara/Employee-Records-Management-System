@@ -84,7 +84,21 @@ function Requests() {
     }
   }, [currentUser?.id]);
 
-  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+  useEffect(() => {
+    fetchRequests();
+
+    const handleUpdate = () => {
+      fetchRequests();
+    };
+
+    window.addEventListener('approvalsUpdated', handleUpdate);
+    window.addEventListener('documentsUpdated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('approvalsUpdated', handleUpdate);
+      window.removeEventListener('documentsUpdated', handleUpdate);
+    };
+  }, [fetchRequests]);
 
   // Auto-remove expired approved requests from the visible list every 10s
   useEffect(() => {

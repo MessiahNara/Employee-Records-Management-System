@@ -38,9 +38,34 @@ export const initSocketClient = async () => {
     window.dispatchEvent(new Event('employeeUpdated'));
   });
 
+  socket.on('file201Updated', () => {
+    console.log('[socket] file201Updated event received, dispatching locally');
+    window.dispatchEvent(new Event('file201Updated'));
+  });
+
   socket.on('documentsUpdated', () => {
     console.log('[socket] documentsUpdated event received, dispatching locally');
     window.dispatchEvent(new Event('documentsUpdated'));
+  });
+
+  socket.on('inventoryUpdated', () => {
+    console.log('[socket] inventoryUpdated event received, dispatching locally');
+    window.dispatchEvent(new Event('inventoryUpdated'));
+  });
+
+  socket.on('usersUpdated', () => {
+    console.log('[socket] usersUpdated event received, dispatching locally');
+    window.dispatchEvent(new Event('usersUpdated'));
+  });
+
+  socket.on('activityUpdated', () => {
+    console.log('[socket] activityUpdated event received, dispatching locally');
+    window.dispatchEvent(new Event('activityUpdated'));
+  });
+
+  socket.on('systemSettingsUpdated', () => {
+    console.log('[socket] systemSettingsUpdated event received, dispatching locally');
+    window.dispatchEvent(new Event('systemSettingsUpdated'));
   });
 
   return socket;

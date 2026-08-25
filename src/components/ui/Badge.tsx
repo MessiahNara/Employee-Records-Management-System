@@ -3,12 +3,13 @@ import './Badge.css';
 
 interface BadgeProps {
   children: ReactNode;
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'violet';
   size?: 'sm' | 'md';
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function Badge({ children, variant = 'default', size = 'md', className = '' }: BadgeProps) {
+function Badge({ children, variant = 'default', size = 'md', className = '', style }: BadgeProps) {
   const classes = [
     'badge',
     `badge--${variant}`,
@@ -18,7 +19,7 @@ function Badge({ children, variant = 'default', size = 'md', className = '' }: B
     .filter(Boolean)
     .join(' ');
 
-  return <span className={classes}>{children}</span>;
+  return <span className={classes} style={style}>{children}</span>;
 }
 
 export default Badge;

@@ -5,6 +5,8 @@ import prisma from '../lib/prisma';
 import { createAuditLog } from '../utils/auditHelper';
 import { uploadInventoryAttachment } from '../middleware/upload';
 import { getRecordLocations, saveRecordLocations, getDispositionProvisions, saveDispositionProvisions, getItemNumbers, saveItemNumbers, getDivisions, saveDivisions, getClassificationCategories, saveClassificationCategories, getSubCategories, saveSubCategories } from './systemSettings.routes';
+import { checkAndAddDropdownOptions } from '../utils/dropdownOptionsHelper';
+import { getIO } from '../socket';
 
 const router = Router();
 
@@ -179,26 +181,32 @@ export interface InventoryRecord {
 
 // Default initial records if file is empty
 const defaultInitialRecords: InventoryRecord[] = [];
+let cachedRecords: InventoryRecord[] | null = null;
 
 function readRecords(): InventoryRecord[] {
+  if (cachedRecords) return cachedRecords;
   try {
     const filePath = getDataFilePath();
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, JSON.stringify(defaultInitialRecords, null, 2), 'utf8');
+      cachedRecords = defaultInitialRecords;
       return defaultInitialRecords;
     }
     const rawData = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(rawData);
+    cachedRecords = JSON.parse(rawData);
+    return cachedRecords || defaultInitialRecords;
   } catch (error) {
     console.error('Failed to read inventory records:', error);
-    return defaultInitialRecords;
+    return cachedRecords || defaultInitialRecords;
   }
 }
 
 function saveRecords(records: InventoryRecord[]): void {
   try {
+    cachedRecords = records;
     const filePath = getDataFilePath();
     fs.writeFileSync(filePath, JSON.stringify(records, null, 2), 'utf8');
+    getIO()?.emit('inventoryUpdated');
   } catch (error) {
     console.error('Failed to save inventory records:', error);
   }
@@ -378,26 +386,33 @@ function getInventoryRequestsFilePath(): string {
   return getMigratedFilePath('inventory_requests.json');
 }
 
+let cachedInventoryRequests: InventoryRequest[] | null = null;
+
 function readInventoryRequests(): InventoryRequest[] {
+  if (cachedInventoryRequests) return cachedInventoryRequests;
   try {
     const filePath = getInventoryRequestsFilePath();
     if (!fs.existsSync(filePath)) {
       saveInventoryRequests([]);
+      cachedInventoryRequests = [];
       return [];
     }
     const raw = fs.readFileSync(filePath, 'utf8');
     const reqs = JSON.parse(raw);
-    return Array.isArray(reqs) ? reqs : [];
+    cachedInventoryRequests = Array.isArray(reqs) ? reqs : [];
+    return cachedInventoryRequests;
   } catch (err) {
     console.error('Failed to read inventory requests:', err);
-    return [];
+    return cachedInventoryRequests || [];
   }
 }
 
 function saveInventoryRequests(reqs: InventoryRequest[]): void {
   try {
+    cachedInventoryRequests = reqs;
     const filePath = getInventoryRequestsFilePath();
     fs.writeFileSync(filePath, JSON.stringify(reqs, null, 2), 'utf8');
+    getIO()?.emit('inventoryUpdated');
   } catch (err) {
     console.error('Failed to save inventory requests:', err);
   }
@@ -1174,7 +1189,16 @@ router.post('/', async (req: Request, res: Response) => {
     records.unshift(newRecord);
     saveRecords(records);
 
-    // Auto-sync options to system settings dropdown options
+    // Auto-sync options to system settings dropdown options (both DB and JSON)
+    await checkAndAddDropdownOptions({
+      recordLocations: [newRecord.locationOfRecords],
+      dispositionProvisions: [newRecord.dispositionProvision],
+      itemNumbers: [newRecord.itemNo],
+      divisions: [newRecord.division],
+      classificationCategories: [newRecord.classificationCategory],
+      subCategories: [newRecord.subCategory],
+      prdsGrds: [newRecord.prdsGrds],
+    });
     syncLocationOption(newRecord.locationOfRecords);
     syncDispositionProvision(newRecord.dispositionProvision);
     if (newRecord.itemNo) syncItemNumberOption(newRecord.itemNo);
@@ -1248,6 +1272,15 @@ router.put('/:id', async (req: Request, res: Response) => {
     saveRecords(records);
 
     // Auto-sync options on update
+    await checkAndAddDropdownOptions({
+      recordLocations: [updatedRecord.locationOfRecords],
+      dispositionProvisions: [updatedRecord.dispositionProvision],
+      itemNumbers: [updatedRecord.itemNo],
+      divisions: [updatedRecord.division],
+      classificationCategories: [updatedRecord.classificationCategory],
+      subCategories: [updatedRecord.subCategory],
+      prdsGrds: [updatedRecord.prdsGrds],
+    });
     syncLocationOption(updatedRecord.locationOfRecords);
     syncDispositionProvision(updatedRecord.dispositionProvision);
     if (updatedRecord.itemNo) syncItemNumberOption(updatedRecord.itemNo);
@@ -1395,31 +1428,38 @@ function getDisposalHistoryFilePath(): string {
 }
 
 const defaultDisposalHistory: DisposalLog[] = [];
+let cachedDisposalLogs: DisposalLog[] | null = null;
 
 function readDisposalHistory(): DisposalLog[] {
+  if (cachedDisposalLogs) return cachedDisposalLogs;
   try {
     const filePath = getDisposalHistoryFilePath();
     if (!fs.existsSync(filePath)) {
       saveDisposalHistory(defaultDisposalHistory);
+      cachedDisposalLogs = defaultDisposalHistory;
       return defaultDisposalHistory;
     }
     const raw = fs.readFileSync(filePath, 'utf8');
     const logs = JSON.parse(raw);
     if (!Array.isArray(logs) || logs.length === 0) {
       saveDisposalHistory(defaultDisposalHistory);
+      cachedDisposalLogs = defaultDisposalHistory;
       return defaultDisposalHistory;
     }
-    return logs;
+    cachedDisposalLogs = logs;
+    return cachedDisposalLogs;
   } catch (err) {
     console.error('Failed to read disposal history:', err);
-    return defaultDisposalHistory;
+    return cachedDisposalLogs || defaultDisposalHistory;
   }
 }
 
 function saveDisposalHistory(logs: DisposalLog[]): void {
   try {
+    cachedDisposalLogs = logs;
     const filePath = getDisposalHistoryFilePath();
     fs.writeFileSync(filePath, JSON.stringify(logs, null, 2), 'utf8');
+    getIO()?.emit('inventoryUpdated');
   } catch (err) {
     console.error('Failed to save disposal history:', err);
   }

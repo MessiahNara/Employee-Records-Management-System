@@ -81,6 +81,7 @@ function App() {
               <Route path="calendar-activities" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><CalendarActivities /></RoleProtectedRoute>} />
               <Route path="reports" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
               <Route path="reports/pulled-out" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
+              <Route path="reports/transferred" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Dashboard /></RoleProtectedRoute>} />
               <Route path="employees/:id" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><EmployeeDetails /></RoleProtectedRoute>} />
               <Route 
                 path="users" 

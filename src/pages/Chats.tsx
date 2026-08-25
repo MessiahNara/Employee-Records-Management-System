@@ -50,10 +50,27 @@ function Chats() {
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
-  // Users & Contacts States
-  const [recentContacts, setRecentContacts] = useState<UserContact[]>([]);
+  const ACTIVE_CHAT_KEY = 'erms_active_chat_contact';
+  const RECENT_CONTACTS_KEY = 'erms_cached_recent_contacts';
+
+  // Users & Contacts States (Restored from localStorage so inbox conversation is never lost on navigation)
+  const [recentContacts, setRecentContacts] = useState<UserContact[]>(() => {
+    try {
+      const saved = localStorage.getItem(RECENT_CONTACTS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [allUsers, setAllUsers] = useState<UserContact[]>([]);
-  const [activeContact, setActiveContact] = useState<UserContact | null>(null);
+  const [activeContact, setActiveContact] = useState<UserContact | null>(() => {
+    try {
+      const saved = localStorage.getItem(ACTIVE_CHAT_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   // UI States
@@ -75,9 +92,14 @@ function Chats() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeContactIdRef = useRef<string | null>(null);
 
-  // Keep track of active contact ID for async fetches
+  // Keep track of active contact ID for async fetches and persist to localStorage
   useEffect(() => {
     activeContactIdRef.current = activeContact ? activeContact.id : null;
+    if (activeContact) {
+      localStorage.setItem(ACTIVE_CHAT_KEY, JSON.stringify(activeContact));
+    } else {
+      localStorage.removeItem(ACTIVE_CHAT_KEY);
+    }
   }, [activeContact]);
 
   const loadAllUsers = async () => {
@@ -105,7 +127,7 @@ function Chats() {
     setGroupWarning('');
   };
 
-  // 2. Poll for unread counts and recent contacts list
+  // 2. Poll for unread counts and recent contacts list (Preserving local opened contacts)
   useEffect(() => {
     let isMounted = true;
 
@@ -120,14 +142,27 @@ function Chats() {
             const map = new Map<string, UserContact>();
 
             // First add server contacts and groups
-            recent.forEach((c) => map.set(c.id, c));
+            (recent || []).forEach((c) => map.set(c.id, c));
+
+            // Preserve local/cached contacts so conversations without messages yet are not lost
+            prev.forEach((c) => {
+              if (!map.has(c.id)) {
+                map.set(c.id, c);
+              }
+            });
 
             // If active contact is set, preserve it in the list
             if (activeContact && !map.has(activeContact.id)) {
               map.set(activeContact.id, activeContact);
             }
 
-            return Array.from(map.values());
+            const combined = Array.from(map.values());
+            try {
+              localStorage.setItem(RECENT_CONTACTS_KEY, JSON.stringify(combined));
+            } catch (e) {
+              // ignore quota
+            }
+            return combined;
           });
           setUnreadCounts(unread || {});
         }
@@ -137,7 +172,7 @@ function Chats() {
     };
 
     fetchSidebarData();
-    const interval = setInterval(fetchSidebarData, 3000);
+    const interval = setInterval(fetchSidebarData, 30000);
     window.addEventListener('chatsUpdated', fetchSidebarData);
 
     return () => {
@@ -187,7 +222,7 @@ function Chats() {
     };
 
     fetchMessages();
-    const interval = setInterval(fetchMessages, 3000);
+    const interval = setInterval(fetchMessages, 30000);
     window.addEventListener('chatsUpdated', fetchMessages);
 
     return () => {
@@ -349,7 +384,20 @@ function Chats() {
       showToast(activeContact.isGroup ? 'Group chat left/removed successfully.' : 'Conversation deleted successfully.', 'success');
 
       // Remove deleted contact from recent contacts list
-      setRecentContacts((prev) => prev.filter((c) => c.id !== activeContact.id));
+      setRecentContacts((prev) => {
+        const updated = prev.filter((c) => c.id !== activeContact.id);
+        try {
+          localStorage.setItem(RECENT_CONTACTS_KEY, JSON.stringify(updated));
+        } catch (e) {
+          // ignore
+        }
+        return updated;
+      });
+      try {
+        localStorage.removeItem(ACTIVE_CHAT_KEY);
+      } catch (e) {
+        // ignore
+      }
       setActiveContact(null);
       setMessages([]);
       setShowDeleteConfirm(false);

@@ -102,7 +102,7 @@ export default function Calendar() {
       }
     };
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 60000);
 
     // Load todos from localStorage
     const savedTodos = localStorage.getItem('hrmdo_calendar_todos');
@@ -114,7 +114,14 @@ export default function Calendar() {
       }
     }
 
-    return () => clearInterval(interval);
+    window.addEventListener('employeeUpdated', fetchData);
+    window.addEventListener('approvalsUpdated', fetchData);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('employeeUpdated', fetchData);
+      window.removeEventListener('approvalsUpdated', fetchData);
+    };
   }, [showToast]);
 
   // Save todos to localStorage when they change

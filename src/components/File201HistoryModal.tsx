@@ -136,7 +136,7 @@ function File201HistoryModal({ isOpen, onClose, employeeId, employeeName, onStat
                           ? '📤 BORROWED'
                           : '📥 RETURNED'}
                       </span>
-                      {!isRsp && isReturned && log.fileCondition && log.fileCondition !== 'Complete' && (
+                      {log.fileCondition && log.fileCondition !== 'Complete' && (
                         <span className={`file201-history__badge file201-history__badge--condition-${log.fileCondition.toLowerCase()}`}>
                           {log.fileCondition.toUpperCase()}
                         </span>
@@ -177,6 +177,20 @@ function File201HistoryModal({ isOpen, onClose, employeeId, employeeName, onStat
                           <span className="file201-history__label">Date Transferred:</span>
                           <span className="file201-history__value">{new Date(log.dateBorrowed).toLocaleString()}</span>
                         </div>
+                        <div className="file201-history__row">
+                          <span className="file201-history__label">Condition of File:</span>
+                          <span className="file201-history__value">
+                            <span className={`file201-history__condition-chip file201-history__condition-chip--${(log.fileCondition || 'Complete').toLowerCase()}`}>
+                              {log.fileCondition || 'Complete'}
+                            </span>
+                          </span>
+                        </div>
+                        {(log.purpose || (!isReturned && log.remarks)) && (
+                          <div className="file201-history__row">
+                            <span className="file201-history__label">Remarks:</span>
+                            <span className="file201-history__value">{log.purpose || (!isReturned && log.remarks)}</span>
+                          </div>
+                        )}
                         {isReturned && (
                           <>
                             <div className="file201-history__divider" />
@@ -196,9 +210,17 @@ function File201HistoryModal({ isOpen, onClose, employeeId, employeeName, onStat
                                 <span className="file201-history__value">{log.receivedBy}</span>
                               </div>
                             )}
+                            <div className="file201-history__row">
+                              <span className="file201-history__label">Condition upon Return:</span>
+                              <span className="file201-history__value">
+                                <span className={`file201-history__condition-chip file201-history__condition-chip--${(log.fileCondition || 'Complete').toLowerCase()}`}>
+                                  {log.fileCondition || 'Complete'}
+                                </span>
+                              </span>
+                            </div>
                             {log.remarks && (
                               <div className="file201-history__row">
-                                <span className="file201-history__label">Remarks:</span>
+                                <span className="file201-history__label">Return Remarks:</span>
                                 <span className="file201-history__value">{log.remarks}</span>
                               </div>
                             )}
@@ -263,9 +285,11 @@ function File201HistoryModal({ isOpen, onClose, employeeId, employeeName, onStat
                             )}
                             {log.fileCondition && (
                               <div className="file201-history__row">
-                                <span className="file201-history__label">File Condition:</span>
-                                <span className={`file201-history__condition file201-history__condition--${log.fileCondition.toLowerCase()}`}>
-                                  {log.fileCondition}
+                                <span className="file201-history__label">Condition of File:</span>
+                                <span className="file201-history__value">
+                                  <span className={`file201-history__condition-chip file201-history__condition-chip--${log.fileCondition.toLowerCase()}`}>
+                                    {log.fileCondition}
+                                  </span>
                                 </span>
                               </div>
                             )}

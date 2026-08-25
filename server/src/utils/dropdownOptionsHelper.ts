@@ -1,9 +1,19 @@
 import prisma from '../lib/prisma';
+import { getIO } from '../socket';
 
 export async function checkAndAddDropdownOptions(data: {
   officeNames?: (string | null | undefined)[];
   positions?: (string | null | undefined)[];
   appointmentStatuses?: (string | null | undefined)[];
+  recordLocations?: (string | null | undefined)[];
+  divisions?: (string | null | undefined)[];
+  classificationCategories?: (string | null | undefined)[];
+  subCategories?: (string | null | undefined)[];
+  itemNumbers?: (string | null | undefined)[];
+  dispositionProvisions?: (string | null | undefined)[];
+  prdsGrds?: (string | null | undefined)[];
+  reasonsForSeparation?: (string | null | undefined)[];
+  aoYears?: (string | null | undefined)[];
 }) {
   try {
     let settings = await prisma.systemSetting.findFirst();
@@ -13,6 +23,15 @@ export async function checkAndAddDropdownOptions(data: {
           appointmentStatuses: [],
           officeNames: [],
           positions: [],
+          recordLocations: [],
+          divisions: [],
+          classificationCategories: [],
+          subCategories: [],
+          itemNumbers: [],
+          dispositionProvisions: [],
+          prdsGrds: [],
+          reasonsForSeparation: [],
+          aoYears: [],
         },
       });
     }
@@ -20,39 +39,49 @@ export async function checkAndAddDropdownOptions(data: {
     const currentOfficeNames = new Set((settings.officeNames as string[] | null) ?? []);
     const currentPositions = new Set((settings.positions as string[] | null) ?? []);
     const currentAppointmentStatuses = new Set((settings.appointmentStatuses as string[] | null) ?? []);
+    const currentRecordLocations = new Set((settings.recordLocations as string[] | null) ?? []);
+    const currentDivisions = new Set((settings.divisions as string[] | null) ?? []);
+    const currentClassificationCategories = new Set((settings.classificationCategories as string[] | null) ?? []);
+    const currentSubCategories = new Set((settings.subCategories as string[] | null) ?? []);
+    const currentItemNumbers = new Set((settings.itemNumbers as string[] | null) ?? []);
+    const currentDispositionProvisions = new Set((settings.dispositionProvisions as string[] | null) ?? []);
+    const currentPrdsGrds = new Set((settings.prdsGrds as string[] | null) ?? []);
+    const currentReasonsForSeparation = new Set((settings.reasonsForSeparation as string[] | null) ?? []);
+    const currentAoYears = new Set((settings.aoYears as string[] | null) ?? []);
 
     let needsUpdate = false;
 
-    if (data.officeNames) {
-      for (const office of data.officeNames) {
-        if (office && office.trim() !== '') {
-          const trimmed = office.trim();
-          if (!currentOfficeNames.has(trimmed)) {
-            currentOfficeNames.add(trimmed);
+    const addItemsToSet = (items: (string | null | undefined)[] | undefined, targetSet: Set<string>) => {
+      if (!items) return;
+      for (const item of items) {
+        if (item && item.trim() !== '') {
+          const trimmed = item.trim();
+          if (!targetSet.has(trimmed)) {
+            targetSet.add(trimmed);
             needsUpdate = true;
           }
         }
       }
-    }
+    };
 
-    if (data.positions) {
-      for (const pos of data.positions) {
-        if (pos && pos.trim() !== '') {
-          const trimmed = pos.trim();
-          if (!currentPositions.has(trimmed)) {
-            currentPositions.add(trimmed);
-            needsUpdate = true;
-          }
-        }
-      }
-    }
+    addItemsToSet(data.officeNames, currentOfficeNames);
+    addItemsToSet(data.positions, currentPositions);
+    addItemsToSet(data.recordLocations, currentRecordLocations);
+    addItemsToSet(data.divisions, currentDivisions);
+    addItemsToSet(data.classificationCategories, currentClassificationCategories);
+    addItemsToSet(data.subCategories, currentSubCategories);
+    addItemsToSet(data.itemNumbers, currentItemNumbers);
+    addItemsToSet(data.dispositionProvisions, currentDispositionProvisions);
+    addItemsToSet(data.prdsGrds, currentPrdsGrds);
+    addItemsToSet(data.reasonsForSeparation, currentReasonsForSeparation);
+    addItemsToSet(data.aoYears, currentAoYears);
 
     if (data.appointmentStatuses) {
       for (const status of data.appointmentStatuses) {
         if (status && status.trim() !== '') {
           const trimmed = status.trim();
           const baseName = trimmed.toLowerCase();
-          const exists = Array.from(currentAppointmentStatuses).some(s => {
+          const exists = Array.from(currentAppointmentStatuses).some((s) => {
             const name = s.endsWith('|date') ? s.slice(0, -5) : s;
             return name.toLowerCase() === baseName;
           });
@@ -71,9 +100,19 @@ export async function checkAndAddDropdownOptions(data: {
           officeNames: Array.from(currentOfficeNames).sort(),
           positions: Array.from(currentPositions).sort(),
           appointmentStatuses: Array.from(currentAppointmentStatuses).sort(),
+          recordLocations: Array.from(currentRecordLocations).sort(),
+          divisions: Array.from(currentDivisions).sort(),
+          classificationCategories: Array.from(currentClassificationCategories).sort(),
+          subCategories: Array.from(currentSubCategories).sort(),
+          itemNumbers: Array.from(currentItemNumbers).sort(),
+          dispositionProvisions: Array.from(currentDispositionProvisions).sort(),
+          prdsGrds: Array.from(currentPrdsGrds).sort(),
+          reasonsForSeparation: Array.from(currentReasonsForSeparation).sort(),
+          aoYears: Array.from(currentAoYears).sort(),
         },
       });
-      console.log('[settings] Automatically added new dynamic dropdown options');
+      console.log('[settings] Automatically added new dynamic dropdown options to database');
+      getIO()?.emit('systemSettingsUpdated');
     }
   } catch (error) {
     console.error('[settings] Error auto-populating dropdown options:', error);

@@ -946,6 +946,9 @@ export const file201Api = {
   getAllLogs: () =>
     apiRequest<any[]>('/file201/logs/all'),
 
+  getAllTransferredLogs: () =>
+    apiRequest<any[]>('/file201/logs/transferred'),
+
   getHistory: (employeeId: string) =>
     apiRequest<any[]>(`/file201/${encodeURIComponent(employeeId)}/history`),
 
@@ -975,6 +978,8 @@ export const file201Api = {
     receivedPosition?: string;
     receivedOffice?: string;
     purpose?: string;
+    fileCondition?: string;
+    remarks?: string;
   }) =>
     apiRequest<any>(`/file201/${encodeURIComponent(employeeId)}/transfer-rsp`, {
       method: 'POST',

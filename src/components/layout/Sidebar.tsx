@@ -59,12 +59,12 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     if (currentPath === '/calendar' || currentPath === '/calendar-activities') {
       setIsCalendarOpen(true);
     }
-    if (currentPath === '/reports' || currentPath === '/reports/pulled-out' || currentPath === '/inventory') {
+    if (currentPath === '/reports' || currentPath === '/reports/pulled-out' || currentPath === '/reports/transferred' || currentPath === '/inventory') {
       setIsReportsOpen(true);
     }
   }, [currentPath]);
 
-  // Poll pending approvals count every 5 seconds (admins/superadmins) & listen for updates
+  // Pending approvals count for admins/superadmins (instant socket update + 60s fallback)
   useEffect(() => {
     const isAnyAdmin = userRole === 'superadmin' || userRole === 'admin' || userRole === 'developer';
     if (!isAnyAdmin) return;
@@ -77,14 +77,14 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
     fetch();
     window.addEventListener('approvalsUpdated', fetch);
-    const interval = setInterval(fetch, 4000);
+    const interval = setInterval(fetch, 60000);
     return () => {
       window.removeEventListener('approvalsUpdated', fetch);
       clearInterval(interval);
     };
   }, [userRole]);
 
-  // Poll staff's own pending requests count every 5 seconds & listen for updates
+  // Staff's own pending requests count (instant socket update + 60s fallback)
   useEffect(() => {
     if (!isStaffOrAdmin || !currentUser?.id) return;
 
@@ -99,14 +99,14 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
     fetchMyCount();
     window.addEventListener('approvalsUpdated', fetchMyCount);
-    const interval = setInterval(fetchMyCount, 4000);
+    const interval = setInterval(fetchMyCount, 60000);
     return () => {
       window.removeEventListener('approvalsUpdated', fetchMyCount);
       clearInterval(interval);
     };
   }, [isStaffOrAdmin, currentUser?.id]);
 
-  // Poll calendar alerts count (expired/expiring within 30 days) and listen for updates
+  // Calendar alerts count (instant socket update + 120s fallback)
   useEffect(() => {
     const fetchCalendarCount = async () => {
       try {
@@ -162,7 +162,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     fetchCalendarCount();
     window.addEventListener('approvalsUpdated', fetchCalendarCount);
     window.addEventListener('employeeUpdated', fetchCalendarCount);
-    const interval = setInterval(fetchCalendarCount, 15000);
+    const interval = setInterval(fetchCalendarCount, 120000);
     return () => {
       window.removeEventListener('approvalsUpdated', fetchCalendarCount);
       window.removeEventListener('employeeUpdated', fetchCalendarCount);
@@ -207,7 +207,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     }
   };
 
-  // Poll unread chat counts and listen for instant chat updates
+  // Unread chat counts (instant socket update + 60s fallback)
   useEffect(() => {
     if (!currentUser?.id) return;
 
@@ -230,7 +230,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
     fetchChatUnread();
     window.addEventListener('chatsUpdated', fetchChatUnread);
-    const interval = setInterval(fetchChatUnread, 3000);
+    const interval = setInterval(fetchChatUnread, 60000);
 
     return () => {
       window.removeEventListener('chatsUpdated', fetchChatUnread);
@@ -278,7 +278,8 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
       iconColor: '#10b981',
       subItems: [
         { path: '/reports', label: 'Administrative Order' },
-        { path: '/reports/pulled-out', label: 'Pulled-Out Files' }
+        { path: '/reports/pulled-out', label: 'Pulled-Out Files' },
+        { path: '/reports/transferred', label: 'Transferred Files' }
       ],
       isOpen: isReportsOpen,
       onToggle: () => {

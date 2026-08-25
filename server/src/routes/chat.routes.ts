@@ -56,23 +56,30 @@ export interface GroupChat {
   updatedAt: string;
 }
 
+let cachedGroupChats: GroupChat[] | null = null;
+let cachedGroupReads: Record<string, string> | null = null;
+
 function readGroupChats(): GroupChat[] {
+  if (cachedGroupChats) return cachedGroupChats;
   try {
     const file = getGroupsFilePath();
     if (!fs.existsSync(file)) {
       fs.writeFileSync(file, '[]', 'utf-8');
+      cachedGroupChats = [];
       return [];
     }
     const data = fs.readFileSync(file, 'utf-8');
-    return JSON.parse(data || '[]');
+    cachedGroupChats = JSON.parse(data || '[]');
+    return cachedGroupChats || [];
   } catch (err) {
     console.error('Error reading group_chats.json:', err);
-    return [];
+    return cachedGroupChats || [];
   }
 }
 
 function saveGroupChats(groups: GroupChat[]) {
   try {
+    cachedGroupChats = groups;
     const file = getGroupsFilePath();
     fs.writeFileSync(file, JSON.stringify(groups, null, 2), 'utf-8');
   } catch (err) {
@@ -85,21 +92,25 @@ function getReadsFilePath(): string {
 }
 
 function readGroupChatReads(): Record<string, string> {
+  if (cachedGroupReads) return cachedGroupReads;
   try {
     const file = getReadsFilePath();
     if (!fs.existsSync(file)) {
       fs.writeFileSync(file, '{}', 'utf-8');
+      cachedGroupReads = {};
       return {};
     }
     const data = fs.readFileSync(file, 'utf-8');
-    return JSON.parse(data || '{}');
+    cachedGroupReads = JSON.parse(data || '{}');
+    return cachedGroupReads || {};
   } catch (err) {
-    return {};
+    return cachedGroupReads || {};
   }
 }
 
 function saveGroupChatReads(reads: Record<string, string>) {
   try {
+    cachedGroupReads = reads;
     const file = getReadsFilePath();
     fs.writeFileSync(file, JSON.stringify(reads, null, 2), 'utf-8');
   } catch (err) {
@@ -408,6 +419,10 @@ router.delete('/groups/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Group chat not found' });
     }
 
+    if (userId && group.creatorId !== userId && !group.memberIds.includes(userId)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this group chat' });
+    }
+
     groups = groups.filter((g) => g.id !== id);
     saveGroupChats(groups);
 
@@ -594,7 +609,6 @@ router.get('/', async (req: Request, res: Response) => {
         },
       });
 
-      getIO()?.emit('chatsUpdated');
       return res.json(messages);
     }
 
@@ -612,8 +626,8 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
 
-    // Mark incoming messages from the recipient to the user as read
-    await prisma.chatMessage.updateMany({
+    // Mark incoming messages from the recipient to the user as read ONLY if there were unread messages
+    const updateResult = await prisma.chatMessage.updateMany({
       where: {
         senderId: recipientId,
         recipientId: userId,
@@ -624,7 +638,11 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
 
-    getIO()?.emit('chatsUpdated');
+    // Only emit when an unread message actually transitioned to read
+    if (updateResult.count > 0) {
+      getIO()?.emit('chatsUpdated');
+    }
+
     res.json(messages);
   } catch (error) {
     console.error('Error fetching chat history:', error);

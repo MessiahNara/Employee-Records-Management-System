@@ -35,6 +35,7 @@ import generateAOStatusDetailedExcel from '../utils/generateAOStatusDetailedExce
 import generateAOStatusDesignatedExcel from '../utils/generateAOStatusDesignatedExcel';
 import generateAOStatusRecalledExcel from '../utils/generateAOStatusRecalledExcel';
 import generatePulledOutFilesExcel from '../utils/generatePulledOutFilesExcel';
+import generateTransferredFilesExcel from '../utils/generateTransferredFilesExcel';
 import './Dashboard.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -132,6 +133,42 @@ const DEFAULT_VISIBLE_BORROW_COLUMNS: Record<string, boolean> = {
   receivedBy: true,
   fileCondition: true,
   remarks: true,
+};
+
+const TRANSFERRED_COLUMN_LABELS: Record<string, string> = {
+  employeeName: 'Employee Name (Owner)',
+  officeName: 'Office/Hospital',
+  position: 'Position / Designation',
+  appointmentStatus: 'Employment Status',
+  borrowerName: 'Transferred To (Received By)',
+  dateBorrowed: 'Date Transferred',
+  releasedBy: 'Released By',
+  fileCondition: 'File Condition',
+  remarks: 'Remarks',
+  status: 'Status',
+  dateReturned: 'Date Returned',
+  returnedByName: 'Returned By',
+  receivedBy: 'Received By (Records)',
+  returnFileCondition: 'Return Condition',
+  returnRemarks: 'Return Remarks',
+};
+
+const DEFAULT_VISIBLE_TRANSFERRED_COLUMNS: Record<string, boolean> = {
+  employeeName: true,
+  officeName: true,
+  position: true,
+  appointmentStatus: true,
+  borrowerName: true,
+  dateBorrowed: true,
+  releasedBy: true,
+  fileCondition: true,
+  remarks: true,
+  status: true,
+  dateReturned: true,
+  returnedByName: true,
+  receivedBy: true,
+  returnFileCondition: true,
+  returnRemarks: true,
 };
 
 const escapeXml = (unsafe: string) => {
@@ -858,8 +895,13 @@ function Dashboard() {
   const [pendingDeleteReportIds, setPendingDeleteReportIds] = useState<string[]>([]);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
 
-  // Pulled-Out Files UI States
-  const reportsTab = location.pathname === '/reports/pulled-out' ? 'pulled-out' : 'ao';
+  // Pulled-Out & Transferred Files UI States
+  const reportsTab = location.pathname === '/reports/pulled-out'
+    ? 'pulled-out'
+    : location.pathname === '/reports/transferred'
+    ? 'transferred'
+    : 'ao';
+
   const [borrowLogs, setBorrowLogs] = useState<any[]>([]);
   const [borrowLogsLoading, setBorrowLogsLoading] = useState(false);
   const [borrowSearchTerm, setBorrowSearchTerm] = useState('');
@@ -878,9 +920,40 @@ function Dashboard() {
   const [isDeletingBorrow, setIsDeletingBorrow] = useState(false);
   const [borrowSortPriority, setBorrowSortPriority] = useState<ReportSortConfig[]>([]);
 
+  // Transferred Files UI States
+  const [transferredLogs, setTransferredLogs] = useState<any[]>([]);
+  const [transferredLogsLoading, setTransferredLogsLoading] = useState(false);
+  const [transferredSearchTerm, setTransferredSearchTerm] = useState('');
+  const [transferredStatusFilter, setTransferredStatusFilter] = useState<'All' | 'Transferred' | 'Returned'>('All');
+  const [transferredDateFromFilter, setTransferredDateFromFilter] = useState('');
+  const [transferredDateToFilter, setTransferredDateToFilter] = useState('');
+  const [transferredReturnDateFromFilter, setTransferredReturnDateFromFilter] = useState('');
+  const [transferredReturnDateToFilter, setTransferredReturnDateToFilter] = useState('');
+  const [transferredCurrentPage, setTransferredCurrentPage] = useState(1);
+  const [transferredItemsPerPage, setTransferredItemsPerPage] = useState(10);
+  const [selectedTransferredLog, setSelectedTransferredLog] = useState<any>(null);
+  const [isTransferredDetailsModalOpen, setIsTransferredDetailsModalOpen] = useState(false);
+  const [selectedTransferredRowIds, setSelectedTransferredRowIds] = useState<Set<string>>(new Set());
+  const [isDeleteTransferredConfirmOpen, setIsDeleteTransferredConfirmOpen] = useState(false);
+  const [pendingDeleteTransferredIds, setPendingDeleteTransferredIds] = useState<string[]>([]);
+  const [isDeletingTransferred, setIsDeletingTransferred] = useState(false);
+  const [transferredSortPriority, setTransferredSortPriority] = useState<ReportSortConfig[]>([]);
+  const [isTransferredReportPreviewOpen, setIsTransferredReportPreviewOpen] = useState(false);
+  const [isTransferredColumnDropdownOpen, setIsTransferredColumnDropdownOpen] = useState(false);
+  const [visibleTransferredColumns, setVisibleTransferredColumns] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('transferred_visible_columns');
+      return saved ? JSON.parse(saved) : DEFAULT_VISIBLE_TRANSFERRED_COLUMNS;
+    } catch {
+      return DEFAULT_VISIBLE_TRANSFERRED_COLUMNS;
+    }
+  });
+  const transferredDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setSelectedReportRowIds(new Set());
     setSelectedBorrowRowIds(new Set());
+    setSelectedTransferredRowIds(new Set());
   }, [reportsTab]);
 
   useEffect(() => {
@@ -889,6 +962,13 @@ function Dashboard() {
       setReturnDateToFilter('');
     }
   }, [borrowStatusFilter]);
+
+  useEffect(() => {
+    if (transferredStatusFilter === 'Transferred') {
+      setTransferredReturnDateFromFilter('');
+      setTransferredReturnDateToFilter('');
+    }
+  }, [transferredStatusFilter]);
 
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
     try {
@@ -1044,6 +1124,25 @@ function Dashboard() {
     }
   }, [viewMode, reportsTab, fetchBorrowLogs]);
 
+  const fetchTransferredLogs = useCallback(async () => {
+    try {
+      setTransferredLogsLoading(true);
+      const data = await api.file201.getAllTransferredLogs();
+      setTransferredLogs(data);
+    } catch (error) {
+      console.error('Failed to fetch transferred logs:', error);
+      showToast('Failed to load transferred 201 file logs.', 'error');
+    } finally {
+      setTransferredLogsLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (viewMode === 'reports' && reportsTab === 'transferred') {
+      fetchTransferredLogs();
+    }
+  }, [viewMode, reportsTab, fetchTransferredLogs]);
+
   // For superadmin and admin, they have all permissions
   // For superadmin, they have all permissions
   // For admin and staff, use their individual permissions from the database
@@ -1100,6 +1199,8 @@ function Dashboard() {
       fetchAllEmployeesForKPI();
       if (viewMode === 'reports') {
         fetchEmployeeAuditLogs();
+        fetchTransferredLogs();
+        fetchBorrowLogs();
       }
       fetchEmployees();
     };
@@ -1107,13 +1208,15 @@ function Dashboard() {
     window.addEventListener('employeeUpdated', handleUpdate);
     window.addEventListener('approvalsUpdated', handleUpdate);
     window.addEventListener('documentsUpdated', handleUpdate);
+    window.addEventListener('file201Updated', handleUpdate);
 
     return () => {
       window.removeEventListener('employeeUpdated', handleUpdate);
       window.removeEventListener('approvalsUpdated', handleUpdate);
       window.removeEventListener('documentsUpdated', handleUpdate);
+      window.removeEventListener('file201Updated', handleUpdate);
     };
-  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees, currentPage, itemsPerPage, viewMode]);
+  }, [searchQuery, searchFilterType, statusFilter, showAllEmployees, currentPage, itemsPerPage, viewMode, fetchTransferredLogs, fetchBorrowLogs]);
 
   // Fetch KPI stats
   const fetchEmployeeStats = async () => {
@@ -2294,6 +2397,436 @@ function Dashboard() {
     }
   };
 
+  // Transferred Files Helpers
+  const handleTransferredSortClick = (field: string) => {
+    setTransferredSortPriority((prev) => {
+      const existingIndex = prev.findIndex((s) => s.key === field);
+      if (existingIndex >= 0) {
+        const existing = prev[existingIndex];
+        if (existing.direction === 'asc') {
+          const next = [...prev];
+          next[existingIndex] = { key: field, direction: 'desc' };
+          return next;
+        } else {
+          return prev.filter((s) => s.key !== field);
+        }
+      }
+      return [...prev, { key: field, direction: 'asc' }];
+    });
+  };
+
+  const handleRemoveTransferredSort = (field: string) => {
+    setTransferredSortPriority((prev) => prev.filter((s) => s.key !== field));
+  };
+
+  const renderTransferredSortableHeader = (label: string, field: string) => {
+    const existingIndex = transferredSortPriority.findIndex((s) => s.key === field);
+    const active = existingIndex >= 0;
+    const currentDirection = active ? transferredSortPriority[existingIndex].direction : undefined;
+    const priorityIndex = active ? existingIndex + 1 : 0;
+
+    return (
+      <div className="reports-view__sortable-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+        <span>{label}</span>
+        <div className="reports-view__sort-controls" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+          <button
+            type="button"
+            className={`reports-view__sort-btn${active ? ' reports-view__sort-btn--active' : ''}`}
+            onClick={() => handleTransferredSortClick(field)}
+            title={`Sort by ${label} (${active ? (currentDirection === 'asc' ? 'Ascending (click for Descending)' : 'Descending (click to clear)') : 'Click to sort Ascending'})`}
+          >
+            {priorityIndex > 0 ? <span className="reports-view__sort-priority">{priorityIndex}</span> : null}
+            {active ? (currentDirection === 'asc' ? '▲' : '▼') : '⇅'}
+          </button>
+          {active && (
+            <button
+              type="button"
+              className="reports-view__sort-remove-btn"
+              onClick={(e) => { e.stopPropagation(); handleRemoveTransferredSort(field); }}
+              title={`Remove ${label} sort`}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const getTransferredSortValue = (row: any, field: string) => {
+    switch (field) {
+      case 'employeeName':
+        return row.employee ? `${row.employee.lastName}, ${row.employee.firstName}` : row.employeeId || '';
+      case 'officeName':
+        return row.employee?.yellowBox?.office || row.employee?.officeName || '';
+      case 'position':
+        return row.employee?.position || '';
+      case 'appointmentStatus':
+        return row.employee?.status || '';
+      case 'borrowerName':
+        return row.borrowerName || '';
+      case 'dateBorrowed':
+        return row.dateBorrowed || '';
+      case 'releasedBy':
+        return row.releasedBy || '';
+      case 'fileCondition':
+        return row.fileCondition || '';
+      case 'remarks':
+        return row.purpose || row.remarks || '';
+      case 'status':
+        const isReturned = row.action === 'return' || !!row.dateReturned;
+        return isReturned ? 'Returned' : 'Transferred';
+      case 'dateReturned':
+        return row.dateReturned || '';
+      case 'returnedByName':
+        return row.returnedByName || '';
+      case 'receivedBy':
+        return row.receivedBy || '';
+      case 'returnFileCondition':
+        return row.fileCondition || '';
+      case 'returnRemarks':
+        return row.remarks || '';
+      default:
+        return '';
+    }
+  };
+
+  const filteredTransferredRows = useMemo(() => {
+    const filtered = transferredLogs.filter((log) => {
+      const emp = log.employee;
+      const empName = emp ? `${emp.firstName} ${emp.lastName} ${emp.middleName || ''}`.toLowerCase() : '';
+      const office = (emp?.yellowBox?.office || emp?.officeName || '').toLowerCase();
+      const pos = (emp?.position || '').toLowerCase();
+      const receivedBy = (log.borrowerName || '').toLowerCase();
+      const released = (log.releasedBy || '').toLowerCase();
+      const returnedBy = (log.returnedByName || '').toLowerCase();
+      const recordsReceived = (log.receivedBy || '').toLowerCase();
+      const remarks = (log.remarks || '').toLowerCase();
+      const purpose = (log.purpose || '').toLowerCase();
+
+      const search = transferredSearchTerm.toLowerCase().trim();
+      const matchSearch =
+        !search ||
+        empName.includes(search) ||
+        office.includes(search) ||
+        pos.includes(search) ||
+        receivedBy.includes(search) ||
+        released.includes(search) ||
+        returnedBy.includes(search) ||
+        recordsReceived.includes(search) ||
+        remarks.includes(search) ||
+        purpose.includes(search);
+
+      const isReturned = log.action === 'return' || !!log.dateReturned;
+      const matchStatus =
+        transferredStatusFilter === 'All' ||
+        (transferredStatusFilter === 'Transferred' && !isReturned) ||
+        (transferredStatusFilter === 'Returned' && isReturned);
+
+      let matchTransferDate = true;
+      if (log.dateBorrowed) {
+        const logDateStr = new Date(log.dateBorrowed).toLocaleDateString('en-CA');
+        if (transferredDateFromFilter && logDateStr < transferredDateFromFilter) matchTransferDate = false;
+        if (transferredDateToFilter && logDateStr > transferredDateToFilter) matchTransferDate = false;
+      } else if (transferredDateFromFilter || transferredDateToFilter) {
+        matchTransferDate = false;
+      }
+
+      let matchReturnDate = true;
+      if (transferredStatusFilter !== 'Transferred') {
+        if (log.dateReturned) {
+          const logReturnDateStr = new Date(log.dateReturned).toLocaleDateString('en-CA');
+          if (transferredReturnDateFromFilter && logReturnDateStr < transferredReturnDateFromFilter) matchReturnDate = false;
+          if (transferredReturnDateToFilter && logReturnDateStr > transferredReturnDateToFilter) matchReturnDate = false;
+        } else if (transferredReturnDateFromFilter || transferredReturnDateToFilter) {
+          matchReturnDate = false;
+        }
+      }
+
+      return matchSearch && matchStatus && matchTransferDate && matchReturnDate;
+    });
+
+    if (transferredSortPriority.length === 0) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      for (const sort of transferredSortPriority) {
+        const valueA = getTransferredSortValue(a, sort.key);
+        const valueB = getTransferredSortValue(b, sort.key);
+        const comparison = String(valueA || '').localeCompare(String(valueB || ''), undefined, { sensitivity: 'base' });
+        if (comparison !== 0) {
+          return sort.direction === 'asc' ? comparison : -comparison;
+        }
+      }
+      return 0;
+    });
+  }, [transferredLogs, transferredSearchTerm, transferredStatusFilter, transferredDateFromFilter, transferredDateToFilter, transferredReturnDateFromFilter, transferredReturnDateToFilter, transferredSortPriority]);
+
+  const transferredTotalPages = Math.ceil(filteredTransferredRows.length / transferredItemsPerPage);
+
+  const paginatedTransferredLogs = useMemo(() => {
+    const start = (transferredCurrentPage - 1) * transferredItemsPerPage;
+    return filteredTransferredRows.slice(start, start + transferredItemsPerPage);
+  }, [filteredTransferredRows, transferredCurrentPage, transferredItemsPerPage]);
+
+  useEffect(() => {
+    setTransferredCurrentPage(1);
+  }, [transferredSearchTerm, transferredStatusFilter, transferredDateFromFilter, transferredDateToFilter, transferredReturnDateFromFilter, transferredReturnDateToFilter]);
+
+  const transferredColumns = useMemo(() => {
+    const isAllSelected =
+      paginatedTransferredLogs.length > 0 &&
+      paginatedTransferredLogs.every((row) => selectedTransferredRowIds.has(row.id));
+    const isSomeSelected =
+      paginatedTransferredLogs.some((row) => selectedTransferredRowIds.has(row.id)) &&
+      !isAllSelected;
+
+    const selectionColumn: Column<any> = {
+      key: 'select',
+      header: (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            checked={isAllSelected}
+            ref={(input) => {
+              if (input) input.indeterminate = isSomeSelected;
+            }}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setSelectedTransferredRowIds((prev) => {
+                const next = new Set(prev);
+                paginatedTransferredLogs.forEach((row) => {
+                  if (checked) {
+                    next.add(row.id);
+                  } else {
+                    next.delete(row.id);
+                  }
+                });
+                return next;
+              });
+            }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ cursor: 'pointer' }}
+            title="Select All"
+          />
+          {selectedTransferredRowIds.size > 0 && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteTransferredEntries(Array.from(selectedTransferredRowIds));
+              }}
+              style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', height: '28px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+            >
+              <MdDelete style={{ fontSize: '0.85rem' }} /> Delete ({selectedTransferredRowIds.size})
+            </Button>
+          )}
+        </div>
+      ),
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedTransferredRowIds.has(row.id)}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            setSelectedTransferredRowIds((prev) => {
+              const next = new Set(prev);
+              if (checked) {
+                next.add(row.id);
+              } else {
+                next.delete(row.id);
+              }
+              return next;
+            });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: 'pointer' }}
+        />
+      ),
+      width: selectedTransferredRowIds.size > 0 ? '160px' : '50px',
+    };
+
+    const cols: Column<any>[] = [
+      {
+        key: 'employeeName',
+        header: renderTransferredSortableHeader('Employee Name (Owner)', 'employeeName'),
+        render: (row) => {
+          const emp = row.employee;
+          return emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+        }
+      },
+      {
+        key: 'officeName',
+        header: renderTransferredSortableHeader('Office/Hospital', 'officeName'),
+        render: (row) => row.employee?.yellowBox?.office || row.employee?.officeName || '—'
+      },
+      {
+        key: 'position',
+        header: renderTransferredSortableHeader('Position / Designation', 'position'),
+        render: (row) => row.employee?.position || '—'
+      },
+      {
+        key: 'appointmentStatus',
+        header: renderTransferredSortableHeader('Employment Status', 'appointmentStatus'),
+        render: (row) => {
+          const status = row.employee?.status;
+          return status ? (status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()) : '—';
+        }
+      },
+      {
+        key: 'borrowerName',
+        header: renderTransferredSortableHeader('Transferred To (Received By)', 'borrowerName'),
+        render: (row) => row.borrowerName || '—'
+      },
+      {
+        key: 'dateBorrowed',
+        header: renderTransferredSortableHeader('Date Transferred', 'dateBorrowed'),
+        render: (row) => formatDateMDY(row.dateBorrowed)
+      },
+      {
+        key: 'releasedBy',
+        header: renderTransferredSortableHeader('Released By', 'releasedBy'),
+        render: (row) => row.releasedBy || '—'
+      },
+      {
+        key: 'fileCondition',
+        header: renderTransferredSortableHeader('File Condition', 'fileCondition'),
+        render: (row) => row.transferCondition || row.fileCondition || 'Complete'
+      },
+      {
+        key: 'remarks',
+        header: renderTransferredSortableHeader('Remarks', 'remarks'),
+        render: (row) => row.transferRemarks || row.purpose || (!row.dateReturned ? row.remarks : '') || '—'
+      },
+      {
+        key: 'status',
+        header: renderTransferredSortableHeader('Status', 'status'),
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return (
+            <Badge variant={isReturned ? 'success' : 'purple'}>
+              {isReturned ? 'Returned' : 'Transferred'}
+            </Badge>
+          );
+        }
+      },
+      {
+        key: 'dateReturned',
+        header: renderTransferredSortableHeader('Date Returned', 'dateReturned'),
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned && row.dateReturned ? formatDateMDY(row.dateReturned) : '';
+        }
+      },
+      {
+        key: 'returnedByName',
+        header: renderTransferredSortableHeader('Returned By', 'returnedByName'),
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? row.returnedByName || '—' : '';
+        }
+      },
+      {
+        key: 'receivedBy',
+        header: renderTransferredSortableHeader('Received By (Records)', 'receivedBy'),
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? row.receivedBy || '—' : '';
+        }
+      },
+      {
+        key: 'returnFileCondition',
+        header: renderTransferredSortableHeader('Return Condition', 'returnFileCondition'),
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? (row.returnCondition || row.fileCondition || 'Complete') : '';
+        }
+      },
+      {
+        key: 'returnRemarks',
+        header: renderTransferredSortableHeader('Return Remarks', 'returnRemarks'),
+        render: (row) => {
+          const isReturned = row.action === 'return' || !!row.dateReturned;
+          return isReturned ? (row.returnRemarks || (row.dateReturned ? row.remarks : '') || '—') : '';
+        }
+      }
+    ];
+
+    const activeCols = cols.filter(c => {
+      if (visibleTransferredColumns[c.key] === false) return false;
+      if (transferredStatusFilter === 'Transferred') {
+        const toHide = ['dateReturned', 'returnedByName', 'receivedBy', 'returnFileCondition', 'returnRemarks'];
+        if (toHide.includes(c.key)) return false;
+      }
+      return true;
+    });
+    return [selectionColumn, ...activeCols];
+  }, [visibleTransferredColumns, paginatedTransferredLogs, selectedTransferredRowIds, transferredStatusFilter, transferredSortPriority]);
+
+  const handleDeleteTransferredEntries = (ids: string[]) => {
+    setPendingDeleteTransferredIds(ids);
+    setIsDeleteTransferredConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteTransferredEntries = async () => {
+    if (pendingDeleteTransferredIds.length === 0) return;
+    try {
+      setIsDeletingTransferred(true);
+
+      const entryNames = pendingDeleteTransferredIds.map((rawId) => {
+        const row = transferredLogs.find((r) => r.id === rawId);
+        const emp = row?.employee;
+        const empName = emp ? `${emp.lastName}, ${emp.firstName}` : (row?.employeeId || 'N/A');
+        return row
+          ? `${empName} - Transferred to ${row.borrowerName || 'RSP'} on ${new Date(row.dateBorrowed).toLocaleDateString()}`
+          : rawId;
+      });
+
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'delete_borrow_logs',
+        entityType: 'file201',
+        entityId: pendingDeleteTransferredIds.length === 1 ? pendingDeleteTransferredIds[0] : 'bulk',
+        entityName: pendingDeleteTransferredIds.length === 1 ? entryNames[0] : `${pendingDeleteTransferredIds.length} transferred file logs`,
+        payload: { ids: pendingDeleteTransferredIds, entryNames },
+      });
+
+      showToast('🗑️ Delete request submitted. Go to Approvals to review and execute.', 'info');
+      setIsDeleteTransferredConfirmOpen(false);
+      setPendingDeleteTransferredIds([]);
+      setSelectedTransferredRowIds(new Set());
+    } catch (err: any) {
+      showToast(`Failed to submit delete request: ${err.message}`, 'error');
+    } finally {
+      setIsDeletingTransferred(false);
+    }
+  };
+
+  const handleExportTransferredLogsToExcel = async () => {
+    let title = 'TRANSFERRED AND RETURNED 201 FILES REPORT';
+    let filenamePrefix = 'Transferred_And_Returned_201_Files_Report';
+    if (transferredStatusFilter === 'Transferred') {
+      title = 'TRANSFERRED 201 FILES TO RSP REPORT';
+      filenamePrefix = 'Transferred_201_Files_Report';
+    } else if (transferredStatusFilter === 'Returned') {
+      title = 'RETURNED 201 FILES TO RECORDS REPORT';
+      filenamePrefix = 'Returned_201_Files_Report';
+    }
+
+    try {
+      showToast('Generating report...', 'info');
+      const buffer = await generateTransferredFilesExcel(title, filteredTransferredRows, transferredStatusFilter as any);
+
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `${filenamePrefix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast('📊 Report exported successfully!', 'success');
+    } catch (error: any) {
+      console.error('XLSX export error:', error);
+      showToast(`Failed to export report: ${error.message}`, 'error');
+    }
+  };
+
   const reportColumns = useMemo<Column<ReportRow>[]>(() => {
     const selectionColumn: Column<ReportRow> = {
       key: 'selection',
@@ -3012,7 +3545,7 @@ function Dashboard() {
           <title>${title}</title>
           <style>
             @media print {
-              @page { size: landscape; margin: 0.5in; }
+              @page { size: 13in 8.5in; margin: 0.5in; }
               body { margin: 0; }
             }
             body {
@@ -4158,11 +4691,21 @@ function Dashboard() {
       <div className="dashboard__header">
         <div>
           <h1 className="dashboard__title">
-            {viewMode === 'reports' ? (reportsTab === 'pulled-out' ? 'Pulled-Out Files Report' : 'Administrative Reports') : 'Employee Management'}
+            {viewMode === 'reports'
+              ? (reportsTab === 'pulled-out'
+                ? 'Pulled-Out Files Report'
+                : reportsTab === 'transferred'
+                ? 'Transferred Files Report'
+                : 'Administrative Reports')
+              : 'Employee Management'}
           </h1>
           <p className="dashboard__subtitle">
             {viewMode === 'reports'
-              ? (reportsTab === 'pulled-out' ? 'View and track all borrowed and returned physical 201 records' : 'Generate administrative reports of employees')
+              ? (reportsTab === 'pulled-out'
+                ? 'View and track all borrowed and returned physical 201 records'
+                : reportsTab === 'transferred'
+                ? 'View and track all 201 files transferred to RSP and returned back to Records'
+                : 'Generate administrative reports of employees')
               : `Manage and track all employee records in the system (${employeeStats.total} employees)`}
           </p>
         </div>
@@ -4624,7 +5167,7 @@ function Dashboard() {
                 )}
               </Card>
             </>
-          ) : (
+          ) : reportsTab === 'pulled-out' ? (
             <div className="pulled-out-reports">
               <Card>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
@@ -4859,6 +5402,252 @@ function Dashboard() {
                               size="sm"
                               onClick={() => setBorrowCurrentPage(borrowTotalPages)}
                               disabled={borrowCurrentPage === borrowTotalPages}
+                            >
+                              Last
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </Card>
+            </div>
+          ) : (
+            <div className="transferred-reports">
+              <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                    Search and Filter
+                  </h3>
+                  <span className="reports-view__summary-pill">Total Transferred Records: {filteredTransferredRows.length}</span>
+                </div>
+
+                <div className="reports-view__filters-grid">
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Search</label>
+                    <Input
+                      type="text"
+                      placeholder="Search recipient, employee, office, position..."
+                      value={transferredSearchTerm}
+                      onChange={(e) => setTransferredSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Transfer Status</label>
+                    <select
+                      className="dashboard__filter-select"
+                      value={transferredStatusFilter}
+                      onChange={(e) => setTransferredStatusFilter(e.target.value as any)}
+                    >
+                      <option value="All">All Records</option>
+                      <option value="Transferred">Currently Transferred</option>
+                      <option value="Returned">Returned Back to Records</option>
+                    </select>
+                  </div>
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Date Transferred From</label>
+                    <input
+                      type="date"
+                      className="dashboard__form-input"
+                      value={transferredDateFromFilter}
+                      onChange={(e) => setTransferredDateFromFilter(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="reports-view__filter-card">
+                    <label className="dashboard__filter-label">Date Transferred To</label>
+                    <input
+                      type="date"
+                      className="dashboard__form-input"
+                      value={transferredDateToFilter}
+                      onChange={(e) => setTransferredDateToFilter(e.target.value)}
+                    />
+                  </div>
+
+                  {transferredStatusFilter !== 'Transferred' && (
+                    <>
+                      <div className="reports-view__filter-card">
+                        <label className="dashboard__filter-label">Date Returned From</label>
+                        <input
+                          type="date"
+                          className="dashboard__form-input"
+                          value={transferredReturnDateFromFilter}
+                          onChange={(e) => setTransferredReturnDateFromFilter(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="reports-view__filter-card">
+                        <label className="dashboard__filter-label">Date Returned To</label>
+                        <input
+                          type="date"
+                          className="dashboard__form-input"
+                          value={transferredReturnDateToFilter}
+                          onChange={(e) => setTransferredReturnDateToFilter(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setTransferredSearchTerm('');
+                      setTransferredStatusFilter('All');
+                      setTransferredDateFromFilter('');
+                      setTransferredDateToFilter('');
+                      setTransferredReturnDateFromFilter('');
+                      setTransferredReturnDateToFilter('');
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              </Card>
+
+              <Card>
+                {transferredLogsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Loading transferred files...</div>
+                ) : (
+                  <>
+                    <div className="reports-view__export-actions" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setIsTransferredReportPreviewOpen(true)}
+                        disabled={filteredTransferredRows.length === 0}
+                      >
+                        <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print
+                      </Button>
+                      <div ref={transferredDropdownRef} className="reports-view__columns-control" style={{ position: 'relative' }}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setIsTransferredColumnDropdownOpen(!isTransferredColumnDropdownOpen)}
+                        >
+                          ⚙️ Columns
+                        </Button>
+                        {isTransferredColumnDropdownOpen && (
+                          <div className="reports-view__columns-dropdown">
+                            <div className="reports-view__columns-dropdown-header">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVisibleTransferredColumns(DEFAULT_VISIBLE_TRANSFERRED_COLUMNS);
+                                  localStorage.setItem('transferred_visible_columns', JSON.stringify(DEFAULT_VISIBLE_TRANSFERRED_COLUMNS));
+                                }}
+                                className="reports-view__columns-link"
+                              >
+                                Select All
+                              </button>
+                              <span className="reports-view__columns-divider">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const cleared = Object.keys(DEFAULT_VISIBLE_TRANSFERRED_COLUMNS).reduce((acc, k) => ({ ...acc, [k]: false }), {});
+                                  setVisibleTransferredColumns(cleared);
+                                  localStorage.setItem('transferred_visible_columns', JSON.stringify(cleared));
+                                }}
+                                className="reports-view__columns-link"
+                              >
+                                Clear All
+                              </button>
+                            </div>
+                            <div className="reports-view__columns-dropdown-list">
+                              {Object.keys(TRANSFERRED_COLUMN_LABELS).map((key) => (
+                                <label key={key} className="reports-view__columns-item">
+                                  <input
+                                    type="checkbox"
+                                    className="reports-view__columns-checkbox"
+                                    checked={visibleTransferredColumns[key] !== false}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setVisibleTransferredColumns((prev) => {
+                                        const next = { ...prev, [key]: checked };
+                                        localStorage.setItem('transferred_visible_columns', JSON.stringify(next));
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span className="reports-view__columns-label">{TRANSFERRED_COLUMN_LABELS[key] || key}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="reports-view__table-container" style={{ marginTop: '1rem' }}>
+                      <div className="dashboard__table-scroll" style={{ borderBottomLeftRadius: transferredTotalPages <= 1 ? 'var(--border-radius-lg)' : 0, borderBottomRightRadius: transferredTotalPages <= 1 ? 'var(--border-radius-lg)' : 0 }}>
+                        <Table
+                          columns={transferredColumns}
+                          data={paginatedTransferredLogs}
+                          keyExtractor={(row) => row.id}
+                          onRowClick={(row) => {
+                            setSelectedTransferredLog(row);
+                            setIsTransferredDetailsModalOpen(true);
+                          }}
+                          emptyMessage="No transferred file records found"
+                        />
+                      </div>
+                    </div>
+
+                    {filteredTransferredRows.length > 0 && (
+                      <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
+                        <div className="dashboard__page-size">
+                          <span className="dashboard__page-size-label">Rows per page:</span>
+                          {PAGE_SIZE_OPTIONS.map((size) => (
+                            <button
+                              key={size}
+                              className={`dashboard__page-size-btn${transferredItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
+                              onClick={() => {
+                                setTransferredItemsPerPage(size);
+                                setTransferredCurrentPage(1);
+                              }}
+                            >
+                              {size}
+                            </button>
+                          ))}
+                        </div>
+                        {transferredTotalPages > 1 && (
+                          <div className="dashboard__pagination-controls">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setTransferredCurrentPage(1)}
+                              disabled={transferredCurrentPage === 1}
+                            >
+                              First
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setTransferredCurrentPage(transferredCurrentPage - 1)}
+                              disabled={transferredCurrentPage === 1}
+                            >
+                              Previous
+                            </Button>
+                            <div className="dashboard__pagination-info">
+                              Page {transferredCurrentPage} of {transferredTotalPages}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setTransferredCurrentPage(transferredCurrentPage + 1)}
+                              disabled={transferredCurrentPage === transferredTotalPages}
+                            >
+                              Next
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setTransferredCurrentPage(transferredTotalPages)}
+                              disabled={transferredCurrentPage === transferredTotalPages}
                             >
                               Last
                             </Button>
@@ -7187,6 +7976,571 @@ function Dashboard() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Transferred Files Report Preview Modal */}
+      <Modal
+        isOpen={isTransferredReportPreviewOpen}
+        onClose={() => setIsTransferredReportPreviewOpen(false)}
+        title="Transferred 201 Files Report Preview & Export"
+        size="xl"
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
+            <Button
+              variant="primary"
+              style={{ background: '#10b981', borderColor: '#10b981' }}
+              onClick={handleExportTransferredLogsToExcel}
+            >
+              <MdFileDownload style={{ marginRight: '0.35rem', fontSize: '1.1rem' }} /> Export Request (Excel)
+            </Button>
+          </div>
+        }
+      >
+        <div className="printable-report" style={{
+          fontFamily: "'Times New Roman', Times, serif",
+          color: '#000',
+          backgroundColor: '#fff',
+          padding: '1rem',
+          borderRadius: 'var(--border-radius)',
+          border: '1px solid var(--border-color)',
+          overflowX: 'auto',
+          lineHeight: '1.3'
+        }}>
+          {(() => {
+            const tabRows = filteredTransferredRows;
+            const ROWS_PER_PAGE = 13;
+            const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));
+
+            const headerBlock = (
+              <div style={{
+                position: 'relative',
+                border: '1px solid #000',
+                borderBottom: '2px solid #000',
+                padding: '10px 12px',
+                textAlign: 'center'
+              }}>
+                <div style={{ display: 'inline-block', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
+                  <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
+                  <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                </div>
+              </div>
+            );
+
+            const isTransferredMode = transferredStatusFilter === 'Transferred';
+            const reportTitle = isTransferredMode 
+              ? 'TRANSFERRED 201 FILES TO RSP REPORT'
+              : 'TRANSFERRED AND RETURNED 201 FILES REPORT';
+
+            const tableHeader = isTransferredMode ? (
+              <thead>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>EMPLOYEE NAME</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>OFFICE/HOSPITAL</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '11%' }}>POSITION / DESIGNATION</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>EMPLOYMENT STATUS</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>RELEASED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>RECEIVED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '6%' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>TIME</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>RECORDS CONFORMED</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>FILE CONDITION</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>REMARKS</th>
+                </tr>
+              </thead>
+            ) : (
+              <thead>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%' }}>NO.</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>EMPLOYEE NAME</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>OFFICE / HOSPITAL</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>POSITION / DESIGNATION</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>EMPLOYMENT STATUS</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>RELEASED BY</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>TRANSFERRED TO (RSP)</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>RECORDS CONFORMED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%' }}>FILE CONDITION</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>REMARKS</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>STATUS</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>RETURNED BACK TO RECORDS</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>RECEIVED BY</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>RECORDS CONFORMED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%' }}>RETURN CONDITION</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>RETURN REMARKS</th>
+                </tr>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>RECEIVED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>TIME</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>RETURNED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>TIME</th>
+                </tr>
+              </thead>
+            );
+
+            if (tabRows.length === 0) {
+              return (
+                <>
+                  {headerBlock}
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '11pt',
+                    fontFamily: "'Times New Roman', Times, serif",
+                    textTransform: 'uppercase',
+                    padding: '8px 6px',
+                    borderLeft: '1px solid #000',
+                    borderRight: '1px solid #000',
+                    borderBottom: '1px solid #000',
+                    letterSpacing: '0.3px'
+                  }}>{reportTitle}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
+                    {tableHeader}
+                    <tbody>
+                      <tr>
+                        <td colSpan={isTransferredMode ? 12 : 20} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>
+                          No records found.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              );
+            }
+
+            return Array.from({ length: pageCount }, (_, pageIdx) => {
+              const pageRows = tabRows.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
+              return (
+                <div
+                  key={pageIdx}
+                  style={{
+                    pageBreakAfter: pageIdx < pageCount - 1 ? 'always' : 'auto',
+                    marginBottom: pageIdx < pageCount - 1 ? '40px' : '0',
+                    paddingBottom: pageIdx < pageCount - 1 ? '40px' : '0',
+                    borderBottom: pageIdx < pageCount - 1 ? '3px dashed #aaa' : 'none',
+                  }}
+                >
+                  {headerBlock}
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '11pt',
+                    fontFamily: "'Times New Roman', Times, serif",
+                    textTransform: 'uppercase',
+                    padding: '8px 6px',
+                    borderLeft: '1px solid #000',
+                    borderRight: '1px solid #000',
+                    borderBottom: '1px solid #000',
+                    letterSpacing: '0.3px'
+                  }}>
+                    {reportTitle}
+                    {pageCount > 1 && (
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
+                        (Page {pageIdx + 1} of {pageCount})
+                      </span>
+                    )}
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
+                    {tableHeader}
+                    <tbody>
+                      {pageRows.map((row, idx) => {
+                        const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
+                        const emp = row.employee;
+                        const empName = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
+                        const isReturned = row.action === 'return' || !!row.dateReturned;
+
+                        if (isTransferredMode) {
+                          return (
+                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {globalIdx + 1}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {empName}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {row.employee?.yellowBox?.office || row.employee?.officeName || '—'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {row.employee?.position || '—'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {row.employee?.status || '—'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {row.releasedBy || '—'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {row.borrowerName || ''}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {/* Records Conformed signature */}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                                {row.transferCondition || row.fileCondition || 'Complete'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                                {row.transferRemarks || row.purpose || (!row.dateReturned ? row.remarks : '') || '—'}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {globalIdx + 1}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {empName}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {row.employee?.yellowBox?.office || row.employee?.officeName || '—'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {row.employee?.position || '—'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.employee?.status || '—'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.releasedBy || '—'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {row.borrowerName || ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {/* Records Conformed Transfer */}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {row.transferCondition || row.fileCondition || 'Complete'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {row.transferRemarks || row.purpose || (!row.dateReturned ? row.remarks : '') || '—'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned ? 'Returned' : 'Transferred'}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {isReturned ? (row.returnedByName || '') : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned ? (row.receivedBy || '') : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {/* Records Conformed Return */}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              {isReturned ? (row.returnCondition || row.fileCondition || 'Complete') : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              {isReturned ? (row.returnRemarks || (row.dateReturned ? row.remarks : '') || '—') : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            });
+          })()}
+        </div>
+      </Modal>
+
+      {/* TRANSFERRED DETAILS / TIMELINE MODAL */}
+      <Modal
+        isOpen={isTransferredDetailsModalOpen && !!selectedTransferredLog}
+        onClose={() => {
+          setIsTransferredDetailsModalOpen(false);
+          setSelectedTransferredLog(null);
+        }}
+        title="201 File Transfer to RSP — Transaction Details"
+        size="lg"
+      >
+        {selectedTransferredLog && (() => {
+          const emp = selectedTransferredLog.employee;
+          const isReturned = selectedTransferredLog.action === 'return' || !!selectedTransferredLog.dateReturned;
+          const empFullName = emp
+            ? `${emp.lastName}, ${emp.firstName} ${emp.middleName || ''} ${emp.nameExtension || ''}`.trim()
+            : selectedTransferredLog.employeeId;
+
+          return (
+            <div className="borrow-details" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0.5rem 0' }}>
+              
+              {/* Employee Summary Card */}
+              <div style={{
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--border-radius-lg)',
+                padding: '1.25rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '1rem'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Employee (Owner)</div>
+                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>{empFullName}</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>ID: {emp?.employeeIdNumber || selectedTransferredLog.employeeId}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Position & Office</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{emp?.position || '—'}</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>{emp?.yellowBox?.office || emp?.officeName || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Employment Status</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{emp?.status || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Overall File Status</div>
+                  <div style={{ marginTop: '0.375rem' }}>
+                    <Badge variant={isReturned ? 'success' : 'purple'}>
+                      {isReturned ? 'Returned Back to Records' : 'Currently Transferred to RSP'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Column Transaction Timeline Cards */}
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
+                position: 'relative'
+              }}>
+
+                {/* Left Card: Transfer to RSP details */}
+                <div style={{
+                  flex: '1 1 280px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.04)',
+                  border: '1px solid rgba(59, 130, 246, 0.15)',
+                  borderRadius: 'var(--border-radius-lg)',
+                  padding: '1.5rem',
+                  position: 'relative',
+                  zIndex: 1
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                    <div style={{
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      color: '#3b82f6',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '1.1rem'
+                    }}>
+                      🔄
+                    </div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Transfer to RSP Log</h4>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Received By (RSP Officer)</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedTransferredLog.borrowerName || '—'}</div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time Transferred</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                        {new Date(selectedTransferredLog.dateBorrowed).toLocaleString('en-US', {
+                          month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Released By (Records Officer)</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedTransferredLog.releasedBy || '—'}</div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>File Condition upon Transfer</div>
+                      <div style={{ marginTop: '0.375rem' }}>
+                        <Badge variant={
+                          (selectedTransferredLog.transferCondition || selectedTransferredLog.fileCondition) === 'Complete' ? 'success' :
+                            (selectedTransferredLog.transferCondition || selectedTransferredLog.fileCondition) === 'Incomplete' ? 'warning' : 'danger'
+                        }>
+                          {selectedTransferredLog.transferCondition || selectedTransferredLog.fileCondition || 'Complete'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {(selectedTransferredLog.transferRemarks || selectedTransferredLog.purpose || (!selectedTransferredLog.dateReturned ? selectedTransferredLog.remarks : '')) && (
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Remarks / Purpose</div>
+                        <div style={{ fontWeight: 500, color: 'var(--text-primary)', marginTop: '0.25rem', fontSize: '0.875rem' }}>
+                          {selectedTransferredLog.transferRemarks || selectedTransferredLog.purpose || (!selectedTransferredLog.dateReturned ? selectedTransferredLog.remarks : '')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Card: Return from RSP details */}
+                <div style={{
+                  flex: '1 1 280px',
+                  backgroundColor: isReturned ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-secondary)',
+                  border: isReturned ? '1px solid rgba(16, 185, 129, 0.2)' : '1px dashed var(--border-color)',
+                  borderRadius: 'var(--border-radius-lg)',
+                  padding: '1.5rem',
+                  position: 'relative',
+                  zIndex: 1
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                    <div style={{
+                      backgroundColor: isReturned ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)',
+                      color: isReturned ? '#10b981' : 'var(--text-secondary)',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '1.1rem'
+                    }}>
+                      {isReturned ? '📥' : '⏳'}
+                    </div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: isReturned ? 'var(--text-primary)' : 'var(--text-secondary)', margin: 0 }}>
+                      {isReturned ? 'Return to Records Log' : 'Pending Return'}
+                    </h4>
+                  </div>
+
+                  {isReturned ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Returned By (RSP Officer)</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedTransferredLog.returnedByName || '—'}</div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Received By (Records Officer)</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{selectedTransferredLog.receivedBy || '—'}</div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time Returned</div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                          {new Date(selectedTransferredLog.dateReturned).toLocaleString('en-US', {
+                            month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>File Condition upon Return</div>
+                        <div style={{ marginTop: '0.375rem' }}>
+                          <Badge variant={
+                            (selectedTransferredLog.returnCondition || selectedTransferredLog.fileCondition) === 'Complete' ? 'success' :
+                              (selectedTransferredLog.returnCondition || selectedTransferredLog.fileCondition) === 'Incomplete' ? 'warning' : 'danger'
+                          }>
+                            {selectedTransferredLog.returnCondition || selectedTransferredLog.fileCondition || 'Complete'}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {(selectedTransferredLog.returnRemarks || (selectedTransferredLog.dateReturned ? selectedTransferredLog.remarks : '')) && (
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Remarks</div>
+                          <div style={{
+                            fontWeight: 500,
+                            color: 'var(--text-primary)',
+                            marginTop: '0.25rem',
+                            fontSize: '0.875rem',
+                            lineHeight: '1.4'
+                          }}>
+                            {selectedTransferredLog.remarks}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '80%',
+                      textAlign: 'center',
+                      color: 'var(--text-secondary)',
+                      padding: '2rem 1rem'
+                    }}>
+                      <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⏳</div>
+                      <p style={{ fontWeight: 600, fontSize: '0.9375rem', margin: 0 }}>This file is currently transferred to RSP.</p>
+                      <p style={{ fontSize: '0.8125rem', marginTop: '0.5rem' }}>No return back to records has been logged yet.</p>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Delete Transferred Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteTransferredConfirmOpen}
+        onClose={() => {
+          if (!isDeletingTransferred) {
+            setIsDeleteTransferredConfirmOpen(false);
+            setPendingDeleteTransferredIds([]);
+          }
+        }}
+        title="Submit Delete Request for Transferred File Records"
+        size="md"
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsDeleteTransferredConfirmOpen(false);
+                setPendingDeleteTransferredIds([]);
+              }}
+              disabled={isDeletingTransferred}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleConfirmDeleteTransferredEntries}
+              loading={isDeletingTransferred}
+            >
+              Submit Delete Request
+            </Button>
+          </div>
+        }
+      >
+        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+          Are you sure you want to submit a delete request for <strong>{pendingDeleteTransferredIds.length}</strong> transferred file transaction log(s)?
+        </p>
       </Modal>
     </div>
   );

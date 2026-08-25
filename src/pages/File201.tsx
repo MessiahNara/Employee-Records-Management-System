@@ -214,6 +214,20 @@ function File201() {
 
   useEffect(() => {
     fetchData();
+
+    const handleRealtimeUpdate = () => {
+      fetchData();
+    };
+
+    window.addEventListener('file201Updated', handleRealtimeUpdate);
+    window.addEventListener('employeeUpdated', handleRealtimeUpdate);
+    window.addEventListener('approvalsUpdated', handleRealtimeUpdate);
+
+    return () => {
+      window.removeEventListener('file201Updated', handleRealtimeUpdate);
+      window.removeEventListener('employeeUpdated', handleRealtimeUpdate);
+      window.removeEventListener('approvalsUpdated', handleRealtimeUpdate);
+    };
   }, []);
 
   // Fetch all employees when assigning

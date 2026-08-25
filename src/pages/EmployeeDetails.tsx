@@ -99,7 +99,16 @@ function EmployeeDetails() {
       if (id) fetchEmployee(id);
     };
     window.addEventListener('employeeUpdated', handleUpdate);
-    return () => window.removeEventListener('employeeUpdated', handleUpdate);
+    window.addEventListener('documentsUpdated', handleUpdate);
+    window.addEventListener('file201Updated', handleUpdate);
+    window.addEventListener('approvalsUpdated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('employeeUpdated', handleUpdate);
+      window.removeEventListener('documentsUpdated', handleUpdate);
+      window.removeEventListener('file201Updated', handleUpdate);
+      window.removeEventListener('approvalsUpdated', handleUpdate);
+    };
   }, [id]);
 
   // If navigated via barcode scan, auto-open the 201 borrow/return modal
@@ -426,7 +435,7 @@ function EmployeeDetails() {
               const rawStatus = employee.file201Status || 'Available';
               const conditions = rawStatus.split(',').map((s: string) => s.trim()).filter(Boolean);
               const isTransferredToRsp = hasActiveRsp || conditions.some((c: string) => c.toLowerCase().includes('rsp'));
-              const isBorrowed = hasActiveBorrow || conditions.includes('Borrowed');
+              const isBorrowed = hasActiveBorrow || (conditions.includes('Borrowed') && !isTransferredToRsp);
               const nonCompleteConditions = conditions.filter((c: string) => c !== 'Available' && c !== 'Borrowed' && c !== 'Complete' && !c.toLowerCase().includes('rsp'));
 
               return (
@@ -1090,7 +1099,7 @@ function EmployeeDetails() {
         employeeId={employee.id}
         employeeName={`${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`}
         fileLocation={employee.fileboxLocation}
-        currentStatus={employee.file201Status || 'Available'}
+        currentStatus={hasActiveBorrow ? 'Borrowed' : 'Available'}
         onStatusChanged={() => {
           fetchEmployee(employee.id);
         }}

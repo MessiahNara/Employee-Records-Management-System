@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { getIO } from '../socket';
 
 const router = Router();
 
@@ -37,6 +38,41 @@ router.get('/logs/all', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching all borrow logs:', error);
     res.status(500).json({ error: 'Failed to fetch all borrow logs' });
+  }
+});
+
+// GET /api/file201/logs/transferred — get all RSP transfer logs in the database
+router.get('/logs/transferred', async (req: Request, res: Response) => {
+  try {
+    const logs = await (prisma as any).file201BorrowLog.findMany({
+      where: {
+        action: 'transfer_rsp',
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            officeName: true,
+            position: true,
+            appointmentStatus: true,
+            status: true,
+            yellowBox: {
+              select: {
+                office: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { dateBorrowed: 'desc' },
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching transferred logs:', error);
+    res.status(500).json({ error: 'Failed to fetch transferred logs' });
   }
 });
 
@@ -95,6 +131,8 @@ router.post('/:employeeId/transfer-rsp', async (req: Request, res: Response) => 
       receivedPosition,
       receivedOffice,
       purpose,
+      fileCondition,
+      remarks,
     } = req.body;
 
     if (!receivedBy || !receivedBy.trim()) {
@@ -122,7 +160,9 @@ router.post('/:employeeId/transfer-rsp', async (req: Request, res: Response) => 
         borrowerName: receivedBy.trim(),
         borrowerPosition: receivedPosition || null,
         borrowerOffice: receivedOffice || null,
-        purpose: purpose?.trim() || null,
+        purpose: remarks?.trim() || purpose?.trim() || null,
+        fileCondition: fileCondition || 'Complete',
+        remarks: null,
         releasedBy: releasedBy.trim(),
         dateBorrowed: new Date(),
       },
@@ -139,6 +179,9 @@ router.post('/:employeeId/transfer-rsp', async (req: Request, res: Response) => 
       where: { id: employeeId },
       data: { file201Status: newStatus },
     });
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.status(201).json(log);
   } catch (error) {
@@ -182,7 +225,7 @@ router.post('/:employeeId/return-rsp', async (req: Request, res: Response) => {
       where: { id: activeRsp.id },
       data: {
         dateReturned: new Date(),
-        fileCondition: fileCondition || 'Complete',
+        fileCondition: fileCondition || activeRsp.fileCondition || 'Complete',
         remarks: remarks?.trim() || null,
         returnedByName: returnedByName.trim(),
         receivedBy: receivedBy.trim(),
@@ -194,7 +237,14 @@ router.post('/:employeeId/return-rsp', async (req: Request, res: Response) => {
     const remaining = currentStatus
       .split(',')
       .map((s: string) => s.trim())
-      .filter((c: string) => c && c !== 'Transferred to RSP');
+      .filter((c: string) => c && c !== 'Transferred to RSP' && c !== 'Available' && c !== 'Damaged' && c !== 'Incomplete');
+    
+    if (fileCondition === 'Damaged') {
+      remaining.push('Damaged');
+    } else if (fileCondition === 'Incomplete') {
+      remaining.push('Incomplete');
+    }
+
     if (remaining.length === 0) remaining.push('Available');
     const newFile201Status = remaining.join(', ');
 
@@ -202,6 +252,9 @@ router.post('/:employeeId/return-rsp', async (req: Request, res: Response) => {
       where: { id: employeeId },
       data: { file201Status: newFile201Status },
     });
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.json(updated);
   } catch (error) {
@@ -263,6 +316,9 @@ router.post('/:employeeId/borrow', async (req: Request, res: Response) => {
       where: { id: employeeId },
       data: { file201Status: newStatus },
     });
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.status(201).json(log);
   } catch (error) {
@@ -329,6 +385,9 @@ router.post('/:employeeId/return', async (req: Request, res: Response) => {
       data: { file201Status: newFile201Status },
     });
 
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.json(updated);
   } catch (error) {
     console.error('Error recording return:', error);
@@ -382,6 +441,9 @@ router.post('/:employeeId/update-condition', async (req: Request, res: Response)
       data: { file201Status: newFile201Status },
     });
 
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.json(newLog);
   } catch (error) {
     console.error('Error updating file condition:', error);
@@ -399,6 +461,10 @@ router.delete('/:employeeId/clear', async (req: Request, res: Response) => {
       where: { id: employeeId },
       data: { file201Status: 'Available' },
     });
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.json({ message: 'History cleared' });
   } catch (error) {
     console.error('Error clearing borrow history:', error);
@@ -422,9 +488,13 @@ router.post('/delete-logs', async (req: Request, res: Response) => {
     });
 
     for (const log of logs) {
-      if (log.action === 'borrow' && !log.dateReturned) {
+      if (!log.dateReturned) {
         const active = await (prisma as any).file201BorrowLog.findFirst({
-          where: { employeeId: log.employeeId, action: 'borrow', dateReturned: null },
+          where: {
+            employeeId: log.employeeId,
+            action: { in: ['borrow', 'transfer_rsp'] },
+            dateReturned: null,
+          },
         });
         if (!active) {
           await prisma.employee.update({
@@ -434,6 +504,9 @@ router.post('/delete-logs', async (req: Request, res: Response) => {
         }
       }
     }
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.json({ success: true, count: logs.length });
   } catch (error: any) {

@@ -35,6 +35,8 @@ function File201RspModal({
   // Form fields for Return back to Records
   const [returnedByName, setReturnedByName] = useState('');
   const [returnReceivedByName, setReturnReceivedByName] = useState('');
+  const [fileCondition, setFileCondition] = useState('Complete');
+  const [remarks, setRemarks] = useState('');
 
   // Autocomplete states
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -72,6 +74,8 @@ function File201RspModal({
       setReleasedByName('');
       setReturnedByName('');
       setReturnReceivedByName('');
+      setFileCondition('Complete');
+      setRemarks('');
       setReceivedSuggestions([]);
       setShowReceivedSuggestions(false);
       setReleasedSuggestions([]);
@@ -202,6 +206,8 @@ function File201RspModal({
         releasedBy: releasedByName.trim(),
         receivedPosition: receivedPosition.trim() || undefined,
         receivedOffice: receivedOffice.trim() || undefined,
+        fileCondition: fileCondition || 'Complete',
+        remarks: remarks.trim() || undefined,
       });
       onStatusChanged('Transferred to RSP');
       onClose();
@@ -230,8 +236,10 @@ function File201RspModal({
         logId: activeRspLog?.id,
         returnedByName: returnedByName.trim(),
         receivedBy: returnReceivedByName.trim(),
+        fileCondition: fileCondition || 'Complete',
+        remarks: remarks.trim() || undefined,
       });
-      onStatusChanged('Available');
+      onStatusChanged(fileCondition === 'Damaged' ? 'Damaged' : fileCondition === 'Incomplete' ? 'Incomplete' : 'Available');
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to record return back to Records.');
@@ -406,6 +414,32 @@ function File201RspModal({
                 </div>
               )}
             </div>
+
+            {/* Condition of File */}
+            <div className="file201-modal__form-field">
+              <label className="file201-modal__form-label">Condition of File</label>
+              <select
+                className="file201-modal__select"
+                value={fileCondition}
+                onChange={(e) => setFileCondition(e.target.value)}
+              >
+                <option value="Complete">Complete</option>
+                <option value="Incomplete">Incomplete</option>
+                <option value="Damaged">Damaged</option>
+              </select>
+            </div>
+
+            {/* Remarks (optional) */}
+            <div className="file201-modal__form-field">
+              <label className="file201-modal__form-label">Remarks (optional)</label>
+              <textarea
+                className="file201-modal__textarea"
+                placeholder="Any remarks about the returned file (e.g. missing documents, damages)..."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                rows={3}
+              />
+            </div>
           </div>
         ) : (
           /* TRANSFER FORM */
@@ -486,6 +520,32 @@ function File201RspModal({
                   })}
                 </div>
               )}
+            </div>
+
+            {/* Condition of File */}
+            <div className="file201-modal__form-field">
+              <label className="file201-modal__form-label">Condition of File</label>
+              <select
+                className="file201-modal__select"
+                value={fileCondition}
+                onChange={(e) => setFileCondition(e.target.value)}
+              >
+                <option value="Complete">Complete</option>
+                <option value="Incomplete">Incomplete</option>
+                <option value="Damaged">Damaged</option>
+              </select>
+            </div>
+
+            {/* Remarks (optional) */}
+            <div className="file201-modal__form-field">
+              <label className="file201-modal__form-label">Remarks (optional)</label>
+              <textarea
+                className="file201-modal__textarea"
+                placeholder="Any remarks about the transferred file (e.g. purpose, notes)..."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                rows={3}
+              />
             </div>
           </div>
         )}

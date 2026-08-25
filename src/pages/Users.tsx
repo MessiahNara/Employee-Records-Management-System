@@ -148,18 +148,22 @@ function Users() {
     }
   }, [canAccessUserManagement]);
 
-  // Listen for profile picture updates
+  // Listen for user, approval, and profile picture updates
   useEffect(() => {
-    const handleProfileUpdate = () => {
+    const handleUpdate = () => {
       if (canAccessUserManagement) {
-        fetchUsers(); // Refresh users list when profile picture changes
+        fetchUsers();
       }
     };
 
-    window.addEventListener('profilePictureUpdated', handleProfileUpdate);
+    window.addEventListener('profilePictureUpdated', handleUpdate);
+    window.addEventListener('usersUpdated', handleUpdate);
+    window.addEventListener('approvalsUpdated', handleUpdate);
 
     return () => {
-      window.removeEventListener('profilePictureUpdated', handleProfileUpdate);
+      window.removeEventListener('profilePictureUpdated', handleUpdate);
+      window.removeEventListener('usersUpdated', handleUpdate);
+      window.removeEventListener('approvalsUpdated', handleUpdate);
     };
   }, [canAccessUserManagement]);
 

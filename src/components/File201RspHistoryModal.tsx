@@ -62,6 +62,11 @@ function File201RspHistoryModal({ isOpen, onClose, employeeId, employeeName }: F
                       >
                         {isReturned ? '📥 RETURNED BACK TO RECORDS' : '🔄 TRANSFERRED TO RSP'}
                       </span>
+                      {log.fileCondition && log.fileCondition !== 'Complete' && (
+                        <span className={`file201-history__badge file201-history__badge--condition-${log.fileCondition.toLowerCase()}`}>
+                          {log.fileCondition.toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <span className="file201-history__date">
                       {new Date(log.dateBorrowed).toLocaleString()}
@@ -95,6 +100,20 @@ function File201RspHistoryModal({ isOpen, onClose, employeeId, employeeName }: F
                       <span className="file201-history__label">Date Transferred:</span>
                       <span className="file201-history__value">{new Date(log.dateBorrowed).toLocaleString()}</span>
                     </div>
+                    <div className="file201-history__row">
+                      <span className="file201-history__label">Condition of File:</span>
+                      <span className="file201-history__value">
+                        <span className={`file201-history__condition-chip file201-history__condition-chip--${(log.fileCondition || 'Complete').toLowerCase()}`}>
+                          {log.fileCondition || 'Complete'}
+                        </span>
+                      </span>
+                    </div>
+                    {(log.purpose || (!isReturned && log.remarks)) && (
+                      <div className="file201-history__row">
+                        <span className="file201-history__label">Remarks:</span>
+                        <span className="file201-history__value">{log.purpose || (!isReturned && log.remarks)}</span>
+                      </div>
+                    )}
 
                     {isReturned && (
                       <>
@@ -113,6 +132,20 @@ function File201RspHistoryModal({ isOpen, onClose, employeeId, employeeName }: F
                           <div className="file201-history__row">
                             <span className="file201-history__label">Received by (Records):</span>
                             <span className="file201-history__value">{log.receivedBy}</span>
+                          </div>
+                        )}
+                        <div className="file201-history__row">
+                          <span className="file201-history__label">Condition upon Return:</span>
+                          <span className="file201-history__value">
+                            <span className={`file201-history__condition-chip file201-history__condition-chip--${(log.fileCondition || 'Complete').toLowerCase()}`}>
+                              {log.fileCondition || 'Complete'}
+                            </span>
+                          </span>
+                        </div>
+                        {log.remarks && (
+                          <div className="file201-history__row">
+                            <span className="file201-history__label">Return Remarks:</span>
+                            <span className="file201-history__value">{log.remarks}</span>
                           </div>
                         )}
                       </>

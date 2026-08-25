@@ -57577,6 +57577,35 @@ async function createAuditLog(prisma5, data) {
   });
 }
 
+// server/node_modules/socket.io/wrapper.mjs
+var import_dist = __toESM(require_dist2(), 1);
+var { Server, Namespace, Socket } = import_dist.default;
+
+// server/src/socket.ts
+var io2 = null;
+var initSocket = (server) => {
+  io2 = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    }
+  });
+  io2.on("connection", (socket) => {
+    console.log("[socket] Client connected:", socket.id);
+    socket.on("disconnect", () => {
+      console.log("[socket] Client disconnected:", socket.id);
+    });
+  });
+  return io2;
+};
+var getIO = () => {
+  if (!io2) {
+    console.warn("[socket] io not initialized yet");
+    return null;
+  }
+  return io2;
+};
+
 // server/src/routes/user.routes.ts
 var import_path2 = __toESM(require("path"));
 var import_fs2 = __toESM(require("fs"));
@@ -57702,6 +57731,7 @@ router.post("/", async (req, res) => {
       entityId: user.id,
       entityName: getUserName(user)
     });
+    getIO()?.emit("usersUpdated");
     res.status(201).json(user);
   } catch (error) {
     console.error("Error creating user:", error);
@@ -57762,6 +57792,7 @@ router.put("/:id", requireSuperadminApproval, async (req, res) => {
         authorizingUserName
       }
     });
+    getIO()?.emit("usersUpdated");
     res.json(user);
   } catch (error) {
     console.error("Error updating user:", error);
@@ -57927,6 +57958,7 @@ router.patch("/:id", async (req, res) => {
           authorizingUserName
         }
       });
+      getIO()?.emit("usersUpdated");
       res.json(user);
     }
   } catch (error) {
@@ -57986,6 +58018,7 @@ router.delete("/:id", async (req, res) => {
     await prisma_default.user.delete({
       where: { id }
     });
+    getIO()?.emit("usersUpdated");
     res.json({ message: "User deleted successfully" });
   } catch (error) {
     console.error("Error deleting user:", error);
@@ -58236,36 +58269,55 @@ async function checkAndAddDropdownOptions(data) {
         data: {
           appointmentStatuses: [],
           officeNames: [],
-          positions: []
+          positions: [],
+          recordLocations: [],
+          divisions: [],
+          classificationCategories: [],
+          subCategories: [],
+          itemNumbers: [],
+          dispositionProvisions: [],
+          prdsGrds: [],
+          reasonsForSeparation: [],
+          aoYears: []
         }
       });
     }
     const currentOfficeNames = new Set(settings.officeNames ?? []);
     const currentPositions = new Set(settings.positions ?? []);
     const currentAppointmentStatuses = new Set(settings.appointmentStatuses ?? []);
+    const currentRecordLocations = new Set(settings.recordLocations ?? []);
+    const currentDivisions = new Set(settings.divisions ?? []);
+    const currentClassificationCategories = new Set(settings.classificationCategories ?? []);
+    const currentSubCategories = new Set(settings.subCategories ?? []);
+    const currentItemNumbers = new Set(settings.itemNumbers ?? []);
+    const currentDispositionProvisions = new Set(settings.dispositionProvisions ?? []);
+    const currentPrdsGrds = new Set(settings.prdsGrds ?? []);
+    const currentReasonsForSeparation = new Set(settings.reasonsForSeparation ?? []);
+    const currentAoYears = new Set(settings.aoYears ?? []);
     let needsUpdate = false;
-    if (data.officeNames) {
-      for (const office of data.officeNames) {
-        if (office && office.trim() !== "") {
-          const trimmed = office.trim();
-          if (!currentOfficeNames.has(trimmed)) {
-            currentOfficeNames.add(trimmed);
+    const addItemsToSet = (items, targetSet) => {
+      if (!items) return;
+      for (const item of items) {
+        if (item && item.trim() !== "") {
+          const trimmed = item.trim();
+          if (!targetSet.has(trimmed)) {
+            targetSet.add(trimmed);
             needsUpdate = true;
           }
         }
       }
-    }
-    if (data.positions) {
-      for (const pos of data.positions) {
-        if (pos && pos.trim() !== "") {
-          const trimmed = pos.trim();
-          if (!currentPositions.has(trimmed)) {
-            currentPositions.add(trimmed);
-            needsUpdate = true;
-          }
-        }
-      }
-    }
+    };
+    addItemsToSet(data.officeNames, currentOfficeNames);
+    addItemsToSet(data.positions, currentPositions);
+    addItemsToSet(data.recordLocations, currentRecordLocations);
+    addItemsToSet(data.divisions, currentDivisions);
+    addItemsToSet(data.classificationCategories, currentClassificationCategories);
+    addItemsToSet(data.subCategories, currentSubCategories);
+    addItemsToSet(data.itemNumbers, currentItemNumbers);
+    addItemsToSet(data.dispositionProvisions, currentDispositionProvisions);
+    addItemsToSet(data.prdsGrds, currentPrdsGrds);
+    addItemsToSet(data.reasonsForSeparation, currentReasonsForSeparation);
+    addItemsToSet(data.aoYears, currentAoYears);
     if (data.appointmentStatuses) {
       for (const status of data.appointmentStatuses) {
         if (status && status.trim() !== "") {
@@ -58288,10 +58340,20 @@ async function checkAndAddDropdownOptions(data) {
         data: {
           officeNames: Array.from(currentOfficeNames).sort(),
           positions: Array.from(currentPositions).sort(),
-          appointmentStatuses: Array.from(currentAppointmentStatuses).sort()
+          appointmentStatuses: Array.from(currentAppointmentStatuses).sort(),
+          recordLocations: Array.from(currentRecordLocations).sort(),
+          divisions: Array.from(currentDivisions).sort(),
+          classificationCategories: Array.from(currentClassificationCategories).sort(),
+          subCategories: Array.from(currentSubCategories).sort(),
+          itemNumbers: Array.from(currentItemNumbers).sort(),
+          dispositionProvisions: Array.from(currentDispositionProvisions).sort(),
+          prdsGrds: Array.from(currentPrdsGrds).sort(),
+          reasonsForSeparation: Array.from(currentReasonsForSeparation).sort(),
+          aoYears: Array.from(currentAoYears).sort()
         }
       });
-      console.log("[settings] Automatically added new dynamic dropdown options");
+      console.log("[settings] Automatically added new dynamic dropdown options to database");
+      getIO()?.emit("systemSettingsUpdated");
     }
   } catch (error) {
     console.error("[settings] Error auto-populating dropdown options:", error);
@@ -58360,37 +58422,6 @@ async function syncExistingRecordsToDropdownOptions() {
 // server/src/routes/employee.routes.ts
 var import_fs3 = __toESM(require("fs"));
 var import_path3 = __toESM(require("path"));
-
-// server/node_modules/socket.io/wrapper.mjs
-var import_dist = __toESM(require_dist2(), 1);
-var { Server, Namespace, Socket } = import_dist.default;
-
-// server/src/socket.ts
-var io2 = null;
-var initSocket = (server) => {
-  io2 = new Server(server, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-    }
-  });
-  io2.on("connection", (socket) => {
-    console.log("[socket] Client connected:", socket.id);
-    socket.on("disconnect", () => {
-      console.log("[socket] Client disconnected:", socket.id);
-    });
-  });
-  return io2;
-};
-var getIO = () => {
-  if (!io2) {
-    console.warn("[socket] io not initialized yet");
-    return null;
-  }
-  return io2;
-};
-
-// server/src/routes/employee.routes.ts
 var router2 = (0, import_express2.Router)();
 var toNullableDate = (value) => {
   if (value === void 0 || value === null || value === "") {
@@ -59218,6 +59249,8 @@ router2.delete("/:id", requireSuperadminApproval, async (req, res) => {
       where: { id }
     });
     getIO()?.emit("employeeUpdated");
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("documentsUpdated");
     res.json({
       message: "Employee deleted successfully",
       deletedDocuments: employee.documents.length,
@@ -59312,6 +59345,9 @@ router2.post("/bulk-delete", requireSuperadminApproval, async (req, res) => {
         }
       }
     });
+    getIO()?.emit("employeeUpdated");
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("documentsUpdated");
     res.json({
       message: `Successfully deleted ${result.count} employee(s)`,
       deletedCount: result.count,
@@ -59370,6 +59406,7 @@ router2.post("/:id/profile-picture", uploadProfilePicture.single("profilePicture
       where: { id },
       data: { profilePicture: profilePictureUrl }
     });
+    getIO()?.emit("employeeUpdated");
     res.json({ profilePicture: updated.profilePicture });
   } catch (error) {
     if (req.file) import_fs3.default.unlinkSync(req.file.path);
@@ -59394,6 +59431,7 @@ router2.delete("/:id/profile-picture", async (req, res) => {
       where: { id },
       data: { profilePicture: null }
     });
+    getIO()?.emit("employeeUpdated");
     res.json({ message: "Profile picture removed successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to remove profile picture" });
@@ -59534,6 +59572,8 @@ router2.post("/delete-report-entries", async (req, res) => {
         }
       }
     }
+    getIO()?.emit("employeeUpdated");
+    getIO()?.emit("documentsUpdated");
     res.json({ success: true, currentDeleted: currentDeletedCount, historicalDeleted: historicalDeletedCount });
   } catch (error) {
     console.error("Error deleting report entries:", error);
@@ -59986,6 +60026,8 @@ router3.post("/", (req, res, next) => {
         fileSize: uploadedFile.size
       }
     });
+    getIO()?.emit("documentsUpdated");
+    getIO()?.emit("employeeUpdated");
     res.status(201).json(document2);
   } catch (error) {
     console.error("Error creating document:", error);
@@ -60003,6 +60045,8 @@ router3.put("/:id", requireSuperadminApproval, async (req, res) => {
         ...fileName && { fileName }
       }
     });
+    getIO()?.emit("documentsUpdated");
+    getIO()?.emit("employeeUpdated");
     res.json(document2);
   } catch (error) {
     console.error("Error updating document:", error);
@@ -60080,6 +60124,8 @@ router3.delete("/:id", requireSuperadminApproval, async (req, res) => {
         authorizingUserName: authorizingUserName || userName
       }
     });
+    getIO()?.emit("documentsUpdated");
+    getIO()?.emit("employeeUpdated");
     res.json({ message: "Document deleted successfully" });
   } catch (error) {
     console.error("Error deleting document:", error);
@@ -60179,6 +60225,8 @@ router3.post("/bulk-delete", requireSuperadminApproval, async (req, res) => {
     await prisma_default.auditLog.create({
       data: auditData
     });
+    getIO()?.emit("documentsUpdated");
+    getIO()?.emit("employeeUpdated");
     res.json({
       message: `Successfully deleted ${result.count} document(s)`,
       deletedCount: result.count,
@@ -60898,6 +60946,39 @@ router6.get("/logs/all", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch all borrow logs" });
   }
 });
+router6.get("/logs/transferred", async (req, res) => {
+  try {
+    const logs = await prisma_default.file201BorrowLog.findMany({
+      where: {
+        action: "transfer_rsp"
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            officeName: true,
+            position: true,
+            appointmentStatus: true,
+            status: true,
+            yellowBox: {
+              select: {
+                office: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { dateBorrowed: "desc" }
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error("Error fetching transferred logs:", error);
+    res.status(500).json({ error: "Failed to fetch transferred logs" });
+  }
+});
 router6.get("/:employeeId/history", async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -60945,7 +61026,9 @@ router6.post("/:employeeId/transfer-rsp", async (req, res) => {
       releasedBy,
       receivedPosition,
       receivedOffice,
-      purpose
+      purpose,
+      fileCondition,
+      remarks
     } = req.body;
     if (!receivedBy || !receivedBy.trim()) {
       return res.status(400).json({ error: "Received By is required" });
@@ -60968,7 +61051,9 @@ router6.post("/:employeeId/transfer-rsp", async (req, res) => {
         borrowerName: receivedBy.trim(),
         borrowerPosition: receivedPosition || null,
         borrowerOffice: receivedOffice || null,
-        purpose: purpose?.trim() || null,
+        purpose: remarks?.trim() || purpose?.trim() || null,
+        fileCondition: fileCondition || "Complete",
+        remarks: null,
         releasedBy: releasedBy.trim(),
         dateBorrowed: /* @__PURE__ */ new Date()
       }
@@ -60983,6 +61068,8 @@ router6.post("/:employeeId/transfer-rsp", async (req, res) => {
       where: { id: employeeId },
       data: { file201Status: newStatus }
     });
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.status(201).json(log);
   } catch (error) {
     console.error("Error recording RSP transfer:", error);
@@ -61018,7 +61105,7 @@ router6.post("/:employeeId/return-rsp", async (req, res) => {
       where: { id: activeRsp.id },
       data: {
         dateReturned: /* @__PURE__ */ new Date(),
-        fileCondition: fileCondition || "Complete",
+        fileCondition: fileCondition || activeRsp.fileCondition || "Complete",
         remarks: remarks?.trim() || null,
         returnedByName: returnedByName.trim(),
         receivedBy: receivedBy.trim()
@@ -61026,13 +61113,20 @@ router6.post("/:employeeId/return-rsp", async (req, res) => {
     });
     const employee = await prisma_default.employee.findUnique({ where: { id: employeeId } });
     const currentStatus = employee?.file201Status || "Available";
-    const remaining = currentStatus.split(",").map((s) => s.trim()).filter((c) => c && c !== "Transferred to RSP");
+    const remaining = currentStatus.split(",").map((s) => s.trim()).filter((c) => c && c !== "Transferred to RSP" && c !== "Available" && c !== "Damaged" && c !== "Incomplete");
+    if (fileCondition === "Damaged") {
+      remaining.push("Damaged");
+    } else if (fileCondition === "Incomplete") {
+      remaining.push("Incomplete");
+    }
     if (remaining.length === 0) remaining.push("Available");
     const newFile201Status = remaining.join(", ");
     await prisma_default.employee.update({
       where: { id: employeeId },
       data: { file201Status: newFile201Status }
     });
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json(updated);
   } catch (error) {
     console.error("Error recording return from RSP:", error);
@@ -61081,6 +61175,8 @@ router6.post("/:employeeId/borrow", async (req, res) => {
       where: { id: employeeId },
       data: { file201Status: newStatus }
     });
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.status(201).json(log);
   } catch (error) {
     console.error("Error recording borrow:", error);
@@ -61132,6 +61228,8 @@ router6.post("/:employeeId/return", async (req, res) => {
       where: { id: employeeId },
       data: { file201Status: newFile201Status }
     });
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json(updated);
   } catch (error) {
     console.error("Error recording return:", error);
@@ -61174,6 +61272,8 @@ router6.post("/:employeeId/update-condition", async (req, res) => {
       where: { id: employeeId },
       data: { file201Status: newFile201Status }
     });
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json(newLog);
   } catch (error) {
     console.error("Error updating file condition:", error);
@@ -61188,6 +61288,8 @@ router6.delete("/:employeeId/clear", async (req, res) => {
       where: { id: employeeId },
       data: { file201Status: "Available" }
     });
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json({ message: "History cleared" });
   } catch (error) {
     console.error("Error clearing borrow history:", error);
@@ -61207,9 +61309,13 @@ router6.post("/delete-logs", async (req, res) => {
       where: { id: { in: ids } }
     });
     for (const log of logs) {
-      if (log.action === "borrow" && !log.dateReturned) {
+      if (!log.dateReturned) {
         const active = await prisma_default.file201BorrowLog.findFirst({
-          where: { employeeId: log.employeeId, action: "borrow", dateReturned: null }
+          where: {
+            employeeId: log.employeeId,
+            action: { in: ["borrow", "transfer_rsp"] },
+            dateReturned: null
+          }
         });
         if (!active) {
           await prisma_default.employee.update({
@@ -61219,6 +61325,8 @@ router6.post("/delete-logs", async (req, res) => {
         }
       }
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json({ success: true, count: logs.length });
   } catch (error) {
     console.error("Error deleting borrow logs:", error);
@@ -61369,6 +61477,10 @@ router7.post("/:id/approve", async (req, res) => {
       }
     });
     getIO()?.emit("approvalsUpdated");
+    getIO()?.emit("employeeUpdated");
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("documentsUpdated");
+    getIO()?.emit("inventoryUpdated");
     res.json({
       approved: true,
       approvalToken,
@@ -61429,6 +61541,10 @@ router7.post("/:id/reject", async (req, res) => {
       }
     });
     getIO()?.emit("approvalsUpdated");
+    getIO()?.emit("employeeUpdated");
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("documentsUpdated");
+    getIO()?.emit("inventoryUpdated");
     res.json({ rejected: true });
   } catch (error) {
     console.error("Error rejecting request:", error);
@@ -61572,22 +61688,28 @@ function getMigratedFilePath2(fileName) {
 function getGroupsFilePath() {
   return getMigratedFilePath2("group_chats.json");
 }
+var cachedGroupChats = null;
+var cachedGroupReads = null;
 function readGroupChats() {
+  if (cachedGroupChats) return cachedGroupChats;
   try {
     const file = getGroupsFilePath();
     if (!import_fs6.default.existsSync(file)) {
       import_fs6.default.writeFileSync(file, "[]", "utf-8");
+      cachedGroupChats = [];
       return [];
     }
     const data = import_fs6.default.readFileSync(file, "utf-8");
-    return JSON.parse(data || "[]");
+    cachedGroupChats = JSON.parse(data || "[]");
+    return cachedGroupChats || [];
   } catch (err) {
     console.error("Error reading group_chats.json:", err);
-    return [];
+    return cachedGroupChats || [];
   }
 }
 function saveGroupChats(groups) {
   try {
+    cachedGroupChats = groups;
     const file = getGroupsFilePath();
     import_fs6.default.writeFileSync(file, JSON.stringify(groups, null, 2), "utf-8");
   } catch (err) {
@@ -61598,20 +61720,24 @@ function getReadsFilePath() {
   return getMigratedFilePath2("group_chat_reads.json");
 }
 function readGroupChatReads() {
+  if (cachedGroupReads) return cachedGroupReads;
   try {
     const file = getReadsFilePath();
     if (!import_fs6.default.existsSync(file)) {
       import_fs6.default.writeFileSync(file, "{}", "utf-8");
+      cachedGroupReads = {};
       return {};
     }
     const data = import_fs6.default.readFileSync(file, "utf-8");
-    return JSON.parse(data || "{}");
+    cachedGroupReads = JSON.parse(data || "{}");
+    return cachedGroupReads || {};
   } catch (err) {
-    return {};
+    return cachedGroupReads || {};
   }
 }
 function saveGroupChatReads(reads) {
   try {
+    cachedGroupReads = reads;
     const file = getReadsFilePath();
     import_fs6.default.writeFileSync(file, JSON.stringify(reads, null, 2), "utf-8");
   } catch (err) {
@@ -61855,6 +61981,9 @@ router9.delete("/groups/:id", async (req, res) => {
     if (!group) {
       return res.status(404).json({ error: "Group chat not found" });
     }
+    if (userId && group.creatorId !== userId && !group.memberIds.includes(userId)) {
+      return res.status(403).json({ error: "Forbidden: You do not have permission to delete this group chat" });
+    }
     groups = groups.filter((g) => g.id !== id);
     saveGroupChats(groups);
     await prisma4.chatMessage.deleteMany({
@@ -62003,7 +62132,6 @@ router9.get("/", async (req, res) => {
           createdAt: "asc"
         }
       });
-      getIO()?.emit("chatsUpdated");
       return res.json(messages2);
     }
     const messages = await prisma4.chatMessage.findMany({
@@ -62017,7 +62145,7 @@ router9.get("/", async (req, res) => {
         createdAt: "asc"
       }
     });
-    await prisma4.chatMessage.updateMany({
+    const updateResult = await prisma4.chatMessage.updateMany({
       where: {
         senderId: recipientId,
         recipientId: userId,
@@ -62027,7 +62155,9 @@ router9.get("/", async (req, res) => {
         read: true
       }
     });
-    getIO()?.emit("chatsUpdated");
+    if (updateResult.count > 0) {
+      getIO()?.emit("chatsUpdated");
+    }
     res.json(messages);
   } catch (error) {
     console.error("Error fetching chat history:", error);
@@ -62225,6 +62355,8 @@ router10.post("/", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.status(201).json(box);
   } catch (error) {
     console.error("Error creating yellow box:", error);
@@ -62263,6 +62395,8 @@ router10.put("/:id", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json(updated);
   } catch (error) {
     console.error("Error updating yellow box:", error);
@@ -62299,6 +62433,8 @@ router10.delete("/:id", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json({ success: true });
   } catch (error) {
     console.error("Error deleting yellow box:", error);
@@ -62337,6 +62473,8 @@ router10.post("/:id/employees", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json(updatedEmployee);
   } catch (error) {
     console.error("Error assigning employee to yellow box:", error);
@@ -62371,6 +62509,8 @@ router10.delete("/:id/employees/:employeeId", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json(updatedEmployee);
   } catch (error) {
     console.error("Error removing employee from yellow box:", error);
@@ -62409,6 +62549,8 @@ router10.post("/:id/employees/bulk", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json({ success: true, count: updatedCount.count });
   } catch (error) {
     console.error("Error bulk assigning employees:", error);
@@ -62447,6 +62589,8 @@ router10.post("/:id/employees/bulk-remove", async (req, res) => {
         }
       });
     }
+    getIO()?.emit("file201Updated");
+    getIO()?.emit("employeeUpdated");
     res.json({ success: true, count: updatedCount.count });
   } catch (error) {
     console.error("Error bulk removing employees:", error);
@@ -62588,24 +62732,30 @@ function getDataFilePath() {
   return getMigratedFilePath3("inventory_records.json");
 }
 var defaultInitialRecords = [];
+var cachedRecords = null;
 function readRecords() {
+  if (cachedRecords) return cachedRecords;
   try {
     const filePath = getDataFilePath();
     if (!import_fs7.default.existsSync(filePath)) {
       import_fs7.default.writeFileSync(filePath, JSON.stringify(defaultInitialRecords, null, 2), "utf8");
+      cachedRecords = defaultInitialRecords;
       return defaultInitialRecords;
     }
     const rawData = import_fs7.default.readFileSync(filePath, "utf8");
-    return JSON.parse(rawData);
+    cachedRecords = JSON.parse(rawData);
+    return cachedRecords || defaultInitialRecords;
   } catch (error) {
     console.error("Failed to read inventory records:", error);
-    return defaultInitialRecords;
+    return cachedRecords || defaultInitialRecords;
   }
 }
 function saveRecords(records) {
   try {
+    cachedRecords = records;
     const filePath = getDataFilePath();
     import_fs7.default.writeFileSync(filePath, JSON.stringify(records, null, 2), "utf8");
+    getIO()?.emit("inventoryUpdated");
   } catch (error) {
     console.error("Failed to save inventory records:", error);
   }
@@ -62739,25 +62889,31 @@ router11.post("/disposal-history", async (req, res) => {
 function getInventoryRequestsFilePath() {
   return getMigratedFilePath3("inventory_requests.json");
 }
+var cachedInventoryRequests = null;
 function readInventoryRequests() {
+  if (cachedInventoryRequests) return cachedInventoryRequests;
   try {
     const filePath = getInventoryRequestsFilePath();
     if (!import_fs7.default.existsSync(filePath)) {
       saveInventoryRequests([]);
+      cachedInventoryRequests = [];
       return [];
     }
     const raw = import_fs7.default.readFileSync(filePath, "utf8");
     const reqs = JSON.parse(raw);
-    return Array.isArray(reqs) ? reqs : [];
+    cachedInventoryRequests = Array.isArray(reqs) ? reqs : [];
+    return cachedInventoryRequests;
   } catch (err) {
     console.error("Failed to read inventory requests:", err);
-    return [];
+    return cachedInventoryRequests || [];
   }
 }
 function saveInventoryRequests(reqs) {
   try {
+    cachedInventoryRequests = reqs;
     const filePath = getInventoryRequestsFilePath();
     import_fs7.default.writeFileSync(filePath, JSON.stringify(reqs, null, 2), "utf8");
+    getIO()?.emit("inventoryUpdated");
   } catch (err) {
     console.error("Failed to save inventory requests:", err);
   }
@@ -63425,6 +63581,15 @@ router11.post("/", async (req, res) => {
     newRecord.disposalStatus = calculateDisposalStatus(newRecord);
     records.unshift(newRecord);
     saveRecords(records);
+    await checkAndAddDropdownOptions({
+      recordLocations: [newRecord.locationOfRecords],
+      dispositionProvisions: [newRecord.dispositionProvision],
+      itemNumbers: [newRecord.itemNo],
+      divisions: [newRecord.division],
+      classificationCategories: [newRecord.classificationCategory],
+      subCategories: [newRecord.subCategory],
+      prdsGrds: [newRecord.prdsGrds]
+    });
     syncLocationOption(newRecord.locationOfRecords);
     syncDispositionProvision(newRecord.dispositionProvision);
     if (newRecord.itemNo) syncItemNumberOption(newRecord.itemNo);
@@ -63486,6 +63651,15 @@ router11.put("/:id", async (req, res) => {
     updatedRecord.disposalStatus = calculateDisposalStatus(updatedRecord);
     records[index] = updatedRecord;
     saveRecords(records);
+    await checkAndAddDropdownOptions({
+      recordLocations: [updatedRecord.locationOfRecords],
+      dispositionProvisions: [updatedRecord.dispositionProvision],
+      itemNumbers: [updatedRecord.itemNo],
+      divisions: [updatedRecord.division],
+      classificationCategories: [updatedRecord.classificationCategory],
+      subCategories: [updatedRecord.subCategory],
+      prdsGrds: [updatedRecord.prdsGrds]
+    });
     syncLocationOption(updatedRecord.locationOfRecords);
     syncDispositionProvision(updatedRecord.dispositionProvision);
     if (updatedRecord.itemNo) syncItemNumberOption(updatedRecord.itemNo);
@@ -63598,29 +63772,36 @@ function getDisposalHistoryFilePath() {
   return getMigratedFilePath3("disposal_history.json");
 }
 var defaultDisposalHistory = [];
+var cachedDisposalLogs = null;
 function readDisposalHistory() {
+  if (cachedDisposalLogs) return cachedDisposalLogs;
   try {
     const filePath = getDisposalHistoryFilePath();
     if (!import_fs7.default.existsSync(filePath)) {
       saveDisposalHistory(defaultDisposalHistory);
+      cachedDisposalLogs = defaultDisposalHistory;
       return defaultDisposalHistory;
     }
     const raw = import_fs7.default.readFileSync(filePath, "utf8");
     const logs = JSON.parse(raw);
     if (!Array.isArray(logs) || logs.length === 0) {
       saveDisposalHistory(defaultDisposalHistory);
+      cachedDisposalLogs = defaultDisposalHistory;
       return defaultDisposalHistory;
     }
-    return logs;
+    cachedDisposalLogs = logs;
+    return cachedDisposalLogs;
   } catch (err) {
     console.error("Failed to read disposal history:", err);
-    return defaultDisposalHistory;
+    return cachedDisposalLogs || defaultDisposalHistory;
   }
 }
 function saveDisposalHistory(logs) {
   try {
+    cachedDisposalLogs = logs;
     const filePath = getDisposalHistoryFilePath();
     import_fs7.default.writeFileSync(filePath, JSON.stringify(logs, null, 2), "utf8");
+    getIO()?.emit("inventoryUpdated");
   } catch (err) {
     console.error("Failed to save disposal history:", err);
   }

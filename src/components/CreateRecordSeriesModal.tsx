@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import SearchableDropdown from './ui/SearchableDropdown';
@@ -120,48 +120,59 @@ function CreateRecordSeriesModal({
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [subCategoryOptions, setSubCategoryOptions] = useState<string[]>([]);
 
+  const loadSettings = () => {
+    api.systemSettings.get()
+      .then((settings) => {
+        const locs = (settings as any)?.recordLocations;
+        if (Array.isArray(locs)) {
+          setLocationOptions(locs);
+        }
+        const provs = (settings as any)?.dispositionProvisions;
+        if (Array.isArray(provs)) {
+          setDispositionOptions(provs);
+        }
+        const items = (settings as any)?.itemNumbers;
+        if (Array.isArray(items)) {
+          setItemNoOptions(items);
+        }
+        const prds = (settings as any)?.prdsGrds;
+        if (Array.isArray(prds)) {
+          setPrdsGrdsOptions(prds);
+        }
+        const divs = (settings as any)?.divisions;
+        if (Array.isArray(divs)) {
+          if (allowedDivisions && allowedDivisions.length > 0 && !allowedDivisions.includes('ALL')) {
+             const filteredDivs = divs.filter((d: string) => allowedDivisions.some((ad: string) => ad.trim().toLowerCase() === d.trim().toLowerCase()));
+             const optionsToUse = filteredDivs.length > 0 ? filteredDivs : allowedDivisions;
+             setDivisionOptions(optionsToUse);
+          } else {
+             setDivisionOptions(divs);
+          }
+        }
+        const cats = (settings as any)?.classificationCategories;
+        if (Array.isArray(cats)) {
+          setCategoryOptions(cats);
+        }
+        const subs = (settings as any)?.subCategories;
+        if (Array.isArray(subs)) {
+          setSubCategoryOptions(subs);
+        }
+      })
+      .catch(() => { });
+  };
+
   useEffect(() => {
     if (isOpen) {
-      api.systemSettings.get()
-        .then((settings) => {
-          const locs = (settings as any)?.recordLocations;
-          if (Array.isArray(locs)) {
-            setLocationOptions(locs);
-          }
-          const provs = (settings as any)?.dispositionProvisions;
-          if (Array.isArray(provs)) {
-            setDispositionOptions(provs);
-          }
-          const items = (settings as any)?.itemNumbers;
-          if (Array.isArray(items)) {
-            setItemNoOptions(items);
-          }
-          const prds = (settings as any)?.prdsGrds;
-          if (Array.isArray(prds)) {
-            setPrdsGrdsOptions(prds);
-          }
-          const divs = (settings as any)?.divisions;
-          if (Array.isArray(divs)) {
-            if (allowedDivisions && allowedDivisions.length > 0 && !allowedDivisions.includes('ALL')) {
-               const filteredDivs = divs.filter((d: string) => allowedDivisions.some((ad: string) => ad.trim().toLowerCase() === d.trim().toLowerCase()));
-               const optionsToUse = filteredDivs.length > 0 ? filteredDivs : allowedDivisions;
-               setDivisionOptions(optionsToUse);
-            } else {
-               setDivisionOptions(divs);
-            }
-          }
-          const cats = (settings as any)?.classificationCategories;
-          if (Array.isArray(cats)) {
-            setCategoryOptions(cats);
-          }
-          const subs = (settings as any)?.subCategories;
-          if (Array.isArray(subs)) {
-            setSubCategoryOptions(subs);
-          }
-        })
-        .catch(() => { });
+      loadSettings();
     }
-  }, [isOpen]);
+    const handleSettingsUpdated = () => {
+      loadSettings();
+    };
+    window.addEventListener('systemSettingsUpdated', handleSettingsUpdated);
+    return () => {
+      window.removeEventListener('systemSettingsUpdated', handleSettingsUpdated);
+    };
+  }, [isOpen, allowedDivisions]);
 
   useEffect(() => {
     if (initialData) {
@@ -190,13 +201,16 @@ function CreateRecordSeriesModal({
       });
     }
     
-    // Auto-select division if there's only 1 option and no initialData division provided
-    if (allowedDivisions && allowedDivisions.length === 1 && !allowedDivisions.includes('ALL') && (!initialData || !initialData.division)) {
+    // Auto-select division if restricted user and no initialData division provided
+    if (allowedDivisions && allowedDivisions.length > 0 && !allowedDivisions.includes('ALL') && (!initialData || !initialData.division)) {
       setFormData(prev => ({ ...prev, division: allowedDivisions[0] }));
     }
     
     setError('');
   }, [initialData, isOpen, allowedDivisions]);
+
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleActiveDeskChange = (yrs: number) => {
     const active = Math.max(0, yrs);
@@ -210,10 +224,12 @@ function CreateRecordSeriesModal({
     setFormData(prev => ({ ...prev, storageYrs: storage, totalRetention: total }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, keepOpen = false) => {
+    if (e) e.preventDefault();
     if (!formData.seriesTitle.trim()) {
       setError('Record Series Title is required.');
+      setSuccessMessage('');
+      titleInputRef.current?.focus();
       return;
     }
 
@@ -244,10 +260,12 @@ function CreateRecordSeriesModal({
 
     if (!finalInclusiveDates) {
       setError('Inclusive Dates is required (e.g. 2024 - 2026 or 2022, 2024 - 2026).');
+      setSuccessMessage('');
       return;
     }
     if (!formData.locationOfRecords.trim()) {
       setError('Location of Records is required.');
+      setSuccessMessage('');
       return;
     }
 
@@ -256,9 +274,28 @@ function CreateRecordSeriesModal({
 
     setIsSubmitting(true);
     setError('');
+    setSuccessMessage('');
     try {
       await onSave(payloadData);
-      onClose();
+      if (keepOpen) {
+        const savedTitle = payloadData.seriesTitle;
+        setFormData(prev => ({
+          ...prev,
+          seriesTitle: '',
+          scopeDescription: '',
+          itemNo: '',
+          startYear: '',
+          endYear: '',
+          customDates: '',
+          isOngoing: false,
+        }));
+        setSuccessMessage(`✅ "${savedTitle}" saved! Enter the next record series below.`);
+        setTimeout(() => {
+          titleInputRef.current?.focus();
+        }, 50);
+      } else {
+        onClose();
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to save record series.');
     } finally {
@@ -273,17 +310,39 @@ function CreateRecordSeriesModal({
       title={initialData ? 'Edit Record Series Entry' : 'Create Record Series Entry'}
       size="lg"
       footer={
-        <>
+        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : 'Save Record Series'}
+          {!initialData && (
+            <Button
+              variant="secondary"
+              onClick={(e) => handleSubmit(e as any, true)}
+              disabled={isSubmitting}
+              style={{
+                borderColor: '#10b981',
+                color: '#10b981',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+              }}
+            >
+              {isSubmitting ? 'Saving...' : '⚡ Save & Add Another'}
+            </Button>
+          )}
+          <Button variant="primary" onClick={(e) => handleSubmit(e as any, false)} disabled={isSubmitting}>
+            {isSubmitting ? 'Saving...' : (initialData ? 'Save Changes' : 'Save Record Series')}
           </Button>
-        </>
+        </div>
       }
     >
-      <form onSubmit={handleSubmit} className="record-modal__form">
+      <form onSubmit={(e) => handleSubmit(e, false)} className="record-modal__form">
+        {successMessage && (
+          <div style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {successMessage}
+          </div>
+        )}
         {error && (
           <div style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', fontSize: '0.875rem' }}>
             {error}
@@ -302,11 +361,15 @@ function CreateRecordSeriesModal({
                 Record Series Title <span className="record-modal__required">*</span>
               </label>
               <input
+                ref={titleInputRef}
                 type="text"
                 className="record-modal__input"
                 placeholder="e.g. Leave Ledgers, PPSB Resolutions"
                 value={formData.seriesTitle}
-                onChange={(e) => setFormData({ ...formData, seriesTitle: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, seriesTitle: e.target.value });
+                  if (successMessage) setSuccessMessage('');
+                }}
                 required
               />
             </div>
@@ -339,12 +402,29 @@ function CreateRecordSeriesModal({
               <label className="record-modal__label">
                 Division
               </label>
-              <SearchableDropdown
-                options={divisionOptions.length > 0 ? divisionOptions : ['ADMINISTRATIVE', 'FINANCE', 'LEGAL', 'RECORDS DIVISION', 'HUMAN RESOURCE', 'OPERATIONS']}
-                value={formData.division || ''}
-                onChange={(val) => setFormData(prev => ({ ...prev, division: val }))}
-                placeholder="Select or type Division"
-              />
+              {allowedDivisions && allowedDivisions.length > 0 && !allowedDivisions.includes('ALL') ? (
+                <select
+                  className="record-modal__input"
+                  value={formData.division || allowedDivisions[0] || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, division: e.target.value }))}
+                >
+                  {allowedDivisions.length > 1 && (
+                    <option value="" disabled>Select Division</option>
+                  )}
+                  {allowedDivisions.map((div) => (
+                    <option key={div} value={div}>
+                      {div}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <SearchableDropdown
+                  options={divisionOptions.length > 0 ? divisionOptions : ['ADMINISTRATIVE', 'FINANCE', 'LEGAL', 'RECORDS DIVISION', 'HUMAN RESOURCE', 'OPERATIONS']}
+                  value={formData.division || ''}
+                  onChange={(val) => setFormData(prev => ({ ...prev, division: val }))}
+                  placeholder="Select or type Division"
+                />
+              )}
             </div>
 
             <div className="record-modal__field">

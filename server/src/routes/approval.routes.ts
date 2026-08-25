@@ -179,6 +179,10 @@ router.post('/:id/approve', async (req: Request, res: Response) => {
     });
 
     getIO()?.emit('approvalsUpdated');
+    getIO()?.emit('employeeUpdated');
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('documentsUpdated');
+    getIO()?.emit('inventoryUpdated');
 
     // Return the token and payload so the frontend can execute the action
     res.json({
@@ -250,6 +254,11 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
     });
 
     getIO()?.emit('approvalsUpdated');
+    getIO()?.emit('employeeUpdated');
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('documentsUpdated');
+    getIO()?.emit('inventoryUpdated');
+
     res.json({ rejected: true });
   } catch (error) {
     console.error('Error rejecting request:', error);

@@ -101,8 +101,12 @@ export default function CalendarActivities() {
       }
     };
     fetchActivities();
-    const interval = setInterval(fetchActivities, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchActivities, 60000);
+    window.addEventListener('activityUpdated', fetchActivities);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('activityUpdated', fetchActivities);
+    };
   }, [showToast]);
 
   const year = currentDate.getFullYear();

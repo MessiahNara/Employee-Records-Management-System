@@ -155,7 +155,7 @@ model AuditLog {
 model File201BorrowLog {
   id                  String    @id @default(uuid())
   employeeId          String
-  action              String    // borrow | return
+  action              String    // borrow | return | transfer_rsp
   borrowerName        String
   borrowerPosition    String?
   borrowerOffice      String?

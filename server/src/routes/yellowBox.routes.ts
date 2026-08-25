@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { createAuditLog } from '../utils/auditHelper';
+import { getIO } from '../socket';
 
 const router = Router();
 
@@ -101,6 +102,9 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.status(201).json(box);
   } catch (error) {
     console.error('Error creating yellow box:', error);
@@ -146,6 +150,9 @@ router.put('/:id', async (req: Request, res: Response) => {
       });
     }
 
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.json(updated);
   } catch (error) {
     console.error('Error updating yellow box:', error);
@@ -190,6 +197,9 @@ router.delete('/:id', async (req: Request, res: Response) => {
         },
       });
     }
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.json({ success: true });
   } catch (error) {
@@ -237,6 +247,9 @@ router.post('/:id/employees', async (req: Request, res: Response) => {
       });
     }
 
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.json(updatedEmployee);
   } catch (error) {
     console.error('Error assigning employee to yellow box:', error);
@@ -277,6 +290,9 @@ router.delete('/:id/employees/:employeeId', async (req: Request, res: Response) 
         },
       });
     }
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.json(updatedEmployee);
   } catch (error) {
@@ -323,6 +339,9 @@ router.post('/:id/employees/bulk', async (req: Request, res: Response) => {
       });
     }
 
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
+
     res.json({ success: true, count: updatedCount.count });
   } catch (error) {
     console.error('Error bulk assigning employees:', error);
@@ -367,6 +386,9 @@ router.post('/:id/employees/bulk-remove', async (req: Request, res: Response) =>
         },
       });
     }
+
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('employeeUpdated');
 
     res.json({ success: true, count: updatedCount.count });
   } catch (error) {

@@ -968,6 +968,9 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
     });
 
     getIO()?.emit('employeeUpdated');
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('documentsUpdated');
+
     res.json({ 
       message: 'Employee deleted successfully',
       deletedDocuments: employee.documents.length,
@@ -1083,6 +1086,10 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
       },
     });
 
+    getIO()?.emit('employeeUpdated');
+    getIO()?.emit('file201Updated');
+    getIO()?.emit('documentsUpdated');
+
     res.json({ 
       message: `Successfully deleted ${result.count} employee(s)`,
       deletedCount: result.count,
@@ -1159,6 +1166,8 @@ router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'
       data: { profilePicture: profilePictureUrl },
     });
 
+    getIO()?.emit('employeeUpdated');
+
     res.json({ profilePicture: updated.profilePicture });
   } catch (error: any) {
     if (req.file) fs.unlinkSync(req.file.path);
@@ -1189,6 +1198,8 @@ router.delete('/:id/profile-picture', async (req: Request, res: Response) => {
       where: { id },
       data: { profilePicture: null },
     });
+
+    getIO()?.emit('employeeUpdated');
 
     res.json({ message: 'Profile picture removed successfully' });
   } catch (error) {
@@ -1345,6 +1356,9 @@ router.post('/delete-report-entries', async (req: Request, res: Response) => {
         }
       }
     }
+
+    getIO()?.emit('employeeUpdated');
+    getIO()?.emit('documentsUpdated');
 
     res.json({ success: true, currentDeleted: currentDeletedCount, historicalDeleted: historicalDeletedCount });
   } catch (error: any) {

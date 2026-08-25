@@ -20,7 +20,27 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+function isZipBuffer(buf: ArrayBuffer): boolean {
+  if (!buf || buf.byteLength < 4) return false;
+  const bytes = new Uint8Array(buf, 0, 4);
+  // Zip files (including docx) start with PK\x03\x04 (0x50, 0x4B, 0x03, 0x04)
+  return bytes[0] === 0x50 && bytes[1] === 0x4B && bytes[2] === 0x03 && bytes[3] === 0x04;
+}
+
 async function loadTemplateBuffer(): Promise<ArrayBuffer> {
+  // 1. If embedded base64 template is available, use it immediately (zero network dependency)
+  if (NAP_FORM_3_TEMPLATE_BASE64) {
+    try {
+      const embedded = base64ToArrayBuffer(NAP_FORM_3_TEMPLATE_BASE64);
+      if (isZipBuffer(embedded)) {
+        return embedded;
+      }
+    } catch (e) {
+      console.warn('Failed to parse embedded NAP Form 3 base64 template, trying fetch...', e);
+    }
+  }
+
+  // 2. Fallback to fetching from public directory
   const paths = [
     './NAP-FORM-3-Template.docx',
     '/NAP-FORM-3-Template.docx',
@@ -32,18 +52,13 @@ async function loadTemplateBuffer(): Promise<ArrayBuffer> {
       const response = await fetch(p);
       if (response.ok) {
         const buf = await response.arrayBuffer();
-        if (buf && buf.byteLength > 100) {
+        if (isZipBuffer(buf)) {
           return buf;
         }
       }
     } catch {
-      // Continue to next path or base64 fallback
+      // Continue to next path
     }
-  }
-
-  // Guaranteed fallback: embedded template
-  if (NAP_FORM_3_TEMPLATE_BASE64) {
-    return base64ToArrayBuffer(NAP_FORM_3_TEMPLATE_BASE64);
   }
 
   throw new Error('Failed to load NAP Form 3 Word template.');

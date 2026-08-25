@@ -4,6 +4,7 @@ import { createAuditLog, getEmployeeName } from '../utils/auditHelper';
 import { checkAndAddDropdownOptions } from '../utils/dropdownOptionsHelper';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { uploadDocumentFile } from '../middleware/upload';
+import { getIO } from '../socket';
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -512,6 +513,9 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
       },
     });
 
+    getIO()?.emit('documentsUpdated');
+    getIO()?.emit('employeeUpdated');
+
     res.status(201).json(document);
   } catch (error: any) {
     console.error('Error creating document:', error);
@@ -532,6 +536,9 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
         ...(fileName && { fileName }),
       },
     });
+
+    getIO()?.emit('documentsUpdated');
+    getIO()?.emit('employeeUpdated');
 
     res.json(document);
   } catch (error) {
@@ -628,6 +635,9 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
         authorizingUserName: authorizingUserName || userName,
       },
     });
+
+    getIO()?.emit('documentsUpdated');
+    getIO()?.emit('employeeUpdated');
 
     res.json({ message: 'Document deleted successfully' });
   } catch (error) {
@@ -748,6 +758,9 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
     await prisma.auditLog.create({
       data: auditData,
     });
+
+    getIO()?.emit('documentsUpdated');
+    getIO()?.emit('employeeUpdated');
 
     res.json({
       message: `Successfully deleted ${result.count} document(s)`,

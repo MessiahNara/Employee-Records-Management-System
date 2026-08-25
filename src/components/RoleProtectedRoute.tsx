@@ -40,6 +40,7 @@ function RoleProtectedRoute({
     '/calendar-activities': 'Calendar',
     '/reports': 'Generated Reports',
     '/reports/pulled-out': 'Generated Reports',
+    '/reports/transferred': 'Generated Reports',
     '/inventory': 'Inventory and Appraisal',
     '/chats': 'Chats',
     '/settings': 'Settings'

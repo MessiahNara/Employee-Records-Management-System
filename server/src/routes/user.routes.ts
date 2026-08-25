@@ -5,6 +5,7 @@ import { uploadProfilePicture } from '../middleware/upload';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { issueSuperadminApprovalToken } from '../lib/superadminApproval';
 import { createAuditLog, getUserName } from '../utils/auditHelper';
+import { getIO } from '../socket';
 import path from 'path';
 import fs from 'fs';
 
@@ -155,6 +156,7 @@ router.post('/', async (req: Request, res: Response) => {
       entityName: getUserName(user),
     });
 
+    getIO()?.emit('usersUpdated');
     res.status(201).json(user);
   } catch (error) {
     console.error('Error creating user:', error);
@@ -226,6 +228,7 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
       },
     });
 
+    getIO()?.emit('usersUpdated');
     res.json(user);
   } catch (error) {
     console.error('Error updating user:', error);
@@ -439,6 +442,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
         },
       });
 
+      getIO()?.emit('usersUpdated');
       res.json(user);
     }
   } catch (error: any) {
@@ -515,6 +519,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       where: { id },
     });
 
+    getIO()?.emit('usersUpdated');
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error);

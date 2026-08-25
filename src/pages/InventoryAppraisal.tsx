@@ -1218,6 +1218,20 @@ function InventoryAppraisal() {
     fetchRecords();
     fetchDisposalHistory();
     fetchInventoryRequests();
+
+    const handleRealtimeUpdate = () => {
+      fetchRecords();
+      fetchDisposalHistory();
+      fetchInventoryRequests();
+    };
+
+    window.addEventListener('inventoryUpdated', handleRealtimeUpdate);
+    window.addEventListener('approvalsUpdated', handleRealtimeUpdate);
+
+    return () => {
+      window.removeEventListener('inventoryUpdated', handleRealtimeUpdate);
+      window.removeEventListener('approvalsUpdated', handleRealtimeUpdate);
+    };
   }, []);
 
   const pendingRequests = useMemo(() => {
@@ -1594,7 +1608,6 @@ function InventoryAppraisal() {
 
       await api.inventory.update(editingRecord.id, data);
       showToast('Record series updated successfully!', 'success');
-      setIsModalOpen(false);
     } else {
       if (targetStage === 'Storage' || targetStage === 'Disposed') {
         const newRecord = await api.inventory.create({ ...data, retentionStage: 'Active' });
@@ -1611,7 +1624,6 @@ function InventoryAppraisal() {
 
       await api.inventory.create(data);
       showToast('New record series entry created successfully!', 'success');
-      setIsModalOpen(false);
     }
     fetchRecords();
   };

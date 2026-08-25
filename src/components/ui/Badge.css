@@ -49,3 +49,10 @@
   color: #2563eb;
   border: 1px solid rgba(59, 130, 246, 0.25);
 }
+
+.badge--purple,
+.badge--violet {
+  background-color: rgba(139, 92, 246, 0.12);
+  color: #7c3aed;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}

@@ -319,12 +319,14 @@ function createWindow() {
     show: false
   });
 
-  // Track current zoom to avoid zoom resets on window maximize/minimize
-  let currentZoom = 0.65;
+  // Track current zoom and prevent zoom resets on window maximize/minimize/idle
+  const TARGET_ZOOM = 0.65;
+  let currentZoom = TARGET_ZOOM;
   
   const applyZoom = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
+        mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
         mainWindow.webContents.setZoomFactor(currentZoom);
       } catch (e) {
         // ignore
@@ -332,14 +334,20 @@ function createWindow() {
     }
   };
 
-  // Listen for user zoom changes (Ctrl +/-) and save it
-  mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      currentZoom = mainWindow.webContents.getZoomFactor();
+  mainWindow.webContents.on('did-finish-load', applyZoom);
+  mainWindow.on('focus', applyZoom);
+  mainWindow.on('restore', applyZoom);
+  mainWindow.on('maximize', applyZoom);
+  mainWindow.on('unmaximize', applyZoom);
+
+  // Allow manual Ctrl + 0 to reset zoom back to clean 0.65
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && (input.key === '0' || input.code === 'Digit0' || input.code === 'Numpad0')) {
+      event.preventDefault();
+      currentZoom = TARGET_ZOOM;
+      applyZoom();
     }
   });
-
-  mainWindow.webContents.on('did-finish-load', applyZoom);
 
 
   // Show window when ready to avoid flickering
