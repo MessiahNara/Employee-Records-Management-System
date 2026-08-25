@@ -698,6 +698,8 @@ function InventoryAppraisal() {
   const [divisionTab, setDivisionTab] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showEvaluateModal, setShowEvaluateModal] = useState(false);
+  const [modalDisposalDivisionFilter, setModalDisposalDivisionFilter] = useState('ALL');
+  const [modalStorageDivisionFilter, setModalStorageDivisionFilter] = useState('ALL');
   const [evaluatingRecord, setEvaluatingRecord] = useState<{ record: InventoryRecord; info: any } | null>(null);
   const [customDisposedYears, setCustomDisposedYears] = useState<number[]>([]);
   const [customStorageYears, setCustomStorageYears] = useState<number[]>([]);
@@ -1068,8 +1070,9 @@ function InventoryAppraisal() {
     return { total: totalDisposed, divisionStats };
   }, [disposalOnlyLogs, systemDivisions]);
 
-  const activeDeskEligibleRecords = useMemo(() => {
-    return scopeFilteredRecords.filter(r => {
+  // ALL authorized records eligible for storage (system-wide for user)
+  const allActiveDeskEligibleRecords = useMemo(() => {
+    return authorizedRecords.filter(r => {
       if (r.appraisalCategory === 'Permanent') return false;
       if (Number(r.storageYrs) <= 0) return false;
       const activeDeskInfoRaw = getOngoingActiveDeskInfo(r.inclusiveDates, Number(r.activeDeskYrs), r.retentionStage);
@@ -1081,25 +1084,48 @@ function InventoryAppraisal() {
       });
       return hasUnstored;
     });
-  }, [scopeFilteredRecords, storageLogs]);
+  }, [authorizedRecords, storageLogs]);
 
-  const disposalEligibleRecords = useMemo(() => {
-    return scopeFilteredRecords.filter(r => {
+  // ALL authorized records eligible for disposal (system-wide for user)
+  const allDisposalEligibleRecords = useMemo(() => {
+    return authorizedRecords.filter(r => {
       if (r.appraisalCategory === 'Permanent') return false;
       const disposalInfoRaw = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention), r.retentionStage, r.frequencyOfUse, Number(r.storageYrs));
       return disposalInfoRaw !== null;
     });
-  }, [scopeFilteredRecords]);
+  }, [authorizedRecords]);
+
+  // Tab-scoped versions for KPI display
+  const activeDeskEligibleRecords = useMemo(() => {
+    if (divisionTab === 'ALL') return allActiveDeskEligibleRecords;
+    return allActiveDeskEligibleRecords.filter(r => (r.division || 'General').trim().toLowerCase() === divisionTab.trim().toLowerCase());
+  }, [allActiveDeskEligibleRecords, divisionTab]);
+
+  const disposalEligibleRecords = useMemo(() => {
+    if (divisionTab === 'ALL') return allDisposalEligibleRecords;
+    return allDisposalEligibleRecords.filter(r => (r.division || 'General').trim().toLowerCase() === divisionTab.trim().toLowerCase());
+  }, [allDisposalEligibleRecords, divisionTab]);
+
+  // Modal-filtered records for the Evaluation Modals
+  const modalStorageRecords = useMemo(() => {
+    if (modalStorageDivisionFilter === 'ALL') return allActiveDeskEligibleRecords;
+    return allActiveDeskEligibleRecords.filter(r => (r.division || 'General').trim().toLowerCase() === modalStorageDivisionFilter.trim().toLowerCase());
+  }, [allActiveDeskEligibleRecords, modalStorageDivisionFilter]);
+
+  const modalDisposalRecords = useMemo(() => {
+    if (modalDisposalDivisionFilter === 'ALL') return allDisposalEligibleRecords;
+    return allDisposalEligibleRecords.filter(r => (r.division || 'General').trim().toLowerCase() === modalDisposalDivisionFilter.trim().toLowerCase());
+  }, [allDisposalEligibleRecords, modalDisposalDivisionFilter]);
 
   useEffect(() => {
     if (records.length > 0) {
       const currentYear = new Date().getFullYear();
       const hasSeenNotice = localStorage.getItem(`annual_retention_notice_${currentYear}`);
-      if (!hasSeenNotice && (activeDeskEligibleRecords.length > 0 || disposalEligibleRecords.length > 0)) {
+      if (!hasSeenNotice && (allActiveDeskEligibleRecords.length > 0 || allDisposalEligibleRecords.length > 0)) {
         setShowAnnualNoticeModal(true);
       }
     }
-  }, [records, activeDeskEligibleRecords.length, disposalEligibleRecords.length]);
+  }, [records, allActiveDeskEligibleRecords.length, allDisposalEligibleRecords.length]);
 
   const handleMoveToStorage = (record: InventoryRecord) => {
     setStagedStorageRecords((prev) => {
@@ -3360,7 +3386,7 @@ function InventoryAppraisal() {
         <Modal
           isOpen={showEvaluateModal}
           onClose={() => setShowEvaluateModal(false)}
-          title={`Evaluate Disposal Records (${disposalEligibleRecords.length})`}
+          title={`Evaluate Disposal Records (${modalDisposalRecords.length} / ${allDisposalEligibleRecords.length} Total)`}
           size="xl"
         >
           <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -3368,9 +3394,32 @@ function InventoryAppraisal() {
               <strong>Records Eligible for Evaluation & Disposal:</strong> The following record series have reached their designated retention schedule period. Click <strong>"Evaluate & Dispose ➔"</strong> to review expired years and update active periods.
             </div>
 
-            {disposalEligibleRecords.length === 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 0' }}>
+              <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                Showing <strong>{modalDisposalRecords.length}</strong> eligible record{modalDisposalRecords.length === 1 ? '' : 's'} {modalDisposalDivisionFilter !== 'ALL' ? `in ${modalDisposalDivisionFilter}` : 'across all divisions'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Division:</label>
+                <select
+                  className="search-filter-box__select"
+                  value={modalDisposalDivisionFilter}
+                  onChange={(e) => setModalDisposalDivisionFilter(e.target.value)}
+                  style={{ minWidth: '170px', padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
+                >
+                  <option value="ALL">All Divisions ({allDisposalEligibleRecords.length})</option>
+                  {(hasFullDivisionAccess ? systemDivisions : allowedDivisions).filter(d => d !== 'ALL').map(div => {
+                    const count = allDisposalEligibleRecords.filter(r => (r.division || 'General').trim().toLowerCase() === div.trim().toLowerCase()).length;
+                    return (
+                      <option key={div} value={div}>{div} ({count})</option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+
+            {modalDisposalRecords.length === 0 ? (
               <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                No records currently eligible for disposal evaluation.
+                No records currently eligible for disposal evaluation in this selection.
               </div>
             ) : (
               <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
@@ -3387,7 +3436,7 @@ function InventoryAppraisal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {disposalEligibleRecords.map((r, idx) => {
+                    {modalDisposalRecords.map((r, idx) => {
                       const ongoingInfo = getOngoingDisposalInfo(r.inclusiveDates, Number(r.totalRetention));
                       return (
                         <tr key={`eval-row-${r.id}-${idx}`} style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -4909,9 +4958,9 @@ function InventoryAppraisal() {
                 background: 'linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, rgba(245, 158, 11, 0.02) 100%)',
                 padding: '1.25rem',
                 borderRadius: '12px',
-                border: activeDeskEligibleRecords.length > 0 ? '1.5px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)',
+                border: allActiveDeskEligibleRecords.length > 0 ? '1.5px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)',
                 position: 'relative',
-                boxShadow: activeDeskEligibleRecords.length > 0 ? '0 4px 12px rgba(245, 158, 11, 0.08)' : 'none'
+                boxShadow: allActiveDeskEligibleRecords.length > 0 ? '0 4px 12px rgba(245, 158, 11, 0.08)' : 'none'
               }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -4926,31 +4975,31 @@ function InventoryAppraisal() {
                       fontSize: '0.85rem',
                       fontWeight: 800
                     }}>
-                      <MdArchive style={{ fontSize: '1.1rem', color: '#d97706' }} />
-                      1. Transfer to Storage
+                      <MdHourglassTop style={{ fontSize: '1.1rem', color: '#d97706' }} />
+                      1. Storage Stage
                     </div>
                     <span style={{
-                      background: activeDeskEligibleRecords.length > 0 ? '#d97706' : '#9ca3af',
+                      background: allActiveDeskEligibleRecords.length > 0 ? '#d97706' : '#9ca3af',
                       color: '#ffffff',
                       padding: '0.2rem 0.65rem',
                       borderRadius: '9999px',
                       fontWeight: 800,
                       fontSize: '0.85rem',
-                      boxShadow: activeDeskEligibleRecords.length > 0 ? '0 2px 4px rgba(217, 119, 6, 0.3)' : 'none'
+                      boxShadow: allActiveDeskEligibleRecords.length > 0 ? '0 2px 4px rgba(217, 119, 6, 0.3)' : 'none'
                     }}>
-                      {activeDeskEligibleRecords.length} Due
+                      {allActiveDeskEligibleRecords.length} Due
                     </span>
                   </div>
 
                   <div style={{ fontSize: '0.925rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                    Pending Storage Transition
+                    Active Desk Period Completed
                   </div>
                   <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-                    Active desk retention period is complete. These records must be moved from active office desks into secondary storage files.
+                    Records have finished their active office desk retention and should now be evaluated for transfer to records storage or archiving.
                   </div>
                 </div>
 
-                {activeDeskEligibleRecords.length > 0 ? (
+                {allActiveDeskEligibleRecords.length > 0 ? (
                   <Button
                     variant="primary"
                     style={{
@@ -4968,10 +5017,11 @@ function InventoryAppraisal() {
                     onClick={() => {
                       const currentYear = new Date().getFullYear();
                       sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
+                      setModalStorageDivisionFilter('ALL');
                       setShowActiveDeskModal(true);
                     }}
                   >
-                    Evaluate Storage ({activeDeskEligibleRecords.length}) &rarr;
+                    Evaluate Storage ({allActiveDeskEligibleRecords.length}) &rarr;
                   </Button>
                 ) : (
                   <div style={{
@@ -4996,9 +5046,9 @@ function InventoryAppraisal() {
                 background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, rgba(239, 68, 68, 0.02) 100%)',
                 padding: '1.25rem',
                 borderRadius: '12px',
-                border: disposalEligibleRecords.length > 0 ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-color)',
+                border: allDisposalEligibleRecords.length > 0 ? '1.5px solid rgba(239, 68, 68, 0.4)' : '1px solid var(--border-color)',
                 position: 'relative',
-                boxShadow: disposalEligibleRecords.length > 0 ? '0 4px 12px rgba(239, 68, 68, 0.08)' : 'none'
+                boxShadow: allDisposalEligibleRecords.length > 0 ? '0 4px 12px rgba(239, 68, 68, 0.08)' : 'none'
               }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -5017,15 +5067,15 @@ function InventoryAppraisal() {
                       2. Formal Disposal
                     </div>
                     <span style={{
-                      background: disposalEligibleRecords.length > 0 ? '#dc2626' : '#9ca3af',
+                      background: allDisposalEligibleRecords.length > 0 ? '#dc2626' : '#9ca3af',
                       color: '#ffffff',
                       padding: '0.2rem 0.65rem',
                       borderRadius: '9999px',
                       fontWeight: 800,
                       fontSize: '0.85rem',
-                      boxShadow: disposalEligibleRecords.length > 0 ? '0 2px 4px rgba(220, 38, 38, 0.3)' : 'none'
+                      boxShadow: allDisposalEligibleRecords.length > 0 ? '0 2px 4px rgba(220, 38, 38, 0.3)' : 'none'
                     }}>
-                      {disposalEligibleRecords.length} Eligible
+                      {allDisposalEligibleRecords.length} Eligible
                     </span>
                   </div>
 
@@ -5037,7 +5087,7 @@ function InventoryAppraisal() {
                   </div>
                 </div>
 
-                {disposalEligibleRecords.length > 0 ? (
+                {allDisposalEligibleRecords.length > 0 ? (
                   <Button
                     variant="danger"
                     style={{
@@ -5055,10 +5105,11 @@ function InventoryAppraisal() {
                     onClick={() => {
                       const currentYear = new Date().getFullYear();
                       sessionStorage.setItem(`annual_retention_notice_${currentYear}`, 'true');
+                      setModalDisposalDivisionFilter('ALL');
                       setShowEvaluateModal(true);
                     }}
                   >
-                    Evaluate Disposal ({disposalEligibleRecords.length}) &rarr;
+                    Evaluate Disposal ({allDisposalEligibleRecords.length}) &rarr;
                   </Button>
                 ) : (
                   <div style={{
@@ -5084,7 +5135,7 @@ function InventoryAppraisal() {
         <Modal
           isOpen={showActiveDeskModal}
           onClose={() => setShowActiveDeskModal(false)}
-          title={`Evaluate Storage Records (${activeDeskEligibleRecords.length})`}
+          title={`Evaluate Storage Records (${modalStorageRecords.length} / ${allActiveDeskEligibleRecords.length} Total)`}
           size="xl"
         >
           <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -5092,9 +5143,32 @@ function InventoryAppraisal() {
               <strong>Active Period Reached:</strong> The following record series have completed their designated active desk period. Transitioning a record to <strong>Storage</strong> sets its stage to Storage and starts the storage retention countdown toward disposal eligibility.
             </div>
 
-            {activeDeskEligibleRecords.length === 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 0' }}>
+              <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                Showing <strong>{modalStorageRecords.length}</strong> eligible record{modalStorageRecords.length === 1 ? '' : 's'} {modalStorageDivisionFilter !== 'ALL' ? `in ${modalStorageDivisionFilter}` : 'across all divisions'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Division:</label>
+                <select
+                  className="search-filter-box__select"
+                  value={modalStorageDivisionFilter}
+                  onChange={(e) => setModalStorageDivisionFilter(e.target.value)}
+                  style={{ minWidth: '170px', padding: '0.35rem 0.65rem', fontSize: '0.85rem' }}
+                >
+                  <option value="ALL">All Divisions ({allActiveDeskEligibleRecords.length})</option>
+                  {(hasFullDivisionAccess ? systemDivisions : allowedDivisions).filter(d => d !== 'ALL').map(div => {
+                    const count = allActiveDeskEligibleRecords.filter(r => (r.division || 'General').trim().toLowerCase() === div.trim().toLowerCase()).length;
+                    return (
+                      <option key={div} value={div}>{div} ({count})</option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+
+            {modalStorageRecords.length === 0 ? (
               <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
-                No records currently eligible for storage evaluation.
+                No records currently eligible for storage evaluation in this selection.
               </div>
             ) : (
               <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
@@ -5111,7 +5185,7 @@ function InventoryAppraisal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeDeskEligibleRecords.map((record) => {
+                    {modalStorageRecords.map((record) => {
                       const info = getOngoingActiveDeskInfo(record.inclusiveDates, Number(record.activeDeskYrs), record.retentionStage);
                       return (
                         <tr key={record.id} style={{ borderBottom: '1px solid var(--border-color)' }}>

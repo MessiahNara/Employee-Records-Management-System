@@ -4,7 +4,7 @@ import { getAuthState } from '../utils/mockAuth';
 const envApiUrl = (import.meta as any).env.VITE_API_URL as string | undefined;
 
 // Mutable server URL that can be set dynamically
-let serverBaseUrl = '';
+let serverBaseUrl = (typeof window !== 'undefined' ? localStorage.getItem('activeServerBaseUrl') || '' : '');
 let serverUrlPromise: Promise<string> | null = null;
 
 async function fetchServerUrlFromElectron(): Promise<string> {
@@ -12,17 +12,21 @@ async function fetchServerUrlFromElectron(): Promise<string> {
   const isElectron = isBrowser && typeof (window as any).electron !== 'undefined';
   
   if (!isElectron) {
-    return '';
+    return localStorage.getItem('activeServerBaseUrl') || '';
   }
 
   try {
     // Call IPC to get server URL from main process
     const url = await (window as any).electron.getServerUrl();
     console.log('[api] Server URL from IPC:', url);
+    if (url) {
+      serverBaseUrl = url.replace(/\/api\/?$/, '');
+      localStorage.setItem('activeServerBaseUrl', serverBaseUrl);
+    }
     return url;
   } catch (e) {
     console.error('[api] Error getting server URL from IPC:', e);
-    return '';
+    return localStorage.getItem('activeServerBaseUrl') || '';
   }
 }
 
@@ -30,15 +34,23 @@ export async function setServerBaseUrl(url: string): Promise<boolean> {
   const isBrowser = typeof window !== 'undefined';
   const isElectron = isBrowser && typeof (window as any).electron !== 'undefined';
   
+  const cleanUrl = url.replace(/\/api\/?$/, '').trim();
+  if (cleanUrl) {
+    serverBaseUrl = cleanUrl;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('activeServerBaseUrl', cleanUrl);
+    }
+  }
+
   if (!isElectron) {
-    return false;
+    return true;
   }
 
   try {
-    const result = await (window as any).electron.setServerUrl(url);
+    const result = await (window as any).electron.setServerUrl(cleanUrl);
     if (result && result.success) {
-      serverBaseUrl = url;
-      serverUrlPromise = Promise.resolve(url);
+      serverBaseUrl = cleanUrl;
+      serverUrlPromise = Promise.resolve(cleanUrl);
       return true;
     }
     return false;
@@ -52,16 +64,17 @@ function getDefaultServerBaseUrl(): string {
   const isBrowser = typeof window !== 'undefined';
   const isElectron = isBrowser && typeof (window as any).electron !== 'undefined';
 
-  if (isElectron) {
-    // Priority 1: Check if already cached
-    if (serverBaseUrl) {
-      return serverBaseUrl;
-    }
+  if (serverBaseUrl) {
+    return serverBaseUrl;
+  }
 
-    // Note: localStorage 'serverUrl' is intentionally skipped here so the Electron
-    // IPC always provides the canonical URL (avoids stale http:// entries overriding HTTPS).
-    
-    // Priority 2: Return empty - will fetch from IPC on first API call
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('activeServerBaseUrl') : null;
+  if (stored) {
+    serverBaseUrl = stored;
+    return stored;
+  }
+
+  if (isElectron) {
     console.warn('[api] No server URL cached yet. Will fetch from IPC on first request.');
     return '';
   }

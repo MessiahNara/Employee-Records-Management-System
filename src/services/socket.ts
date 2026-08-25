@@ -16,6 +16,16 @@ export const initSocketClient = async () => {
 
   socket.on('connect', () => {
     console.log('[socket] Connected to server:', socket?.id);
+    window.dispatchEvent(new Event('systemSettingsUpdated'));
+    window.dispatchEvent(new Event('inventoryUpdated'));
+    window.dispatchEvent(new Event('employeeUpdated'));
+  });
+
+  socket.on('reconnect', () => {
+    console.log('[socket] Reconnected to server, triggering data refresh');
+    window.dispatchEvent(new Event('systemSettingsUpdated'));
+    window.dispatchEvent(new Event('inventoryUpdated'));
+    window.dispatchEvent(new Event('employeeUpdated'));
   });
 
   socket.on('disconnect', () => {
