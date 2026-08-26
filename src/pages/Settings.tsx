@@ -989,6 +989,27 @@ function Settings() {
                 </Card>
               )}
 
+              {isSuperAdminOrDeveloper && (
+                <Card>
+                  <div className="settings__card-header">
+                    <h2 className="settings__card-title">💾 Database Backup & Disaster Recovery</h2>
+                    <p className="settings__card-description">
+                      Manage database snapshots, restore points, automated cron schedules, and disaster recovery.
+                    </p>
+                  </div>
+                  <div className="settings__form">
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                      Create one-click database backups, download snapshots for offsite cold storage, or restore previous states with automatic pre-restore safety points.
+                    </p>
+                    <div>
+                      <Button variant="primary" onClick={() => (window.location.hash = '#/backup-restore')}>
+                        Open Backup & Disaster Recovery Hub →
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               
               {isDeveloper && (
                 <>

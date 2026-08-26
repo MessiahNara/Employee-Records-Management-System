@@ -20,6 +20,8 @@ import BackupButton from '../components/BackupButton';
 import DownloadTemplateButton from '../components/DownloadTemplateButton';
 import PasswordConfirmModal from '../components/ui/PasswordConfirmModal';
 import BulkDownloadModal from '../components/BulkDownloadModal';
+import EmployeeFormWizard from '../components/EmployeeFormWizard';
+import UnsavedChangesModal from '../components/ui/UnsavedChangesModal';
 import { Employee, EmployeeFormData, AppointmentStatus, EmployeeStatus } from '../types/employee';
 import { ImportedEmployee } from '../types/importExport';
 import { generateImportTemplate } from '../utils/exportUtils';
@@ -863,6 +865,8 @@ function Dashboard() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [aoFile, setAoFile] = useState<File | null>(null);
   const [autoRename, setAutoRename] = useState(false);
+  const [addProfilePicture, setAddProfilePicture] = useState<string | undefined>(undefined);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [pendingUpdatePayload, setPendingUpdatePayload] = useState<{ employeeId: string; changedFields: any } | null>(null);
   const [pendingImportEmployees, setPendingImportEmployees] = useState<ImportedEmployee[] | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
@@ -3889,6 +3893,7 @@ function Dashboard() {
       file201Status: '',
     });
     setAoFile(null);
+    setAddProfilePicture(undefined);
     setFormErrors({});
   };
 
@@ -3896,7 +3901,42 @@ function Dashboard() {
     setIsAddEmployeeModalOpen(false);
     setAoFile(null);
     setAutoRename(false);
+    setAddProfilePicture(undefined);
+    setShowUnsavedChangesModal(false);
   }, []);
+
+  const isAddFormDirty = useMemo(() => {
+    return Boolean(
+      formData.id?.trim() ||
+      formData.lastName?.trim() ||
+      formData.firstName?.trim() ||
+      formData.middleName?.trim() ||
+      formData.officeHospitalName?.trim() ||
+      formData.positionFunction?.trim() ||
+      formData.appointmentStatus?.trim() ||
+      formData.aoNumber?.trim() ||
+      aoFile ||
+      addProfilePicture
+    );
+  }, [formData, aoFile, addProfilePicture]);
+
+  const handleRequestCloseAddEmployee = useCallback(() => {
+    if (isAddFormDirty) {
+      setShowUnsavedChangesModal(true);
+    } else {
+      handleCloseAddEmployeeModal();
+    }
+  }, [isAddFormDirty, handleCloseAddEmployeeModal]);
+
+  const existingEmployeeIds = useMemo(() => {
+    return employees.map((e) => e.id);
+  }, [employees]);
+
+  const existingAoKeys = useMemo(() => {
+    return employees
+      .filter((e) => (e as any).aoNumber && (e as any).aoYear)
+      .map((e) => `${(e as any).aoNumber}_${(e as any).aoYear}`);
+  }, [employees]);
 
   const handleOpenUpdateEmployeeModal = (employee: Employee) => {
     setShowIdUpdate(false);
@@ -4054,6 +4094,7 @@ function Dashboard() {
         recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
         recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
         fileboxLocation: formData.fileboxLocation || undefined,
+        profilePicture: addProfilePicture || undefined,
       };
 
       // Pass user info for audit logging
@@ -5896,592 +5937,41 @@ function Dashboard() {
         </>
       )}
 
-      {/* Add Employee Modal */}
+      {/* Add Employee Modal with Multi-Step Wizard */}
       <Modal
         isOpen={isAddEmployeeModalOpen}
-        onClose={handleCloseAddEmployeeModal}
+        onClose={handleRequestCloseAddEmployee}
         title="Add New Employee"
         size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={handleCloseAddEmployeeModal}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSaveEmployee}>
-              Save Employee
-            </Button>
-          </>
-        }
       >
-        <div className="dashboard__employee-form">
-          <div className="dashboard__form-section">
-            <h4 className="dashboard__form-section-header">Personal Information</h4>
-
-            <Input
-              id="employee-id"
-              label="Employee ID *"
-              placeholder="Enter employee ID (e.g., EMP-001)"
-              value={formData.id}
-              onChange={(e) => handleFormChange('id', e.target.value)}
-              error={formErrors.id}
-              fullWidth
-            />
-
-            <div className="dashboard__form-row">
-              <Input
-                id="last-name"
-                label="Last Name"
-                placeholder="Enter last name"
-                value={formData.lastName}
-                onChange={(e) => handleFormChange('lastName', e.target.value)}
-                error={formErrors.lastName}
-                fullWidth
-              />
-              <Input
-                id="first-name"
-                label="First Name"
-                placeholder="Enter first name"
-                value={formData.firstName}
-                onChange={(e) => handleFormChange('firstName', e.target.value)}
-                error={formErrors.firstName}
-                fullWidth
-              />
-            </div>
-
-            <Input
-              id="middle-name"
-              label="Middle Name"
-              placeholder="Enter middle name (optional)"
-              value={formData.middleName}
-              onChange={(e) => handleFormChange('middleName', e.target.value)}
-              fullWidth
-            />
-
-            <div className="dashboard__form-row">
-              <Input
-                id="date-of-birth"
-                label="Date of Birth"
-                type="date"
-                placeholder="Select date of birth (optional)"
-                value={formData.dateOfBirth}
-                onChange={(e) => handleFormChange('dateOfBirth', e.target.value)}
-                fullWidth
-              />
-
-              <div className="dashboard__form-field">
-                <label htmlFor="gender" className="dashboard__form-label">
-                  Gender <span className="dashboard__required">*</span>
-                </label>
-                <select
-                  id="gender"
-                  className="dashboard__form-select"
-                  value={formData.gender}
-                  onChange={(e) => handleFormChange('gender', e.target.value)}
-                >
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-                {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard__form-section">
-            <h4 className="dashboard__form-section-header">Employment Details</h4>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="office-hospital-name" className="dashboard__form-label">
-                Office / Hospital Name <span className="dashboard__required">*</span>
-              </label>
-              <SearchableDropdown
-                id="office-hospital-name"
-                options={dropdownOptions.officeNames}
-                value={formData.officeHospitalName}
-                onChange={(val) => handleFormChange('officeHospitalName', val)}
-                placeholder="Select or enter office or hospital name"
-              />
-              {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="position-function" className="dashboard__form-label">
-                Position / Function <span className="dashboard__required">*</span>
-              </label>
-              <SearchableDropdown
-                id="position-function"
-                options={dropdownOptions.positions}
-                value={formData.positionFunction}
-                onChange={(val) => handleFormChange('positionFunction', val)}
-                placeholder="Select or enter position or function"
-              />
-              {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="status" className="dashboard__form-label">
-                Status <span className="dashboard__required">*</span>
-              </label>
-              <select
-                id="status"
-                className="dashboard__form-select"
-                value={formData.status}
-                onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-
-            <Input
-              id="date-of-employment"
-              label="Date of Employment"
-              type="date"
-              value={formData.dateOfEmployment}
-              onChange={(e) => handleFormChange('dateOfEmployment', e.target.value)}
-              error={formErrors.dateOfEmployment}
-              fullWidth
-            />
-
-            {formData.status === 'Inactive' && (
-              <>
-                <Input
-                  id="date-of-separation"
-                  label="Date of Separation"
-                  type="date"
-                  value={formData.dateOfSeparation}
-                  onChange={(e) => handleFormChange('dateOfSeparation', e.target.value)}
-                  error={formErrors.dateOfSeparation}
-                  fullWidth
-                />
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="reasonForSeparation" className="dashboard__form-label">
-                    Reason for Separation <span className="dashboard__required">*</span>
-                  </label>
-                  <select
-                    id="reasonForSeparation"
-                    className="dashboard__form-select"
-                    value={formData.reasonForSeparation}
-                    onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
-                  >
-                    <option value="">Select reason for separation</option>
-                    {dropdownOptions.reasonsForSeparation.map((reason) => (
-                      <option key={reason} value={reason}>{reason}</option>
-                    ))}
-                  </select>
-                  {formErrors.reasonForSeparation && (
-                    <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
-                  )}
-                </div>
-              </>
-            )}
-
-            <div className="dashboard__form-field">
-              <label htmlFor="appointmentStatus" className="dashboard__form-label">
-                Appointment Status <span className="dashboard__required">*</span>
-              </label>
-              <select
-                id="appointmentStatus"
-                className="dashboard__form-select"
-                value={formData.appointmentStatus}
-                onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
-              >
-                <option value="">Select appointment status</option>
-                {dropdownOptions.appointmentStatuses.map((s) => {
-                  const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
-                  return (
-                    <option key={s} value={displayName}>{displayName}</option>
-                  );
-                })}
-              </select>
-              {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
-            </div>
-
-            {/* Durational appointment statuses conditional date inputs */}
-            {formData.appointmentStatus && (
-              (() => {
-                const s = formData.appointmentStatus.toLowerCase().trim();
-                const isDefaultDurational = (
-                  s === 'consultant' ||
-                  s === 'contract of service' ||
-                  s === 'contractual' ||
-                  s === 'casual' ||
-                  s === 'job order'
-                );
-                if (isDefaultDurational) return true;
-
-                const matchedOption = dropdownOptions.appointmentStatuses.find(
-                  (opt) => {
-                    const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
-                    return name.toLowerCase().trim() === s;
-                  }
-                );
-                return matchedOption ? matchedOption.endsWith('|date') : false;
-              })()
-            ) && (
-                <div className="dashboard__form-row">
-                  <Input
-                    id="appointment-from"
-                    label="Appointment From"
-                    type="date"
-                    value={formData.appointmentFrom}
-                    onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
-                    error={formErrors.appointmentFrom}
-                    fullWidth
-                  />
-                  <Input
-                    id="appointment-to"
-                    label="Appointment To"
-                    type="date"
-                    value={formData.appointmentTo}
-                    onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
-                    error={formErrors.appointmentTo}
-                    fullWidth
-                  />
-                </div>
-              )}
-
-          </div>
-
-          <div className="dashboard__form-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-              <h4 className="dashboard__form-section-header" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>Administrative Order (AO) Details</h4>
-              <button
-                type="button"
-                onClick={() => {
-                  handleFormChange('aoType', '');
-                  handleFormChange('aoNumber', '');
-                  handleFormChange('aoYear', '');
-                  handleFormChange('detailedTo', '');
-                  handleFormChange('detailedDivision', '');
-                  handleFormChange('detailedOrderFrom', '');
-                  handleFormChange('detailedOrderTo', '');
-                  handleFormChange('designatedPositionFunction', '');
-                  handleFormChange('designatedOrderFrom', '');
-                  handleFormChange('designatedOrderTo', '');
-                  handleFormChange('recalledFrom', '');
-                  handleFormChange('recalledTo', '');
-                  handleFormChange('recalledOrderFrom', '');
-                  handleFormChange('recalledOrderTo', '');
-                  setAoFile(null);
-                }}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '6px',
-                  padding: '3px 10px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: 'var(--color-danger)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                Clear AO Inputs
-              </button>
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="ao-type" className="dashboard__form-label">
-                AO Status
-              </label>
-              <select
-                id="ao-type"
-                className="dashboard__form-select"
-                value={formData.aoType}
-                onChange={(e) => handleFormChange('aoType', e.target.value as any)}
-              >
-                <option value="">Select AO Type</option>
-                <option value="Detailed">Detailed</option>
-                <option value="Designated">Designated</option>
-                <option value="Recalled">Recalled</option>
-              </select>
-            </div>
-
-            <div className="dashboard__form-row">
-              <Input
-                id="ao-number"
-                label="AO Number"
-                placeholder="Enter Administrative Order number"
-                value={formData.aoNumber}
-                onChange={(e) => handleFormChange('aoNumber', e.target.value)}
-                fullWidth
-              />
-              <div className="dashboard__form-field">
-                <label htmlFor="ao-year" className="dashboard__form-label">
-                  Series
-                </label>
-                <select
-                  id="ao-year"
-                  className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
-                  value={formData.aoYear}
-                  onChange={(e) => handleFormChange('aoYear', e.target.value)}
-                >
-                  <option value="">Select series year</option>
-                  {dropdownOptions.aoYears.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-                {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
-              </div>
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="ao-file" className="dashboard__form-label">
-                Upload AO PDF File {formData.aoNumber.trim() ? '(Required)' : '(Optional)'}
-              </label>
-              <input
-                id="ao-file"
-                className="dashboard__form-input"
-                type="file"
-                accept=".pdf,application/pdf"
-                onChange={(e) => setAoFile(e.target.files?.[0] || null)}
-                style={{
-                  padding: '0.5rem',
-                  border: '1px dashed var(--border-color)',
-                  borderRadius: 'var(--border-radius)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  width: '100%'
-                }}
-              />
-              {aoFile && (
-                <>
-                  <p style={{
-                    fontSize: '0.8125rem',
-                    marginTop: '0.375rem',
-                    color: 'var(--color-success)',
-                    fontWeight: 500
-                  }}>
-                    ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-                  </p>
-                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      id="add-auto-rename"
-                      checked={autoRename}
-                      onChange={(e) => setAutoRename(e.target.checked)}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                    />
-                    <label htmlFor="add-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                      Auto rename file according to AO details
-                    </label>
-                  </div>
-                </>
-              )}
-              {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
-            </div>
-
-            {formData.aoType === 'Detailed' && (
-              <>
-                <div className="dashboard__form-field">
-                  <label htmlFor="detailedTo" className="dashboard__form-label">
-                    Detailed/Transferred Office
-                  </label>
-                  <SearchableDropdown
-                    id="detailedTo"
-                    options={dropdownOptions.officeNames}
-                    value={formData.detailedTo}
-                    onChange={(val) => handleFormChange('detailedTo', val)}
-                    placeholder="Select or enter office"
-                  />
-                </div>
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="detailedDivision" className="dashboard__form-label">
-                    Division
-                  </label>
-                  <input
-                    id="detailedDivision"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter division"
-                    value={formData.detailedDivision}
-                    onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
-                  />
-                </div>
-
-                <div className="dashboard__form-row">
-                  <Input
-                    id="appointment-from-add"
-                    label="Duration of Detailed Order (From)"
-                    type="date"
-                    value={formData.detailedOrderFrom}
-                    onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="appointment-to-add"
-                      label="Duration of Detailed Order (To)"
-                      type={formData.detailedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.detailedOrderTo}
-                      onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
-                      disabled={formData.detailedOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="detailed-until-revoked-add"
-                        checked={formData.detailedOrderTo === 'Until revoked'}
-                        onChange={(e) => handleFormChange('detailedOrderTo', e.target.checked ? 'Until revoked' : '')}
-                      />
-                      <label htmlFor="detailed-until-revoked-add" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {formData.aoType === 'Designated' && (
-              <>
-                <div className="dashboard__form-field">
-                  <label htmlFor="designatedOffice" className="dashboard__form-label">
-                    Designated Office
-                  </label>
-                  <SearchableDropdown
-                    id="designatedOffice"
-                    options={dropdownOptions.officeNames}
-                    value={formData.detailedTo}
-                    onChange={(val) => handleFormChange('detailedTo', val)}
-                    placeholder="Select or enter designated office"
-                  />
-                </div>
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="designatedPositionFunction" className="dashboard__form-label">
-                    Designated Position Function
-                  </label>
-                  <SearchableDropdown
-                    id="designatedPositionFunction"
-                    options={dropdownOptions.positions}
-                    value={formData.designatedPositionFunction}
-                    onChange={(val) => handleFormChange('designatedPositionFunction', val)}
-                    placeholder="Select or enter position function"
-                  />
-                </div>
-
-                <div className="dashboard__form-row">
-                  <Input
-                    id="designated-order-from"
-                    label="Designated Order (From)"
-                    type="date"
-                    value={formData.designatedOrderFrom}
-                    onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="designated-order-to"
-                      label="Designated Order (To)"
-                      type={formData.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.designatedOrderTo}
-                      onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
-                      disabled={formData.designatedOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="designated-until-revoked-add"
-                        checked={formData.designatedOrderTo === 'Until revoked'}
-                        onChange={(e) => handleFormChange('designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
-                      />
-                      <label htmlFor="designated-until-revoked-add" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {formData.aoType === 'Recalled' && (
-              <>
-                <div className="dashboard__form-field">
-                  <label htmlFor="recalledFrom" className="dashboard__form-label">
-                    Recalled from
-                  </label>
-                  <SearchableDropdown
-                    id="recalledFrom"
-                    options={dropdownOptions.officeNames}
-                    value={formData.recalledFrom}
-                    onChange={(val) => handleFormChange('recalledFrom', val)}
-                    placeholder="Select or enter recalled from office"
-                  />
-                </div>
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="recalledTo" className="dashboard__form-label">
-                    Recalled to
-                  </label>
-                  <SearchableDropdown
-                    id="recalledTo"
-                    options={dropdownOptions.officeNames}
-                    value={formData.recalledTo}
-                    onChange={(val) => handleFormChange('recalledTo', val)}
-                    placeholder="Select or enter recalled to office"
-                  />
-                </div>
-
-                <div className="dashboard__form-row">
-                  <Input
-                    id="recalled-order-from"
-                    label="Duration of recalled Order (From)"
-                    type="date"
-                    value={formData.recalledOrderFrom}
-                    onChange={(e) => handleFormChange('recalledOrderFrom', e.target.value)}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="recalled-order-to"
-                      label="Duration of recalled Order (To)"
-                      type={formData.recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.recalledOrderTo}
-                      onChange={(e) => handleFormChange('recalledOrderTo', e.target.value)}
-                      disabled={formData.recalledOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="recalled-until-revoked-add"
-                        checked={formData.recalledOrderTo === 'Until revoked'}
-                        onChange={(e) => handleFormChange('recalledOrderTo', e.target.checked ? 'Until revoked' : '')}
-                      />
-                      <label htmlFor="recalled-until-revoked-add" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="dashboard__form-section">
-            <h4 className="dashboard__form-section-header">201 File Status</h4>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="file201-status" className="dashboard__form-label">
-                201 File Status
-              </label>
-              <select
-                id="file201-status"
-                className="dashboard__form-select"
-                value={formData.file201Status}
-                onChange={(e) => handleFormChange('file201Status', e.target.value)}
-              >
-                <option value="Available">Available</option>
-                <option value="Unavailable">Unavailable</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        <EmployeeFormWizard
+          formData={formData as any}
+          onChange={(field, val) => handleFormChange(field as any, val)}
+          formErrors={formErrors as any}
+          dropdownOptions={dropdownOptions}
+          existingEmployeeIds={existingEmployeeIds}
+          existingAoKeys={existingAoKeys}
+          aoFile={aoFile}
+          setAoFile={setAoFile}
+          autoRename={autoRename}
+          setAutoRename={setAutoRename}
+          profilePicture={addProfilePicture}
+          setProfilePicture={setAddProfilePicture}
+          onSave={handleSaveEmployee}
+          onCancel={handleRequestCloseAddEmployee}
+          isSaving={isLoading}
+        />
       </Modal>
+
+      {/* Unsaved Changes Confirmation Modal */}
+      <UnsavedChangesModal
+        isOpen={showUnsavedChangesModal}
+        onKeepEditing={() => setShowUnsavedChangesModal(false)}
+        onDiscard={() => {
+          setShowUnsavedChangesModal(false);
+          handleCloseAddEmployeeModal();
+        }}
+      />
 
 
       {/* Update Employee Modal */}

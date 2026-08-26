@@ -1,0 +1,321 @@
+/* Split Document Viewer Styles */
+.split-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 80vh;
+  min-height: 540px;
+  background: var(--bg-primary, #ffffff);
+  border-radius: var(--border-radius-lg, 12px);
+  overflow: hidden;
+}
+
+/* Header & View Controls */
+.split-viewer__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-secondary, #f9fafb);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.split-viewer__title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 200px;
+}
+
+.split-viewer__badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--color-primary, #3b82f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.split-viewer__filename {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.split-viewer__meta-tag {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* Layout Ratio Selector */
+.split-viewer__layout-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary, #f3f4f6);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.split-viewer__layout-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.split-viewer__layout-btn:hover {
+  color: var(--text-primary, #111827);
+}
+
+.split-viewer__layout-btn--active {
+  background: var(--bg-primary, #ffffff);
+  color: var(--color-primary, #3b82f6);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Toolbar for PDF */
+.split-viewer__pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.split-viewer__tool-btn {
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--text-primary, #374151);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.split-viewer__tool-btn:hover {
+  background: var(--bg-tertiary, #f3f4f6);
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.split-viewer__zoom-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+  min-width: 48px;
+  text-align: center;
+}
+
+/* Split Main Container */
+.split-viewer__main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Left Pane: PDF Container */
+.split-viewer__pane-left {
+  flex: 1;
+  background: #2b2b2b;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: flex 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.split-viewer__iframe-wrapper {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  position: relative;
+}
+
+.split-viewer__iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #ffffff;
+  transition: transform 0.2s ease-out;
+  transform-origin: center center;
+}
+
+.split-viewer__loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 41, 59, 0.85);
+  color: #ffffff;
+  z-index: 10;
+  gap: 12px;
+}
+
+.split-viewer__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: split-spin 0.8s linear infinite;
+}
+
+@keyframes split-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Right Pane: Data / Form Panel */
+.split-viewer__pane-right {
+  flex: 1;
+  background: var(--bg-primary, #ffffff);
+  border-left: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transition: flex 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.split-viewer__pane-right-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.split-viewer__section-card {
+  background: var(--bg-secondary, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--border-radius-lg, 12px);
+  padding: 1.25rem;
+}
+
+.split-viewer__section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.split-viewer__kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.875rem 1rem;
+}
+
+.split-viewer__kv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.split-viewer__kv-key {
+  font-size: 0.725rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.split-viewer__kv-val {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  word-break: break-word;
+}
+
+/* Diff viewer items */
+.split-viewer__diff-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0.625rem;
+  border-radius: 6px;
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.split-viewer__diff-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+
+.split-viewer__diff-badge-old {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger, #ef4444);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: line-through;
+}
+
+.split-viewer__diff-badge-new {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-success, #10b981);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Pane Footer Actions */
+.split-viewer__action-footer {
+  margin-top: auto;
+  padding: 1rem 1.5rem;
+  background: var(--bg-secondary, #f9fafb);
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .split-viewer__main {
+    flex-direction: column;
+  }
+  .split-viewer__pane-left {
+    height: 320px;
+    flex: none !important;
+  }
+  .split-viewer__pane-right {
+    border-left: none;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+    flex: 1;
+  }
+}

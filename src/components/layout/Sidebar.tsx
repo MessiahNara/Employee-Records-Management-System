@@ -4,7 +4,8 @@ import { getAuthState } from '../../utils/mockAuth';
 import {
   MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder,
   MdAssignmentTurnedIn, MdInsertChart, MdInbox, MdCalendarToday,
-  MdExpandMore, MdChevronRight, MdChat, MdInventory, MdPieChart
+  MdExpandMore, MdChevronRight, MdChat, MdInventory, MdPieChart,
+  MdSecurity
 } from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
@@ -313,6 +314,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['developer'] },
     { path: '/file201', label: 'File Locator', icon: MdFolder, iconColor: '#3b82f6', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/audit-logs', label: 'Audit Logs', icon: MdDescription, iconColor: '#f59e0b', requiredRoles: ['superadmin', 'admin', 'developer'] },
+    { path: '/backup-restore', label: 'Backup & Restore', icon: MdSecurity, iconColor: '#0ea5e9', requiredRoles: ['superadmin', 'developer'] },
     // If admin has role 'admin', they see Requests under Admin Tools
     {
       path: '/requests',
@@ -357,6 +359,13 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   });
 
   const hasAccess = (item: NavItem): boolean => {
+    // Superadmin and Developer always have full access to tools matching their role
+    if (userRole === 'developer' || userRole === 'superadmin') {
+      if (item.requiredRoles && item.requiredRoles.length > 0 && !item.requiredRoles.includes(userRole)) {
+        return false;
+      }
+      return true;
+    }
     if (item.requiredRoles && item.requiredRoles.length > 0 && !item.requiredRoles.includes(userRole)) {
       return false;
     }
@@ -374,8 +383,31 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''} ${isMobileOpen ? 'sidebar--open' : ''}`}>
       <div className="sidebar__header">
         <div className="sidebar__logo">
-          <MdFolder className="sidebar__logo-icon" style={{ color: '#3b82f6' }} />
-          {!isCollapsed && <span className="sidebar__logo-text" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: '1.4', display: 'block', width: '100%' }}>Employee Records Management System</span>}
+          <img
+            src="/icon.png"
+            alt="ERMS Logo"
+            className="sidebar__logo-image"
+            style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px', flexShrink: 0 }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = '/template_logo.png';
+            }}
+          />
+          {!isCollapsed && (
+            <span
+              className="sidebar__logo-text"
+              style={{
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                color: 'var(--text-primary)',
+                lineHeight: '1.35',
+                display: 'block',
+                width: '100%',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Employee Records Management System
+            </span>
+          )}
         </div>
       </div>
 

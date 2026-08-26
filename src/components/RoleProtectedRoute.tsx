@@ -32,6 +32,8 @@ function RoleProtectedRoute({
     '/users': 'Users',
     '/file201': 'File Locator',
     '/audit-logs': 'Audit Logs',
+    '/backup-restore': 'Backup & Restore',
+    '/analytics': 'Dashboard Analytics',
     '/requests': 'Requests',
     '/approvals': 'Request & Approvals',
     '/dashboard': 'Dashboard',
@@ -46,7 +48,10 @@ function RoleProtectedRoute({
     '/settings': 'Settings'
   };
 
-  if (currentUser?.permissions?.allowedTabs) {
+  // Superadmin and Developer always have full access to tools allowed for their role
+  if (userRole === 'superadmin' || userRole === 'developer') {
+    hasAccess = allowedRoles.includes(userRole);
+  } else if (currentUser?.permissions?.allowedTabs) {
     const tabName = routeToTabMap[currentPath];
     if (tabName) {
       hasAccess = hasAccess && currentUser.permissions.allowedTabs.includes(tabName);

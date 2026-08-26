@@ -32,6 +32,8 @@ function PDFViewer({
   const [isMaximized, setIsMaximized] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [zoom, setZoom] = useState(100);
+  const [rotation, setRotation] = useState(0);
+  const [showSplitDetails, setShowSplitDetails] = useState(false);
 
   // Approval-request state
   const [pendingAction, setPendingAction] = useState<ApprovalAction>(null);
@@ -52,8 +54,18 @@ function PDFViewer({
     });
   };
 
-  const handleZoomIn = () => setZoom(prev => Math.min(200, prev + 25));
+  const handleZoomIn = () => setZoom(prev => Math.min(250, prev + 25));
   const handleZoomOut = () => setZoom(prev => Math.max(50, prev - 25));
+  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
+  const handleResetZoom = () => {
+    setZoom(100);
+    setRotation(0);
+  };
+  const handleOpenNewTab = () => {
+    if (iframeSrc) {
+      window.open(iframeSrc, '_blank');
+    }
+  };
 
   useEffect(() => {
     if (isOpen && pdfData) {
@@ -68,7 +80,9 @@ function PDFViewer({
     if (!isOpen) {
       setIsMaximized(false);
       setIsMinimized(false);
+      setShowSplitDetails(false);
       setZoom(100);
+      setRotation(0);
       setPendingAction(null);
       setApprovalPurpose('');
       setPurposeError('');
@@ -210,7 +224,7 @@ function PDFViewer({
   // Only privileged users get a real src — everyone else sees the locked placeholder
   const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#toolbar=0&zoom=${zoom}` : '';
 
-  const modalSize = isMaximized ? 'xl' : 'lg';
+  const modalSize = 'xl';
 
   return (
     <>
@@ -229,7 +243,7 @@ function PDFViewer({
                 <strong>Category:</strong> {employeeDocument.category}
               </span>
               <span className="pdf-viewer__meta-item">
-                <strong>Uploaded by:</strong> {employeeDocument.uploadedBy}
+                <strong>Uploaded by:</strong> {employeeDocument.uploadedBy || 'System'}
               </span>
               <span className="pdf-viewer__meta-item">
                 <strong>Date:</strong> {formatDate(employeeDocument.uploadedAt || (employeeDocument as any).createdAt)}
@@ -237,63 +251,111 @@ function PDFViewer({
             </div>
 
             <div className="pdf-viewer__actions">
-              {/* Zoom Controls */}
+              {/* Zoom Button Group */}
+              <div className="pdf-viewer__btn-group">
+                <button
+                  type="button"
+                  className="pdf-viewer__window-btn"
+                  onClick={handleZoomOut}
+                  title="Zoom Out"
+                  aria-label="Zoom Out"
+                >
+                  ➖
+                </button>
+                <span className="pdf-viewer__zoom-val">
+                  {zoom}%
+                </span>
+                <button
+                  type="button"
+                  className="pdf-viewer__window-btn"
+                  onClick={handleZoomIn}
+                  title="Zoom In"
+                  aria-label="Zoom In"
+                >
+                  ➕
+                </button>
+              </div>
+
+              {/* Transform Group */}
+              <div className="pdf-viewer__btn-group">
+                <button
+                  type="button"
+                  className="pdf-viewer__window-btn"
+                  onClick={handleRotate}
+                  title="Rotate 90° Clockwise"
+                  aria-label="Rotate 90°"
+                >
+                  ⟳ Rotate
+                </button>
+                <button
+                  type="button"
+                  className="pdf-viewer__window-btn"
+                  onClick={handleResetZoom}
+                  title="Reset Zoom & Rotation"
+                  aria-label="Reset View"
+                >
+                  ↺ Reset
+                </button>
+              </div>
+
+              {/* Window / Open Tools */}
+              <div className="pdf-viewer__btn-group">
+                {canDownloadOrPrint && iframeSrc && (
+                  <button
+                    type="button"
+                    className="pdf-viewer__window-btn"
+                    onClick={handleOpenNewTab}
+                    title="Open in new window / tab"
+                    aria-label="Open in new window"
+                  >
+                    ↗ Open Tab
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="pdf-viewer__window-btn"
+                  onClick={() => setIsMinimized(true)}
+                  title="Minimize file viewer"
+                  aria-label="Minimize file viewer"
+                >
+                  🗕
+                </button>
+                <button
+                  type="button"
+                  className={`pdf-viewer__window-btn ${isMaximized ? 'pdf-viewer__window-btn--active' : ''}`}
+                  onClick={() => setIsMaximized((prev) => !prev)}
+                  title={isMaximized ? 'Restore window size' : 'Maximize window'}
+                  aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
+                >
+                  {isMaximized ? '🗗 Restore' : '🗖 Maximize'}
+                </button>
+              </div>
+
+              {/* Split View Toggle */}
               <button
                 type="button"
-                className="pdf-viewer__window-btn"
-                onClick={handleZoomOut}
-                title="Zoom Out"
-                aria-label="Zoom Out"
-                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
+                className={`pdf-viewer__window-btn ${showSplitDetails ? 'pdf-viewer__window-btn--active' : ''}`}
+                onClick={() => setShowSplitDetails((prev) => !prev)}
+                title={showSplitDetails ? 'Hide details panel' : 'Show details side-by-side'}
+                aria-label="Toggle details split view"
               >
-                ➖
-              </button>
-              <button
-                type="button"
-                className="pdf-viewer__window-btn"
-                onClick={handleZoomIn}
-                title="Zoom In"
-                aria-label="Zoom In"
-                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
-              >
-                ➕
+                📋 {showSplitDetails ? 'Hide Details' : 'Split View'}
               </button>
 
-              {/* Window Controls */}
-              <button
-                type="button"
-                className="pdf-viewer__window-btn"
-                onClick={() => setIsMinimized(true)}
-                title="Minimize file viewer"
-                aria-label="Minimize file viewer"
-                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem', marginLeft: '0.5rem' }}
-              >
-                🗕
-              </button>
-              <button
-                type="button"
-                className="pdf-viewer__window-btn"
-                onClick={() => setIsMaximized((prev) => !prev)}
-                title={isMaximized ? 'Restore window' : 'Maximize window'}
-                aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
-                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem' }}
-              >
-                {isMaximized ? '🗗' : '🗖'}
-              </button>
-
+              {/* Print & Download Buttons */}
               {canDownloadOrPrint ? (
                 // Superadmin / admin / developer — direct access
-                <>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
                   <Button variant="secondary" size="sm" onClick={handlePrintDirect}>
                     🖨️ Print
                   </Button>
                   <Button variant="primary" size="sm" onClick={handleDownloadDirect}>
                     ⬇️ Download
                   </Button>
-                </>
+                </div>
               ) : (
                 // Staff / viewer — must request approval
-                <>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -315,50 +377,136 @@ function PDFViewer({
                   >
                     ⬇️ Download
                   </Button>
-                </>
+                </div>
               )}
             </div>
           </div>
 
           <div className="pdf-viewer__content">
-            {isLoading && canDownloadOrPrint && (
-              <div className="pdf-viewer__loading">
-                <div className="pdf-viewer__spinner"></div>
-                <p>Loading PDF...</p>
-              </div>
-            )}
+            <div className={`pdf-viewer__body--split`}>
+              <div className="pdf-viewer__split-doc-pane" style={{ overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {isLoading && canDownloadOrPrint && (
+                  <div className="pdf-viewer__loading">
+                    <div className="pdf-viewer__spinner"></div>
+                    <p>Loading PDF...</p>
+                  </div>
+                )}
 
-            {/* Privileged users — render the iframe */}
-            {canDownloadOrPrint && iframeSrc && (
-              <iframe
-                key={zoom}
-                src={iframeSrc}
-                className="pdf-viewer__iframe"
-                title={employeeDocument.fileName}
-                style={{ display: isLoading ? 'none' : 'block' }}
-              />
-            )}
+                {/* Privileged users — render the iframe */}
+                {canDownloadOrPrint && iframeSrc && (
+                  <iframe
+                    key={`${zoom}-${rotation}`}
+                    src={iframeSrc}
+                    className="pdf-viewer__iframe"
+                    title={employeeDocument.fileName}
+                    style={{
+                      display: isLoading ? 'none' : 'block',
+                      transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
+                      transformOrigin: 'center center',
+                      transition: 'transform 0.2s ease-out',
+                    }}
+                  />
+                )}
 
-            {/* Non-privileged users — locked placeholder */}
-            {!canDownloadOrPrint && (
-              <div className="pdf-viewer__locked">
-                <div className="pdf-viewer__locked-icon">🔒</div>
-                <p className="pdf-viewer__locked-title">Access Restricted</p>
-                <p className="pdf-viewer__locked-body">
-                  You need admin approval to view, print, or download this file.
-                  Use the buttons above to submit a request.
-                </p>
-                <p className="pdf-viewer__locked-filename">
-                  {employeeDocument.fileName}
-                </p>
-              </div>
-            )}
+                {/* Non-privileged users — locked placeholder */}
+                {!canDownloadOrPrint && (
+                  <div className="pdf-viewer__locked">
+                    <div className="pdf-viewer__locked-icon">🔒</div>
+                    <p className="pdf-viewer__locked-title">Access Restricted</p>
+                    <p className="pdf-viewer__locked-body">
+                      You need admin approval to view, print, or download this file.
+                      Use the buttons above to submit a request.
+                    </p>
+                    <p className="pdf-viewer__locked-filename">
+                      {employeeDocument.fileName}
+                    </p>
+                  </div>
+                )}
 
-            {canDownloadOrPrint && !iframeSrc && !isLoading && (
-              <div className="pdf-viewer__error">
-                <p>Failed to load PDF document</p>
+                {canDownloadOrPrint && !iframeSrc && !isLoading && (
+                  <div className="pdf-viewer__error">
+                    <p>Failed to load PDF document</p>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Side Details Pane */}
+              {showSplitDetails && (
+                <div className="pdf-viewer__split-details-pane">
+                  <div className="pdf-viewer__detail-group">
+                    <h5 className="pdf-viewer__detail-group-title">Document Metadata</h5>
+                    <div className="pdf-viewer__detail-row">
+                      <span className="pdf-viewer__detail-label">File Name</span>
+                      <span className="pdf-viewer__detail-value">{employeeDocument.fileName}</span>
+                    </div>
+                    <div className="pdf-viewer__detail-row">
+                      <span className="pdf-viewer__detail-label">Category</span>
+                      <span className="pdf-viewer__detail-value">{employeeDocument.category}</span>
+                    </div>
+                    {employeeDocument.fileSize && (
+                      <div className="pdf-viewer__detail-row">
+                        <span className="pdf-viewer__detail-label">File Size</span>
+                        <span className="pdf-viewer__detail-value">
+                          {(employeeDocument.fileSize / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                    )}
+                    <div className="pdf-viewer__detail-row">
+                      <span className="pdf-viewer__detail-label">Uploaded By</span>
+                      <span className="pdf-viewer__detail-value">{employeeDocument.uploadedBy || 'System'}</span>
+                    </div>
+                    <div className="pdf-viewer__detail-row">
+                      <span className="pdf-viewer__detail-label">Uploaded Date</span>
+                      <span className="pdf-viewer__detail-value">
+                        {formatDate(employeeDocument.uploadedAt || (employeeDocument as any).createdAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(employeeId || employeeName) && (
+                    <div className="pdf-viewer__detail-group">
+                      <h5 className="pdf-viewer__detail-group-title">Associated Employee</h5>
+                      {employeeName && (
+                        <div className="pdf-viewer__detail-row">
+                          <span className="pdf-viewer__detail-label">Employee Name</span>
+                          <span className="pdf-viewer__detail-value">{employeeName}</span>
+                        </div>
+                      )}
+                      {employeeId && (
+                        <div className="pdf-viewer__detail-row">
+                          <span className="pdf-viewer__detail-label">Employee ID</span>
+                          <span className="pdf-viewer__detail-value">{employeeId}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(employeeDocument.aoNumber || (employeeDocument as any).aoYear) && (
+                    <div className="pdf-viewer__detail-group">
+                      <h5 className="pdf-viewer__detail-group-title">Administrative Order Details</h5>
+                      {employeeDocument.aoNumber && (
+                        <div className="pdf-viewer__detail-row">
+                          <span className="pdf-viewer__detail-label">AO Number</span>
+                          <span className="pdf-viewer__detail-value">{employeeDocument.aoNumber}</span>
+                        </div>
+                      )}
+                      {(employeeDocument as any).aoYear && (
+                        <div className="pdf-viewer__detail-row">
+                          <span className="pdf-viewer__detail-label">Series Year</span>
+                          <span className="pdf-viewer__detail-value">{(employeeDocument as any).aoYear}</span>
+                        </div>
+                      )}
+                      {(employeeDocument as any).aoType && (
+                        <div className="pdf-viewer__detail-row">
+                          <span className="pdf-viewer__detail-label">AO Type</span>
+                          <span className="pdf-viewer__detail-value">{(employeeDocument as any).aoType}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Modal>

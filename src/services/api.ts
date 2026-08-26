@@ -214,13 +214,15 @@ async function handleResponseError(response: Response): Promise<never> {
 // Generic API request handler with timeout
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { timeout?: number } = {}
 ): Promise<T> {
   // Ensure server URL is fetched before making request
   await ensureServerUrl();
 
   const API_BASE_URL = getApiBaseUrl();
   const url = `${API_BASE_URL}${endpoint}`;
+  
+  const timeoutMs = options.timeout || 15000; // default 15s timeout
   
   const config: RequestInit = {
     ...options,
@@ -239,7 +241,7 @@ async function apiRequest<T>(
         ? 'Server connection timeout. The backend server may not be running. Please wait a moment and try again.'
         : 'Server connection timeout. Please check the Server URL in Settings and ensure the server is running.';
       reject(new Error(msg));
-    }, 10000); // 10 second timeout
+    }, timeoutMs);
   });
 
   try {
@@ -1269,6 +1271,53 @@ export const inventoryApi = {
     }),
 };
 
+const backupApi = {
+  list: () => apiRequest<{ success: boolean; backups: any[]; liveRecordCounts: any; schedule: any }>('/backup/list'),
+  create: (data: { createdBy?: string; type?: string }) =>
+    apiRequest<{ success: boolean; message: string; backup: any }>('/backup/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      timeout: 120000,
+    }),
+  restore: (data: { filename: string; superadminPassword: string; username?: string }) =>
+    apiRequest<{ success: boolean; message: string; safetyBackup: string; restoredFrom: string }>('/backup/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      timeout: 300000,
+    }),
+  delete: (filename: string) =>
+    apiRequest<{ success: boolean; message: string }>(`/backup/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    }),
+  getSchedule: () => apiRequest<{ success: boolean; schedule: any }>('/backup/schedule'),
+  saveSchedule: (data: any) =>
+    apiRequest<{ success: boolean; message: string; schedule: any }>('/backup/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  upload: async (file: File) => {
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/backup/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to upload backup file');
+    }
+    return response.json();
+  },
+  getDownloadUrl: async (filename: string) => {
+    const baseUrl = getApiBaseUrl();
+    return `${baseUrl}/backup/download/${encodeURIComponent(filename)}`;
+  },
+};
+
 export default {
   user: userApi,
   employee: employeeApi,
@@ -1281,5 +1330,7 @@ export default {
   chats: chatsApi,
   yellowBoxes: yellowBoxesApi,
   inventory: inventoryApi,
+  backup: backupApi,
   healthCheck,
 };
+

@@ -15,6 +15,7 @@ import Chats from './pages/Chats';
 import File201 from './pages/File201';
 import InventoryAppraisal from './pages/InventoryAppraisal';
 import Analytics from './pages/Analytics';
+import BackupRestore from './pages/BackupRestore';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
@@ -108,6 +109,14 @@ function App() {
                 } 
               />
               <Route path="audit-logs" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'developer']}><AuditLogs /></RoleProtectedRoute>} />
+              <Route
+                path="backup-restore"
+                element={
+                  <RoleProtectedRoute allowedRoles={['superadmin', 'developer']}>
+                    <BackupRestore />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route path="settings" element={<RoleProtectedRoute allowedRoles={['superadmin', 'admin', 'staff', 'developer']}><Settings /></RoleProtectedRoute>} />
               <Route
                 path="requests"

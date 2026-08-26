@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "frequency": "daily",
+  "time": "11:00",
+  "retentionCount": 10,
+  "lastRun": "2026-08-26"
+}

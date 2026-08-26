@@ -31,7 +31,7 @@ interface LoginFormData {
 
 function Login() {
   const navigate = useNavigate();
-  const { showWelcomeToast } = useToast();
+  const { showWelcomeToast, showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
   const [formData, setFormData] = useState<LoginFormData>({
     username: '',
@@ -61,6 +61,16 @@ function Login() {
   useEffect(() => {
     checkServerHealth();
     const interval = setInterval(checkServerHealth, 15000);
+
+    const restoreNotice = sessionStorage.getItem('restoreLogoutNotice');
+    if (restoreNotice) {
+      sessionStorage.removeItem('restoreLogoutNotice');
+      setLoginError(restoreNotice);
+      if (showToast) {
+        showToast(restoreNotice, 'warning');
+      }
+    }
+
     return () => clearInterval(interval);
   }, []);
 

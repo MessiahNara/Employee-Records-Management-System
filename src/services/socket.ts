@@ -78,6 +78,28 @@ export const initSocketClient = async () => {
     window.dispatchEvent(new Event('systemSettingsUpdated'));
   });
 
+  // Global force logout and full reload when a restore point is executed
+  socket.on('databaseRestored', (data: any) => {
+    console.warn('[socket] Database restore detected! Safely logging out active session and refreshing application...', data);
+    
+    // Clear all auth and cached user state
+    localStorage.removeItem('authUser');
+    localStorage.removeItem('currentUserId');
+    sessionStorage.clear();
+    sessionStorage.setItem(
+      'restoreLogoutNotice',
+      data?.message || 'A database restore was executed. All user sessions were safely logged out to synchronize live data. Please log in again.'
+    );
+
+    // Redirect to login and reload app window
+    if (window.location.hash !== '#/login') {
+      window.location.hash = '#/login';
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 150);
+  });
+
   return socket;
 };
 
