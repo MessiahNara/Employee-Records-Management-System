@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './SearchableDropdown.css';
 
 interface SearchableDropdownProps {
@@ -55,10 +55,14 @@ export default function SearchableDropdown({
     };
   }, [onChange]);
 
-  // Filter options based on search term
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Memoize filtered options based on search term
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm.trim()) return options;
+    const lower = searchTerm.toLowerCase();
+    return options.filter((option) =>
+      option.toLowerCase().includes(lower)
+    );
+  }, [options, searchTerm]);
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -247,6 +247,19 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('[server] Unhandled Rejection intercepted at:', promise, 'reason:', reason);
 });
 
+const handleGracefulShutdown = async (signal: string) => {
+  console.log(`[server] Received ${signal}. Closing database connections cleanly...`);
+  try {
+    await prisma.$disconnect();
+  } catch (e) {
+    // Ignore error on exit
+  }
+  process.exit(0);
+};
+
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+
 // Serve frontend static files for network clients (production only)
 const frontendDist = process.env.FRONTEND_DIST;
 if (frontendDist && fs.existsSync(frontendDist)) {

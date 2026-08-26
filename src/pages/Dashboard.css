@@ -482,14 +482,18 @@
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-size: var(--font-size-base);
-  transition: all var(--transition-fast);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
+}
+
+.dashboard__form-input:hover {
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .dashboard__form-input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.18);
 }
 
 .dashboard__radio-group {

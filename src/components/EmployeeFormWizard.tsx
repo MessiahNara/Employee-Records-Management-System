@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import SearchableDropdown from './ui/SearchableDropdown';
@@ -48,7 +48,7 @@ interface DropdownOptions {
 
 interface EmployeeFormWizardProps {
   formData: EmployeeWizardFormData;
-  onChange: (field: keyof EmployeeWizardFormData, value: any) => void;
+  onChange?: (field: keyof EmployeeWizardFormData, value: any) => void;
   formErrors: Record<string, string>;
   dropdownOptions: DropdownOptions;
   existingEmployeeIds?: string[];
@@ -59,7 +59,7 @@ interface EmployeeFormWizardProps {
   setAutoRename: (val: boolean) => void;
   profilePicture?: string;
   setProfilePicture: (pic: string | undefined) => void;
-  onSave: () => void;
+  onSave: (data?: EmployeeWizardFormData) => void;
   onCancel: () => void;
   isSaving?: boolean;
 }
@@ -81,58 +81,71 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
   onCancel,
   isSaving = false,
 }) => {
+  const [localFormData, setLocalFormData] = useState<EmployeeWizardFormData>(formData);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    setLocalFormData(formData);
+  }, [formData]);
+
+  const handleChange = (field: keyof EmployeeWizardFormData, value: any) => {
+    setLocalFormData((prev) => ({ ...prev, [field]: value }));
+    onChange?.(field, value);
+    if (stepErrors[field]) {
+      setStepErrors((prev) => ({ ...prev, [field]: '' }));
+    }
+  };
+
   // Check duplicate ID
   const isDuplicateId = useMemo(() => {
-    if (!formData.id || !formData.id.trim()) return false;
-    const clean = formData.id.trim().toLowerCase();
+    if (!localFormData.id || !localFormData.id.trim()) return false;
+    const clean = localFormData.id.trim().toLowerCase();
     return existingEmployeeIds.some((id) => id.trim().toLowerCase() === clean);
-  }, [formData.id, existingEmployeeIds]);
+  }, [localFormData.id, existingEmployeeIds]);
 
   // Check duplicate AO
   const isDuplicateAo = useMemo(() => {
-    if (!formData.aoNumber.trim() || !formData.aoYear.trim()) return false;
-    const key = `${formData.aoNumber.trim().toLowerCase()}_${formData.aoYear.trim().toLowerCase()}`;
+    if (!localFormData.aoNumber.trim() || !localFormData.aoYear.trim()) return false;
+    const key = `${localFormData.aoNumber.trim().toLowerCase()}_${localFormData.aoYear.trim().toLowerCase()}`;
     return existingAoKeys.some((k) => k.toLowerCase() === key);
-  }, [formData.aoNumber, formData.aoYear, existingAoKeys]);
+  }, [localFormData.aoNumber, localFormData.aoYear, existingAoKeys]);
 
   // Determine if Step 1 is valid
   const isStep1Valid = useMemo(() => {
     return (
-      formData.id.trim().length > 0 &&
+      localFormData.id.trim().length > 0 &&
       !isDuplicateId &&
-      formData.lastName.trim().length > 0 &&
-      formData.firstName.trim().length > 0 &&
-      formData.gender.trim().length > 0
+      localFormData.lastName.trim().length > 0 &&
+      localFormData.firstName.trim().length > 0 &&
+      localFormData.gender.trim().length > 0
     );
-  }, [formData.id, isDuplicateId, formData.lastName, formData.firstName, formData.gender]);
+  }, [localFormData.id, isDuplicateId, localFormData.lastName, localFormData.firstName, localFormData.gender]);
 
   // Determine if Step 2 is valid
   const isStep2Valid = useMemo(() => {
     const baseValid = (
-      formData.officeHospitalName.trim().length > 0 &&
-      formData.positionFunction.trim().length > 0 &&
-      formData.appointmentStatus.trim().length > 0
+      localFormData.officeHospitalName.trim().length > 0 &&
+      localFormData.positionFunction.trim().length > 0 &&
+      localFormData.appointmentStatus.trim().length > 0
     );
     if (!baseValid) return false;
-    if (formData.status === 'Inactive' && !formData.reasonForSeparation.trim()) {
+    if (localFormData.status === 'Inactive' && !localFormData.reasonForSeparation.trim()) {
       return false;
     }
     return true;
-  }, [formData.officeHospitalName, formData.positionFunction, formData.appointmentStatus, formData.status, formData.reasonForSeparation]);
+  }, [localFormData.officeHospitalName, localFormData.positionFunction, localFormData.appointmentStatus, localFormData.status, localFormData.reasonForSeparation]);
 
   // Validate step before advancing
   const handleNextStep = () => {
     const errs: Record<string, string> = {};
 
     if (currentStep === 1) {
-      if (!formData.id.trim()) errs.id = 'Employee ID is required';
+      if (!localFormData.id.trim()) errs.id = 'Employee ID is required';
       else if (isDuplicateId) errs.id = 'Employee ID already exists!';
-      if (!formData.lastName.trim()) errs.lastName = 'Last Name is required';
-      if (!formData.firstName.trim()) errs.firstName = 'First Name is required';
-      if (!formData.gender.trim()) errs.gender = 'Gender is required';
+      if (!localFormData.lastName.trim()) errs.lastName = 'Last Name is required';
+      if (!localFormData.firstName.trim()) errs.firstName = 'First Name is required';
+      if (!localFormData.gender.trim()) errs.gender = 'Gender is required';
 
       if (Object.keys(errs).length > 0) {
         setStepErrors(errs);
@@ -141,9 +154,9 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
       setStepErrors({});
       setCurrentStep(2);
     } else if (currentStep === 2) {
-      if (!formData.officeHospitalName.trim()) errs.officeHospitalName = 'Office / Hospital is required';
-      if (!formData.appointmentStatus.trim()) errs.appointmentStatus = 'Appointment Status is required';
-      if (formData.status === 'Inactive' && !formData.reasonForSeparation.trim()) {
+      if (!localFormData.officeHospitalName.trim()) errs.officeHospitalName = 'Office / Hospital is required';
+      if (!localFormData.appointmentStatus.trim()) errs.appointmentStatus = 'Appointment Status is required';
+      if (localFormData.status === 'Inactive' && !localFormData.reasonForSeparation.trim()) {
         errs.reasonForSeparation = 'Reason for separation is required for inactive employees';
       }
 
@@ -170,8 +183,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
 
   // Helper for durational appointment statuses
   const isDurationalAppointment = useMemo(() => {
-    if (!formData.appointmentStatus) return false;
-    const s = formData.appointmentStatus.toLowerCase().trim();
+    if (!localFormData.appointmentStatus) return false;
+    const s = localFormData.appointmentStatus.toLowerCase().trim();
     const isDefaultDurational = (
       s === 'consultant' ||
       s === 'contract of service' ||
@@ -186,23 +199,23 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
       return name.toLowerCase().trim() === s;
     });
     return matchedOption ? matchedOption.endsWith('|date') : false;
-  }, [formData.appointmentStatus, dropdownOptions.appointmentStatuses]);
+  }, [localFormData.appointmentStatus, dropdownOptions.appointmentStatuses]);
 
   const clearAoInputs = () => {
-    onChange('aoType', '');
-    onChange('aoNumber', '');
-    onChange('aoYear', '');
-    onChange('detailedTo', '');
-    onChange('detailedDivision', '');
-    onChange('detailedOrderFrom', '');
-    onChange('detailedOrderTo', '');
-    onChange('designatedPositionFunction', '');
-    onChange('designatedOrderFrom', '');
-    onChange('designatedOrderTo', '');
-    onChange('recalledFrom', '');
-    onChange('recalledTo', '');
-    onChange('recalledOrderFrom', '');
-    onChange('recalledOrderTo', '');
+    handleChange('aoType', '');
+    handleChange('aoNumber', '');
+    handleChange('aoYear', '');
+    handleChange('detailedTo', '');
+    handleChange('detailedDivision', '');
+    handleChange('detailedOrderFrom', '');
+    handleChange('detailedOrderTo', '');
+    handleChange('designatedPositionFunction', '');
+    handleChange('designatedOrderFrom', '');
+    handleChange('designatedOrderTo', '');
+    handleChange('recalledFrom', '');
+    handleChange('recalledTo', '');
+    handleChange('recalledOrderFrom', '');
+    handleChange('recalledOrderTo', '');
     setAoFile(null);
   };
 
@@ -299,15 +312,15 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 onRemove={async () => {
                   setProfilePicture(undefined);
                 }}
-                firstName={formData.firstName || 'New'}
-                lastName={formData.lastName || 'Employee'}
+                firstName={localFormData.firstName || 'New'}
+                lastName={localFormData.lastName || 'Employee'}
               />
             </div>
 
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-employee-id">
                 <span>Employee ID <span className="form-wizard__required">*</span></span>
-                {formData.id.trim() && (
+                {localFormData.id.trim() && (
                   isDuplicateId ? (
                     <span className="form-wizard__validation-status form-wizard__validation-status--duplicate">
                       <MdWarning /> Duplicate ID
@@ -322,11 +335,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <Input
                 id="wizard-employee-id"
                 placeholder="Enter unique employee ID (e.g., EMP-2024-001)"
-                value={formData.id}
-                onChange={(e) => {
-                  onChange('id', e.target.value);
-                  if (stepErrors.id) setStepErrors(prev => ({ ...prev, id: '' }));
-                }}
+                value={localFormData.id}
+                onChange={(e) => handleChange('id', e.target.value)}
                 error={stepErrors.id || formErrors.id}
                 fullWidth
               />
@@ -336,7 +346,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <div className="form-wizard__field">
                 <label className="form-wizard__label" htmlFor="wizard-last-name">
                   <span>Last Name <span className="form-wizard__required">*</span></span>
-                  {formData.lastName.trim() && (
+                  {localFormData.lastName.trim() && (
                     <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                       <MdCheck />
                     </span>
@@ -345,11 +355,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <Input
                   id="wizard-last-name"
                   placeholder="Enter last name"
-                  value={formData.lastName}
-                  onChange={(e) => {
-                    onChange('lastName', e.target.value);
-                    if (stepErrors.lastName) setStepErrors(prev => ({ ...prev, lastName: '' }));
-                  }}
+                  value={localFormData.lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value)}
                   error={stepErrors.lastName || formErrors.lastName}
                   fullWidth
                 />
@@ -358,7 +365,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <div className="form-wizard__field">
                 <label className="form-wizard__label" htmlFor="wizard-first-name">
                   <span>First Name <span className="form-wizard__required">*</span></span>
-                  {formData.firstName.trim() && (
+                  {localFormData.firstName.trim() && (
                     <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                       <MdCheck />
                     </span>
@@ -367,11 +374,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <Input
                   id="wizard-first-name"
                   placeholder="Enter first name"
-                  value={formData.firstName}
-                  onChange={(e) => {
-                    onChange('firstName', e.target.value);
-                    if (stepErrors.firstName) setStepErrors(prev => ({ ...prev, firstName: '' }));
-                  }}
+                  value={localFormData.firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
                   error={stepErrors.firstName || formErrors.firstName}
                   fullWidth
                 />
@@ -385,8 +389,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <Input
                 id="wizard-middle-name"
                 placeholder="Enter middle name"
-                value={formData.middleName}
-                onChange={(e) => onChange('middleName', e.target.value)}
+                value={localFormData.middleName}
+                onChange={(e) => handleChange('middleName', e.target.value)}
                 fullWidth
               />
             </div>
@@ -399,8 +403,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <Input
                   id="wizard-date-of-birth"
                   type="date"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => onChange('dateOfBirth', e.target.value)}
+                  value={localFormData.dateOfBirth}
+                  onChange={(e) => handleChange('dateOfBirth', e.target.value)}
                   fullWidth
                 />
               </div>
@@ -408,7 +412,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <div className="form-wizard__field">
                 <label className="form-wizard__label" htmlFor="wizard-gender">
                   <span>Gender <span className="form-wizard__required">*</span></span>
-                  {formData.gender.trim() && (
+                  {localFormData.gender.trim() && (
                     <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                       <MdCheck />
                     </span>
@@ -416,12 +420,9 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 </label>
                 <select
                   id="wizard-gender"
-                  className={`form-wizard__select ${stepErrors.gender || formErrors.gender ? 'form-wizard__select--error' : formData.gender ? 'form-wizard__select--valid' : ''}`}
-                  value={formData.gender}
-                  onChange={(e) => {
-                    onChange('gender', e.target.value);
-                    if (stepErrors.gender) setStepErrors(prev => ({ ...prev, gender: '' }));
-                  }}
+                  className={`form-wizard__select ${stepErrors.gender || formErrors.gender ? 'form-wizard__select--error' : localFormData.gender ? 'form-wizard__select--valid' : ''}`}
+                  value={localFormData.gender}
+                  onChange={(e) => handleChange('gender', e.target.value)}
                 >
                   <option value="">Select gender</option>
                   <option value="Male">Male</option>
@@ -452,7 +453,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-office-name">
                 <span>Office / Hospital Name <span className="form-wizard__required">*</span></span>
-                {formData.officeHospitalName.trim() && (
+                {localFormData.officeHospitalName.trim() && (
                   <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                     <MdCheck />
                   </span>
@@ -461,9 +462,9 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <SearchableDropdown
                 id="wizard-office-name"
                 options={dropdownOptions.officeNames}
-                value={formData.officeHospitalName}
+                value={localFormData.officeHospitalName}
                 onChange={(val) => {
-                  onChange('officeHospitalName', val);
+                  handleChange('officeHospitalName', val);
                   if (stepErrors.officeHospitalName) setStepErrors(prev => ({ ...prev, officeHospitalName: '' }));
                 }}
                 placeholder="Select or type office/hospital"
@@ -476,7 +477,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-position">
                 <span>Position / Function <span className="form-wizard__optional">(Optional)</span></span>
-                {formData.positionFunction.trim() && (
+                {localFormData.positionFunction.trim() && (
                   <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                     <MdCheck />
                   </span>
@@ -485,9 +486,9 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <SearchableDropdown
                 id="wizard-position"
                 options={dropdownOptions.positions}
-                value={formData.positionFunction}
+                value={localFormData.positionFunction}
                 onChange={(val) => {
-                  onChange('positionFunction', val);
+                  handleChange('positionFunction', val);
                   if (stepErrors.positionFunction) setStepErrors(prev => ({ ...prev, positionFunction: '' }));
                 }}
                 placeholder="Select or type position/function"
@@ -505,8 +506,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <select
                   id="wizard-status"
                   className="form-wizard__select"
-                  value={formData.status}
-                  onChange={(e) => onChange('status', e.target.value as any)}
+                  value={localFormData.status}
+                  onChange={(e) => handleChange('status', e.target.value as any)}
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
@@ -520,15 +521,15 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <Input
                   id="wizard-date-of-employment"
                   type="date"
-                  value={formData.dateOfEmployment}
-                  onChange={(e) => onChange('dateOfEmployment', e.target.value)}
+                  value={localFormData.dateOfEmployment}
+                  onChange={(e) => handleChange('dateOfEmployment', e.target.value)}
                   error={formErrors.dateOfEmployment}
                   fullWidth
                 />
               </div>
             </div>
 
-            {formData.status === 'Inactive' && (
+            {localFormData.status === 'Inactive' && (
               <div className="form-wizard__row" style={{ background: 'rgba(239,68,68,0.03)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.15)' }}>
                 <div className="form-wizard__field">
                   <label className="form-wizard__label" htmlFor="wizard-date-of-separation">
@@ -537,8 +538,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <Input
                     id="wizard-date-of-separation"
                     type="date"
-                    value={formData.dateOfSeparation}
-                    onChange={(e) => onChange('dateOfSeparation', e.target.value)}
+                    value={localFormData.dateOfSeparation}
+                    onChange={(e) => handleChange('dateOfSeparation', e.target.value)}
                     error={formErrors.dateOfSeparation}
                     fullWidth
                   />
@@ -551,9 +552,9 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <select
                     id="wizard-reason-separation"
                     className={`form-wizard__select ${stepErrors.reasonForSeparation || formErrors.reasonForSeparation ? 'form-wizard__select--error' : ''}`}
-                    value={formData.reasonForSeparation}
+                    value={localFormData.reasonForSeparation}
                     onChange={(e) => {
-                      onChange('reasonForSeparation', e.target.value);
+                      handleChange('reasonForSeparation', e.target.value);
                       if (stepErrors.reasonForSeparation) setStepErrors(prev => ({ ...prev, reasonForSeparation: '' }));
                     }}
                   >
@@ -572,7 +573,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-appointment-status">
                 <span>Appointment Status <span className="form-wizard__required">*</span></span>
-                {formData.appointmentStatus.trim() && (
+                {localFormData.appointmentStatus.trim() && (
                   <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                     <MdCheck />
                   </span>
@@ -580,10 +581,10 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               </label>
               <select
                 id="wizard-appointment-status"
-                className={`form-wizard__select ${stepErrors.appointmentStatus || formErrors.appointmentStatus ? 'form-wizard__select--error' : formData.appointmentStatus ? 'form-wizard__select--valid' : ''}`}
-                value={formData.appointmentStatus}
+                className={`form-wizard__select ${stepErrors.appointmentStatus || formErrors.appointmentStatus ? 'form-wizard__select--error' : localFormData.appointmentStatus ? 'form-wizard__select--valid' : ''}`}
+                value={localFormData.appointmentStatus}
                 onChange={(e) => {
-                  onChange('appointmentStatus', e.target.value);
+                  handleChange('appointmentStatus', e.target.value);
                   if (stepErrors.appointmentStatus) setStepErrors(prev => ({ ...prev, appointmentStatus: '' }));
                 }}
               >
@@ -607,8 +608,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <Input
                     id="wizard-appointment-from"
                     type="date"
-                    value={formData.appointmentFrom}
-                    onChange={(e) => onChange('appointmentFrom', e.target.value)}
+                    value={localFormData.appointmentFrom}
+                    onChange={(e) => handleChange('appointmentFrom', e.target.value)}
                     error={formErrors.appointmentFrom}
                     fullWidth
                   />
@@ -621,8 +622,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <Input
                     id="wizard-appointment-to"
                     type="date"
-                    value={formData.appointmentTo}
-                    onChange={(e) => onChange('appointmentTo', e.target.value)}
+                    value={localFormData.appointmentTo}
+                    onChange={(e) => handleChange('appointmentTo', e.target.value)}
                     error={formErrors.appointmentTo}
                     fullWidth
                   />
@@ -662,8 +663,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               <select
                 id="wizard-ao-type"
                 className="form-wizard__select"
-                value={formData.aoType}
-                onChange={(e) => onChange('aoType', e.target.value as any)}
+                value={localFormData.aoType}
+                onChange={(e) => handleChange('aoType', e.target.value as any)}
               >
                 <option value="">Select AO Type (Optional)</option>
                 <option value="Detailed">Detailed</option>
@@ -685,8 +686,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <Input
                   id="wizard-ao-number"
                   placeholder="Enter Administrative Order number"
-                  value={formData.aoNumber}
-                  onChange={(e) => onChange('aoNumber', e.target.value)}
+                  value={localFormData.aoNumber}
+                  onChange={(e) => handleChange('aoNumber', e.target.value)}
                   fullWidth
                 />
               </div>
@@ -698,8 +699,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                 <select
                   id="wizard-ao-year"
                   className="form-wizard__select"
-                  value={formData.aoYear}
-                  onChange={(e) => onChange('aoYear', e.target.value)}
+                  value={localFormData.aoYear}
+                  onChange={(e) => handleChange('aoYear', e.target.value)}
                 >
                   <option value="">Select series year</option>
                   {dropdownOptions.aoYears.map((year) => (
@@ -710,7 +711,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
             </div>
 
             {/* Dynamic fields based on AO Type */}
-            {formData.aoType === 'Detailed' && (
+            {localFormData.aoType === 'Detailed' && (
               <div style={{ background: 'rgba(59,130,246,0.03)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.15)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="form-wizard__field">
                   <label className="form-wizard__label" htmlFor="wizard-detailed-to">
@@ -719,8 +720,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <SearchableDropdown
                     id="wizard-detailed-to"
                     options={dropdownOptions.officeNames}
-                    value={formData.detailedTo}
-                    onChange={(val) => onChange('detailedTo', val)}
+                    value={localFormData.detailedTo}
+                    onChange={(val) => handleChange('detailedTo', val)}
                     placeholder="Select or enter office"
                   />
                 </div>
@@ -732,8 +733,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <Input
                     id="wizard-detailed-division"
                     placeholder="Enter division"
-                    value={formData.detailedDivision}
-                    onChange={(e) => onChange('detailedDivision', e.target.value)}
+                    value={localFormData.detailedDivision}
+                    onChange={(e) => handleChange('detailedDivision', e.target.value)}
                     fullWidth
                   />
                 </div>
@@ -746,8 +747,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                     <Input
                       id="wizard-detailed-from"
                       type="date"
-                      value={formData.detailedOrderFrom}
-                      onChange={(e) => onChange('detailedOrderFrom', e.target.value)}
+                      value={localFormData.detailedOrderFrom}
+                      onChange={(e) => handleChange('detailedOrderFrom', e.target.value)}
                       fullWidth
                     />
                   </div>
@@ -758,18 +759,18 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                     </label>
                     <Input
                       id="wizard-detailed-to-date"
-                      type={formData.detailedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.detailedOrderTo}
-                      onChange={(e) => onChange('detailedOrderTo', e.target.value)}
-                      disabled={formData.detailedOrderTo === 'Until revoked'}
+                      type={localFormData.detailedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={localFormData.detailedOrderTo}
+                      onChange={(e) => handleChange('detailedOrderTo', e.target.value)}
+                      disabled={localFormData.detailedOrderTo === 'Until revoked'}
                       fullWidth
                     />
                     <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <input
                         type="checkbox"
                         id="wizard-detailed-until-revoked"
-                        checked={formData.detailedOrderTo === 'Until revoked'}
-                        onChange={(e) => onChange('detailedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                        checked={localFormData.detailedOrderTo === 'Until revoked'}
+                        onChange={(e) => handleChange('detailedOrderTo', e.target.checked ? 'Until revoked' : '')}
                         style={{ cursor: 'pointer' }}
                       />
                       <label htmlFor="wizard-detailed-until-revoked" style={{ fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -781,7 +782,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               </div>
             )}
 
-            {formData.aoType === 'Designated' && (
+            {localFormData.aoType === 'Designated' && (
               <div style={{ background: 'rgba(59,130,246,0.03)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.15)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="form-wizard__field">
                   <label className="form-wizard__label" htmlFor="wizard-designated-position">
@@ -790,8 +791,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                   <SearchableDropdown
                     id="wizard-designated-position"
                     options={dropdownOptions.positions}
-                    value={formData.designatedPositionFunction}
-                    onChange={(val) => onChange('designatedPositionFunction', val)}
+                    value={localFormData.designatedPositionFunction}
+                    onChange={(val) => handleChange('designatedPositionFunction', val)}
                     placeholder="Select or enter designated function"
                   />
                 </div>
@@ -804,8 +805,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                     <Input
                       id="wizard-designated-from"
                       type="date"
-                      value={formData.designatedOrderFrom}
-                      onChange={(e) => onChange('designatedOrderFrom', e.target.value)}
+                      value={localFormData.designatedOrderFrom}
+                      onChange={(e) => handleChange('designatedOrderFrom', e.target.value)}
                       fullWidth
                     />
                   </div>
@@ -816,18 +817,18 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                     </label>
                     <Input
                       id="wizard-designated-to"
-                      type={formData.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.designatedOrderTo}
-                      onChange={(e) => onChange('designatedOrderTo', e.target.value)}
-                      disabled={formData.designatedOrderTo === 'Until revoked'}
+                      type={localFormData.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
+                      value={localFormData.designatedOrderTo}
+                      onChange={(e) => handleChange('designatedOrderTo', e.target.value)}
+                      disabled={localFormData.designatedOrderTo === 'Until revoked'}
                       fullWidth
                     />
                     <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <input
                         type="checkbox"
                         id="wizard-designated-until-revoked"
-                        checked={formData.designatedOrderTo === 'Until revoked'}
-                        onChange={(e) => onChange('designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
+                        checked={localFormData.designatedOrderTo === 'Until revoked'}
+                        onChange={(e) => handleChange('designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
                         style={{ cursor: 'pointer' }}
                       />
                       <label htmlFor="wizard-designated-until-revoked" style={{ fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>
@@ -839,7 +840,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               </div>
             )}
 
-            {formData.aoType === 'Recalled' && (
+            {localFormData.aoType === 'Recalled' && (
               <div style={{ background: 'rgba(59,130,246,0.03)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.15)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="form-wizard__row">
                   <div className="form-wizard__field">
@@ -849,8 +850,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                     <SearchableDropdown
                       id="wizard-recalled-from"
                       options={dropdownOptions.officeNames}
-                      value={formData.recalledFrom}
-                      onChange={(val) => onChange('recalledFrom', val)}
+                      value={localFormData.recalledFrom}
+                      onChange={(val) => handleChange('recalledFrom', val)}
                       placeholder="Select office recalled from"
                     />
                   </div>
@@ -862,8 +863,8 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
                     <SearchableDropdown
                       id="wizard-recalled-to"
                       options={dropdownOptions.officeNames}
-                      value={formData.recalledTo}
-                      onChange={(val) => onChange('recalledTo', val)}
+                      value={localFormData.recalledTo}
+                      onChange={(val) => handleChange('recalledTo', val)}
                       placeholder="Select mother unit office"
                     />
                   </div>
@@ -874,7 +875,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
             {/* Document Upload Zone */}
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-ao-file">
-                <span>Upload AO Document {formData.aoNumber.trim() ? '(Required for AO)' : '(Optional)'}</span>
+                <span>Upload AO Document {localFormData.aoNumber.trim() ? '(Required for AO)' : '(Optional)'}</span>
               </label>
 
               <div className={`form-wizard__upload-zone ${aoFile ? 'form-wizard__upload-zone--has-file' : ''}`} onClick={() => document.getElementById('wizard-ao-file-input')?.click()}>
@@ -942,7 +943,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               Next Step <MdArrowForward />
             </Button>
           ) : (
-            <Button variant="success" onClick={onSave} loading={isSaving}>
+            <Button variant="success" onClick={() => onSave(localFormData)} loading={isSaving}>
               <MdCheck /> Save Employee Record
             </Button>
           )}

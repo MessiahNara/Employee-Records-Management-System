@@ -1248,13 +1248,16 @@ function Dashboard() {
     }
   };
 
-  // Debounced search effect
+  const searchRequestIdRef = useRef(0);
+
+  // Ultra-responsive debounced search effect (60ms)
   useEffect(() => {
     // Only fetch if there's a search query OR showAllEmployees is true
     if (searchQuery.trim() || showAllEmployees) {
+      const currentReqId = ++searchRequestIdRef.current;
       const timeoutId = setTimeout(() => {
-        fetchEmployees();
-      }, 300); // 300ms debounce
+        fetchEmployees(currentReqId);
+      }, 60); // 60ms ultra-fast debounce
 
       return () => clearTimeout(timeoutId);
     } else {
@@ -1274,7 +1277,7 @@ function Dashboard() {
     }
   };
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (requestId?: number) => {
     try {
       setIsLoading(true);
       const filters: any = {
@@ -1294,6 +1297,11 @@ function Dashboard() {
       }
 
       const result = await api.employee.getAll(filters);
+      // Discard results if a newer search request has already been initiated
+      if (requestId && requestId !== searchRequestIdRef.current) {
+        return;
+      }
+
       if (result && (result as any).data) {
         setEmployees((result as any).data);
         setTotalEmployees((result as any).total);
@@ -1305,31 +1313,20 @@ function Dashboard() {
         setTotalEmployees(0);
       }
     } catch (error) {
+      if (requestId && requestId !== searchRequestIdRef.current) {
+        return;
+      }
       console.error('Error fetching employees:', error);
       showToast('Failed to load employees. Please check if the backend server is running.', 'error');
     } finally {
-      setIsLoading(false);
+      if (!requestId || requestId === searchRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
-  // The filteredEmployees is already paginated by the backend, but we still apply frontend search
-  // if needed for other attributes like positionFunction
-  const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) => {
-      if (searchQuery.trim()) {
-        const matchesPosition = employee.positionFunction.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesOffice = employee.officeHospitalName.toLowerCase().includes(searchQuery.toLowerCase());
-
-        if (searchFilterType === 'all' && (matchesPosition || matchesOffice)) {
-          return true;
-        }
-      }
-      return true;
-    });
-  }, [searchQuery, searchFilterType, employees]);
-
-  // Paginated employees are just filteredEmployees since the backend handles limit/offset
-  const paginatedEmployees = filteredEmployees;
+  const filteredEmployees = employees;
+  const paginatedEmployees = employees;
   
   const totalPages = Math.ceil(totalEmployees / itemsPerPage);
 
@@ -3876,6 +3873,7 @@ function Dashboard() {
 
   const handleClearSearch = () => {
     setSearchQuery('');
+    setCurrentPage(1);
   };
 
   const handleOpenAddEmployeeModal = () => {
@@ -4024,49 +4022,50 @@ function Dashboard() {
     }
   };
 
-  const validateForm = (isUpdate: boolean = false): boolean => {
+  const validateForm = (isUpdate: boolean = false, dataToValidate?: EmployeeFormData): boolean => {
+    const currentData = dataToValidate || formData;
     const errors: Partial<Record<keyof EmployeeFormData, string>> = {};
 
     // For updates, only validate fields that are being changed
     if (isUpdate) {
       // Only validate non-empty fields
-      if (formData.lastName.trim() === '') errors.lastName = 'Last name cannot be empty';
-      if (formData.firstName.trim() === '') errors.firstName = 'First name cannot be empty';
-      if (formData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
+      if (currentData.lastName.trim() === '') errors.lastName = 'Last name cannot be empty';
+      if (currentData.firstName.trim() === '') errors.firstName = 'First name cannot be empty';
+      if (currentData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
 
       // Validate status-dependent fields (made optional per request)
-      if (formData.status === 'Inactive') {
+      if (currentData.status === 'Inactive') {
         // Validation removed: Date and Reason for separation are now optional
       }
     } else {
       // For create, all required fields must be filled
-      if (!formData.id.trim()) errors.id = 'Employee ID is required';
-      if (!formData.lastName.trim()) errors.lastName = 'Last name is required';
-      if (!formData.firstName.trim()) errors.firstName = 'First name is required';
-      if (!formData.gender) errors.gender = 'Gender is required';
-      if (!formData.officeHospitalName.trim()) errors.officeHospitalName = 'Office/Hospital name is required';
-      if (!formData.appointmentStatus) errors.appointmentStatus = 'Appointment status is required';
-      if (formData.appointmentFrom && formData.appointmentTo && formData.appointmentTo < formData.appointmentFrom) {
+      if (!currentData.id.trim()) errors.id = 'Employee ID is required';
+      if (!currentData.lastName.trim()) errors.lastName = 'Last name is required';
+      if (!currentData.firstName.trim()) errors.firstName = 'First name is required';
+      if (!currentData.gender) errors.gender = 'Gender is required';
+      if (!currentData.officeHospitalName.trim()) errors.officeHospitalName = 'Office/Hospital name is required';
+      if (!currentData.appointmentStatus) errors.appointmentStatus = 'Appointment status is required';
+      if (currentData.appointmentFrom && currentData.appointmentTo && currentData.appointmentTo < currentData.appointmentFrom) {
         errors.appointmentTo = 'Appointment to must be on or after appointment from';
       }
 
-      if (formData.status === 'Inactive') {
+      if (currentData.status === 'Inactive') {
         // Validation removed: Date and Reason for separation are now optional
       }
     }
 
     // Auto-populate Mother Unit from primary Office/Hospital Name for Detailed AOs
-    if (formData.aoType === 'Detailed') {
-      formData.motherUnit = formData.officeHospitalName;
+    if (currentData.aoType === 'Detailed') {
+      currentData.motherUnit = currentData.officeHospitalName;
     }
 
     // AO conditional validation: if aoNumber is set, aoYear is required and aoFile is required when updating/creating AO
-    if (formData.aoNumber && formData.aoNumber.trim() !== '') {
-      if (!formData.aoYear) {
+    if (currentData.aoNumber && currentData.aoNumber.trim() !== '') {
+      if (!currentData.aoYear) {
         errors.aoYear = 'Series (Year) is required when AO number is provided';
       }
 
-      const isAoNumberChanged = !isUpdate || (formData.aoNumber !== originalEmployeeData?.aoNumber);
+      const isAoNumberChanged = !isUpdate || (currentData.aoNumber !== originalEmployeeData?.aoNumber);
       if (isAoNumberChanged && !aoFile) {
         errors.aoNumber = 'An Administrative Order file upload is required';
       }
@@ -4076,44 +4075,48 @@ function Dashboard() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSaveEmployee = async () => {
-    if (!validateForm()) {
+  const handleSaveEmployee = async (customFormData?: any) => {
+    const dataToSave = customFormData || formData;
+    if (customFormData) {
+      setFormData(customFormData);
+    }
+    if (!validateForm(false, dataToSave)) {
       return;
     }
 
     try {
       const employeeData = {
-        id: formData.id,
-        lastName: formData.lastName,
-        firstName: formData.firstName,
-        middleName: formData.middleName || undefined,
-        dateOfBirth: formData.dateOfBirth || undefined,
-        gender: formData.gender,
-        officeName: formData.officeHospitalName,
-        appointmentStatus: formData.appointmentStatus,
-        appointmentFrom: formData.appointmentFrom || undefined,
-        appointmentTo: formData.appointmentTo || undefined,
-        aoNumber: formData.aoNumber || undefined,
-        aoYear: formData.aoYear || undefined,
-        aoType: formData.aoType || undefined,
-        status: formData.status,
-        position: formData.positionFunction,
-        dateOfEmployment: formData.dateOfEmployment,
-        dateOfSeparation: formData.dateOfSeparation || undefined,
-        reasonOfSeparation: formData.reasonForSeparation || undefined,
-        motherUnit: formData.motherUnit || undefined,
-        detailedTo: (formData.aoType === 'Detailed' || formData.aoType === 'Designated') ? formData.detailedTo || undefined : undefined,
-        detailedDivision: formData.aoType === 'Detailed' ? formData.detailedDivision || undefined : undefined,
-        detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
-        detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
-        designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
-        designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
-        designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
-        recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
-        recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
-        recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
-        recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
-        fileboxLocation: formData.fileboxLocation || undefined,
+        id: dataToSave.id,
+        lastName: dataToSave.lastName,
+        firstName: dataToSave.firstName,
+        middleName: dataToSave.middleName || undefined,
+        dateOfBirth: dataToSave.dateOfBirth || undefined,
+        gender: dataToSave.gender,
+        officeName: dataToSave.officeHospitalName,
+        appointmentStatus: dataToSave.appointmentStatus,
+        appointmentFrom: dataToSave.appointmentFrom || undefined,
+        appointmentTo: dataToSave.appointmentTo || undefined,
+        aoNumber: dataToSave.aoNumber || undefined,
+        aoYear: dataToSave.aoYear || undefined,
+        aoType: dataToSave.aoType || undefined,
+        status: dataToSave.status,
+        position: dataToSave.positionFunction,
+        dateOfEmployment: dataToSave.dateOfEmployment,
+        dateOfSeparation: dataToSave.dateOfSeparation || undefined,
+        reasonOfSeparation: dataToSave.reasonForSeparation || undefined,
+        motherUnit: dataToSave.motherUnit || undefined,
+        detailedTo: (dataToSave.aoType === 'Detailed' || dataToSave.aoType === 'Designated') ? dataToSave.detailedTo || undefined : undefined,
+        detailedDivision: dataToSave.aoType === 'Detailed' ? dataToSave.detailedDivision || undefined : undefined,
+        detailedOrderFrom: dataToSave.aoType === 'Detailed' ? dataToSave.detailedOrderFrom || undefined : undefined,
+        detailedOrderTo: dataToSave.aoType === 'Detailed' ? dataToSave.detailedOrderTo || undefined : undefined,
+        designatedPositionFunction: dataToSave.aoType === 'Designated' ? dataToSave.designatedPositionFunction || undefined : undefined,
+        designatedOrderFrom: dataToSave.aoType === 'Designated' ? dataToSave.designatedOrderFrom || undefined : undefined,
+        designatedOrderTo: dataToSave.aoType === 'Designated' ? dataToSave.designatedOrderTo || undefined : undefined,
+        recalledFrom: dataToSave.aoType === 'Recalled' ? dataToSave.recalledFrom || undefined : undefined,
+        recalledTo: dataToSave.aoType === 'Recalled' ? dataToSave.recalledTo || undefined : undefined,
+        recalledOrderFrom: dataToSave.aoType === 'Recalled' ? dataToSave.recalledOrderFrom || undefined : undefined,
+        recalledOrderTo: dataToSave.aoType === 'Recalled' ? dataToSave.recalledOrderTo || undefined : undefined,
+        fileboxLocation: dataToSave.fileboxLocation || undefined,
         profilePicture: addProfilePicture || undefined,
       };
 
@@ -5743,9 +5746,12 @@ function Dashboard() {
             <div className="dashboard__filters">
               <div className="dashboard__search-container">
                 <SearchBar
-                  placeholder={`Search by ${searchFilterType === 'all' ? 'name' : searchFilterType.replace('_', ' ')}...`}
+                  placeholder={`Search by ${searchFilterType === 'all' ? 'name, office, position, ID, or AO...' : searchFilterType.replace('_', ' ')}...`}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   onClear={handleClearSearch}
                   fullWidth
                 />
@@ -5757,7 +5763,10 @@ function Dashboard() {
                       name="searchFilter"
                       value="all"
                       checked={searchFilterType === 'all'}
-                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      onChange={(e) => {
+                        setSearchFilterType(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
                       className="dashboard__radio-input"
                     />
                     <span className="dashboard__radio-text">All Fields</span>
@@ -5769,7 +5778,10 @@ function Dashboard() {
                       name="searchFilter"
                       value="last_name"
                       checked={searchFilterType === 'last_name'}
-                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      onChange={(e) => {
+                        setSearchFilterType(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
                       className="dashboard__radio-input"
                     />
                     <span className="dashboard__radio-text">Last Name</span>
@@ -5781,7 +5793,10 @@ function Dashboard() {
                       name="searchFilter"
                       value="first_name"
                       checked={searchFilterType === 'first_name'}
-                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      onChange={(e) => {
+                        setSearchFilterType(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
                       className="dashboard__radio-input"
                     />
                     <span className="dashboard__radio-text">First Name</span>
@@ -5793,7 +5808,10 @@ function Dashboard() {
                       name="searchFilter"
                       value="middle_name"
                       checked={searchFilterType === 'middle_name'}
-                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      onChange={(e) => {
+                        setSearchFilterType(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
                       className="dashboard__radio-input"
                     />
                     <span className="dashboard__radio-text">Middle Name</span>
@@ -5805,7 +5823,10 @@ function Dashboard() {
                       name="searchFilter"
                       value="id"
                       checked={searchFilterType === 'id'}
-                      onChange={(e) => setSearchFilterType(e.target.value as any)}
+                      onChange={(e) => {
+                        setSearchFilterType(e.target.value as any);
+                        setCurrentPage(1);
+                      }}
                       className="dashboard__radio-input"
                     />
                     <span className="dashboard__radio-text">Employee ID</span>
@@ -5847,7 +5868,7 @@ function Dashboard() {
             </div>
 
             {/* Empty State - No Search */}
-            {!searchQuery.trim() && !showAllEmployees && !isLoading && (
+            {!searchQuery.trim() && !showAllEmployees && !isLoading && filteredEmployees.length === 0 && (
               <div className="dashboard__empty-state">
                 <MdPeople className="dashboard__empty-icon" />
                 <h3 className="dashboard__empty-title">Search employees to display results</h3>
@@ -5857,8 +5878,8 @@ function Dashboard() {
               </div>
             )}
 
-            {/* Loading State */}
-            {isLoading && (
+            {/* Initial Loading State (only when table is empty) */}
+            {isLoading && filteredEmployees.length === 0 && (
               <div className="dashboard__loading-state">
                 <div className="dashboard__spinner"></div>
                 <p className="dashboard__loading-text">Searching employees...</p>
@@ -5876,10 +5897,13 @@ function Dashboard() {
               </div>
             )}
 
-            {/* Results Table */}
-            {!isLoading && (searchQuery.trim() || showAllEmployees) && filteredEmployees.length > 0 && (
+            {/* Results Table - Stays smoothly mounted during typing */}
+            {filteredEmployees.length > 0 && (
               <>
-                <div className="dashboard__table-scroll">
+                <div className="dashboard__table-scroll" style={{ opacity: isLoading ? 0.75 : 1, transition: 'opacity 0.1s ease', position: 'relative' }}>
+                  {isLoading && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'linear-gradient(90deg, var(--color-primary-light, #60a5fa), var(--color-primary, #3b82f6), var(--color-primary-light, #60a5fa))', backgroundSize: '200% 100%', animation: 'shimmer 1s infinite linear', zIndex: 10 }} />
+                  )}
                   <Table
                     columns={columns}
                     data={paginatedEmployees}
@@ -5951,13 +5975,12 @@ function Dashboard() {
       {/* Add Employee Modal with Multi-Step Wizard */}
       <Modal
         isOpen={isAddEmployeeModalOpen}
-        onClose={handleRequestCloseAddEmployee}
+        onClose={handleCloseAddEmployeeModal}
         title="Add New Employee"
         size="lg"
       >
         <EmployeeFormWizard
           formData={formData as any}
-          onChange={(field, val) => handleFormChange(field as any, val)}
           formErrors={formErrors as any}
           dropdownOptions={dropdownOptions}
           existingEmployeeIds={existingEmployeeIds}
@@ -5968,8 +5991,8 @@ function Dashboard() {
           setAutoRename={setAutoRename}
           profilePicture={addProfilePicture}
           setProfilePicture={setAddProfilePicture}
-          onSave={handleSaveEmployee}
-          onCancel={handleRequestCloseAddEmployee}
+          onSave={(data) => handleSaveEmployee(data)}
+          onCancel={handleCloseAddEmployeeModal}
           isSaving={isLoading}
         />
       </Modal>

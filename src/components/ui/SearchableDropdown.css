@@ -17,12 +17,16 @@
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.searchable-dropdown__input:hover {
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .searchable-dropdown__input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.18);
 }
 
 .searchable-dropdown__clear-btn {

@@ -126,7 +126,8 @@ router.get('/', async (req: Request, res: Response) => {
       const searchTerm = search.trim();
       
       if (searchTerm) {
-        const filterType = filter_type as string;
+        const filterType = (filter_type as string) || 'all';
+        const tokens = searchTerm.split(/[\s,]+/).filter(Boolean);
         
         switch (filterType) {
           case 'first_name':
@@ -154,33 +155,30 @@ router.get('/', async (req: Request, res: Response) => {
             };
             break;
           default:
-            // Global search across all fields
-            where.OR = [
-              {
-                id: {
-                  contains: searchTerm,
-                  mode: 'insensitive',
-                },
-              },
-              {
-                firstName: {
-                  contains: searchTerm,
-                  mode: 'insensitive',
-                },
-              },
-              {
-                middleName: {
-                  contains: searchTerm,
-                  mode: 'insensitive',
-                },
-              },
-              {
-                lastName: {
-                  contains: searchTerm,
-                  mode: 'insensitive',
-                },
-              },
-            ];
+            // Multi-token case-insensitive search across all fields
+            if (tokens.length > 1) {
+              where.AND = tokens.map((token) => ({
+                OR: [
+                  { id: { contains: token, mode: 'insensitive' } },
+                  { firstName: { contains: token, mode: 'insensitive' } },
+                  { middleName: { contains: token, mode: 'insensitive' } },
+                  { lastName: { contains: token, mode: 'insensitive' } },
+                  { officeName: { contains: token, mode: 'insensitive' } },
+                  { position: { contains: token, mode: 'insensitive' } },
+                  { aoNumber: { contains: token, mode: 'insensitive' } },
+                ],
+              }));
+            } else {
+              where.OR = [
+                { id: { contains: searchTerm, mode: 'insensitive' } },
+                { firstName: { contains: searchTerm, mode: 'insensitive' } },
+                { middleName: { contains: searchTerm, mode: 'insensitive' } },
+                { lastName: { contains: searchTerm, mode: 'insensitive' } },
+                { officeName: { contains: searchTerm, mode: 'insensitive' } },
+                { position: { contains: searchTerm, mode: 'insensitive' } },
+                { aoNumber: { contains: searchTerm, mode: 'insensitive' } },
+              ];
+            }
             break;
         }
       }

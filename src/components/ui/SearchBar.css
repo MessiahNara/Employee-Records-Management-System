@@ -43,13 +43,13 @@
 }
 
 .search-bar__input:hover {
-  border-color: var(--color-gray-400);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .search-bar__input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.18);
 }
 
 .search-bar__clear {
