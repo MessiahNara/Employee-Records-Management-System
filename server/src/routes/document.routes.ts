@@ -256,8 +256,8 @@ router.get('/:id/file', async (req: Request, res: Response) => {
     // New: filePath is an absolute path on disk
     let resolvedPath = document.filePath;
     if (!fs.existsSync(resolvedPath)) {
-      const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
-      const defaultDocsBase = path.join(PROGRAM_DATA, 'ERMS', 'uploads', 'documents');
+      const baseUploads = process.env.UPLOADS_DIR || path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'ERMS', 'uploads');
+      const defaultDocsBase = path.join(baseUploads, 'documents');
       
       const relIdx = document.filePath.indexOf('documents');
       if (relIdx !== -1) {

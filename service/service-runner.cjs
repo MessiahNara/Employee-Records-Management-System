@@ -25,11 +25,11 @@ const ENV_PATH     = path.join(RESOURCES, '.env');
 const CERT_PATH    = path.join(RESOURCES, 'certs', 'server-cert.pem');
 const KEY_PATH     = path.join(RESOURCES, 'certs', 'server-key.pem');
 const PRISMA_ENGINE = path.join(RESOURCES, 'node_modules', '.prisma', 'client', 'query-engine-windows.exe');
-const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
-const UPLOADS_DIR  = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
-const LOG_PATH     = path.join(PROGRAM_DATA, 'ERMS', 'service.log');
 
 // ── Logging ──────────────────────────────────────────────────────────────────
+const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+const LOG_PATH     = path.join(PROGRAM_DATA, 'ERMS', 'service.log');
+
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   process.stdout.write(line);
@@ -39,6 +39,28 @@ function log(msg) {
     fs.appendFileSync(LOG_PATH, line);
   } catch (_) {}
 }
+
+// ── Load .env from resources FIRST ───────────────────────────────────────────
+if (fs.existsSync(ENV_PATH)) {
+  const lines = fs.readFileSync(ENV_PATH, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 0) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes
+    if ((val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = val;
+  }
+  log(`Loaded .env from ${ENV_PATH}`);
+}
+
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(PROGRAM_DATA, 'ERMS', 'uploads');
 
 // ── Validate required files ───────────────────────────────────────────────────
 if (!fs.existsSync(BUNDLE_PATH)) {
@@ -85,26 +107,6 @@ try {
 }
 
 // ── Set environment variables ─────────────────────────────────────────────────
-// Load .env from resources (contains DATABASE_URL, JWT_SECRET, etc.)
-if (fs.existsSync(ENV_PATH)) {
-  const lines = fs.readFileSync(ENV_PATH, 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx < 0) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    let val = trimmed.slice(eqIdx + 1).trim();
-    // Strip surrounding quotes
-    if ((val.startsWith('"') && val.endsWith('"')) ||
-        (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    if (!process.env[key]) process.env[key] = val;
-  }
-  log(`Loaded .env from ${ENV_PATH}`);
-}
-
 process.env.NODE_ENV             = 'production';
 process.env.NODE_PATH            = path.join(RESOURCES, 'node_modules');
 process.env.UPLOADS_DIR          = UPLOADS_DIR;

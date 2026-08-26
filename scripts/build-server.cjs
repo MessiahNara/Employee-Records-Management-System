@@ -6,10 +6,10 @@
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
+const pkg = require('../package.json');
 
 const outDir = path.join(__dirname, '../dist-electron/server');
-const installerName = 'Employee Records Management System - Server Setup 1.0.0.exe';
+const installerName = `Employee Records Management System - Server Setup ${pkg.version}.exe`;
 const installerPath = path.join(outDir, installerName);
 const renamedInstaller = path.join(outDir, 'ERMS-Server-Setup.exe');
 

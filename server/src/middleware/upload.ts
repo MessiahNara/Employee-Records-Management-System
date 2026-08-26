@@ -2,23 +2,23 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
-const DEFAULT_UPLOADS_BASE = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
-const baseUploadsDir = process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
-
-// Ensure base directories exist
-const uploadsDir = path.join(baseUploadsDir, 'profile-pictures');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+export function getBaseUploadsDir(): string {
+  const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  const DEFAULT_UPLOADS_BASE = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
+  return process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
 }
 
-// Configure storage
+// Configure storage for profile pictures
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
+    const uploadsDir = path.join(baseUploadsDir, 'profile-pictures');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename: userId-timestamp.ext
     const userId = req.params.id;
     const ext = path.extname(file.originalname);
     const filename = `${userId}-${Date.now()}${ext}`;
@@ -26,7 +26,6 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter - only allow JPG and PNG (support browser MIME quirks)
 const allowedMimeTypes = new Set([
   'image/jpeg',
   'image/jpg',
@@ -35,7 +34,7 @@ const allowedMimeTypes = new Set([
   'image/x-png',
 ]);
 
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const mimeType = (file.mimetype || '').toLowerCase();
   const extension = path.extname(file.originalname || '').toLowerCase();
   const isAllowed = allowedMimeTypes.has(mimeType) || ['.jpg', '.jpeg', '.png'].includes(extension);
@@ -47,7 +46,6 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
   }
 };
 
-// Create multer upload instance
 export const uploadProfilePicture = multer({
   storage,
   fileFilter,
@@ -55,28 +53,22 @@ export const uploadProfilePicture = multer({
 
 // ── Document file upload ──────────────────────────────────────────────────────
 
-const documentsDir = path.join(baseUploadsDir, 'documents');
-
-console.log('[upload] Document upload configuration:');
-console.log(`  - baseUploadsDir: ${baseUploadsDir}`);
-console.log(`  - documentsDir: ${documentsDir}`);
-
-if (!fs.existsSync(documentsDir)) {
-  fs.mkdirSync(documentsDir, { recursive: true });
-  console.log(`[upload] Created documentsDir at: ${documentsDir}`);
-}
-
 const documentStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    // Sanitize employee name and category to be filesystem-safe
-    // Strip invalid chars, then strip trailing dots/spaces (Windows NTFS restriction)
+    const baseUploadsDir = getBaseUploadsDir();
+    const documentsDir = path.join(baseUploadsDir, 'documents');
+    if (!fs.existsSync(documentsDir)) {
+      fs.mkdirSync(documentsDir, { recursive: true });
+    }
+
     const employeeName: string = (req.body?.employeeName || 'Unknown Employee')
       .replace(/[/\\?%*:|"<>]/g, '-')
       .trim()
-      .replace(/\.+$/, '');  // remove trailing dots
+      .replace(/\.+$/, '');
     const category: string = (req.body?.category || 'Uncategorized')
       .replace(/[/\\?%*:|"<>]/g, '-')
       .replace(/\.+$/, '');
+
     const destDir = path.join(documentsDir, employeeName, category);
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
@@ -84,15 +76,18 @@ const documentStorage = multer.diskStorage({
     cb(null, destDir);
   },
   filename: (req, file, cb) => {
-    // Use the original file name; prefix with timestamp if file already exists
+    const baseUploadsDir = getBaseUploadsDir();
+    const documentsDir = path.join(baseUploadsDir, 'documents');
+
     const originalName = file.originalname;
     const employeeName: string = (req.body?.employeeName || 'Unknown Employee')
       .replace(/[/\\?%*:|"<>]/g, '-')
       .trim()
-      .replace(/\.+$/, '');  // remove trailing dots
+      .replace(/\.+$/, '');
     const category: string = (req.body?.category || 'Uncategorized')
       .replace(/[/\\?%*:|"<>]/g, '-')
       .replace(/\.+$/, '');
+
     const targetPath = path.join(documentsDir, employeeName, category, originalName);
     if (fs.existsSync(targetPath)) {
       const ext = path.extname(originalName);
@@ -104,7 +99,7 @@ const documentStorage = multer.diskStorage({
   },
 });
 
-const documentFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const documentFileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (file.mimetype === 'application/pdf') {
     cb(null, true);
   } else {
@@ -117,8 +112,11 @@ export const uploadDocumentFile = multer({
   fileFilter: documentFileFilter,
 });
 
+// ── Inventory attachment upload ───────────────────────────────────────────────
+
 const inventoryStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
     const destDir = path.join(baseUploadsDir, 'inventory');
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });

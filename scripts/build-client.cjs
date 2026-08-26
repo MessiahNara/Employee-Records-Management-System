@@ -6,13 +6,13 @@
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
+const pkg = require('../package.json');
 
 const serverIp = process.argv[2] || '192.168.2.187';
 const serverUrl = `https://${serverIp}:5000`;
 const configPath = path.join(__dirname, '../electron/client-config.json');
 const outDir = path.join(__dirname, '../dist-electron/client');
-const installerName = 'Employee Records Management System - Client Setup 1.0.0.exe';
+const installerName = `Employee Records Management System - Client Setup ${pkg.version}.exe`;
 const installerPath = path.join(outDir, installerName);
 const renamedInstaller = path.join(outDir, `ERMS-Client-Setup.exe`);
 

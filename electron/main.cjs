@@ -150,7 +150,50 @@ function copyDirRecursiveSync(src, dest) {
   }
 }
 
+function loadEnvFile() {
+  const envPath = app.isPackaged 
+    ? path.join(process.resourcesPath, '.env')
+    : path.join(__dirname, '../server/.env');
+  
+  if (fs.existsSync(envPath)) {
+    try {
+      const content = fs.readFileSync(envPath, 'utf8');
+      content.split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx > 0) {
+            const key = trimmed.slice(0, eqIdx).trim();
+            let val = trimmed.slice(eqIdx + 1).trim();
+            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+              val = val.slice(1, -1);
+            }
+            if (!process.env[key]) process.env[key] = val;
+          }
+        }
+      });
+      console.log('[main] Loaded .env from:', envPath);
+    } catch (err) {
+      console.warn('[main] Failed to parse .env:', err.message);
+    }
+  }
+}
+
 function resolveUploadsDir() {
+  loadEnvFile();
+  if (process.env.UPLOADS_DIR) {
+    const customDir = process.env.UPLOADS_DIR;
+    try {
+      fs.mkdirSync(path.join(customDir, 'profile-pictures'), { recursive: true });
+      fs.mkdirSync(path.join(customDir, 'documents'), { recursive: true });
+      fs.mkdirSync(path.join(customDir, 'data'), { recursive: true });
+      console.log('[server] ✅ Uploads directory ready at custom UPLOADS_DIR:', customDir);
+      return customDir;
+    } catch (err) {
+      console.warn('[server] ⚠️ Could not create custom UPLOADS_DIR, falling back:', err.message);
+    }
+  }
+
   const programData = process.env.PROGRAMDATA || 'C:\\ProgramData';
   let uploadsDir = path.join(programData, 'ERMS', 'uploads');
   try {

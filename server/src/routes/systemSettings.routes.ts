@@ -65,13 +65,26 @@ function getDataDir(): string {
 function getMigratedFilePath(fileName: string): string {
   const targetDir = getDataDir();
   const targetFile = path.join(targetDir, fileName);
-  if (!fs.existsSync(targetFile)) {
-    const legacyFile = path.join(__dirname, '../../uploads/data', fileName);
-    if (fs.existsSync(legacyFile)) {
-      try {
-        fs.copyFileSync(legacyFile, targetFile);
-      } catch (err) {
-        console.error(`Failed to migrate ${fileName}:`, err);
+
+  const isFileEmptyOrMissing = !fs.existsSync(targetFile) || (fs.existsSync(targetFile) && fs.statSync(targetFile).size <= 2);
+
+  if (isFileEmptyOrMissing) {
+    const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+    const fallbackLocations = [
+      path.join(PROGRAM_DATA, 'ERMS', 'uploads', 'data', fileName),
+      path.join(__dirname, '../../uploads/data', fileName),
+      path.join('D:\\ERMS-Uploads\\data', fileName),
+      path.join('C:\\ProgramData\\ERMS\\uploads\\data', fileName),
+    ];
+    for (const legacyFile of fallbackLocations) {
+      if (fs.existsSync(legacyFile) && fs.statSync(legacyFile).size > 2) {
+        try {
+          fs.copyFileSync(legacyFile, targetFile);
+          console.log(`[migration] Migrated ${fileName} from ${legacyFile} to ${targetFile}`);
+          break;
+        } catch (err) {
+          console.error(`Failed to copy ${fileName}:`, err);
+        }
       }
     }
   }

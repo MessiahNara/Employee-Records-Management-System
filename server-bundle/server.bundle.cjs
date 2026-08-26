@@ -30,6 +30,410 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// server/node_modules/dotenv/package.json
+var require_package = __commonJS({
+  "server/node_modules/dotenv/package.json"(exports2, module2) {
+    module2.exports = {
+      name: "dotenv",
+      version: "16.6.1",
+      description: "Loads environment variables from .env file",
+      main: "lib/main.js",
+      types: "lib/main.d.ts",
+      exports: {
+        ".": {
+          types: "./lib/main.d.ts",
+          require: "./lib/main.js",
+          default: "./lib/main.js"
+        },
+        "./config": "./config.js",
+        "./config.js": "./config.js",
+        "./lib/env-options": "./lib/env-options.js",
+        "./lib/env-options.js": "./lib/env-options.js",
+        "./lib/cli-options": "./lib/cli-options.js",
+        "./lib/cli-options.js": "./lib/cli-options.js",
+        "./package.json": "./package.json"
+      },
+      scripts: {
+        "dts-check": "tsc --project tests/types/tsconfig.json",
+        lint: "standard",
+        pretest: "npm run lint && npm run dts-check",
+        test: "tap run --allow-empty-coverage --disable-coverage --timeout=60000",
+        "test:coverage": "tap run --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov",
+        prerelease: "npm test",
+        release: "standard-version"
+      },
+      repository: {
+        type: "git",
+        url: "git://github.com/motdotla/dotenv.git"
+      },
+      homepage: "https://github.com/motdotla/dotenv#readme",
+      funding: "https://dotenvx.com",
+      keywords: [
+        "dotenv",
+        "env",
+        ".env",
+        "environment",
+        "variables",
+        "config",
+        "settings"
+      ],
+      readmeFilename: "README.md",
+      license: "BSD-2-Clause",
+      devDependencies: {
+        "@types/node": "^18.11.3",
+        decache: "^4.6.2",
+        sinon: "^14.0.1",
+        standard: "^17.0.0",
+        "standard-version": "^9.5.0",
+        tap: "^19.2.0",
+        typescript: "^4.8.4"
+      },
+      engines: {
+        node: ">=12"
+      },
+      browser: {
+        fs: false
+      }
+    };
+  }
+});
+
+// server/node_modules/dotenv/lib/main.js
+var require_main = __commonJS({
+  "server/node_modules/dotenv/lib/main.js"(exports2, module2) {
+    var fs9 = require("fs");
+    var path9 = require("path");
+    var os = require("os");
+    var crypto3 = require("crypto");
+    var packageJson = require_package();
+    var version = packageJson.version;
+    var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
+    function parse(src) {
+      const obj = {};
+      let lines = src.toString();
+      lines = lines.replace(/\r\n?/mg, "\n");
+      let match;
+      while ((match = LINE.exec(lines)) != null) {
+        const key = match[1];
+        let value = match[2] || "";
+        value = value.trim();
+        const maybeQuote = value[0];
+        value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
+        if (maybeQuote === '"') {
+          value = value.replace(/\\n/g, "\n");
+          value = value.replace(/\\r/g, "\r");
+        }
+        obj[key] = value;
+      }
+      return obj;
+    }
+    function _parseVault(options) {
+      options = options || {};
+      const vaultPath = _vaultPath(options);
+      options.path = vaultPath;
+      const result = DotenvModule.configDotenv(options);
+      if (!result.parsed) {
+        const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
+        err.code = "MISSING_DATA";
+        throw err;
+      }
+      const keys = _dotenvKey(options).split(",");
+      const length = keys.length;
+      let decrypted;
+      for (let i = 0; i < length; i++) {
+        try {
+          const key = keys[i].trim();
+          const attrs = _instructions(result, key);
+          decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
+          break;
+        } catch (error) {
+          if (i + 1 >= length) {
+            throw error;
+          }
+        }
+      }
+      return DotenvModule.parse(decrypted);
+    }
+    function _warn(message) {
+      console.log(`[dotenv@${version}][WARN] ${message}`);
+    }
+    function _debug(message) {
+      console.log(`[dotenv@${version}][DEBUG] ${message}`);
+    }
+    function _log(message) {
+      console.log(`[dotenv@${version}] ${message}`);
+    }
+    function _dotenvKey(options) {
+      if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
+        return options.DOTENV_KEY;
+      }
+      if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
+        return process.env.DOTENV_KEY;
+      }
+      return "";
+    }
+    function _instructions(result, dotenvKey) {
+      let uri;
+      try {
+        uri = new URL(dotenvKey);
+      } catch (error) {
+        if (error.code === "ERR_INVALID_URL") {
+          const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
+          err.code = "INVALID_DOTENV_KEY";
+          throw err;
+        }
+        throw error;
+      }
+      const key = uri.password;
+      if (!key) {
+        const err = new Error("INVALID_DOTENV_KEY: Missing key part");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      const environment = uri.searchParams.get("environment");
+      if (!environment) {
+        const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
+      const ciphertext = result.parsed[environmentKey];
+      if (!ciphertext) {
+        const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
+        err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
+        throw err;
+      }
+      return { ciphertext, key };
+    }
+    function _vaultPath(options) {
+      let possibleVaultPath = null;
+      if (options && options.path && options.path.length > 0) {
+        if (Array.isArray(options.path)) {
+          for (const filepath of options.path) {
+            if (fs9.existsSync(filepath)) {
+              possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
+            }
+          }
+        } else {
+          possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
+        }
+      } else {
+        possibleVaultPath = path9.resolve(process.cwd(), ".env.vault");
+      }
+      if (fs9.existsSync(possibleVaultPath)) {
+        return possibleVaultPath;
+      }
+      return null;
+    }
+    function _resolveHome(envPath) {
+      return envPath[0] === "~" ? path9.join(os.homedir(), envPath.slice(1)) : envPath;
+    }
+    function _configVault(options) {
+      const debug = Boolean(options && options.debug);
+      const quiet = options && "quiet" in options ? options.quiet : true;
+      if (debug || !quiet) {
+        _log("Loading env from encrypted .env.vault");
+      }
+      const parsed = DotenvModule._parseVault(options);
+      let processEnv = process.env;
+      if (options && options.processEnv != null) {
+        processEnv = options.processEnv;
+      }
+      DotenvModule.populate(processEnv, parsed, options);
+      return { parsed };
+    }
+    function configDotenv(options) {
+      const dotenvPath = path9.resolve(process.cwd(), ".env");
+      let encoding = "utf8";
+      const debug = Boolean(options && options.debug);
+      const quiet = options && "quiet" in options ? options.quiet : true;
+      if (options && options.encoding) {
+        encoding = options.encoding;
+      } else {
+        if (debug) {
+          _debug("No encoding is specified. UTF-8 is used by default");
+        }
+      }
+      let optionPaths = [dotenvPath];
+      if (options && options.path) {
+        if (!Array.isArray(options.path)) {
+          optionPaths = [_resolveHome(options.path)];
+        } else {
+          optionPaths = [];
+          for (const filepath of options.path) {
+            optionPaths.push(_resolveHome(filepath));
+          }
+        }
+      }
+      let lastError;
+      const parsedAll = {};
+      for (const path10 of optionPaths) {
+        try {
+          const parsed = DotenvModule.parse(fs9.readFileSync(path10, { encoding }));
+          DotenvModule.populate(parsedAll, parsed, options);
+        } catch (e) {
+          if (debug) {
+            _debug(`Failed to load ${path10} ${e.message}`);
+          }
+          lastError = e;
+        }
+      }
+      let processEnv = process.env;
+      if (options && options.processEnv != null) {
+        processEnv = options.processEnv;
+      }
+      DotenvModule.populate(processEnv, parsedAll, options);
+      if (debug || !quiet) {
+        const keysCount = Object.keys(parsedAll).length;
+        const shortPaths = [];
+        for (const filePath of optionPaths) {
+          try {
+            const relative = path9.relative(process.cwd(), filePath);
+            shortPaths.push(relative);
+          } catch (e) {
+            if (debug) {
+              _debug(`Failed to load ${filePath} ${e.message}`);
+            }
+            lastError = e;
+          }
+        }
+        _log(`injecting env (${keysCount}) from ${shortPaths.join(",")}`);
+      }
+      if (lastError) {
+        return { parsed: parsedAll, error: lastError };
+      } else {
+        return { parsed: parsedAll };
+      }
+    }
+    function config(options) {
+      if (_dotenvKey(options).length === 0) {
+        return DotenvModule.configDotenv(options);
+      }
+      const vaultPath = _vaultPath(options);
+      if (!vaultPath) {
+        _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
+        return DotenvModule.configDotenv(options);
+      }
+      return DotenvModule._configVault(options);
+    }
+    function decrypt(encrypted, keyStr) {
+      const key = Buffer.from(keyStr.slice(-64), "hex");
+      let ciphertext = Buffer.from(encrypted, "base64");
+      const nonce = ciphertext.subarray(0, 12);
+      const authTag = ciphertext.subarray(-16);
+      ciphertext = ciphertext.subarray(12, -16);
+      try {
+        const aesgcm = crypto3.createDecipheriv("aes-256-gcm", key, nonce);
+        aesgcm.setAuthTag(authTag);
+        return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
+      } catch (error) {
+        const isRange = error instanceof RangeError;
+        const invalidKeyLength = error.message === "Invalid key length";
+        const decryptionFailed = error.message === "Unsupported state or unable to authenticate data";
+        if (isRange || invalidKeyLength) {
+          const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
+          err.code = "INVALID_DOTENV_KEY";
+          throw err;
+        } else if (decryptionFailed) {
+          const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
+          err.code = "DECRYPTION_FAILED";
+          throw err;
+        } else {
+          throw error;
+        }
+      }
+    }
+    function populate(processEnv, parsed, options = {}) {
+      const debug = Boolean(options && options.debug);
+      const override = Boolean(options && options.override);
+      if (typeof parsed !== "object") {
+        const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
+        err.code = "OBJECT_REQUIRED";
+        throw err;
+      }
+      for (const key of Object.keys(parsed)) {
+        if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
+          if (override === true) {
+            processEnv[key] = parsed[key];
+          }
+          if (debug) {
+            if (override === true) {
+              _debug(`"${key}" is already defined and WAS overwritten`);
+            } else {
+              _debug(`"${key}" is already defined and was NOT overwritten`);
+            }
+          }
+        } else {
+          processEnv[key] = parsed[key];
+        }
+      }
+    }
+    var DotenvModule = {
+      configDotenv,
+      _configVault,
+      _parseVault,
+      config,
+      decrypt,
+      parse,
+      populate
+    };
+    module2.exports.configDotenv = DotenvModule.configDotenv;
+    module2.exports._configVault = DotenvModule._configVault;
+    module2.exports._parseVault = DotenvModule._parseVault;
+    module2.exports.config = DotenvModule.config;
+    module2.exports.decrypt = DotenvModule.decrypt;
+    module2.exports.parse = DotenvModule.parse;
+    module2.exports.populate = DotenvModule.populate;
+    module2.exports = DotenvModule;
+  }
+});
+
+// server/node_modules/dotenv/lib/env-options.js
+var require_env_options = __commonJS({
+  "server/node_modules/dotenv/lib/env-options.js"(exports2, module2) {
+    var options = {};
+    if (process.env.DOTENV_CONFIG_ENCODING != null) {
+      options.encoding = process.env.DOTENV_CONFIG_ENCODING;
+    }
+    if (process.env.DOTENV_CONFIG_PATH != null) {
+      options.path = process.env.DOTENV_CONFIG_PATH;
+    }
+    if (process.env.DOTENV_CONFIG_QUIET != null) {
+      options.quiet = process.env.DOTENV_CONFIG_QUIET;
+    }
+    if (process.env.DOTENV_CONFIG_DEBUG != null) {
+      options.debug = process.env.DOTENV_CONFIG_DEBUG;
+    }
+    if (process.env.DOTENV_CONFIG_OVERRIDE != null) {
+      options.override = process.env.DOTENV_CONFIG_OVERRIDE;
+    }
+    if (process.env.DOTENV_CONFIG_DOTENV_KEY != null) {
+      options.DOTENV_KEY = process.env.DOTENV_CONFIG_DOTENV_KEY;
+    }
+    module2.exports = options;
+  }
+});
+
+// server/node_modules/dotenv/lib/cli-options.js
+var require_cli_options = __commonJS({
+  "server/node_modules/dotenv/lib/cli-options.js"(exports2, module2) {
+    var re = /^dotenv_config_(encoding|path|quiet|debug|override|DOTENV_KEY)=(.+)$/;
+    module2.exports = function optionMatcher(args) {
+      const options = args.reduce(function(acc, cur) {
+        const matches = cur.match(re);
+        if (matches) {
+          acc[matches[1]] = matches[2];
+        }
+        return acc;
+      }, {});
+      if (!("quiet" in options)) {
+        options.quiet = "true";
+      }
+      return options;
+    };
+  }
+});
+
 // server/node_modules/depd/index.js
 var require_depd = __commonJS({
   "server/node_modules/depd/index.js"(exports2, module2) {
@@ -22849,364 +23253,6 @@ var require_lib3 = __commonJS({
       }
       module2.exports = middlewareWrapper;
     })();
-  }
-});
-
-// server/node_modules/dotenv/package.json
-var require_package = __commonJS({
-  "server/node_modules/dotenv/package.json"(exports2, module2) {
-    module2.exports = {
-      name: "dotenv",
-      version: "16.6.1",
-      description: "Loads environment variables from .env file",
-      main: "lib/main.js",
-      types: "lib/main.d.ts",
-      exports: {
-        ".": {
-          types: "./lib/main.d.ts",
-          require: "./lib/main.js",
-          default: "./lib/main.js"
-        },
-        "./config": "./config.js",
-        "./config.js": "./config.js",
-        "./lib/env-options": "./lib/env-options.js",
-        "./lib/env-options.js": "./lib/env-options.js",
-        "./lib/cli-options": "./lib/cli-options.js",
-        "./lib/cli-options.js": "./lib/cli-options.js",
-        "./package.json": "./package.json"
-      },
-      scripts: {
-        "dts-check": "tsc --project tests/types/tsconfig.json",
-        lint: "standard",
-        pretest: "npm run lint && npm run dts-check",
-        test: "tap run --allow-empty-coverage --disable-coverage --timeout=60000",
-        "test:coverage": "tap run --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov",
-        prerelease: "npm test",
-        release: "standard-version"
-      },
-      repository: {
-        type: "git",
-        url: "git://github.com/motdotla/dotenv.git"
-      },
-      homepage: "https://github.com/motdotla/dotenv#readme",
-      funding: "https://dotenvx.com",
-      keywords: [
-        "dotenv",
-        "env",
-        ".env",
-        "environment",
-        "variables",
-        "config",
-        "settings"
-      ],
-      readmeFilename: "README.md",
-      license: "BSD-2-Clause",
-      devDependencies: {
-        "@types/node": "^18.11.3",
-        decache: "^4.6.2",
-        sinon: "^14.0.1",
-        standard: "^17.0.0",
-        "standard-version": "^9.5.0",
-        tap: "^19.2.0",
-        typescript: "^4.8.4"
-      },
-      engines: {
-        node: ">=12"
-      },
-      browser: {
-        fs: false
-      }
-    };
-  }
-});
-
-// server/node_modules/dotenv/lib/main.js
-var require_main = __commonJS({
-  "server/node_modules/dotenv/lib/main.js"(exports2, module2) {
-    var fs9 = require("fs");
-    var path9 = require("path");
-    var os = require("os");
-    var crypto3 = require("crypto");
-    var packageJson = require_package();
-    var version = packageJson.version;
-    var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
-    function parse(src) {
-      const obj = {};
-      let lines = src.toString();
-      lines = lines.replace(/\r\n?/mg, "\n");
-      let match;
-      while ((match = LINE.exec(lines)) != null) {
-        const key = match[1];
-        let value = match[2] || "";
-        value = value.trim();
-        const maybeQuote = value[0];
-        value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
-        if (maybeQuote === '"') {
-          value = value.replace(/\\n/g, "\n");
-          value = value.replace(/\\r/g, "\r");
-        }
-        obj[key] = value;
-      }
-      return obj;
-    }
-    function _parseVault(options) {
-      options = options || {};
-      const vaultPath = _vaultPath(options);
-      options.path = vaultPath;
-      const result = DotenvModule.configDotenv(options);
-      if (!result.parsed) {
-        const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
-        err.code = "MISSING_DATA";
-        throw err;
-      }
-      const keys = _dotenvKey(options).split(",");
-      const length = keys.length;
-      let decrypted;
-      for (let i = 0; i < length; i++) {
-        try {
-          const key = keys[i].trim();
-          const attrs = _instructions(result, key);
-          decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
-          break;
-        } catch (error) {
-          if (i + 1 >= length) {
-            throw error;
-          }
-        }
-      }
-      return DotenvModule.parse(decrypted);
-    }
-    function _warn(message) {
-      console.log(`[dotenv@${version}][WARN] ${message}`);
-    }
-    function _debug(message) {
-      console.log(`[dotenv@${version}][DEBUG] ${message}`);
-    }
-    function _log(message) {
-      console.log(`[dotenv@${version}] ${message}`);
-    }
-    function _dotenvKey(options) {
-      if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-        return options.DOTENV_KEY;
-      }
-      if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-        return process.env.DOTENV_KEY;
-      }
-      return "";
-    }
-    function _instructions(result, dotenvKey) {
-      let uri;
-      try {
-        uri = new URL(dotenvKey);
-      } catch (error) {
-        if (error.code === "ERR_INVALID_URL") {
-          const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
-          err.code = "INVALID_DOTENV_KEY";
-          throw err;
-        }
-        throw error;
-      }
-      const key = uri.password;
-      if (!key) {
-        const err = new Error("INVALID_DOTENV_KEY: Missing key part");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      const environment = uri.searchParams.get("environment");
-      if (!environment) {
-        const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
-      const ciphertext = result.parsed[environmentKey];
-      if (!ciphertext) {
-        const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
-        err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
-        throw err;
-      }
-      return { ciphertext, key };
-    }
-    function _vaultPath(options) {
-      let possibleVaultPath = null;
-      if (options && options.path && options.path.length > 0) {
-        if (Array.isArray(options.path)) {
-          for (const filepath of options.path) {
-            if (fs9.existsSync(filepath)) {
-              possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
-            }
-          }
-        } else {
-          possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
-        }
-      } else {
-        possibleVaultPath = path9.resolve(process.cwd(), ".env.vault");
-      }
-      if (fs9.existsSync(possibleVaultPath)) {
-        return possibleVaultPath;
-      }
-      return null;
-    }
-    function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path9.join(os.homedir(), envPath.slice(1)) : envPath;
-    }
-    function _configVault(options) {
-      const debug = Boolean(options && options.debug);
-      const quiet = options && "quiet" in options ? options.quiet : true;
-      if (debug || !quiet) {
-        _log("Loading env from encrypted .env.vault");
-      }
-      const parsed = DotenvModule._parseVault(options);
-      let processEnv = process.env;
-      if (options && options.processEnv != null) {
-        processEnv = options.processEnv;
-      }
-      DotenvModule.populate(processEnv, parsed, options);
-      return { parsed };
-    }
-    function configDotenv(options) {
-      const dotenvPath = path9.resolve(process.cwd(), ".env");
-      let encoding = "utf8";
-      const debug = Boolean(options && options.debug);
-      const quiet = options && "quiet" in options ? options.quiet : true;
-      if (options && options.encoding) {
-        encoding = options.encoding;
-      } else {
-        if (debug) {
-          _debug("No encoding is specified. UTF-8 is used by default");
-        }
-      }
-      let optionPaths = [dotenvPath];
-      if (options && options.path) {
-        if (!Array.isArray(options.path)) {
-          optionPaths = [_resolveHome(options.path)];
-        } else {
-          optionPaths = [];
-          for (const filepath of options.path) {
-            optionPaths.push(_resolveHome(filepath));
-          }
-        }
-      }
-      let lastError;
-      const parsedAll = {};
-      for (const path10 of optionPaths) {
-        try {
-          const parsed = DotenvModule.parse(fs9.readFileSync(path10, { encoding }));
-          DotenvModule.populate(parsedAll, parsed, options);
-        } catch (e) {
-          if (debug) {
-            _debug(`Failed to load ${path10} ${e.message}`);
-          }
-          lastError = e;
-        }
-      }
-      let processEnv = process.env;
-      if (options && options.processEnv != null) {
-        processEnv = options.processEnv;
-      }
-      DotenvModule.populate(processEnv, parsedAll, options);
-      if (debug || !quiet) {
-        const keysCount = Object.keys(parsedAll).length;
-        const shortPaths = [];
-        for (const filePath of optionPaths) {
-          try {
-            const relative = path9.relative(process.cwd(), filePath);
-            shortPaths.push(relative);
-          } catch (e) {
-            if (debug) {
-              _debug(`Failed to load ${filePath} ${e.message}`);
-            }
-            lastError = e;
-          }
-        }
-        _log(`injecting env (${keysCount}) from ${shortPaths.join(",")}`);
-      }
-      if (lastError) {
-        return { parsed: parsedAll, error: lastError };
-      } else {
-        return { parsed: parsedAll };
-      }
-    }
-    function config(options) {
-      if (_dotenvKey(options).length === 0) {
-        return DotenvModule.configDotenv(options);
-      }
-      const vaultPath = _vaultPath(options);
-      if (!vaultPath) {
-        _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
-        return DotenvModule.configDotenv(options);
-      }
-      return DotenvModule._configVault(options);
-    }
-    function decrypt(encrypted, keyStr) {
-      const key = Buffer.from(keyStr.slice(-64), "hex");
-      let ciphertext = Buffer.from(encrypted, "base64");
-      const nonce = ciphertext.subarray(0, 12);
-      const authTag = ciphertext.subarray(-16);
-      ciphertext = ciphertext.subarray(12, -16);
-      try {
-        const aesgcm = crypto3.createDecipheriv("aes-256-gcm", key, nonce);
-        aesgcm.setAuthTag(authTag);
-        return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
-      } catch (error) {
-        const isRange = error instanceof RangeError;
-        const invalidKeyLength = error.message === "Invalid key length";
-        const decryptionFailed = error.message === "Unsupported state or unable to authenticate data";
-        if (isRange || invalidKeyLength) {
-          const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
-          err.code = "INVALID_DOTENV_KEY";
-          throw err;
-        } else if (decryptionFailed) {
-          const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
-          err.code = "DECRYPTION_FAILED";
-          throw err;
-        } else {
-          throw error;
-        }
-      }
-    }
-    function populate(processEnv, parsed, options = {}) {
-      const debug = Boolean(options && options.debug);
-      const override = Boolean(options && options.override);
-      if (typeof parsed !== "object") {
-        const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
-        err.code = "OBJECT_REQUIRED";
-        throw err;
-      }
-      for (const key of Object.keys(parsed)) {
-        if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-          if (override === true) {
-            processEnv[key] = parsed[key];
-          }
-          if (debug) {
-            if (override === true) {
-              _debug(`"${key}" is already defined and WAS overwritten`);
-            } else {
-              _debug(`"${key}" is already defined and was NOT overwritten`);
-            }
-          }
-        } else {
-          processEnv[key] = parsed[key];
-        }
-      }
-    }
-    var DotenvModule = {
-      configDotenv,
-      _configVault,
-      _parseVault,
-      config,
-      decrypt,
-      parse,
-      populate
-    };
-    module2.exports.configDotenv = DotenvModule.configDotenv;
-    module2.exports._configVault = DotenvModule._configVault;
-    module2.exports._parseVault = DotenvModule._parseVault;
-    module2.exports.config = DotenvModule.config;
-    module2.exports.decrypt = DotenvModule.decrypt;
-    module2.exports.parse = DotenvModule.parse;
-    module2.exports.populate = DotenvModule.populate;
-    module2.exports = DotenvModule;
   }
 });
 
@@ -55531,6 +55577,19 @@ __export(src_exports, {
   default: () => src_default
 });
 module.exports = __toCommonJS(src_exports);
+
+// server/node_modules/dotenv/config.js
+(function() {
+  require_main().config(
+    Object.assign(
+      {},
+      require_env_options(),
+      require_cli_options()(process.argv)
+    )
+  );
+})();
+
+// server/src/index.ts
 var import_express12 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_dotenv = __toESM(require_main());
@@ -57276,15 +57335,18 @@ var prisma_default = prisma;
 var import_multer = __toESM(require_multer());
 var import_path = __toESM(require("path"));
 var import_fs = __toESM(require("fs"));
-var PROGRAM_DATA = process.env.PROGRAMDATA || "C:\\ProgramData";
-var DEFAULT_UPLOADS_BASE = import_path.default.join(PROGRAM_DATA, "ERMS", "uploads");
-var baseUploadsDir = process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
-var uploadsDir = import_path.default.join(baseUploadsDir, "profile-pictures");
-if (!import_fs.default.existsSync(uploadsDir)) {
-  import_fs.default.mkdirSync(uploadsDir, { recursive: true });
+function getBaseUploadsDir() {
+  const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+  const DEFAULT_UPLOADS_BASE2 = import_path.default.join(PROGRAM_DATA2, "ERMS", "uploads");
+  return process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE2;
 }
 var storage = import_multer.default.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
+    const uploadsDir = import_path.default.join(baseUploadsDir, "profile-pictures");
+    if (!import_fs.default.existsSync(uploadsDir)) {
+      import_fs.default.mkdirSync(uploadsDir, { recursive: true });
+    }
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
@@ -57301,7 +57363,7 @@ var allowedMimeTypes = /* @__PURE__ */ new Set([
   "image/pjpeg",
   "image/x-png"
 ]);
-var fileFilter = (req, file, cb) => {
+var fileFilter = (_req, file, cb) => {
   const mimeType = (file.mimetype || "").toLowerCase();
   const extension = import_path.default.extname(file.originalname || "").toLowerCase();
   const isAllowed = allowedMimeTypes.has(mimeType) || [".jpg", ".jpeg", ".png"].includes(extension);
@@ -57315,16 +57377,13 @@ var uploadProfilePicture = (0, import_multer.default)({
   storage,
   fileFilter
 });
-var documentsDir = import_path.default.join(baseUploadsDir, "documents");
-console.log("[upload] Document upload configuration:");
-console.log(`  - baseUploadsDir: ${baseUploadsDir}`);
-console.log(`  - documentsDir: ${documentsDir}`);
-if (!import_fs.default.existsSync(documentsDir)) {
-  import_fs.default.mkdirSync(documentsDir, { recursive: true });
-  console.log(`[upload] Created documentsDir at: ${documentsDir}`);
-}
 var documentStorage = import_multer.default.diskStorage({
   destination: (req, _file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
+    const documentsDir = import_path.default.join(baseUploadsDir, "documents");
+    if (!import_fs.default.existsSync(documentsDir)) {
+      import_fs.default.mkdirSync(documentsDir, { recursive: true });
+    }
     const employeeName = (req.body?.employeeName || "Unknown Employee").replace(/[/\\?%*:|"<>]/g, "-").trim().replace(/\.+$/, "");
     const category = (req.body?.category || "Uncategorized").replace(/[/\\?%*:|"<>]/g, "-").replace(/\.+$/, "");
     const destDir = import_path.default.join(documentsDir, employeeName, category);
@@ -57334,6 +57393,8 @@ var documentStorage = import_multer.default.diskStorage({
     cb(null, destDir);
   },
   filename: (req, file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
+    const documentsDir = import_path.default.join(baseUploadsDir, "documents");
     const originalName = file.originalname;
     const employeeName = (req.body?.employeeName || "Unknown Employee").replace(/[/\\?%*:|"<>]/g, "-").trim().replace(/\.+$/, "");
     const category = (req.body?.category || "Uncategorized").replace(/[/\\?%*:|"<>]/g, "-").replace(/\.+$/, "");
@@ -57347,7 +57408,7 @@ var documentStorage = import_multer.default.diskStorage({
     }
   }
 });
-var documentFileFilter = (req, file, cb) => {
+var documentFileFilter = (_req, file, cb) => {
   if (file.mimetype === "application/pdf") {
     cb(null, true);
   } else {
@@ -57360,6 +57421,7 @@ var uploadDocumentFile = (0, import_multer.default)({
 });
 var inventoryStorage = import_multer.default.diskStorage({
   destination: (_req, _file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
     const destDir = import_path.default.join(baseUploadsDir, "inventory");
     if (!import_fs.default.existsSync(destDir)) {
       import_fs.default.mkdirSync(destDir, { recursive: true });
@@ -59304,8 +59366,8 @@ router2.post("/bulk-delete", requireSuperadminApproval, async (req, res) => {
     for (const emp of employeesToDelete) {
       if (emp.profilePicture) {
         try {
-          const uploadsDir2 = process.env.UPLOADS_DIR || import_path3.default.join(__dirname, "../../uploads");
-          const profilePicPath = import_path3.default.join(uploadsDir2, "profile-pictures", import_path3.default.basename(emp.profilePicture));
+          const uploadsDir = process.env.UPLOADS_DIR || import_path3.default.join(__dirname, "../../uploads");
+          const profilePicPath = import_path3.default.join(uploadsDir, "profile-pictures", import_path3.default.basename(emp.profilePicture));
           if (import_fs3.default.existsSync(profilePicPath)) {
             import_fs3.default.unlinkSync(profilePicPath);
           }
@@ -59796,8 +59858,8 @@ router3.get("/:id/file", async (req, res) => {
     }
     let resolvedPath = document2.filePath;
     if (!import_fs4.default.existsSync(resolvedPath)) {
-      const PROGRAM_DATA3 = process.env.PROGRAMDATA || "C:\\ProgramData";
-      const defaultDocsBase = import_path4.default.join(PROGRAM_DATA3, "ERMS", "uploads", "documents");
+      const baseUploads = process.env.UPLOADS_DIR || import_path4.default.join(process.env.PROGRAMDATA || "C:\\ProgramData", "ERMS", "uploads");
+      const defaultDocsBase = import_path4.default.join(baseUploads, "documents");
       const relIdx = document2.filePath.indexOf("documents");
       if (relIdx !== -1) {
         const subPath = document2.filePath.substring(relIdx + 9);
@@ -60506,13 +60568,24 @@ function getDataDir() {
 function getMigratedFilePath(fileName) {
   const targetDir = getDataDir();
   const targetFile = import_path5.default.join(targetDir, fileName);
-  if (!import_fs5.default.existsSync(targetFile)) {
-    const legacyFile = import_path5.default.join(__dirname, "../../uploads/data", fileName);
-    if (import_fs5.default.existsSync(legacyFile)) {
-      try {
-        import_fs5.default.copyFileSync(legacyFile, targetFile);
-      } catch (err) {
-        console.error(`Failed to migrate ${fileName}:`, err);
+  const isFileEmptyOrMissing = !import_fs5.default.existsSync(targetFile) || import_fs5.default.existsSync(targetFile) && import_fs5.default.statSync(targetFile).size <= 2;
+  if (isFileEmptyOrMissing) {
+    const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+    const fallbackLocations = [
+      import_path5.default.join(PROGRAM_DATA2, "ERMS", "uploads", "data", fileName),
+      import_path5.default.join(__dirname, "../../uploads/data", fileName),
+      import_path5.default.join("D:\\ERMS-Uploads\\data", fileName),
+      import_path5.default.join("C:\\ProgramData\\ERMS\\uploads\\data", fileName)
+    ];
+    for (const legacyFile of fallbackLocations) {
+      if (import_fs5.default.existsSync(legacyFile) && import_fs5.default.statSync(legacyFile).size > 2) {
+        try {
+          import_fs5.default.copyFileSync(legacyFile, targetFile);
+          console.log(`[migration] Migrated ${fileName} from ${legacyFile} to ${targetFile}`);
+          break;
+        } catch (err) {
+          console.error(`Failed to copy ${fileName}:`, err);
+        }
       }
     }
   }
@@ -61673,13 +61746,24 @@ function getDataDir2() {
 function getMigratedFilePath2(fileName) {
   const targetDir = getDataDir2();
   const targetFile = import_path6.default.join(targetDir, fileName);
-  if (!import_fs6.default.existsSync(targetFile)) {
-    const legacyFile = import_path6.default.join(__dirname, "../../uploads/data", fileName);
-    if (import_fs6.default.existsSync(legacyFile)) {
-      try {
-        import_fs6.default.copyFileSync(legacyFile, targetFile);
-      } catch (err) {
-        console.error(`Failed to migrate ${fileName}:`, err);
+  const isFileEmptyOrMissing = !import_fs6.default.existsSync(targetFile) || import_fs6.default.existsSync(targetFile) && import_fs6.default.statSync(targetFile).size <= 2;
+  if (isFileEmptyOrMissing) {
+    const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+    const fallbackLocations = [
+      import_path6.default.join(PROGRAM_DATA2, "ERMS", "uploads", "data", fileName),
+      import_path6.default.join(__dirname, "../../uploads/data", fileName),
+      import_path6.default.join("D:\\ERMS-Uploads\\data", fileName),
+      import_path6.default.join("C:\\ProgramData\\ERMS\\uploads\\data", fileName)
+    ];
+    for (const legacyFile of fallbackLocations) {
+      if (import_fs6.default.existsSync(legacyFile) && import_fs6.default.statSync(legacyFile).size > 2) {
+        try {
+          import_fs6.default.copyFileSync(legacyFile, targetFile);
+          console.log(`[migration] Migrated ${fileName} from ${legacyFile} to ${targetFile}`);
+          break;
+        } catch (err) {
+          console.error(`Failed to copy ${fileName}:`, err);
+        }
       }
     }
   }
@@ -62716,13 +62800,24 @@ function getDataDir3() {
 function getMigratedFilePath3(fileName) {
   const targetDir = getDataDir3();
   const targetFile = import_path7.default.join(targetDir, fileName);
-  if (!import_fs7.default.existsSync(targetFile)) {
-    const legacyFile = import_path7.default.join(__dirname, "../../uploads/data", fileName);
-    if (import_fs7.default.existsSync(legacyFile)) {
-      try {
-        import_fs7.default.copyFileSync(legacyFile, targetFile);
-      } catch (err) {
-        console.error(`Failed to migrate ${fileName}:`, err);
+  const isFileEmptyOrMissing = !import_fs7.default.existsSync(targetFile) || import_fs7.default.existsSync(targetFile) && import_fs7.default.statSync(targetFile).size <= 2;
+  if (isFileEmptyOrMissing) {
+    const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+    const fallbackLocations = [
+      import_path7.default.join(PROGRAM_DATA2, "ERMS", "uploads", "data", fileName),
+      import_path7.default.join(__dirname, "../../uploads/data", fileName),
+      import_path7.default.join("D:\\ERMS-Uploads\\data", fileName),
+      import_path7.default.join("C:\\ProgramData\\ERMS\\uploads\\data", fileName)
+    ];
+    for (const legacyFile of fallbackLocations) {
+      if (import_fs7.default.existsSync(legacyFile) && import_fs7.default.statSync(legacyFile).size > 2) {
+        try {
+          import_fs7.default.copyFileSync(legacyFile, targetFile);
+          console.log(`[migration] Migrated ${fileName} from ${legacyFile} to ${targetFile}`);
+          break;
+        } catch (err) {
+          console.error(`Failed to copy ${fileName}:`, err);
+        }
       }
     }
   }
@@ -62734,7 +62829,6 @@ function getDataFilePath() {
 var defaultInitialRecords = [];
 var cachedRecords = null;
 function readRecords() {
-  if (cachedRecords) return cachedRecords;
   try {
     const filePath = getDataFilePath();
     if (!import_fs7.default.existsSync(filePath)) {
@@ -62743,7 +62837,11 @@ function readRecords() {
       return defaultInitialRecords;
     }
     const rawData = import_fs7.default.readFileSync(filePath, "utf8");
-    cachedRecords = JSON.parse(rawData);
+    const parsed = JSON.parse(rawData);
+    if (Array.isArray(parsed)) {
+      cachedRecords = parsed;
+      return parsed;
+    }
     return cachedRecords || defaultInitialRecords;
   } catch (error) {
     console.error("Failed to read inventory records:", error);
@@ -63970,9 +64068,9 @@ app.get("/api/dump-template", async (req, res) => {
 app.use((0, import_cors.default)());
 app.use(import_express12.default.json({ limit: "50mb" }));
 app.use(import_express12.default.urlencoded({ extended: true, limit: "50mb" }));
-var PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
-var DEFAULT_UPLOADS_BASE2 = import_path8.default.join(PROGRAM_DATA2, "ERMS", "uploads");
-var uploadsPath = process.env.UPLOADS_DIR || (import_fs8.default.existsSync(DEFAULT_UPLOADS_BASE2) ? DEFAULT_UPLOADS_BASE2 : import_path8.default.join(__dirname, "../uploads"));
+var PROGRAM_DATA = process.env.PROGRAMDATA || "C:\\ProgramData";
+var DEFAULT_UPLOADS_BASE = import_path8.default.join(PROGRAM_DATA, "ERMS", "uploads");
+var uploadsPath = process.env.UPLOADS_DIR || (import_fs8.default.existsSync(DEFAULT_UPLOADS_BASE) ? DEFAULT_UPLOADS_BASE : import_path8.default.join(__dirname, "../uploads"));
 app.use("/uploads", import_express12.default.static(uploadsPath, {
   setHeaders: (res, filePath) => {
     if (filePath.toLowerCase().endsWith(".pdf")) {
