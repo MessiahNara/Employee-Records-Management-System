@@ -66,12 +66,33 @@ export default defineConfig(() => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
-      chunkSizeWarningLimit: 2000,
+      chunkSizeWarningLimit: 1200,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-icons': ['react-icons'],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react-router-dom') || id.includes('react-dom') || (id.includes('/react/') && !id.includes('react-icons') && !id.includes('react-barcode'))) {
+                return 'vendor-react';
+              }
+              if (id.includes('react-icons')) {
+                return 'vendor-icons';
+              }
+              if (id.includes('exceljs') || id.includes('xlsx') || id.includes('file-saver')) {
+                return 'vendor-excel';
+              }
+              if (id.includes('recharts') || id.includes('d3-')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('docxtemplater') || id.includes('pizzip') || id.includes('jszip')) {
+                return 'vendor-docs';
+              }
+              if (id.includes('@zxing') || id.includes('qrcode') || id.includes('react-barcode')) {
+                return 'vendor-scanner';
+              }
+              if (id.includes('socket.io-client')) {
+                return 'vendor-socket';
+              }
+            }
           },
         },
       },

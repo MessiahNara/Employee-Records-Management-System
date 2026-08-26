@@ -877,7 +877,7 @@ function Dashboard() {
   const [employeeStats, setEmployeeStats] = useState<{ total: number, active: number, inactive: number, documents: number, storageUsed: number }>({ total: 0, active: 0, inactive: 0, documents: 0, storageUsed: 0 });
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]); // Note: Still used for reports client-side generation
   const [isLoading, setIsLoading] = useState(false);
-  const [showAllEmployees, setShowAllEmployees] = useState(false);
+  const [showAllEmployees, setShowAllEmployees] = useState(true);
 
   // Generated Reports UI states
   const location = useLocation();

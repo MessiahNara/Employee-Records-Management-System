@@ -119,6 +119,7 @@ function Users() {
   const [pendingUpdateData, setPendingUpdateData] = useState<any>(null);
   const [isDeletePasswordModalOpen, setIsDeletePasswordModalOpen] = useState(false);
   const [pendingDeleteUser, setPendingDeleteUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Get current logged-in user
   const currentUser = getAuthState();
@@ -169,6 +170,7 @@ function Users() {
 
   const fetchUsers = async () => {
     try {
+      setIsLoading(true);
       const data = await api.user.getAll();
       
       // Map API response to User format
@@ -178,19 +180,21 @@ function Users() {
         lastName: u.lastName || '',
         email: `${u.username}@example.com`,
         department: u.department || 'General',
-        roleId: u.role === 'superadmin' ? 'role-1' : u.role === 'admin' ? 'role-2' : u.role === 'developer' ? 'role-4' : 'role-3',
+        roleId: u.role === 'developer' ? 'role-4' : u.role === 'superadmin' ? 'role-1' : u.role === 'admin' ? 'role-2' : 'role-3',
         status: UserStatus.ACTIVE,
+        lastLogin: u.lastLogin || null,
+        activeSessionId: u.activeSessionId || null,
         permissions: u.permissions || { create: false, read: true, update: false, delete: false },
-        profilePicture: u.profilePicture, // Include profile picture
         createdAt: u.createdAt,
         updatedAt: u.updatedAt,
-        lastLogin: u.lastLogin, // Use the actual lastLogin field from backend
       }));
       
       setUsers(mappedUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
-      showToast('Failed to load users. Please check if the backend server is running.', 'error');
+      showToast('Failed to fetch users', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -854,6 +858,7 @@ function Users() {
             data={filteredUsers}
             keyExtractor={(user) => user.id}
             emptyMessage="No users found"
+            loading={isLoading}
           />
         </Card>
 

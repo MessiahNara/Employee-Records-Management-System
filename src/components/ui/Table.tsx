@@ -36,7 +36,10 @@ function Table<T>({
   if (loading) {
     return (
       <div className="table-container">
-        <div className="table__loading">Loading...</div>
+        <div className="table__loading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', padding: '2.5rem', color: 'var(--text-secondary)' }}>
+          <div className="dashboard__spinner" style={{ width: '22px', height: '22px', borderWidth: '2.5px', margin: 0 }}></div>
+          <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Loading records...</span>
+        </div>
       </div>
     );
   }

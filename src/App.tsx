@@ -1,4 +1,5 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
 import EmployeeDetails from './pages/EmployeeDetails';
@@ -21,7 +22,6 @@ import { ToastProvider } from './contexts/ToastContext';
 import { IdleTimeoutProvider } from './contexts/IdleTimeoutContext';
 import { getAuthState } from './utils/mockAuth';
 import { initSocketClient, getSocket } from './services/socket';
-import { useEffect } from 'react';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -35,14 +35,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  // Note: Using sessionStorage for auth means users are automatically logged out
-  // when they close the browser/tab (no additional logic needed)
-  
   useEffect(() => {
     initSocketClient();
     
     // Only apply the zoom fix if we are NOT running inside the Electron app.
-    // The Electron app has its own zoom controls in main.cjs.
     if (!(window as any).electron) {
       document.documentElement.style.zoom = '0.65';
     }

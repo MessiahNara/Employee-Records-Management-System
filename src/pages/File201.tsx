@@ -504,11 +504,16 @@ function File201() {
       </Card>
 
       {/* Grid of Boxes */}
-      {filteredBoxes.length === 0 ? (
+      {loading ? (
+        <Card className="file201-card-empty">
+          <div className="dashboard__spinner" style={{ margin: '1.5rem auto' }}></div>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading 201 physical record boxes...</p>
+        </Card>
+      ) : filteredBoxes.length === 0 ? (
         <Card className="file201-card-empty">
           <MdFolderOpen size={64} style={{ color: 'var(--text-tertiary)', marginBottom: '16px', opacity: 0.5 }} />
           <h3>No Boxes Found</h3>
-          <p>Create a box to start digitizing and sorting your physical 201 records.</p>
+          <p>{searchTerm.trim() || officeFilter !== 'All' || typeFilter !== 'All' ? 'No boxes match your current search filters.' : 'Create a box to start digitizing and sorting your physical 201 records.'}</p>
         </Card>
       ) : (
         <>
