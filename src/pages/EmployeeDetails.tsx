@@ -603,11 +603,11 @@ function EmployeeDetails() {
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Office / Hospital Assigned</label>
-              <p className="employee-details__value">{employee.officeHospitalName}</p>
+              <p className="employee-details__value">{employee.officeHospitalName || (employee as any).officeName || '—'}</p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Position / Function</label>
-              <p className="employee-details__value">{employee.positionFunction}</p>
+              <p className="employee-details__value">{employee.positionFunction || (employee as any).position || '—'}</p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Date Hired</label>
@@ -615,118 +615,150 @@ function EmployeeDetails() {
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Appointment Status</label>
-              <p className="employee-details__value">{employee.appointmentStatus}</p>
+              <p className="employee-details__value">{employee.appointmentStatus || '—'}</p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Appointment Effectivity</label>
               <p className="employee-details__value">
-                {employee.appointmentFrom && employee.appointmentTo
-                  ? `${formatDateMDY(employee.appointmentFrom)} TO ${formatDateMDY(employee.appointmentTo)}`
+                {employee.appointmentFrom || employee.appointmentTo
+                  ? `${employee.appointmentFrom ? formatDateMDY(employee.appointmentFrom) : '—'} TO ${employee.appointmentTo ? (employee.appointmentTo === 'Until revoked' ? 'Until revoked' : formatDateMDY(employee.appointmentTo)) : '—'}`
                   : 'N/A'}
               </p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Administrative Order</label>
               <p className="employee-details__value">
-                {employee.aoNumber || employee.aoYear ? (
+                {employee.aoNumber || (employee as any).aoYear ? (
                   <>
                     {employee.aoNumber ? `AO ${employee.aoNumber}` : '—'}
-                    {employee.aoYear ? `, S. ${employee.aoYear}` : ''}
+                    {(employee as any).aoYear ? `, S. ${(employee as any).aoYear}` : ''}
                   </>
                 ) : (
                   'N/A'
                 )}
               </p>
             </div>
-            <div className="employee-details__field">
-              <label className="employee-details__label">Type of AO</label>
-              <p className="employee-details__value">{employee.aoType || 'N/A'}</p>
-            </div>
+            {(() => {
+              const aoDoc = (employee as any)?.documents?.find((d: any) => d.category === 'Administrative Order') || {};
+              const aoType = (employee as any).aoType || aoDoc.aoType || ((employee as any).isDetailed ? 'Detailed' : '');
+              return (
+                <div className="employee-details__field">
+                  <label className="employee-details__label">Type of AO</label>
+                  <p className="employee-details__value">{aoType || 'N/A'}</p>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Detailed Section (AO Type = Detailed) */}
-          {(employee as any).aoType === 'Detailed' && (
-            <div className="employee-details__detailed-section">
-              <div className="employee-details__detailed-grid">
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Detailed/Transferred Office</label>
-                  <p className="employee-details__detailed-value">{employee.detailedTo || '—'}</p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Division</label>
-                  <p className="employee-details__detailed-value">{employee.detailedDivision || '—'}</p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Duration From</label>
-                  <p className="employee-details__detailed-value">
-                    {employee.detailedOrderFrom ? formatDateMDY(employee.detailedOrderFrom) : '—'}
-                  </p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Duration To</label>
-                  <p className="employee-details__detailed-value">
-                    {employee.detailedOrderTo === 'Until revoked' ? 'Until revoked' : (employee.detailedOrderTo ? formatDateMDY(employee.detailedOrderTo) : '—')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          {(() => {
+            const aoDoc = (employee as any)?.documents?.find((d: any) => d.category === 'Administrative Order') || {};
+            const aoType = (employee as any).aoType || aoDoc.aoType || ((employee as any).isDetailed ? 'Detailed' : '');
+            const typeLower = (aoType || '').toLowerCase().trim();
+            const isDetailed = typeLower === 'detailed';
+            const isDesignated = typeLower === 'designated';
+            const isRecalled = typeLower === 'recalled';
 
-          {/* Designated Section (AO Type = Designated) */}
-          {(employee as any).aoType === 'Designated' && (
-            <div className="employee-details__detailed-section">
-              <div className="employee-details__detailed-grid">
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Designated Office</label>
-                  <p className="employee-details__detailed-value">{(employee as any).detailedTo || '—'}</p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Designated Position Function</label>
-                  <p className="employee-details__detailed-value">{(employee as any).designatedPositionFunction || '—'}</p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Duration From</label>
-                  <p className="employee-details__detailed-value">
-                    {(employee as any).designatedOrderFrom ? formatDateMDY((employee as any).designatedOrderFrom) : '—'}
-                  </p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Duration To</label>
-                  <p className="employee-details__detailed-value">
-                    {(employee as any).designatedOrderTo === 'Until revoked' ? 'Until revoked' : ((employee as any).designatedOrderTo ? formatDateMDY((employee as any).designatedOrderTo) : '—')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+            const recalledFrom = (employee as any).recalledFrom || aoDoc.recalledFrom || '—';
+            const recalledTo = (employee as any).recalledTo || aoDoc.recalledTo || employee.officeHospitalName || (employee as any).officeName || '—';
+            const recalledOrderFrom = (employee as any).recalledOrderFrom || aoDoc.recalledOrderFrom;
+            const recalledOrderTo = (employee as any).recalledOrderTo || aoDoc.recalledOrderTo;
 
-          {/* Recalled Section (AO Type = Recalled) */}
-          {(employee as any).aoType === 'Recalled' && (
-            <div className="employee-details__detailed-section">
-              <div className="employee-details__detailed-grid">
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Recalled from</label>
-                  <p className="employee-details__detailed-value">{(employee as any).recalledFrom || '—'}</p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Recalled to</label>
-                  <p className="employee-details__detailed-value">{(employee as any).recalledTo || '—'}</p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Duration From</label>
-                  <p className="employee-details__detailed-value">
-                    {(employee as any).recalledOrderFrom ? formatDateMDY((employee as any).recalledOrderFrom) : '—'}
-                  </p>
-                </div>
-                <div className="employee-details__detailed-field">
-                  <label className="employee-details__detailed-label">Duration To</label>
-                  <p className="employee-details__detailed-value">
-                    {(employee as any).recalledOrderTo === 'Until revoked' ? 'Until revoked' : ((employee as any).recalledOrderTo ? formatDateMDY((employee as any).recalledOrderTo) : '—')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+            const detailedTo = employee.detailedTo || (employee as any).detailedOffice || aoDoc.detailedTo || '—';
+            const detailedDivision = employee.detailedDivision || aoDoc.detailedDivision || '—';
+            const detailedOrderFrom = employee.detailedOrderFrom || (employee as any).durationFrom || aoDoc.detailedOrderFrom;
+            const detailedOrderTo = employee.detailedOrderTo || (employee as any).durationTo || aoDoc.detailedOrderTo;
+
+            const designatedOffice = (employee as any).detailedTo || aoDoc.detailedTo || '—';
+            const designatedPositionFunction = (employee as any).designatedPositionFunction || aoDoc.designatedPositionFunction || '—';
+            const designatedOrderFrom = (employee as any).designatedOrderFrom || aoDoc.designatedOrderFrom;
+            const designatedOrderTo = (employee as any).designatedOrderTo || aoDoc.designatedOrderTo;
+
+            return (
+              <>
+                {isDetailed && (
+                  <div className="employee-details__detailed-section" style={{ marginTop: '1.25rem' }}>
+                    <div className="employee-details__detailed-grid">
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Detailed/Transferred Office</label>
+                        <p className="employee-details__detailed-value">{detailedTo}</p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Division</label>
+                        <p className="employee-details__detailed-value">{detailedDivision}</p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Duration From</label>
+                        <p className="employee-details__detailed-value">
+                          {detailedOrderFrom ? formatDateMDY(detailedOrderFrom) : '—'}
+                        </p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Duration To</label>
+                        <p className="employee-details__detailed-value">
+                          {detailedOrderTo === 'Until revoked' ? 'Until revoked' : (detailedOrderTo ? formatDateMDY(detailedOrderTo) : '—')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isDesignated && (
+                  <div className="employee-details__detailed-section" style={{ marginTop: '1.25rem' }}>
+                    <div className="employee-details__detailed-grid">
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Designated Office</label>
+                        <p className="employee-details__detailed-value">{designatedOffice}</p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Designated Position Function</label>
+                        <p className="employee-details__detailed-value">{designatedPositionFunction}</p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Duration From</label>
+                        <p className="employee-details__detailed-value">
+                          {designatedOrderFrom ? formatDateMDY(designatedOrderFrom) : '—'}
+                        </p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Duration To</label>
+                        <p className="employee-details__detailed-value">
+                          {designatedOrderTo === 'Until revoked' ? 'Until revoked' : (designatedOrderTo ? formatDateMDY(designatedOrderTo) : '—')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isRecalled && (
+                  <div className="employee-details__detailed-section" style={{ marginTop: '1.25rem' }}>
+                    <div className="employee-details__detailed-grid">
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Recalled from</label>
+                        <p className="employee-details__detailed-value">{recalledFrom}</p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Recalled to</label>
+                        <p className="employee-details__detailed-value">{recalledTo}</p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Duration From</label>
+                        <p className="employee-details__detailed-value">
+                          {recalledOrderFrom ? formatDateMDY(recalledOrderFrom) : '—'}
+                        </p>
+                      </div>
+                      <div className="employee-details__detailed-field">
+                        <label className="employee-details__detailed-label">Duration To</label>
+                        <p className="employee-details__detailed-value">
+                          {recalledOrderTo === 'Until revoked' ? 'Until revoked' : (recalledOrderTo ? formatDateMDY(recalledOrderTo) : '—')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </Card>
 
         {/* Separation Information (only if Inactive) */}

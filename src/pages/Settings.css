@@ -44,33 +44,51 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--border-radius);
   background: none;
-  border: none;
+  border: 1.5px solid transparent;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
   width: auto;
   min-width: 160px;
 }
 
 .settings__nav-item:hover {
-  background-color: var(--bg-tertiary);
+  background-color: rgba(59, 130, 246, 0.09);
+  color: var(--color-primary);
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+}
+
+.settings__nav-item:hover .settings__nav-icon {
+  transform: scale(1.15);
 }
 
 .settings__nav-item--active {
   background-color: var(--color-primary);
   color: var(--color-white);
+  border-color: var(--color-primary);
+  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.25);
+}
+
+.settings__nav-item--active:hover {
+  background-color: #2563eb;
+  color: var(--color-white);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(59, 130, 246, 0.35);
 }
 
 .settings__nav-icon {
   font-size: var(--font-size-lg);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .settings__nav-label {
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .settings__content {

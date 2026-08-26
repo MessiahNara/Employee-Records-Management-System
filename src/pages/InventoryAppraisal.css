@@ -414,7 +414,11 @@
 }
 
 .official-table tr:hover:not(.official-table__category-row) td {
-  background-color: rgba(59, 130, 246, 0.04);
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+[data-theme='dark'] .official-table tr:hover:not(.official-table__category-row) td {
+  background-color: rgba(59, 130, 246, 0.18) !important;
 }
 
 /* Table Pill Badges */

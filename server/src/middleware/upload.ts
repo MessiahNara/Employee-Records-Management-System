@@ -53,6 +53,68 @@ export const uploadProfilePicture = multer({
 
 // ── Document file upload ──────────────────────────────────────────────────────
 
+/**
+ * Resolves the canonical folder for an employee within `documents/`.
+ * 1. Scans existing directories in `documents/` to find any matching folder (case-insensitive & token match).
+ * 2. If a folder already exists (e.g. "FERRER, JASPER IAN DE GUZMAN"), reuses it instead of creating "Ferrer, Jasper Ian".
+ * 3. Otherwise formats a clean canonical uppercase folder name.
+ */
+export function resolveEmployeeFolderName(documentsDir: string, rawEmployeeName: string): string {
+  if (!fs.existsSync(documentsDir)) {
+    fs.mkdirSync(documentsDir, { recursive: true });
+  }
+
+  const cleanName = (rawEmployeeName || 'Unknown Employee')
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .trim()
+    .replace(/\.+$/, '');
+
+  const normalize = (str: string) =>
+    str.toUpperCase().replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const targetNorm = normalize(cleanName);
+  if (!targetNorm) return 'UNKNOWN_EMPLOYEE';
+
+  try {
+    const existingFolders = fs.readdirSync(documentsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+
+    // 1. Exact normalized match (e.g. "FERRER, JASPER IAN" matches "Ferrer, Jasper Ian" or "FERRER, JASPER IAN")
+    const exact = existingFolders.find((f) => normalize(f) === targetNorm);
+    if (exact) {
+      return exact;
+    }
+
+    // 2. Token match (e.g. "Ferrer, Jasper Ian" matches "FERRER, JASPER IAN DE GUZMAN" or vice versa)
+    const targetTokens = targetNorm.split(' ').filter((t) => t.length > 1);
+    if (targetTokens.length >= 2) {
+      const tokenMatch = existingFolders.find((f) => {
+        const fNorm = normalize(f);
+        const fTokens = fNorm.split(' ').filter((t) => t.length > 1);
+        // Primary check: same surname (first token in LASTNAME, FIRSTNAME format or last token in FIRSTNAME LASTNAME)
+        const matchesAll = targetTokens.every((token) => fNorm.includes(token));
+        if (matchesAll) return true;
+        
+        // Reverse check: all tokens in existing folder are in incoming name
+        const reverseMatchesAll = fTokens.length >= 2 && fTokens.every((token) => targetNorm.includes(token));
+        if (reverseMatchesAll) return true;
+
+        return false;
+      });
+
+      if (tokenMatch) {
+        return tokenMatch;
+      }
+    }
+  } catch (err) {
+    console.error('[upload] Error resolving employee folder:', err);
+  }
+
+  // Standardize default folder name: uppercase
+  return cleanName.toUpperCase();
+}
+
 const documentStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
     const baseUploadsDir = getBaseUploadsDir();
@@ -61,15 +123,12 @@ const documentStorage = multer.diskStorage({
       fs.mkdirSync(documentsDir, { recursive: true });
     }
 
-    const employeeName: string = (req.body?.employeeName || 'Unknown Employee')
-      .replace(/[/\\?%*:|"<>]/g, '-')
-      .trim()
-      .replace(/\.+$/, '');
+    const employeeFolder = resolveEmployeeFolderName(documentsDir, req.body?.employeeName || 'Unknown Employee');
     const category: string = (req.body?.category || 'Uncategorized')
       .replace(/[/\\?%*:|"<>]/g, '-')
       .replace(/\.+$/, '');
 
-    const destDir = path.join(documentsDir, employeeName, category);
+    const destDir = path.join(documentsDir, employeeFolder, category);
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
     }
@@ -80,15 +139,12 @@ const documentStorage = multer.diskStorage({
     const documentsDir = path.join(baseUploadsDir, 'documents');
 
     const originalName = file.originalname;
-    const employeeName: string = (req.body?.employeeName || 'Unknown Employee')
-      .replace(/[/\\?%*:|"<>]/g, '-')
-      .trim()
-      .replace(/\.+$/, '');
+    const employeeFolder = resolveEmployeeFolderName(documentsDir, req.body?.employeeName || 'Unknown Employee');
     const category: string = (req.body?.category || 'Uncategorized')
       .replace(/[/\\?%*:|"<>]/g, '-')
       .replace(/\.+$/, '');
 
-    const targetPath = path.join(documentsDir, employeeName, category, originalName);
+    const targetPath = path.join(documentsDir, employeeFolder, category, originalName);
     if (fs.existsSync(targetPath)) {
       const ext = path.extname(originalName);
       const base = path.basename(originalName, ext);

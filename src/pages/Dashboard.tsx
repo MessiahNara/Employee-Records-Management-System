@@ -21,6 +21,7 @@ import DownloadTemplateButton from '../components/DownloadTemplateButton';
 import PasswordConfirmModal from '../components/ui/PasswordConfirmModal';
 import BulkDownloadModal from '../components/BulkDownloadModal';
 import EmployeeFormWizard from '../components/EmployeeFormWizard';
+import EditEmployeeModal from '../components/EditEmployeeModal';
 import UnsavedChangesModal from '../components/ui/UnsavedChangesModal';
 import { Employee, EmployeeFormData, AppointmentStatus, EmployeeStatus } from '../types/employee';
 import { ImportedEmployee } from '../types/importExport';
@@ -1198,15 +1199,19 @@ function Dashboard() {
 
   // Listen for updates
   useEffect(() => {
+    let timer: NodeJS.Timeout;
     const handleUpdate = () => {
-      fetchEmployeeStats();
-      fetchAllEmployeesForKPI();
-      if (viewMode === 'reports') {
-        fetchEmployeeAuditLogs();
-        fetchTransferredLogs();
-        fetchBorrowLogs();
-      }
-      fetchEmployees();
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        fetchEmployeeStats();
+        if (viewMode === 'reports') {
+          fetchAllEmployeesForKPI();
+          fetchEmployeeAuditLogs();
+          fetchTransferredLogs();
+          fetchBorrowLogs();
+        }
+        fetchEmployees();
+      }, 250);
     };
 
     window.addEventListener('employeeUpdated', handleUpdate);
@@ -1215,6 +1220,7 @@ function Dashboard() {
     window.addEventListener('file201Updated', handleUpdate);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('employeeUpdated', handleUpdate);
       window.removeEventListener('approvalsUpdated', handleUpdate);
       window.removeEventListener('documentsUpdated', handleUpdate);
@@ -1235,7 +1241,7 @@ function Dashboard() {
   // Fetch all employees for reports (Warning: Can be slow with 100k+)
   const fetchAllEmployeesForKPI = async () => {
     try {
-      const data = await api.employee.getAll({}); // No filters - get all employees
+      const data = await api.employee.getAll({ includeDocuments: true }); // Request documents for AO reports viewer
       setAllEmployees(Array.isArray(data) ? data : (data as any).data || []);
     } catch (error) {
       console.error('Error fetching all employees:', error);
@@ -1816,42 +1822,58 @@ function Dashboard() {
     );
   };
 
-  const renderAdministrativeOrder = (row: ReportRow) => {
-    const label = `${row.aoNumber ? `AO ${row.aoNumber}` : '-'}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim();
-    const rawEmp = row.rawEmployee || {};
+  const handleOpenAoPdf = async (e: React.MouseEvent, rowOrEmp: any, docId?: string) => {
+    e.stopPropagation();
+    const rawEmp = rowOrEmp.rawEmployee || rowOrEmp;
     const docs = (rawEmp as any).documents || [];
-    // Use the specific document linked to this row via docId; fall back to any AO doc for audit rows
-    const aoDoc = row.docId
-      ? docs.find((d: any) => d.id === row.docId)
+    let aoDoc = docId
+      ? docs.find((d: any) => d.id === docId)
       : docs.find((d: any) => d.category === 'Administrative Order');
 
-    if (aoDoc) {
-      return (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedReportDocument(aoDoc);
-            setReportPdfData(`${getServerBaseUrl()}/api/documents/${aoDoc.id}/file`);
-            setIsReportViewerOpen(true);
-          }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--color-primary)',
-            textDecoration: 'underline',
-            cursor: 'pointer',
-            fontWeight: 600,
-            padding: 0,
-            textAlign: 'left',
-          }}
-          title="Open Administrative Order PDF"
-        >
-          {label}
-        </button>
-      );
+    const empId = rowOrEmp.employeeId || rowOrEmp.id || rawEmp.id;
+
+    if (!aoDoc && empId) {
+      try {
+        const empDocs = await api.document.getByEmployee(empId);
+        aoDoc = docId
+          ? empDocs.find((d: any) => d.id === docId)
+          : empDocs.find((d: any) => d.category === 'Administrative Order');
+      } catch (err) {
+        console.error('Failed to load documents for AO viewer:', err);
+      }
     }
 
-    return label || '-';
+    if (aoDoc) {
+      setSelectedReportDocument(aoDoc);
+      setReportPdfData(`${getServerBaseUrl()}/api/documents/${aoDoc.id}/file`);
+      setIsReportViewerOpen(true);
+    } else {
+      showToast('No PDF document attached to this Administrative Order.', 'info');
+    }
+  };
+
+  const renderAdministrativeOrder = (row: ReportRow) => {
+    const label = `${row.aoNumber ? `AO ${row.aoNumber}` : '-'}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}`.trim();
+    if (!row.aoNumber && label === '-') return '-';
+
+    return (
+      <button
+        onClick={(e) => handleOpenAoPdf(e, row, row.docId)}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--color-primary)',
+          textDecoration: 'underline',
+          cursor: 'pointer',
+          fontWeight: 600,
+          padding: 0,
+          textAlign: 'left',
+        }}
+        title="Open Administrative Order PDF"
+      >
+        {label}
+      </button>
+    );
   };
 
   const currentAvailableKeys = useMemo<string[]>(() => {
@@ -3942,24 +3964,24 @@ function Dashboard() {
     setShowIdUpdate(false);
     setSelectedEmployee(employee);
     const employeeFormData: EmployeeFormData = {
-      id: employee.id,
-      lastName: employee.lastName,
-      firstName: employee.firstName,
-      middleName: employee.middleName,
+      id: employee.id || '',
+      lastName: employee.lastName || '',
+      firstName: employee.firstName || '',
+      middleName: employee.middleName || '',
       dateOfBirth: convertToDateInputFormat(employee.dateOfBirth),
-      gender: employee.gender,
-      officeHospitalName: employee.officeHospitalName,
-      appointmentStatus: employee.appointmentStatus,
+      gender: employee.gender || '',
+      officeHospitalName: employee.officeHospitalName || (employee as any).officeName || '',
+      appointmentStatus: (employee.appointmentStatus as AppointmentStatus) || '',
       appointmentFrom: convertToDateInputFormat(employee.appointmentFrom),
       appointmentTo: convertToDateInputFormat(employee.appointmentTo),
       aoNumber: (employee as any).aoNumber || '',
       aoYear: (employee as any).aoYear || '',
-      aoType: ((employee as any).aoType || '') as any,
-      status: employee.status,
-      positionFunction: employee.positionFunction,
+      aoType: ((employee as any).aoType || ((employee as any).isDetailed ? 'Detailed' : '')) as any,
+      status: employee.status || 'Active',
+      positionFunction: employee.positionFunction || (employee as any).position || '',
       dateOfEmployment: convertToDateInputFormat(employee.dateOfEmployment),
       dateOfSeparation: convertToDateInputFormat(employee.dateOfSeparation),
-      reasonForSeparation: employee.reasonForSeparation || '',
+      reasonForSeparation: employee.reasonForSeparation || (employee as any).reasonOfSeparation || '',
       motherUnit: (employee as any).motherUnit || '',
       detailedTo: (employee as any).detailedTo || '',
       detailedDivision: (employee as any).detailedDivision || '',
@@ -3973,7 +3995,7 @@ function Dashboard() {
       recalledOrderFrom: convertToDateInputFormat((employee as any).recalledOrderFrom),
       recalledOrderTo: convertToDateInputFormat((employee as any).recalledOrderTo),
       fileboxLocation: (employee as any).fileboxLocation || '',
-      file201Status: (employee as any).file201Status || '',
+      file201Status: (employee as any).file201Status || 'Available',
     };
     setFormData(employeeFormData);
     setOriginalEmployeeData(employeeFormData); // Store original data for comparison
@@ -4011,7 +4033,6 @@ function Dashboard() {
       if (formData.lastName.trim() === '') errors.lastName = 'Last name cannot be empty';
       if (formData.firstName.trim() === '') errors.firstName = 'First name cannot be empty';
       if (formData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
-      if (formData.positionFunction.trim() === '') errors.positionFunction = 'Position/Function cannot be empty';
 
       // Validate status-dependent fields (made optional per request)
       if (formData.status === 'Inactive') {
@@ -4025,7 +4046,6 @@ function Dashboard() {
       if (!formData.gender) errors.gender = 'Gender is required';
       if (!formData.officeHospitalName.trim()) errors.officeHospitalName = 'Office/Hospital name is required';
       if (!formData.appointmentStatus) errors.appointmentStatus = 'Appointment status is required';
-      if (!formData.positionFunction.trim()) errors.positionFunction = 'Position/Function is required';
       if (formData.appointmentFrom && formData.appointmentTo && formData.appointmentTo < formData.appointmentFrom) {
         errors.appointmentTo = 'Appointment to must be on or after appointment from';
       }
@@ -4151,34 +4171,19 @@ function Dashboard() {
     }
   };
 
-  const handleUpdateEmployee = async () => {
-    // If aoNumber is cleared, clear all related AO fields
-    if (!formData.aoNumber || formData.aoNumber.trim() === '') {
-      formData.aoNumber = '';
-      formData.aoYear = '';
-      formData.aoType = '';
-      formData.motherUnit = '';
-      formData.detailedTo = '';
-      formData.detailedDivision = '';
-      formData.detailedOrderFrom = '';
-      formData.detailedOrderTo = '';
-      formData.designatedPositionFunction = '';
-      formData.designatedOrderFrom = '';
-      formData.designatedOrderTo = '';
-      formData.recalledFrom = '';
-      formData.recalledTo = '';
-      formData.recalledOrderFrom = '';
-      formData.recalledOrderTo = '';
-    }
-
-    if (!validateForm(true) || !selectedEmployee || !originalEmployeeData) {
+  const handleUpdateEmployee = async (
+    updatedFormData: any,
+    updatedAoFile: File | null,
+    updatedAutoRename: boolean
+  ) => {
+    if (!selectedEmployee || !originalEmployeeData) {
       return;
     }
 
     try {
       // Detect changed fields by comparing with original data
       const changedFields: any = {};
-      const fieldMapping: Record<keyof EmployeeFormData, string> = {
+      const fieldMapping: Record<string, string> = {
         id: 'id',
         lastName: 'lastName',
         firstName: 'firstName',
@@ -4213,12 +4218,10 @@ function Dashboard() {
         file201Status: 'file201Status',
       };
 
-      // Compare each field with original data
-      (Object.keys(formData) as Array<keyof EmployeeFormData>).forEach((key) => {
-        const currentValue = formData[key];
-        const originalValue = originalEmployeeData[key];
+      Object.keys(fieldMapping).forEach((key) => {
+        const currentValue = updatedFormData[key];
+        const originalValue = originalEmployeeData[key as keyof EmployeeFormData];
 
-        // Check if value has changed
         if (currentValue !== originalValue) {
           const backendField = fieldMapping[key];
           const fromValue = originalValue === '' || originalValue === undefined ? null : originalValue;
@@ -4229,37 +4232,41 @@ function Dashboard() {
 
       // Check if any fields were changed or if an AO file was uploaded
       if (Object.keys(changedFields).length === 0) {
-        if (aoFile) {
+        if (updatedAoFile) {
           try {
-            const empName = `${selectedEmployee.lastName}, ${selectedEmployee.firstName}`;
+            const empName = formatEmployeeNameForFolder(
+              selectedEmployee.firstName,
+              selectedEmployee.lastName,
+              selectedEmployee.middleName
+            );
             await api.document.upload(
-              aoFile,
+              updatedAoFile,
               {
                 employeeId: selectedEmployee.id,
                 employeeName: empName,
                 category: 'Administrative Order',
-                fileName: aoFile.name,
-                fileSize: Math.round(aoFile.size / 1024),
-                mimeType: aoFile.type || 'application/pdf',
-                aoNumber: formData.aoNumber,
-                aoYear: formData.aoYear,
-                aoType: formData.aoType,
-                detailedTo: formData.detailedTo,
-                detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
-                detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
-                designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
-                designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
-                designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
-                recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
-                recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
-                recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
-                recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
-                autoRename,
+                fileName: updatedAoFile.name,
+                fileSize: Math.round(updatedAoFile.size / 1024),
+                mimeType: updatedAoFile.type || 'application/pdf',
+                aoNumber: updatedFormData.aoNumber,
+                aoYear: updatedFormData.aoYear,
+                aoType: updatedFormData.aoType,
+                detailedTo: updatedFormData.detailedTo,
+                detailedOrderFrom: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderFrom || undefined : undefined,
+                detailedOrderTo: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderTo || undefined : undefined,
+                designatedPositionFunction: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedPositionFunction || undefined : undefined,
+                designatedOrderFrom: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderFrom || undefined : undefined,
+                designatedOrderTo: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderTo || undefined : undefined,
+                recalledFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledFrom || undefined : undefined,
+                recalledTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledTo || undefined : undefined,
+                recalledOrderFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderFrom || undefined : undefined,
+                recalledOrderTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderTo || undefined : undefined,
+                autoRename: updatedAutoRename,
               },
               currentUser?.id,
               `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
             );
-            showToast(`✅ AO PDF file "${aoFile.name}" uploaded successfully.`, 'success');
+            showToast(`✅ AO PDF file "${updatedAoFile.name}" uploaded successfully.`, 'success');
             handleCloseUpdateEmployeeModal();
             fetchEmployees();
             fetchAllEmployeesForKPI();
@@ -4276,16 +4283,20 @@ function Dashboard() {
 
       // All roles — submit to approval queue, no direct execution
       try {
-        const empName = `${selectedEmployee.lastName}, ${selectedEmployee.firstName}`;
+        const empName = formatEmployeeNameForFolder(
+          selectedEmployee.firstName,
+          selectedEmployee.lastName,
+          selectedEmployee.middleName
+        );
 
         let payloadToSubmit: any = { ...changedFields };
 
         // If there is an AO file, attach it to the payload as base64 so it can be uploaded upon approval
-        if (aoFile) {
+        if (updatedAoFile) {
           try {
             const aoFileData = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
-              reader.readAsDataURL(aoFile);
+              reader.readAsDataURL(updatedAoFile);
               reader.onload = () => resolve(reader.result as string);
               reader.onerror = reject;
             });
@@ -4296,23 +4307,23 @@ function Dashboard() {
                 employeeId: selectedEmployee.id,
                 employeeName: empName,
                 category: 'Administrative Order',
-                fileName: aoFile.name,
-                fileSize: Math.round(aoFile.size / 1024),
-                mimeType: aoFile.type || 'application/pdf',
-                aoNumber: formData.aoNumber,
-                aoYear: formData.aoYear,
-                aoType: formData.aoType,
-                detailedTo: formData.detailedTo,
-                detailedOrderFrom: formData.aoType === 'Detailed' ? formData.detailedOrderFrom || undefined : undefined,
-                detailedOrderTo: formData.aoType === 'Detailed' ? formData.detailedOrderTo || undefined : undefined,
-                designatedPositionFunction: formData.aoType === 'Designated' ? formData.designatedPositionFunction || undefined : undefined,
-                designatedOrderFrom: formData.aoType === 'Designated' ? formData.designatedOrderFrom || undefined : undefined,
-                designatedOrderTo: formData.aoType === 'Designated' ? formData.designatedOrderTo || undefined : undefined,
-                recalledFrom: formData.aoType === 'Recalled' ? formData.recalledFrom || undefined : undefined,
-                recalledTo: formData.aoType === 'Recalled' ? formData.recalledTo || undefined : undefined,
-                recalledOrderFrom: formData.aoType === 'Recalled' ? formData.recalledOrderFrom || undefined : undefined,
-                recalledOrderTo: formData.aoType === 'Recalled' ? formData.recalledOrderTo || undefined : undefined,
-                autoRename,
+                fileName: updatedAoFile.name,
+                fileSize: Math.round(updatedAoFile.size / 1024),
+                mimeType: updatedAoFile.type || 'application/pdf',
+                aoNumber: updatedFormData.aoNumber,
+                aoYear: updatedFormData.aoYear,
+                aoType: updatedFormData.aoType,
+                detailedTo: updatedFormData.detailedTo,
+                detailedOrderFrom: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderFrom || undefined : undefined,
+                detailedOrderTo: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderTo || undefined : undefined,
+                designatedPositionFunction: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedPositionFunction || undefined : undefined,
+                designatedOrderFrom: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderFrom || undefined : undefined,
+                designatedOrderTo: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderTo || undefined : undefined,
+                recalledFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledFrom || undefined : undefined,
+                recalledTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledTo || undefined : undefined,
+                recalledOrderFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderFrom || undefined : undefined,
+                recalledOrderTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderTo || undefined : undefined,
+                autoRename: updatedAutoRename,
               }
             };
           } catch (fileErr) {
@@ -5975,646 +5986,14 @@ function Dashboard() {
 
 
       {/* Update Employee Modal */}
-      <Modal
+      <EditEmployeeModal
         isOpen={isUpdateEmployeeModalOpen}
         onClose={handleCloseUpdateEmployeeModal}
-        title="Update Employee"
-        size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={handleCloseUpdateEmployeeModal}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleUpdateEmployee}>
-              Update Employee
-            </Button>
-          </>
-        }
-      >
-        <div className="dashboard__employee-form">
-          <p style={{
-            marginBottom: '1rem',
-            padding: '0.75rem 1rem',
-            backgroundColor: 'rgba(59, 130, 246, 0.08)',
-            border: '1px solid rgba(59, 130, 246, 0.2)',
-            borderRadius: 'var(--border-radius)',
-            fontSize: '0.875rem',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}>
-            <span>ℹ️</span> Update only the fields you want to change. Unchanged fields will retain their existing values.
-          </p>
-
-          {/* Collapsible ID Update Section */}
-          <div className="dashboard__form-section">
-            <div
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
-              onClick={() => setShowIdUpdate(!showIdUpdate)}
-            >
-              <span className="dashboard__form-section-header" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MdLock style={{ color: 'var(--color-primary)' }} /> Update Employee ID (Advanced Options)
-              </span>
-              <span style={{ fontSize: '0.875rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                {showIdUpdate ? 'Collapse ▲' : 'Expand ▼'}
-              </span>
-            </div>
-
-            {showIdUpdate && (
-              <div className="dashboard__id-update-section" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-warning)', marginBottom: '1rem', fontWeight: 500 }}>
-                  ⚠️ Changing the Employee ID will update all references including documents and audit logs. Use with caution.
-                </p>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                    Current Employee ID
-                  </label>
-                  <div style={{
-                    padding: '0.75rem',
-                    backgroundColor: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--border-radius)',
-                    fontSize: '0.875rem',
-                    color: 'var(--text-primary)',
-                    fontFamily: 'monospace',
-                    fontWeight: 600
-                  }}>
-                    {selectedEmployee?.id}
-                  </div>
-                </div>
-                <Input
-                  id="edit-employee-id"
-                  label="New Employee ID"
-                  placeholder="Enter new employee ID (e.g., EMP-002)"
-                  value={formData.id}
-                  onChange={(e) => handleFormChange('id', e.target.value)}
-                  fullWidth
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="dashboard__form-section">
-            <h4 className="dashboard__form-section-header">Personal Information</h4>
-
-            <div className="dashboard__form-row">
-              <Input
-                id="edit-last-name"
-                label="Last Name"
-                placeholder="Enter last name"
-                value={formData.lastName}
-                onChange={(e) => handleFormChange('lastName', e.target.value)}
-                error={formErrors.lastName}
-                fullWidth
-              />
-              <Input
-                id="edit-first-name"
-                label="First Name"
-                placeholder="Enter first name"
-                value={formData.firstName}
-                onChange={(e) => handleFormChange('firstName', e.target.value)}
-                error={formErrors.firstName}
-                fullWidth
-              />
-            </div>
-
-            <Input
-              id="edit-middle-name"
-              label="Middle Name"
-              placeholder="Enter middle name (optional)"
-              value={formData.middleName}
-              onChange={(e) => handleFormChange('middleName', e.target.value)}
-              fullWidth
-            />
-
-            <div className="dashboard__form-row">
-              <Input
-                id="edit-date-of-birth"
-                label="Date of Birth"
-                type="date"
-                placeholder="Select date of birth (optional)"
-                value={formData.dateOfBirth}
-                onChange={(e) => handleFormChange('dateOfBirth', e.target.value)}
-                fullWidth
-              />
-
-              <div className="dashboard__form-field">
-                <label htmlFor="update-gender" className="dashboard__form-label">
-                  Gender
-                </label>
-                <select
-                  id="update-gender"
-                  className="dashboard__form-select"
-                  value={formData.gender}
-                  onChange={(e) => handleFormChange('gender', e.target.value)}
-                >
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-                {formErrors.gender && <span className="dashboard__error">{formErrors.gender}</span>}
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard__form-section">
-            <h4 className="dashboard__form-section-header">Employment Details</h4>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="edit-office-hospital-name" className="dashboard__form-label">
-                Office / Hospital Name
-              </label>
-              <SearchableDropdown
-                id="edit-office-hospital-name"
-                options={dropdownOptions.officeNames}
-                value={formData.officeHospitalName}
-                onChange={(val) => handleFormChange('officeHospitalName', val)}
-                placeholder="Select or enter office or hospital name"
-              />
-              {formErrors.officeHospitalName && <span className="dashboard__error">{formErrors.officeHospitalName}</span>}
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="edit-position-function" className="dashboard__form-label">
-                Position / Function
-              </label>
-              <SearchableDropdown
-                id="edit-position-function"
-                options={dropdownOptions.positions}
-                value={formData.positionFunction}
-                onChange={(val) => handleFormChange('positionFunction', val)}
-                placeholder="Select or enter position or function"
-              />
-              {formErrors.positionFunction && <span className="dashboard__error">{formErrors.positionFunction}</span>}
-            </div>
-
-            <div className="dashboard__form-row">
-              <div className="dashboard__form-field">
-                <label htmlFor="update-status" className="dashboard__form-label">
-                  Status
-                </label>
-                <select
-                  id="update-status"
-                  className="dashboard__form-select"
-                  value={formData.status}
-                  onChange={(e) => handleFormChange('status', e.target.value as EmployeeStatus)}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-
-              <Input
-                id="edit-date-of-employment"
-                label="Date of Employment"
-                type="date"
-                value={formData.dateOfEmployment}
-                onChange={(e) => handleFormChange('dateOfEmployment', e.target.value)}
-                error={formErrors.dateOfEmployment}
-                fullWidth
-              />
-            </div>
-
-            {formData.status === 'Inactive' && (
-              <div className="dashboard__form-row">
-                <Input
-                  id="edit-date-of-separation"
-                  label="Date of Separation"
-                  type="date"
-                  value={formData.dateOfSeparation}
-                  onChange={(e) => handleFormChange('dateOfSeparation', e.target.value)}
-                  error={formErrors.dateOfSeparation}
-                  fullWidth
-                />
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="update-reasonForSeparation" className="dashboard__form-label">
-                    Reason for Separation
-                  </label>
-                  <select
-                    id="update-reasonForSeparation"
-                    className="dashboard__form-select"
-                    value={formData.reasonForSeparation}
-                    onChange={(e) => handleFormChange('reasonForSeparation', e.target.value)}
-                  >
-                    <option value="">Select reason for separation</option>
-                    {dropdownOptions.reasonsForSeparation.map((reason) => (
-                      <option key={reason} value={reason}>{reason}</option>
-                    ))}
-                  </select>
-                  {formErrors.reasonForSeparation && (
-                    <span className="dashboard__error">{formErrors.reasonForSeparation}</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="dashboard__form-field">
-              <label htmlFor="update-appointmentStatus" className="dashboard__form-label">
-                Appointment Status
-              </label>
-              <select
-                id="update-appointmentStatus"
-                className="dashboard__form-select"
-                value={formData.appointmentStatus}
-                onChange={(e) => handleFormChange('appointmentStatus', e.target.value as AppointmentStatus)}
-              >
-                <option value="">Select appointment status</option>
-                {dropdownOptions.appointmentStatuses.map((s) => {
-                  const displayName = s.endsWith('|date') ? s.slice(0, -5) : s;
-                  return (
-                    <option key={s} value={displayName}>{displayName}</option>
-                  );
-                })}
-              </select>
-              {formErrors.appointmentStatus && <span className="dashboard__error">{formErrors.appointmentStatus}</span>}
-            </div>
-
-            {/* Durational appointment statuses conditional date inputs */}
-            {formData.appointmentStatus && (
-              (() => {
-                const s = formData.appointmentStatus.toLowerCase().trim();
-                const isDefaultDurational = (
-                  s === 'consultant' ||
-                  s === 'contract of service' ||
-                  s === 'contractual' ||
-                  s === 'casual' ||
-                  s === 'job order'
-                );
-                if (isDefaultDurational) return true;
-
-                const matchedOption = dropdownOptions.appointmentStatuses.find(
-                  (opt) => {
-                    const name = opt.endsWith('|date') ? opt.slice(0, -5) : opt;
-                    return name.toLowerCase().trim() === s;
-                  }
-                );
-                return matchedOption ? matchedOption.endsWith('|date') : false;
-              })()
-            ) && (
-                <div className="dashboard__form-row">
-                  <Input
-                    id="edit-appointment-from"
-                    label="Appointment From"
-                    type="date"
-                    value={formData.appointmentFrom}
-                    onChange={(e) => handleFormChange('appointmentFrom', e.target.value)}
-                    error={formErrors.appointmentFrom}
-                    fullWidth
-                  />
-                  <Input
-                    id="edit-appointment-to"
-                    label="Appointment To"
-                    type="date"
-                    value={formData.appointmentTo}
-                    onChange={(e) => handleFormChange('appointmentTo', e.target.value)}
-                    error={formErrors.appointmentTo}
-                    fullWidth
-                  />
-                </div>
-              )}
-          </div>
-
-          <div className="dashboard__form-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-              <h4 className="dashboard__form-section-header" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>Administrative Order (AO) Details</h4>
-              <button
-                type="button"
-                onClick={() => {
-                  handleFormChange('aoType', '');
-                  handleFormChange('aoNumber', '');
-                  handleFormChange('aoYear', '');
-                  handleFormChange('detailedTo', '');
-                  handleFormChange('detailedDivision', '');
-                  handleFormChange('detailedOrderFrom', '');
-                  handleFormChange('detailedOrderTo', '');
-                  handleFormChange('designatedPositionFunction', '');
-                  handleFormChange('designatedOrderFrom', '');
-                  handleFormChange('designatedOrderTo', '');
-                  handleFormChange('recalledFrom', '');
-                  handleFormChange('recalledTo', '');
-                  handleFormChange('recalledOrderFrom', '');
-                  handleFormChange('recalledOrderTo', '');
-                  setAoFile(null);
-                }}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '6px',
-                  padding: '3px 10px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: 'var(--color-danger)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                Clear AO Inputs
-              </button>
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="update-ao-type" className="dashboard__form-label">
-                Type of AO
-              </label>
-              <select
-                id="update-ao-type"
-                className="dashboard__form-select"
-                value={formData.aoType}
-                onChange={(e) => handleFormChange('aoType', e.target.value as any)}
-              >
-                <option value="">Select AO Type</option>
-                <option value="Detailed">Detailed</option>
-                <option value="Designated">Designated</option>
-                <option value="Recalled">Recalled</option>
-              </select>
-            </div>
-
-            <div className="dashboard__form-row">
-              <Input
-                id="update-ao-number"
-                label="AO Number"
-                placeholder="Enter Administrative Order number"
-                value={formData.aoNumber}
-                onChange={(e) => handleFormChange('aoNumber', e.target.value)}
-                fullWidth
-              />
-              <div className="dashboard__form-field">
-                <label htmlFor="update-ao-year" className="dashboard__form-label">
-                  Series
-                </label>
-                <select
-                  id="update-ao-year"
-                  className={`dashboard__form-select${formErrors.aoYear ? ' dashboard__form-select--error' : ''}`}
-                  value={formData.aoYear}
-                  onChange={(e) => handleFormChange('aoYear', e.target.value)}
-                >
-                  <option value="">Select series year</option>
-                  {dropdownOptions.aoYears.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-                {formErrors.aoYear && <span className="dashboard__error">{formErrors.aoYear}</span>}
-              </div>
-            </div>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="update-ao-file" className="dashboard__form-label">
-                Upload AO PDF File {formData.aoNumber.trim() && formData.aoNumber !== originalEmployeeData?.aoNumber ? '(Required)' : '(Optional)'}
-              </label>
-              <input
-                id="update-ao-file"
-                className="dashboard__form-input"
-                type="file"
-                accept=".pdf,application/pdf"
-                onChange={(e) => setAoFile(e.target.files?.[0] || null)}
-                style={{
-                  padding: '0.5rem',
-                  border: '1px dashed var(--border-color)',
-                  borderRadius: 'var(--border-radius)',
-                  backgroundColor: 'var(--bg-secondary)',
-                  width: '100%'
-                }}
-              />
-              {aoFile && (
-                <>
-                  <p style={{
-                    fontSize: '0.8125rem',
-                    marginTop: '0.375rem',
-                    color: 'var(--color-success)',
-                    fontWeight: 500
-                  }}>
-                    ✓ Selected file: {aoFile.name} ({(aoFile.size / 1024).toFixed(1)} KB)
-                  </p>
-                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      id="update-auto-rename"
-                      checked={autoRename}
-                      onChange={(e) => setAutoRename(e.target.checked)}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                    />
-                    <label htmlFor="update-auto-rename" style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                      Auto rename file according to AO details
-                    </label>
-                  </div>
-                </>
-              )}
-              {formErrors.aoNumber && <span className="dashboard__error">{formErrors.aoNumber}</span>}
-            </div>
-
-            {formData.aoType === 'Detailed' && (
-              <>
-                <div className="dashboard__form-field">
-                  <label htmlFor="edit-detailedTo" className="dashboard__form-label">
-                    Detailed/Transferred Office
-                  </label>
-                  <SearchableDropdown
-                    id="edit-detailedTo"
-                    options={dropdownOptions.officeNames}
-                    value={formData.detailedTo}
-                    onChange={(val) => handleFormChange('detailedTo', val)}
-                    placeholder="Select or enter office"
-                  />
-                </div>
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="edit-detailedDivision" className="dashboard__form-label">
-                    Division
-                  </label>
-                  <input
-                    id="edit-detailedDivision"
-                    className="dashboard__form-input"
-                    type="text"
-                    placeholder="Enter division"
-                    value={formData.detailedDivision}
-                    onChange={(e) => handleFormChange('detailedDivision', e.target.value)}
-                  />
-                </div>
-
-                <div className="dashboard__form-row">
-                  <Input
-                    id="edit-appointment-from-detailed"
-                    label="Duration of Detailed Order (From)"
-                    type="date"
-                    value={formData.detailedOrderFrom}
-                    onChange={(e) => handleFormChange('detailedOrderFrom', e.target.value)}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="edit-appointment-to-detailed"
-                      label="Duration of Detailed Order (To)"
-                      type={formData.detailedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.detailedOrderTo}
-                      onChange={(e) => handleFormChange('detailedOrderTo', e.target.value)}
-                      disabled={formData.detailedOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="detailed-until-revoked-edit"
-                        checked={formData.detailedOrderTo === 'Until revoked'}
-                        onChange={(e) => handleFormChange('detailedOrderTo', e.target.checked ? 'Until revoked' : '')}
-                      />
-                      <label htmlFor="detailed-until-revoked-edit" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {formData.aoType === 'Designated' && (
-              <>
-                <div className="dashboard__form-field">
-                  <label htmlFor="edit-designatedOffice" className="dashboard__form-label">
-                    Designated Office
-                  </label>
-                  <SearchableDropdown
-                    id="edit-designatedOffice"
-                    options={dropdownOptions.officeNames}
-                    value={formData.detailedTo}
-                    onChange={(val) => handleFormChange('detailedTo', val)}
-                    placeholder="Select or enter designated office"
-                  />
-                </div>
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="edit-designatedPositionFunction" className="dashboard__form-label">
-                    Designated Position Function
-                  </label>
-                  <SearchableDropdown
-                    id="edit-designatedPositionFunction"
-                    options={dropdownOptions.positions}
-                    value={formData.designatedPositionFunction}
-                    onChange={(val) => handleFormChange('designatedPositionFunction', val)}
-                    placeholder="Select or enter position function"
-                  />
-                </div>
-
-                <div className="dashboard__form-row">
-                  <Input
-                    id="edit-designated-order-from"
-                    label="Designated Order (From)"
-                    type="date"
-                    value={formData.designatedOrderFrom}
-                    onChange={(e) => handleFormChange('designatedOrderFrom', e.target.value)}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="edit-designated-order-to"
-                      label="Designated Order (To)"
-                      type={formData.designatedOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.designatedOrderTo}
-                      onChange={(e) => handleFormChange('designatedOrderTo', e.target.value)}
-                      disabled={formData.designatedOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="designated-until-revoked-edit"
-                        checked={formData.designatedOrderTo === 'Until revoked'}
-                        onChange={(e) => handleFormChange('designatedOrderTo', e.target.checked ? 'Until revoked' : '')}
-                      />
-                      <label htmlFor="designated-until-revoked-edit" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {formData.aoType === 'Recalled' && (
-              <>
-                <div className="dashboard__form-field">
-                  <label htmlFor="edit-recalledFrom" className="dashboard__form-label">
-                    Recalled from
-                  </label>
-                  <SearchableDropdown
-                    id="edit-recalledFrom"
-                    options={dropdownOptions.officeNames}
-                    value={formData.recalledFrom}
-                    onChange={(val) => handleFormChange('recalledFrom', val)}
-                    placeholder="Select or enter recalled from office"
-                  />
-                </div>
-
-                <div className="dashboard__form-field">
-                  <label htmlFor="edit-recalledTo" className="dashboard__form-label">
-                    Recalled to
-                  </label>
-                  <SearchableDropdown
-                    id="edit-recalledTo"
-                    options={dropdownOptions.officeNames}
-                    value={formData.recalledTo}
-                    onChange={(val) => handleFormChange('recalledTo', val)}
-                    placeholder="Select or enter recalled to office"
-                  />
-                </div>
-
-                <div className="dashboard__form-row">
-                  <Input
-                    id="edit-recalled-order-from"
-                    label="Duration of recalled Order (From)"
-                    type="date"
-                    value={formData.recalledOrderFrom}
-                    onChange={(e) => handleFormChange('recalledOrderFrom', e.target.value)}
-                    fullWidth
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                    <Input
-                      id="edit-recalled-order-to"
-                      label="Duration of recalled Order (To)"
-                      type={formData.recalledOrderTo === 'Until revoked' ? 'text' : 'date'}
-                      value={formData.recalledOrderTo}
-                      onChange={(e) => handleFormChange('recalledOrderTo', e.target.value)}
-                      disabled={formData.recalledOrderTo === 'Until revoked'}
-                      fullWidth
-                    />
-                    <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        id="recalled-until-revoked-edit"
-                        checked={formData.recalledOrderTo === 'Until revoked'}
-                        onChange={(e) => handleFormChange('recalledOrderTo', e.target.checked ? 'Until revoked' : '')}
-                      />
-                      <label htmlFor="recalled-until-revoked-edit" style={{ fontSize: '0.85rem' }}>Until revoked</label>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-          </div>
-
-          <div className="dashboard__form-section">
-            <h4 className="dashboard__form-section-header">201 File Status</h4>
-
-            <div className="dashboard__form-field">
-              <label htmlFor="edit-file201-status" className="dashboard__form-label">
-                201 File Status
-              </label>
-              <select
-                id="edit-file201-status"
-                className="dashboard__form-select"
-                value={formData.file201Status}
-                onChange={(e) => handleFormChange('file201Status', e.target.value)}
-              >
-                <option value="Available">Available</option>
-                <option value="Unavailable">Unavailable</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </Modal>
+        employee={selectedEmployee}
+        dropdownOptions={dropdownOptions}
+        onSave={handleUpdateEmployee}
+        isSaving={isLoading}
+      />
 
 
       <ImportModal

@@ -33,11 +33,15 @@ function Modal({
   hideCloseButton = false,
   isMaximized = false,
   noPadding = false,
-  allowMinimize = true,
-  allowFullscreen = true,
+  allowMinimize,
+  allowFullscreen,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  // Automatically disable minimize and fullscreen on small confirmation/alert dialogs (size="sm")
+  const showMinimize = allowMinimize !== undefined ? allowMinimize : size !== 'sm';
+  const showFullscreen = allowFullscreen !== undefined ? allowFullscreen : size !== 'sm';
 
   const [isFullscreen, setIsFullscreen] = useState(isMaximized);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -155,12 +159,12 @@ function Modal({
         {title && (
           <div
             className="modal__header"
-            onDoubleClick={() => allowFullscreen && setIsFullscreen((prev) => !prev)}
-            title={allowFullscreen ? 'Double-click to toggle fullscreen' : undefined}
+            onDoubleClick={() => showFullscreen && setIsFullscreen((prev) => !prev)}
+            title={showFullscreen ? 'Double-click to toggle fullscreen' : undefined}
           >
             <h2 className="modal__title">{title}</h2>
             <div className="modal__controls">
-              {allowMinimize && (
+              {showMinimize && (
                 <button
                   type="button"
                   className="modal__control-btn modal__control-btn--minimize"
@@ -171,7 +175,7 @@ function Modal({
                   <MdRemove size={18} />
                 </button>
               )}
-              {allowFullscreen && (
+              {showFullscreen && (
                 <button
                   type="button"
                   className="modal__control-btn modal__control-btn--fullscreen"

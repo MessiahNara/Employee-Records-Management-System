@@ -55,7 +55,8 @@
 }
 
 .table__row {
-  transition: background-color 0.15s ease, transform 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
 
 .table__row:not(:last-child) {
@@ -63,11 +64,25 @@
 }
 
 .table__row:hover {
-  background-color: rgba(59, 130, 246, 0.03);
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+[data-theme='dark'] .table__row:hover {
+  background-color: rgba(59, 130, 246, 0.16) !important;
 }
 
 .table__row--clickable {
   cursor: pointer;
+}
+
+.table__row--clickable:hover {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  box-shadow: inset 4px 0 0 0 var(--color-primary);
+}
+
+[data-theme='dark'] .table__row--clickable:hover {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+  box-shadow: inset 4px 0 0 0 var(--color-primary);
 }
 
 .table__row--clickable:focus-visible {

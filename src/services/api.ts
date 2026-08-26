@@ -492,6 +492,7 @@ export const employeeApi = {
     filter_type?: 'first_name' | 'middle_name' | 'last_name' | 'all';
     page?: number;
     limit?: number;
+    includeDocuments?: boolean;
   }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
@@ -500,6 +501,7 @@ export const employeeApi = {
     if (filters?.filter_type) params.append('filter_type', filters.filter_type);
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.includeDocuments) params.append('includeDocuments', 'true');
     
     const query = params.toString();
     const result = await apiRequest<any>(`/employees${query ? `?${query}` : ''}`);

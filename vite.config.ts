@@ -66,6 +66,15 @@ export default defineConfig(() => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-icons': ['react-icons'],
+          },
+        },
+      },
     },
   };
 });

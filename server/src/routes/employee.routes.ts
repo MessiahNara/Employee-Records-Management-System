@@ -199,13 +199,15 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
+    const includeDocuments = req.query.includeDocuments === 'true' || (!page && !limit);
+
     const [employees, total] = await Promise.all([
       prisma.employee.findMany({
         where,
         skip,
         take,
         include: {
-          documents: true,
+          documents: includeDocuments,
           yellowBox: true,
         },
         orderBy: [
@@ -609,35 +611,41 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     const updateData = req.body;
 
     // Convert date strings to Date objects and treat blank values as null
+    if ('dateOfBirth' in updateData) {
+      updateData.dateOfBirth = toNullableDate(updateData.dateOfBirth);
+    }
     if ('dateOfEmployment' in updateData) {
-      updateData.dateOfEmployment = updateData.dateOfEmployment ? new Date(updateData.dateOfEmployment) : null;
+      updateData.dateOfEmployment = toNullableDate(updateData.dateOfEmployment);
     }
     if ('appointmentFrom' in updateData) {
-      updateData.appointmentFrom = updateData.appointmentFrom ? new Date(updateData.appointmentFrom) : null;
+      updateData.appointmentFrom = toNullableDate(updateData.appointmentFrom);
     }
     if ('appointmentTo' in updateData) {
-      updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
+      updateData.appointmentTo = toNullableDate(updateData.appointmentTo);
     }
     if ('expirationDate' in updateData) {
-      updateData.expirationDate = updateData.expirationDate ? new Date(updateData.expirationDate) : null;
+      updateData.expirationDate = toNullableDate(updateData.expirationDate);
     }
     if ('dateOfSeparation' in updateData) {
-      updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
+      updateData.dateOfSeparation = toNullableDate(updateData.dateOfSeparation);
+    }
+    if ('detailedDate' in updateData) {
+      updateData.detailedDate = toNullableDate(updateData.detailedDate);
     }
     if ('designatedOrderFrom' in updateData) {
-      updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
+      updateData.designatedOrderFrom = toNullableDate(updateData.designatedOrderFrom);
     }
     if ('designatedOrderTo' in updateData) {
       updateData.designatedOrderTo = toNullableDate(updateData.designatedOrderTo);
     }
     if ('recalledOrderFrom' in updateData) {
-      updateData.recalledOrderFrom = updateData.recalledOrderFrom ? new Date(updateData.recalledOrderFrom) : null;
+      updateData.recalledOrderFrom = toNullableDate(updateData.recalledOrderFrom);
     }
     if ('recalledOrderTo' in updateData) {
       updateData.recalledOrderTo = toNullableDate(updateData.recalledOrderTo);
     }
     if ('detailedOrderFrom' in updateData) {
-      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+      updateData.detailedOrderFrom = toNullableDate(updateData.detailedOrderFrom);
     }
     if ('detailedOrderTo' in updateData) {
       updateData.detailedOrderTo = toNullableDate(updateData.detailedOrderTo);
@@ -713,40 +721,40 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
 
     // Convert date strings to Date objects and treat blank values as null
     if ('dateOfBirth' in updateData) {
-      updateData.dateOfBirth = updateData.dateOfBirth ? new Date(updateData.dateOfBirth) : null;
+      updateData.dateOfBirth = toNullableDate(updateData.dateOfBirth);
     }
     if ('dateOfEmployment' in updateData) {
-      updateData.dateOfEmployment = updateData.dateOfEmployment ? new Date(updateData.dateOfEmployment) : null;
+      updateData.dateOfEmployment = toNullableDate(updateData.dateOfEmployment);
     }
     if ('appointmentFrom' in updateData) {
-      updateData.appointmentFrom = updateData.appointmentFrom ? new Date(updateData.appointmentFrom) : null;
+      updateData.appointmentFrom = toNullableDate(updateData.appointmentFrom);
     }
     if ('appointmentTo' in updateData) {
-      updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
+      updateData.appointmentTo = toNullableDate(updateData.appointmentTo);
     }
     if ('expirationDate' in updateData) {
-      updateData.expirationDate = updateData.expirationDate ? new Date(updateData.expirationDate) : null;
+      updateData.expirationDate = toNullableDate(updateData.expirationDate);
     }
     if ('dateOfSeparation' in updateData) {
-      updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
+      updateData.dateOfSeparation = toNullableDate(updateData.dateOfSeparation);
     }
     if ('detailedDate' in updateData) {
-      updateData.detailedDate = updateData.detailedDate ? new Date(updateData.detailedDate) : null;
+      updateData.detailedDate = toNullableDate(updateData.detailedDate);
     }
     if ('designatedOrderFrom' in updateData) {
-      updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
+      updateData.designatedOrderFrom = toNullableDate(updateData.designatedOrderFrom);
     }
     if ('designatedOrderTo' in updateData) {
       updateData.designatedOrderTo = toNullableDate(updateData.designatedOrderTo);
     }
     if ('detailedOrderFrom' in updateData) {
-      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+      updateData.detailedOrderFrom = toNullableDate(updateData.detailedOrderFrom);
     }
     if ('detailedOrderTo' in updateData) {
       updateData.detailedOrderTo = toNullableDate(updateData.detailedOrderTo);
     }
     if ('recalledOrderFrom' in updateData) {
-      updateData.recalledOrderFrom = updateData.recalledOrderFrom ? new Date(updateData.recalledOrderFrom) : null;
+      updateData.recalledOrderFrom = toNullableDate(updateData.recalledOrderFrom);
     }
     if ('recalledOrderTo' in updateData) {
       updateData.recalledOrderTo = toNullableDate(updateData.recalledOrderTo);

@@ -142,7 +142,6 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
       setCurrentStep(2);
     } else if (currentStep === 2) {
       if (!formData.officeHospitalName.trim()) errs.officeHospitalName = 'Office / Hospital is required';
-      if (!formData.positionFunction.trim()) errs.positionFunction = 'Position / Function is required';
       if (!formData.appointmentStatus.trim()) errs.appointmentStatus = 'Appointment Status is required';
       if (formData.status === 'Inactive' && !formData.reasonForSeparation.trim()) {
         errs.reasonForSeparation = 'Reason for separation is required for inactive employees';
@@ -476,7 +475,7 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
 
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-position">
-                <span>Position / Function <span className="form-wizard__required">*</span></span>
+                <span>Position / Function <span className="form-wizard__optional">(Optional)</span></span>
                 {formData.positionFunction.trim() && (
                   <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                     <MdCheck />

@@ -262,3 +262,61 @@ h6 {
     left: 10px;
   }
 }
+
+/* ==========================================================================
+   Universal Emphasized Tab & Navigation Hover Styles
+   ========================================================================== */
+.tab,
+.nav-tab,
+.filter-tab,
+.tab-btn,
+.nav__item,
+.subtab,
+.reports-view__tab-btn,
+.approvals__filter-tab,
+.settings__nav-item,
+[role="tab"] {
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer !important;
+}
+
+.tab:hover:not(:disabled),
+.nav-tab:hover:not(:disabled),
+.filter-tab:hover:not(:disabled),
+.tab-btn:hover:not(:disabled),
+.nav__item:hover:not(:disabled),
+.subtab:hover:not(:disabled),
+.reports-view__tab-btn:hover:not(:disabled),
+.approvals__filter-tab:hover:not(:disabled),
+.settings__nav-item:hover:not(:disabled),
+[role="tab"]:hover:not([aria-disabled="true"]) {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18) !important;
+}
+
+/* ==========================================================================
+   Universal Emphasized Table Row Hover Styles
+   ========================================================================== */
+table tbody tr {
+  transition: background-color 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease !important;
+}
+
+table tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+[data-theme='dark'] table tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+
+table tbody tr[role="button"]:hover,
+table tbody tr.table__row--clickable:hover {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+  box-shadow: inset 4px 0 0 0 var(--color-primary) !important;
+}
+
+[data-theme='dark'] table tbody tr[role="button"]:hover,
+[data-theme='dark'] table tbody tr.table__row--clickable:hover {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+  box-shadow: inset 4px 0 0 0 var(--color-primary) !important;
+}

@@ -21,6 +21,7 @@ import backupRoutes from './routes/backup.routes';
 import { initBackupScheduler } from './utils/backupScheduler';
 import { validateSession } from './middleware/session';
 import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
+import { consolidateDocumentFolders } from './utils/folderSync';
 import prisma from './lib/prisma';
 import bcrypt from 'bcryptjs';
 import { initSocket } from './socket';
@@ -274,6 +275,7 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
       console.log(`🔒 Using HTTPS with self-signed certificate`);
       syncExistingRecordsToDropdownOptions();
+      consolidateDocumentFolders();
     });
   } catch (err) {
     console.error('⚠️ Failed to start HTTPS server, falling back to HTTP:', err);
@@ -283,6 +285,7 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
       syncExistingRecordsToDropdownOptions();
+      consolidateDocumentFolders();
     });
   }
 } else {
@@ -293,6 +296,7 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
     syncExistingRecordsToDropdownOptions();
+    consolidateDocumentFolders();
   });
 }
 

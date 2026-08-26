@@ -210,7 +210,11 @@
 }
 
 .backup-table tbody tr:hover td {
-  background-color: var(--hover-bg, rgba(59, 130, 246, 0.04));
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+[data-theme='dark'] .backup-table tbody tr:hover td {
+  background-color: rgba(59, 130, 246, 0.18) !important;
 }
 
 .backup-table__filename {
