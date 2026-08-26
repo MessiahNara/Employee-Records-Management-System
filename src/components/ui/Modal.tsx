@@ -1,5 +1,12 @@
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  MdRemove,
+  MdCropSquare,
+  MdFullscreenExit,
+  MdClose,
+  MdOpenInFull,
+} from 'react-icons/md';
 import './Modal.css';
 
 interface ModalProps {
@@ -12,14 +19,46 @@ interface ModalProps {
   hideCloseButton?: boolean;
   isMaximized?: boolean;
   noPadding?: boolean;
+  allowMinimize?: boolean;
+  allowFullscreen?: boolean;
 }
 
-function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideCloseButton = false, isMaximized = false, noPadding = false }: ModalProps) {
+function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+  size = 'md',
+  hideCloseButton = false,
+  isMaximized = false,
+  noPadding = false,
+  allowMinimize = true,
+  allowFullscreen = true,
+}: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
+  const [isFullscreen, setIsFullscreen] = useState(isMaximized);
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  // Sync isFullscreen when isMaximized prop changes externally
   useEffect(() => {
-    if (!isOpen) return;
+    setIsFullscreen(isMaximized);
+  }, [isMaximized]);
+
+  // Reset minimized state whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setIsMinimized(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || isMinimized) {
+      document.body.style.overflow = 'unset';
+      return;
+    }
 
     // Store the previously focused element
     previousActiveElement.current = document.activeElement as HTMLElement;
@@ -33,10 +72,10 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
         previousActiveElement.current.focus();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, isMinimized]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isMinimized) return;
 
     // Handle Escape key to close modal
     const handleEscape = (e: KeyboardEvent) => {
@@ -49,33 +88,112 @@ function Modal({ isOpen, onClose, title, children, footer, size = 'md', hideClos
     return () => {
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen, onClose, hideCloseButton]);
+  }, [isOpen, isMinimized, onClose, hideCloseButton]);
 
   if (!isOpen) return null;
 
+  // Render Minimized Floating Dock Pill
+  if (isMinimized) {
+    return createPortal(
+      <div
+        className="modal-minimized-dock"
+        onClick={() => setIsMinimized(false)}
+        role="button"
+        tabIndex={0}
+        title="Click to restore active window"
+      >
+        <div className="modal-minimized-dock__indicator" />
+        <div className="modal-minimized-dock__content">
+          <span className="modal-minimized-dock__title">
+            {typeof title === 'string' ? title : 'Active Window'}
+          </span>
+          <span className="modal-minimized-dock__sub">Click to restore</span>
+        </div>
+        <div
+          className="modal-minimized-dock__actions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="modal-minimized-dock__btn"
+            onClick={() => setIsMinimized(false)}
+            title="Restore Window"
+            aria-label="Restore Window"
+          >
+            <MdOpenInFull size={14} />
+          </button>
+          {!hideCloseButton && (
+            <button
+              type="button"
+              className="modal-minimized-dock__btn modal-minimized-dock__btn--close"
+              onClick={onClose}
+              title="Close"
+              aria-label="Close"
+            >
+              <MdClose size={14} />
+            </button>
+          )}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  const effectiveMaximized = isFullscreen;
+
   return createPortal(
     <div
-      className={`modal-overlay ${isMaximized ? 'modal-overlay--maximized' : ''}`}
+      className={`modal-overlay ${effectiveMaximized ? 'modal-overlay--maximized' : ''}`}
       role="dialog"
       aria-modal="true"
     >
       <div
         ref={modalRef}
-        className={`modal modal--${size} ${isMaximized ? 'modal--maximized' : ''}`}
+        className={`modal modal--${size} ${effectiveMaximized ? 'modal--maximized modal--fullscreen' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="modal__header">
+          <div
+            className="modal__header"
+            onDoubleClick={() => allowFullscreen && setIsFullscreen((prev) => !prev)}
+            title={allowFullscreen ? 'Double-click to toggle fullscreen' : undefined}
+          >
             <h2 className="modal__title">{title}</h2>
-            {!hideCloseButton && (
-              <button
-                className="modal__close"
-                onClick={onClose}
-                aria-label="Close modal"
-              >
-                ✕
-              </button>
-            )}
+            <div className="modal__controls">
+              {allowMinimize && (
+                <button
+                  type="button"
+                  className="modal__control-btn modal__control-btn--minimize"
+                  onClick={() => setIsMinimized(true)}
+                  title="Minimize window"
+                  aria-label="Minimize modal"
+                >
+                  <MdRemove size={18} />
+                </button>
+              )}
+              {allowFullscreen && (
+                <button
+                  type="button"
+                  className="modal__control-btn modal__control-btn--fullscreen"
+                  onClick={() => setIsFullscreen((prev) => !prev)}
+                  title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                  aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                >
+                  {isFullscreen ? <MdFullscreenExit size={18} /> : <MdCropSquare size={16} />}
+                </button>
+              )}
+              {!hideCloseButton && (
+                <button
+                  type="button"
+                  className="modal__control-btn modal__control-btn--close"
+                  onClick={onClose}
+                  title="Close (Esc)"
+                  aria-label="Close modal"
+                >
+                  <MdClose size={18} />
+                </button>
+              )}
+            </div>
           </div>
         )}
         <div className={`modal__body ${noPadding ? 'modal__body--no-padding' : ''}`}>{children}</div>
