@@ -22,7 +22,7 @@ import {
 } from 'react-icons/md';
 import './Login.css';
 
-const CLIENT_VERSION = 'v1.5.0';
+const CLIENT_VERSION = 'v1.6.1';
 
 interface LoginFormData {
   username: string;
@@ -43,14 +43,14 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isServerConfigOpen, setIsServerConfigOpen] = useState(false);
   const [serverUrlInput, setServerUrlInput] = useState('');
-  const [serverVersion, setServerVersion] = useState<string>('v1.5.0');
+  const [serverVersion, setServerVersion] = useState<string>('v1.6.1');
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   const checkServerHealth = () => {
     setServerStatus('checking');
     api.healthCheck()
       .then((res) => {
-        setServerVersion(res.version ? `v${res.version.replace(/^v/, '')}` : 'v1.5.0');
+        setServerVersion(res.version ? `v${res.version.replace(/^v/, '')}` : 'v1.6.1');
         setServerStatus('online');
       })
       .catch(() => {

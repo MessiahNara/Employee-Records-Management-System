@@ -383,30 +383,68 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''} ${isMobileOpen ? 'sidebar--open' : ''}`}>
       <div className="sidebar__header">
         <div className="sidebar__logo">
-          <img
-            src="/icon.png"
-            alt="ERMS Logo"
-            className="sidebar__logo-image"
-            style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px', flexShrink: 0 }}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = '/template_logo.png';
+          <div
+            className="sidebar__logo-badge"
+            title="Employee Records Management System (ERMS)"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+              flexShrink: 0,
             }}
-          />
+          >
+            <MdFolder style={{ fontSize: '22px', color: '#ffffff' }} />
+          </div>
           {!isCollapsed && (
-            <span
-              className="sidebar__logo-text"
-              style={{
-                fontSize: '0.85rem',
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-                lineHeight: '1.35',
-                display: 'block',
-                width: '100%',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Employee Records Management System
-            </span>
+            <div className="sidebar__logo-text-container" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, paddingLeft: '2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  className="sidebar__logo-title"
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: 900,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '0.04em',
+                    lineHeight: '1.1',
+                  }}
+                >
+                  ERMS
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.62rem',
+                    fontWeight: 800,
+                    backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                    color: 'var(--color-primary, #2563eb)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  v1.6.1
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  lineHeight: '1.2',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  marginTop: '2px',
+                }}
+              >
+                Records Management System
+              </span>
+            </div>
           )}
         </div>
       </div>

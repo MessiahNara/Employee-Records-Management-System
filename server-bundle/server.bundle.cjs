@@ -101,8 +101,8 @@ var require_package = __commonJS({
 // server/node_modules/dotenv/lib/main.js
 var require_main = __commonJS({
   "server/node_modules/dotenv/lib/main.js"(exports2, module2) {
-    var fs9 = require("fs");
-    var path9 = require("path");
+    var fs12 = require("fs");
+    var path12 = require("path");
     var os = require("os");
     var crypto3 = require("crypto");
     var packageJson = require_package();
@@ -210,7 +210,7 @@ var require_main = __commonJS({
       if (options && options.path && options.path.length > 0) {
         if (Array.isArray(options.path)) {
           for (const filepath of options.path) {
-            if (fs9.existsSync(filepath)) {
+            if (fs12.existsSync(filepath)) {
               possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
             }
           }
@@ -218,15 +218,15 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path9.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path12.resolve(process.cwd(), ".env.vault");
       }
-      if (fs9.existsSync(possibleVaultPath)) {
+      if (fs12.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
       }
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path9.join(os.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path12.join(os.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug = Boolean(options && options.debug);
@@ -243,7 +243,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path9.resolve(process.cwd(), ".env");
+      const dotenvPath = path12.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       const debug = Boolean(options && options.debug);
       const quiet = options && "quiet" in options ? options.quiet : true;
@@ -267,13 +267,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path10 of optionPaths) {
+      for (const path13 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs9.readFileSync(path10, { encoding }));
+          const parsed = DotenvModule.parse(fs12.readFileSync(path13, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e) {
           if (debug) {
-            _debug(`Failed to load ${path10} ${e.message}`);
+            _debug(`Failed to load ${path13} ${e.message}`);
           }
           lastError = e;
         }
@@ -288,7 +288,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative = path9.relative(process.cwd(), filePath);
+            const relative = path12.relative(process.cwd(), filePath);
             shortPaths.push(relative);
           } catch (e) {
             if (debug) {
@@ -1694,8 +1694,8 @@ var require_node = __commonJS({
           }
           break;
         case "FILE":
-          var fs9 = require("fs");
-          stream2 = new fs9.SyncWriteStream(fd2, { autoClose: false });
+          var fs12 = require("fs");
+          stream2 = new fs12.SyncWriteStream(fd2, { autoClose: false });
           stream2._type = "fs";
           break;
         case "PIPE":
@@ -14482,11 +14482,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path9) {
-      if (!path9 || typeof path9 !== "string") {
+    function lookup(path12) {
+      if (!path12 || typeof path12 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path9).toLowerCase().substr(1);
+      var extension2 = extname("x." + path12).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -17994,7 +17994,7 @@ var require_path_to_regexp = __commonJS({
   "server/node_modules/path-to-regexp/index.js"(exports2, module2) {
     module2.exports = pathToRegexp;
     var MATCHING_GROUP_REGEXP = /\\.|\((?:\?<(.*?)>)?(?!\?)/g;
-    function pathToRegexp(path9, keys, options) {
+    function pathToRegexp(path12, keys, options) {
       options = options || {};
       keys = keys || [];
       var strict = options.strict;
@@ -18008,8 +18008,8 @@ var require_path_to_regexp = __commonJS({
       var pos = 0;
       var backtrack = "";
       var m;
-      if (path9 instanceof RegExp) {
-        while (m = MATCHING_GROUP_REGEXP.exec(path9.source)) {
+      if (path12 instanceof RegExp) {
+        while (m = MATCHING_GROUP_REGEXP.exec(path12.source)) {
           if (m[0][0] === "\\") continue;
           keys.push({
             name: m[1] || name++,
@@ -18017,18 +18017,18 @@ var require_path_to_regexp = __commonJS({
             offset: m.index
           });
         }
-        return path9;
+        return path12;
       }
-      if (Array.isArray(path9)) {
-        path9 = path9.map(function(value) {
+      if (Array.isArray(path12)) {
+        path12 = path12.map(function(value) {
           return pathToRegexp(value, keys, options).source;
         });
-        return new RegExp(path9.join("|"), flags);
+        return new RegExp(path12.join("|"), flags);
       }
-      if (typeof path9 !== "string") {
+      if (typeof path12 !== "string") {
         throw new TypeError("path must be a string, array of strings, or regular expression");
       }
-      path9 = path9.replace(
+      path12 = path12.replace(
         /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
         function(match, slash, format, key, capture, star, optional, offset) {
           if (match[0] === "\\") {
@@ -18045,7 +18045,7 @@ var require_path_to_regexp = __commonJS({
           if (slash || format) {
             backtrack = "";
           } else {
-            backtrack += path9.slice(pos, offset);
+            backtrack += path12.slice(pos, offset);
           }
           pos = offset + match.length;
           if (match === "*") {
@@ -18075,7 +18075,7 @@ var require_path_to_regexp = __commonJS({
           return result;
         }
       );
-      while (m = MATCHING_GROUP_REGEXP.exec(path9)) {
+      while (m = MATCHING_GROUP_REGEXP.exec(path12)) {
         if (m[0][0] === "\\") continue;
         if (keysOffset + i === keys.length || keys[keysOffset + i].offset > m.index) {
           keys.splice(keysOffset + i, 0, {
@@ -18087,13 +18087,13 @@ var require_path_to_regexp = __commonJS({
         }
         i++;
       }
-      path9 += strict ? "" : path9[path9.length - 1] === "/" ? "?" : "/?";
+      path12 += strict ? "" : path12[path12.length - 1] === "/" ? "?" : "/?";
       if (end) {
-        path9 += "$";
-      } else if (path9[path9.length - 1] !== "/") {
-        path9 += lookahead ? "(?=/|$)" : "(?:/|$)";
+        path12 += "$";
+      } else if (path12[path12.length - 1] !== "/") {
+        path12 += lookahead ? "(?=/|$)" : "(?:/|$)";
       }
-      return new RegExp("^" + path9, flags);
+      return new RegExp("^" + path12, flags);
     }
   }
 });
@@ -18106,19 +18106,19 @@ var require_layer = __commonJS({
     var debug = require_src()("express:router:layer");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     module2.exports = Layer;
-    function Layer(path9, options, fn) {
+    function Layer(path12, options, fn) {
       if (!(this instanceof Layer)) {
-        return new Layer(path9, options, fn);
+        return new Layer(path12, options, fn);
       }
-      debug("new %o", path9);
+      debug("new %o", path12);
       var opts = options || {};
       this.handle = fn;
       this.name = fn.name || "<anonymous>";
       this.params = void 0;
       this.path = void 0;
-      this.regexp = pathRegexp(path9, this.keys = [], opts);
-      this.regexp.fast_star = path9 === "*";
-      this.regexp.fast_slash = path9 === "/" && opts.end === false;
+      this.regexp = pathRegexp(path12, this.keys = [], opts);
+      this.regexp.fast_star = path12 === "*";
+      this.regexp.fast_slash = path12 === "/" && opts.end === false;
     }
     Layer.prototype.handle_error = function handle_error(error, req, res, next) {
       var fn = this.handle;
@@ -18142,20 +18142,20 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.match = function match(path9) {
+    Layer.prototype.match = function match(path12) {
       var match2;
-      if (path9 != null) {
+      if (path12 != null) {
         if (this.regexp.fast_slash) {
           this.params = {};
           this.path = "";
           return true;
         }
         if (this.regexp.fast_star) {
-          this.params = { "0": decode_param(path9) };
-          this.path = path9;
+          this.params = { "0": decode_param(path12) };
+          this.path = path12;
           return true;
         }
-        match2 = this.regexp.exec(path9);
+        match2 = this.regexp.exec(path12);
       }
       if (!match2) {
         this.params = void 0;
@@ -18248,10 +18248,10 @@ var require_route = __commonJS({
     var slice = Array.prototype.slice;
     var toString = Object.prototype.toString;
     module2.exports = Route;
-    function Route(path9) {
-      this.path = path9;
+    function Route(path12) {
+      this.path = path12;
       this.stack = [];
-      debug("new %o", path9);
+      debug("new %o", path12);
       this.methods = {};
     }
     Route.prototype._handles_method = function _handles_method(method) {
@@ -18381,17 +18381,17 @@ var require_router = __commonJS({
     var toString = Object.prototype.toString;
     var proto = module2.exports = function(options) {
       var opts = options || {};
-      function router12(req, res, next) {
-        router12.handle(req, res, next);
+      function router13(req, res, next) {
+        router13.handle(req, res, next);
       }
-      setPrototypeOf(router12, proto);
-      router12.params = {};
-      router12._params = [];
-      router12.caseSensitive = opts.caseSensitive;
-      router12.mergeParams = opts.mergeParams;
-      router12.strict = opts.strict;
-      router12.stack = [];
-      return router12;
+      setPrototypeOf(router13, proto);
+      router13.params = {};
+      router13._params = [];
+      router13.caseSensitive = opts.caseSensitive;
+      router13.mergeParams = opts.mergeParams;
+      router13.strict = opts.strict;
+      router13.stack = [];
+      return router13;
     };
     proto.param = function param(name, fn) {
       if (typeof name === "function") {
@@ -18463,8 +18463,8 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        var path9 = getPathname(req);
-        if (path9 == null) {
+        var path12 = getPathname(req);
+        if (path12 == null) {
           return done(layerError);
         }
         var layer;
@@ -18472,7 +18472,7 @@ var require_router = __commonJS({
         var route;
         while (match !== true && idx < stack.length) {
           layer = stack[idx++];
-          match = matchLayer(layer, path9);
+          match = matchLayer(layer, path12);
           route = layer.route;
           if (typeof match !== "boolean") {
             layerError = layerError || match;
@@ -18510,18 +18510,18 @@ var require_router = __commonJS({
           } else if (route) {
             layer.handle_request(req, res, next);
           } else {
-            trim_prefix(layer, layerError, layerPath, path9);
+            trim_prefix(layer, layerError, layerPath, path12);
           }
           sync = 0;
         });
       }
-      function trim_prefix(layer, layerError, layerPath, path9) {
+      function trim_prefix(layer, layerError, layerPath, path12) {
         if (layerPath.length !== 0) {
-          if (layerPath !== path9.slice(0, layerPath.length)) {
+          if (layerPath !== path12.slice(0, layerPath.length)) {
             next(layerError);
             return;
           }
-          var c = path9[layerPath.length];
+          var c = path12[layerPath.length];
           if (c && c !== "/" && c !== ".") return next(layerError);
           debug("trim prefix (%s) from url %s", layerPath, req.url);
           removed = layerPath;
@@ -18599,7 +18599,7 @@ var require_router = __commonJS({
     };
     proto.use = function use(fn) {
       var offset = 0;
-      var path9 = "/";
+      var path12 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -18607,7 +18607,7 @@ var require_router = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path9 = fn;
+          path12 = fn;
         }
       }
       var callbacks = flatten(slice.call(arguments, offset));
@@ -18619,8 +18619,8 @@ var require_router = __commonJS({
         if (typeof fn !== "function") {
           throw new TypeError("Router.use() requires a middleware function but got a " + gettype(fn));
         }
-        debug("use %o %s", path9, fn.name || "<anonymous>");
-        var layer = new Layer(path9, {
+        debug("use %o %s", path12, fn.name || "<anonymous>");
+        var layer = new Layer(path12, {
           sensitive: this.caseSensitive,
           strict: false,
           end: false
@@ -18630,9 +18630,9 @@ var require_router = __commonJS({
       }
       return this;
     };
-    proto.route = function route(path9) {
-      var route2 = new Route(path9);
-      var layer = new Layer(path9, {
+    proto.route = function route(path12) {
+      var route2 = new Route(path12);
+      var layer = new Layer(path12, {
         sensitive: this.caseSensitive,
         strict: this.strict,
         end: true
@@ -18642,8 +18642,8 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      proto[method] = function(path9) {
-        var route = this.route(path9);
+      proto[method] = function(path12) {
+        var route = this.route(path12);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
@@ -18679,9 +18679,9 @@ var require_router = __commonJS({
       }
       return toString.call(obj).replace(objectRegExp, "$1");
     }
-    function matchLayer(layer, path9) {
+    function matchLayer(layer, path12) {
       try {
-        return layer.match(path9);
+        return layer.match(path12);
       } catch (err) {
         return err;
       }
@@ -18799,13 +18799,13 @@ var require_view = __commonJS({
   "server/node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
     var debug = require_src()("express:view");
-    var path9 = require("path");
-    var fs9 = require("fs");
-    var dirname = path9.dirname;
-    var basename = path9.basename;
-    var extname = path9.extname;
-    var join = path9.join;
-    var resolve = path9.resolve;
+    var path12 = require("path");
+    var fs12 = require("fs");
+    var dirname = path12.dirname;
+    var basename = path12.basename;
+    var extname = path12.extname;
+    var join = path12.join;
+    var resolve = path12.resolve;
     module2.exports = View;
     function View(name, options) {
       var opts = options || {};
@@ -18834,17 +18834,17 @@ var require_view = __commonJS({
       this.path = this.lookup(fileName);
     }
     View.prototype.lookup = function lookup(name) {
-      var path10;
+      var path13;
       var roots = [].concat(this.root);
       debug('lookup "%s"', name);
-      for (var i = 0; i < roots.length && !path10; i++) {
+      for (var i = 0; i < roots.length && !path13; i++) {
         var root = roots[i];
         var loc = resolve(root, name);
         var dir = dirname(loc);
         var file = basename(loc);
-        path10 = this.resolve(dir, file);
+        path13 = this.resolve(dir, file);
       }
-      return path10;
+      return path13;
     };
     View.prototype.render = function render(options, callback) {
       debug('render "%s"', this.path);
@@ -18852,21 +18852,21 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file) {
       var ext = this.ext;
-      var path10 = join(dir, file);
-      var stat = tryStat(path10);
+      var path13 = join(dir, file);
+      var stat = tryStat(path13);
       if (stat && stat.isFile()) {
-        return path10;
+        return path13;
       }
-      path10 = join(dir, basename(file, ext), "index" + ext);
-      stat = tryStat(path10);
+      path13 = join(dir, basename(file, ext), "index" + ext);
+      stat = tryStat(path13);
       if (stat && stat.isFile()) {
-        return path10;
+        return path13;
       }
     };
-    function tryStat(path10) {
-      debug('stat "%s"', path10);
+    function tryStat(path13) {
+      debug('stat "%s"', path13);
       try {
-        return fs9.statSync(path10);
+        return fs12.statSync(path13);
       } catch (e) {
         return void 0;
       }
@@ -19220,8 +19220,8 @@ var require_types = __commonJS({
 // server/node_modules/mime/mime.js
 var require_mime = __commonJS({
   "server/node_modules/mime/mime.js"(exports2, module2) {
-    var path9 = require("path");
-    var fs9 = require("fs");
+    var path12 = require("path");
+    var fs12 = require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
       this.extensions = /* @__PURE__ */ Object.create(null);
@@ -19242,7 +19242,7 @@ var require_mime = __commonJS({
     };
     Mime.prototype.load = function(file) {
       this._loading = file;
-      var map = {}, content = fs9.readFileSync(file, "ascii"), lines = content.split(/[\r\n]+/);
+      var map = {}, content = fs12.readFileSync(file, "ascii"), lines = content.split(/[\r\n]+/);
       lines.forEach(function(line) {
         var fields = line.replace(/\s*#.*|^\s*|\s*$/g, "").split(/\s+/);
         map[fields.shift()] = fields;
@@ -19250,8 +19250,8 @@ var require_mime = __commonJS({
       this.define(map);
       this._loading = null;
     };
-    Mime.prototype.lookup = function(path10, fallback) {
-      var ext = path10.replace(/^.*[\.\/\\]/, "").toLowerCase();
+    Mime.prototype.lookup = function(path13, fallback) {
+      var ext = path13.replace(/^.*[\.\/\\]/, "").toLowerCase();
       return this.types[ext] || fallback || this.default_type;
     };
     Mime.prototype.extension = function(mimeType) {
@@ -19480,33 +19480,33 @@ var require_send = __commonJS({
     var escapeHtml = require_escape_html();
     var etag = require_etag();
     var fresh = require_fresh();
-    var fs9 = require("fs");
+    var fs12 = require("fs");
     var mime = require_mime();
     var ms = require_ms2();
     var onFinished = require_on_finished();
     var parseRange = require_range_parser();
-    var path9 = require("path");
+    var path12 = require("path");
     var statuses = require_statuses();
     var Stream = require("stream");
     var util2 = require("util");
-    var extname = path9.extname;
-    var join = path9.join;
-    var normalize = path9.normalize;
-    var resolve = path9.resolve;
-    var sep = path9.sep;
+    var extname = path12.extname;
+    var join = path12.join;
+    var normalize = path12.normalize;
+    var resolve = path12.resolve;
+    var sep = path12.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module2.exports = send;
     module2.exports.mime = mime;
-    function send(req, path10, options) {
-      return new SendStream(req, path10, options);
+    function send(req, path13, options) {
+      return new SendStream(req, path13, options);
     }
-    function SendStream(req, path10, options) {
+    function SendStream(req, path13, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
-      this.path = path10;
+      this.path = path13;
       this.req = req;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
@@ -19552,8 +19552,8 @@ var require_send = __commonJS({
       this._index = index2;
       return this;
     }, "send.index: pass index as option");
-    SendStream.prototype.root = function root(path10) {
-      this._root = resolve(String(path10));
+    SendStream.prototype.root = function root(path13) {
+      this._root = resolve(String(path13));
       debug("root %s", this._root);
       return this;
     };
@@ -19666,10 +19666,10 @@ var require_send = __commonJS({
       var lastModified = this.res.getHeader("Last-Modified");
       return parseHttpDate(lastModified) <= parseHttpDate(ifRange);
     };
-    SendStream.prototype.redirect = function redirect(path10) {
+    SendStream.prototype.redirect = function redirect(path13) {
       var res = this.res;
       if (hasListeners(this, "directory")) {
-        this.emit("directory", res, path10);
+        this.emit("directory", res, path13);
         return;
       }
       if (this.hasTrailingSlash()) {
@@ -19689,42 +19689,42 @@ var require_send = __commonJS({
     SendStream.prototype.pipe = function pipe(res) {
       var root = this._root;
       this.res = res;
-      var path10 = decode(this.path);
-      if (path10 === -1) {
+      var path13 = decode(this.path);
+      if (path13 === -1) {
         this.error(400);
         return res;
       }
-      if (~path10.indexOf("\0")) {
+      if (~path13.indexOf("\0")) {
         this.error(400);
         return res;
       }
       var parts;
       if (root !== null) {
-        if (path10) {
-          path10 = normalize("." + sep + path10);
+        if (path13) {
+          path13 = normalize("." + sep + path13);
         }
-        if (UP_PATH_REGEXP.test(path10)) {
-          debug('malicious path "%s"', path10);
+        if (UP_PATH_REGEXP.test(path13)) {
+          debug('malicious path "%s"', path13);
           this.error(403);
           return res;
         }
-        parts = path10.split(sep);
-        path10 = normalize(join(root, path10));
+        parts = path13.split(sep);
+        path13 = normalize(join(root, path13));
       } else {
-        if (UP_PATH_REGEXP.test(path10)) {
-          debug('malicious path "%s"', path10);
+        if (UP_PATH_REGEXP.test(path13)) {
+          debug('malicious path "%s"', path13);
           this.error(403);
           return res;
         }
-        parts = normalize(path10).split(sep);
-        path10 = resolve(path10);
+        parts = normalize(path13).split(sep);
+        path13 = resolve(path13);
       }
       if (containsDotFile(parts)) {
         var access = this._dotfiles;
         if (access === void 0) {
           access = parts[parts.length - 1][0] === "." ? this._hidden ? "allow" : "ignore" : "allow";
         }
-        debug('%s dotfile "%s"', access, path10);
+        debug('%s dotfile "%s"', access, path13);
         switch (access) {
           case "allow":
             break;
@@ -19738,13 +19738,13 @@ var require_send = __commonJS({
         }
       }
       if (this._index.length && this.hasTrailingSlash()) {
-        this.sendIndex(path10);
+        this.sendIndex(path13);
         return res;
       }
-      this.sendFile(path10);
+      this.sendFile(path13);
       return res;
     };
-    SendStream.prototype.send = function send2(path10, stat) {
+    SendStream.prototype.send = function send2(path13, stat) {
       var len = stat.size;
       var options = this.options;
       var opts = {};
@@ -19756,9 +19756,9 @@ var require_send = __commonJS({
         this.headersAlreadySent();
         return;
       }
-      debug('pipe "%s"', path10);
-      this.setHeader(path10, stat);
-      this.type(path10);
+      debug('pipe "%s"', path13);
+      this.setHeader(path13, stat);
+      this.type(path13);
       if (this.isConditionalGET()) {
         if (this.isPreconditionFailure()) {
           this.error(412);
@@ -19807,28 +19807,28 @@ var require_send = __commonJS({
         res.end();
         return;
       }
-      this.stream(path10, opts);
+      this.stream(path13, opts);
     };
-    SendStream.prototype.sendFile = function sendFile(path10) {
+    SendStream.prototype.sendFile = function sendFile(path13) {
       var i = 0;
       var self2 = this;
-      debug('stat "%s"', path10);
-      fs9.stat(path10, function onstat(err, stat) {
-        if (err && err.code === "ENOENT" && !extname(path10) && path10[path10.length - 1] !== sep) {
+      debug('stat "%s"', path13);
+      fs12.stat(path13, function onstat(err, stat) {
+        if (err && err.code === "ENOENT" && !extname(path13) && path13[path13.length - 1] !== sep) {
           return next(err);
         }
         if (err) return self2.onStatError(err);
-        if (stat.isDirectory()) return self2.redirect(path10);
-        self2.emit("file", path10, stat);
-        self2.send(path10, stat);
+        if (stat.isDirectory()) return self2.redirect(path13);
+        self2.emit("file", path13, stat);
+        self2.send(path13, stat);
       });
       function next(err) {
         if (self2._extensions.length <= i) {
           return err ? self2.onStatError(err) : self2.error(404);
         }
-        var p = path10 + "." + self2._extensions[i++];
+        var p = path13 + "." + self2._extensions[i++];
         debug('stat "%s"', p);
-        fs9.stat(p, function(err2, stat) {
+        fs12.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self2.emit("file", p, stat);
@@ -19836,7 +19836,7 @@ var require_send = __commonJS({
         });
       }
     };
-    SendStream.prototype.sendIndex = function sendIndex(path10) {
+    SendStream.prototype.sendIndex = function sendIndex(path13) {
       var i = -1;
       var self2 = this;
       function next(err) {
@@ -19844,9 +19844,9 @@ var require_send = __commonJS({
           if (err) return self2.onStatError(err);
           return self2.error(404);
         }
-        var p = join(path10, self2._index[i]);
+        var p = join(path13, self2._index[i]);
         debug('stat "%s"', p);
-        fs9.stat(p, function(err2, stat) {
+        fs12.stat(p, function(err2, stat) {
           if (err2) return next(err2);
           if (stat.isDirectory()) return next();
           self2.emit("file", p, stat);
@@ -19855,10 +19855,10 @@ var require_send = __commonJS({
       }
       next();
     };
-    SendStream.prototype.stream = function stream(path10, options) {
+    SendStream.prototype.stream = function stream(path13, options) {
       var self2 = this;
       var res = this.res;
-      var stream2 = fs9.createReadStream(path10, options);
+      var stream2 = fs12.createReadStream(path13, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -19873,10 +19873,10 @@ var require_send = __commonJS({
         self2.emit("end");
       });
     };
-    SendStream.prototype.type = function type(path10) {
+    SendStream.prototype.type = function type(path13) {
       var res = this.res;
       if (res.getHeader("Content-Type")) return;
-      var type2 = mime.lookup(path10);
+      var type2 = mime.lookup(path13);
       if (!type2) {
         debug("no content-type");
         return;
@@ -19885,9 +19885,9 @@ var require_send = __commonJS({
       debug("content-type %s", type2);
       res.setHeader("Content-Type", type2 + (charset ? "; charset=" + charset : ""));
     };
-    SendStream.prototype.setHeader = function setHeader(path10, stat) {
+    SendStream.prototype.setHeader = function setHeader(path13, stat) {
       var res = this.res;
-      this.emit("headers", res, path10, stat);
+      this.emit("headers", res, path13, stat);
       if (this._acceptRanges && !res.getHeader("Accept-Ranges")) {
         debug("accept ranges");
         res.setHeader("Accept-Ranges", "bytes");
@@ -19946,9 +19946,9 @@ var require_send = __commonJS({
       }
       return err instanceof Error ? createError(status, err, { expose: false }) : createError(status, err);
     }
-    function decode(path10) {
+    function decode(path13) {
       try {
-        return decodeURIComponent(path10);
+        return decodeURIComponent(path13);
       } catch (err) {
         return -1;
       }
@@ -20857,10 +20857,10 @@ var require_utils2 = __commonJS({
     var querystring = require("querystring");
     exports2.etag = createETagGenerator({ weak: false });
     exports2.wetag = createETagGenerator({ weak: true });
-    exports2.isAbsolute = function(path9) {
-      if ("/" === path9[0]) return true;
-      if (":" === path9[1] && ("\\" === path9[2] || "/" === path9[2])) return true;
-      if ("\\\\" === path9.substring(0, 2)) return true;
+    exports2.isAbsolute = function(path12) {
+      if ("/" === path12[0]) return true;
+      if (":" === path12[1] && ("\\" === path12[2] || "/" === path12[2])) return true;
+      if ("\\\\" === path12.substring(0, 2)) return true;
     };
     exports2.flatten = deprecate.function(
       flatten,
@@ -21057,21 +21057,21 @@ var require_application = __commonJS({
       }
     };
     app2.handle = function handle(req, res, callback) {
-      var router12 = this._router;
+      var router13 = this._router;
       var done = callback || finalhandler(req, res, {
         env: this.get("env"),
         onerror: logerror.bind(this)
       });
-      if (!router12) {
+      if (!router13) {
         debug("no routes defined on app");
         done();
         return;
       }
-      router12.handle(req, res, done);
+      router13.handle(req, res, done);
     };
     app2.use = function use(fn) {
       var offset = 0;
-      var path9 = "/";
+      var path12 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -21079,7 +21079,7 @@ var require_application = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path9 = fn;
+          path12 = fn;
         }
       }
       var fns = flatten(slice.call(arguments, offset));
@@ -21087,15 +21087,15 @@ var require_application = __commonJS({
         throw new TypeError("app.use() requires a middleware function");
       }
       this.lazyrouter();
-      var router12 = this._router;
+      var router13 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router12.use(path9, fn2);
+          return router13.use(path12, fn2);
         }
-        debug(".use app under %s", path9);
-        fn2.mountpath = path9;
+        debug(".use app under %s", path12);
+        fn2.mountpath = path12;
         fn2.parent = this;
-        router12.use(path9, function mounted_app(req, res, next) {
+        router13.use(path12, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -21107,9 +21107,9 @@ var require_application = __commonJS({
       }, this);
       return this;
     };
-    app2.route = function route(path9) {
+    app2.route = function route(path12) {
       this.lazyrouter();
-      return this._router.route(path9);
+      return this._router.route(path12);
     };
     app2.engine = function engine(ext, fn) {
       if (typeof fn !== "function") {
@@ -21160,7 +21160,7 @@ var require_application = __commonJS({
       }
       return this;
     };
-    app2.path = function path9() {
+    app2.path = function path12() {
       return this.parent ? this.parent.path() + this.mountpath : "";
     };
     app2.enabled = function enabled(setting) {
@@ -21176,19 +21176,19 @@ var require_application = __commonJS({
       return this.set(setting, false);
     };
     methods.forEach(function(method) {
-      app2[method] = function(path9) {
+      app2[method] = function(path12) {
         if (method === "get" && arguments.length === 1) {
-          return this.set(path9);
+          return this.set(path12);
         }
         this.lazyrouter();
-        var route = this._router.route(path9);
+        var route = this._router.route(path12);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
     });
-    app2.all = function all(path9) {
+    app2.all = function all(path12) {
       this.lazyrouter();
-      var route = this._router.route(path9);
+      var route = this._router.route(path12);
       var args = slice.call(arguments, 1);
       for (var i = 0; i < methods.length; i++) {
         route[methods[i]].apply(route, args);
@@ -21947,7 +21947,7 @@ var require_request = __commonJS({
       var subdomains2 = !isIP(hostname) ? hostname.split(".").reverse() : [hostname];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path9() {
+    defineGetter(req, "path", function path12() {
       return parse(this).pathname;
     });
     defineGetter(req, "hostname", function hostname() {
@@ -22269,7 +22269,7 @@ var require_response = __commonJS({
     var http2 = require("http");
     var isAbsolute = require_utils2().isAbsolute;
     var onFinished = require_on_finished();
-    var path9 = require("path");
+    var path12 = require("path");
     var statuses = require_statuses();
     var merge = require_utils_merge();
     var sign = require_cookie_signature().sign;
@@ -22278,9 +22278,9 @@ var require_response = __commonJS({
     var setCharset = require_utils2().setCharset;
     var cookie = require_cookie();
     var send = require_send();
-    var extname = path9.extname;
+    var extname = path12.extname;
     var mime = send.mime;
-    var resolve = path9.resolve;
+    var resolve = path12.resolve;
     var vary = require_vary();
     var res = Object.create(http2.ServerResponse.prototype);
     module2.exports = res;
@@ -22456,26 +22456,26 @@ var require_response = __commonJS({
       this.type("txt");
       return this.send(body);
     };
-    res.sendFile = function sendFile(path10, options, callback) {
+    res.sendFile = function sendFile(path13, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
       var next = req.next;
       var opts = options || {};
-      if (!path10) {
+      if (!path13) {
         throw new TypeError("path argument is required to res.sendFile");
       }
-      if (typeof path10 !== "string") {
+      if (typeof path13 !== "string") {
         throw new TypeError("path must be a string to res.sendFile");
       }
       if (typeof options === "function") {
         done = options;
         opts = {};
       }
-      if (!opts.root && !isAbsolute(path10)) {
+      if (!opts.root && !isAbsolute(path13)) {
         throw new TypeError("path must be absolute or specify root to res.sendFile");
       }
-      var pathname = encodeURI(path10);
+      var pathname = encodeURI(path13);
       var file = send(req, pathname, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
@@ -22485,7 +22485,7 @@ var require_response = __commonJS({
         }
       });
     };
-    res.sendfile = function(path10, options, callback) {
+    res.sendfile = function(path13, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
@@ -22495,7 +22495,7 @@ var require_response = __commonJS({
         done = options;
         opts = {};
       }
-      var file = send(req, path10, opts);
+      var file = send(req, path13, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -22508,7 +22508,7 @@ var require_response = __commonJS({
       res.sendfile,
       "res.sendfile: Use res.sendFile instead"
     );
-    res.download = function download(path10, filename, options, callback) {
+    res.download = function download(path13, filename, options, callback) {
       var done = callback;
       var name = filename;
       var opts = options || null;
@@ -22525,7 +22525,7 @@ var require_response = __commonJS({
         opts = filename;
       }
       var headers = {
-        "Content-Disposition": contentDisposition(name || path10)
+        "Content-Disposition": contentDisposition(name || path13)
       };
       if (opts && opts.headers) {
         var keys = Object.keys(opts.headers);
@@ -22538,7 +22538,7 @@ var require_response = __commonJS({
       }
       opts = Object.create(opts);
       opts.headers = headers;
-      var fullPath = !opts.root ? resolve(path10) : path10;
+      var fullPath = !opts.root ? resolve(path13) : path13;
       return this.sendFile(fullPath, opts, done);
     };
     res.contentType = res.type = function contentType(type) {
@@ -22838,11 +22838,11 @@ var require_serve_static = __commonJS({
         }
         var forwardError = !fallthrough;
         var originalUrl = parseUrl.original(req);
-        var path9 = parseUrl(req).pathname;
-        if (path9 === "/" && originalUrl.pathname.substr(-1) !== "/") {
-          path9 = "";
+        var path12 = parseUrl(req).pathname;
+        if (path12 === "/" && originalUrl.pathname.substr(-1) !== "/") {
+          path12 = "";
         }
-        var stream = send(req, path9, opts);
+        var stream = send(req, path12, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -23628,18 +23628,18 @@ var require_utils3 = __commonJS({
       if (decode)
         return decode(data, hint);
     }
-    function basename(path9) {
-      if (typeof path9 !== "string")
+    function basename(path12) {
+      if (typeof path12 !== "string")
         return "";
-      for (let i = path9.length - 1; i >= 0; --i) {
-        switch (path9.charCodeAt(i)) {
+      for (let i = path12.length - 1; i >= 0; --i) {
+        switch (path12.charCodeAt(i)) {
           case 47:
           case 92:
-            path9 = path9.slice(i + 1);
-            return path9 === ".." || path9 === "." ? "" : path9;
+            path12 = path12.slice(i + 1);
+            return path12 === ".." || path12 === "." ? "" : path12;
         }
       }
-      return path9 === ".." || path9 === "." ? "" : path9;
+      return path12 === ".." || path12 === "." ? "" : path12;
     }
     var TOKEN = [
       0,
@@ -27291,7 +27291,7 @@ var require_make_middleware = __commonJS({
         if (!is(req, ["multipart"])) return next();
         var options = setup();
         var limits = options.limits;
-        var storage2 = options.storage;
+        var storage3 = options.storage;
         var fileFilter2 = options.fileFilter;
         var fileStrategy = options.fileStrategy;
         var preservePath = options.preservePath;
@@ -27337,7 +27337,7 @@ var require_make_middleware = __commonJS({
           errorOccured = true;
           function finishAbort() {
             function remove(file, cb) {
-              storage2._removeFile(req, file, cb);
+              storage3._removeFile(req, file, cb);
             }
             removeUploadedFiles(uploadedFiles, remove, function(err, storageErrors) {
               if (err) return done(err);
@@ -27437,7 +27437,7 @@ var require_make_middleware = __commonJS({
               aborting = true;
               abortWithCode("LIMIT_FILE_SIZE", fieldname);
             });
-            storage2._handleFile(req, file, function(err2, info) {
+            storage3._handleFile(req, file, function(err2, info) {
               if (aborting) {
                 appender.removePlaceholder(placeholder);
                 uploadedFiles.push({ ...file, ...info });
@@ -27482,9 +27482,9 @@ var require_make_middleware = __commonJS({
 // server/node_modules/multer/storage/disk.js
 var require_disk = __commonJS({
   "server/node_modules/multer/storage/disk.js"(exports2, module2) {
-    var fs9 = require("fs");
+    var fs12 = require("fs");
     var os = require("os");
-    var path9 = require("path");
+    var path12 = require("path");
     var crypto3 = require("crypto");
     function getFilename(req, file, cb) {
       crypto3.randomBytes(16, function(err, raw) {
@@ -27497,7 +27497,7 @@ var require_disk = __commonJS({
     function DiskStorage(opts) {
       this.getFilename = opts.filename || getFilename;
       if (typeof opts.destination === "string") {
-        fs9.mkdirSync(opts.destination, { recursive: true });
+        fs12.mkdirSync(opts.destination, { recursive: true });
         this.getDestination = function($0, $1, cb) {
           cb(null, opts.destination);
         };
@@ -27511,8 +27511,8 @@ var require_disk = __commonJS({
         if (err) return cb(err);
         that.getFilename(req, file, function(err2, filename) {
           if (err2) return cb(err2);
-          var finalPath = path9.join(destination, filename);
-          var outStream = fs9.createWriteStream(finalPath);
+          var finalPath = path12.join(destination, filename);
+          var outStream = fs12.createWriteStream(finalPath);
           file.stream.pipe(outStream);
           outStream.on("error", cb);
           outStream.on("finish", function() {
@@ -27527,11 +27527,11 @@ var require_disk = __commonJS({
       });
     };
     DiskStorage.prototype._removeFile = function _removeFile(req, file, cb) {
-      var path10 = file.path;
+      var path13 = file.path;
       delete file.destination;
       delete file.filename;
       delete file.path;
-      fs9.unlink(path10, cb);
+      fs12.unlink(path13, cb);
     };
     module2.exports = function(opts) {
       return new DiskStorage(opts);
@@ -30977,7 +30977,7 @@ var require_multer = __commonJS({
       }
       return makeMiddleware(setup.bind(this));
     };
-    function multer2(options) {
+    function multer3(options) {
       if (options === void 0) {
         return new Multer({});
       }
@@ -30986,7 +30986,7 @@ var require_multer = __commonJS({
       }
       throw new TypeError("Expected object for argument options");
     }
-    module2.exports = multer2;
+    module2.exports = multer3;
     module2.exports.diskStorage = diskStorage;
     module2.exports.memoryStorage = memoryStorage;
     module2.exports.MulterError = MulterError;
@@ -37411,11 +37411,11 @@ var require_server = __commonJS({
        * @protected
        */
       _computePath(options) {
-        let path9 = (options.path || "/engine.io").replace(/\/$/, "");
+        let path12 = (options.path || "/engine.io").replace(/\/$/, "");
         if (options.addTrailingSlash !== false) {
-          path9 += "/";
+          path12 += "/";
         }
-        return path9;
+        return path12;
       }
       /**
        * Returns a list of available transports for upgrade given a certain transport.
@@ -37931,10 +37931,10 @@ var require_server = __commonJS({
        * @param {Object} options
        */
       attach(server, options = {}) {
-        const path9 = this._computePath(options);
+        const path12 = this._computePath(options);
         const destroyUpgradeTimeout = options.destroyUpgradeTimeout || 1e3;
         function check(req) {
-          return path9 === req.url.slice(0, path9.length);
+          return path12 === req.url.slice(0, path12.length);
         }
         const listeners = server.listeners("request").slice(0);
         server.removeAllListeners("request");
@@ -37942,7 +37942,7 @@ var require_server = __commonJS({
         server.on("listening", this.init.bind(this));
         server.on("request", (req, res) => {
           if (check(req)) {
-            debug('intercepting request for path "%s"', path9);
+            debug('intercepting request for path "%s"', path12);
             this.handleRequest(req, res);
           } else {
             let i = 0;
@@ -38782,8 +38782,8 @@ var require_userver = __commonJS({
        * @param options
        */
       attach(app2, options = {}) {
-        const path9 = this._computePath(options);
-        app2.any(path9, this.handleRequest.bind(this)).ws(path9, {
+        const path12 = this._computePath(options);
+        app2.any(path12, this.handleRequest.bind(this)).ws(path12, {
           compression: options.compression,
           idleTimeout: options.idleTimeout,
           maxBackpressure: options.maxBackpressure,
@@ -45151,7 +45151,7 @@ var require_dist2 = __commonJS({
     var zlib_1 = require("zlib");
     var accepts = require_accepts();
     var stream_1 = require("stream");
-    var path9 = require("path");
+    var path12 = require("path");
     var engine_io_1 = require_engine_io();
     var client_1 = require_client();
     var events_1 = require("events");
@@ -45346,7 +45346,7 @@ var require_dist2 = __commonJS({
             res.writeHeader("cache-control", "public, max-age=0");
             res.writeHeader("content-type", "application/" + (isMap ? "json" : "javascript") + "; charset=utf-8");
             res.writeHeader("etag", expectedEtag);
-            const filepath = path9.join(__dirname, "../client-dist/", filename);
+            const filepath = path12.join(__dirname, "../client-dist/", filename);
             (0, uws_1.serveFile)(res, filepath);
           });
         }
@@ -45428,7 +45428,7 @@ var require_dist2 = __commonJS({
        * @private
        */
       static sendFile(filename, req, res) {
-        const readStream = (0, fs_1.createReadStream)(path9.join(__dirname, "../client-dist/", filename));
+        const readStream = (0, fs_1.createReadStream)(path12.join(__dirname, "../client-dist/", filename));
         const encoding = accepts(req).encodings(["br", "gzip", "deflate"]);
         const onError = (err) => {
           if (err) {
@@ -48730,8 +48730,8 @@ var require_utils4 = __commonJS({
       var result = transform[inputType][outputType](input);
       return result;
     };
-    exports2.resolve = function(path9) {
-      var parts = path9.split("/");
+    exports2.resolve = function(path12) {
+      var parts = path12.split("/");
       var result = [];
       for (var index = 0; index < parts.length; index++) {
         var part = parts[index];
@@ -54561,18 +54561,18 @@ var require_object = __commonJS({
       var object = new ZipObject(name, zipObjectContent, o);
       this.files[name] = object;
     };
-    var parentFolder = function(path9) {
-      if (path9.slice(-1) === "/") {
-        path9 = path9.substring(0, path9.length - 1);
+    var parentFolder = function(path12) {
+      if (path12.slice(-1) === "/") {
+        path12 = path12.substring(0, path12.length - 1);
       }
-      var lastSlash = path9.lastIndexOf("/");
-      return lastSlash > 0 ? path9.substring(0, lastSlash) : "";
+      var lastSlash = path12.lastIndexOf("/");
+      return lastSlash > 0 ? path12.substring(0, lastSlash) : "";
     };
-    var forceTrailingSlash = function(path9) {
-      if (path9.slice(-1) !== "/") {
-        path9 += "/";
+    var forceTrailingSlash = function(path12) {
+      if (path12.slice(-1) !== "/") {
+        path12 += "/";
       }
-      return path9;
+      return path12;
     };
     var folderAdd = function(name, createFolders) {
       createFolders = typeof createFolders !== "undefined" ? createFolders : defaults.createFolders;
@@ -55590,11 +55590,11 @@ module.exports = __toCommonJS(src_exports);
 })();
 
 // server/src/index.ts
-var import_express12 = __toESM(require_express2());
+var import_express13 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_dotenv = __toESM(require_main());
-var import_path8 = __toESM(require("path"));
-var import_fs8 = __toESM(require("fs"));
+var import_path11 = __toESM(require("path"));
+var import_fs11 = __toESM(require("fs"));
 var import_http = __toESM(require("http"));
 var import_https = __toESM(require("https"));
 
@@ -57327,8 +57327,19 @@ var bcryptjs_default = {
 // server/src/lib/prisma.ts
 var import_client = require("@prisma/client");
 var prisma = new import_client.PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"]
+  log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"]
 });
+(async () => {
+  const dbUrl = process.env.DATABASE_URL || "";
+  if (dbUrl.startsWith("file:") || dbUrl.includes("sqlite")) {
+    try {
+      await prisma.$executeRawUnsafe("PRAGMA journal_mode = WAL;");
+      await prisma.$executeRawUnsafe("PRAGMA busy_timeout = 5000;");
+      await prisma.$executeRawUnsafe("PRAGMA synchronous = NORMAL;");
+    } catch (err) {
+    }
+  }
+})();
 var prisma_default = prisma;
 
 // server/src/middleware/upload.ts
@@ -57377,6 +57388,40 @@ var uploadProfilePicture = (0, import_multer.default)({
   storage,
   fileFilter
 });
+function resolveEmployeeFolderName(documentsDir, rawEmployeeName) {
+  if (!import_fs.default.existsSync(documentsDir)) {
+    import_fs.default.mkdirSync(documentsDir, { recursive: true });
+  }
+  const cleanName = (rawEmployeeName || "Unknown Employee").replace(/[/\\?%*:|"<>]/g, "-").trim().replace(/\.+$/, "");
+  const normalize = (str) => str.toUpperCase().replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  const targetNorm = normalize(cleanName);
+  if (!targetNorm) return "UNKNOWN_EMPLOYEE";
+  try {
+    const existingFolders = import_fs.default.readdirSync(documentsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    const exact = existingFolders.find((f) => normalize(f) === targetNorm);
+    if (exact) {
+      return exact;
+    }
+    const targetTokens = targetNorm.split(" ").filter((t) => t.length > 1);
+    if (targetTokens.length >= 2) {
+      const tokenMatch = existingFolders.find((f) => {
+        const fNorm = normalize(f);
+        const fTokens = fNorm.split(" ").filter((t) => t.length > 1);
+        const matchesAll = targetTokens.every((token) => fNorm.includes(token));
+        if (matchesAll) return true;
+        const reverseMatchesAll = fTokens.length >= 2 && fTokens.every((token) => targetNorm.includes(token));
+        if (reverseMatchesAll) return true;
+        return false;
+      });
+      if (tokenMatch) {
+        return tokenMatch;
+      }
+    }
+  } catch (err) {
+    console.error("[upload] Error resolving employee folder:", err);
+  }
+  return cleanName.toUpperCase();
+}
 var documentStorage = import_multer.default.diskStorage({
   destination: (req, _file, cb) => {
     const baseUploadsDir = getBaseUploadsDir();
@@ -57384,9 +57429,9 @@ var documentStorage = import_multer.default.diskStorage({
     if (!import_fs.default.existsSync(documentsDir)) {
       import_fs.default.mkdirSync(documentsDir, { recursive: true });
     }
-    const employeeName = (req.body?.employeeName || "Unknown Employee").replace(/[/\\?%*:|"<>]/g, "-").trim().replace(/\.+$/, "");
+    const employeeFolder = resolveEmployeeFolderName(documentsDir, req.body?.employeeName || "Unknown Employee");
     const category = (req.body?.category || "Uncategorized").replace(/[/\\?%*:|"<>]/g, "-").replace(/\.+$/, "");
-    const destDir = import_path.default.join(documentsDir, employeeName, category);
+    const destDir = import_path.default.join(documentsDir, employeeFolder, category);
     if (!import_fs.default.existsSync(destDir)) {
       import_fs.default.mkdirSync(destDir, { recursive: true });
     }
@@ -57396,9 +57441,9 @@ var documentStorage = import_multer.default.diskStorage({
     const baseUploadsDir = getBaseUploadsDir();
     const documentsDir = import_path.default.join(baseUploadsDir, "documents");
     const originalName = file.originalname;
-    const employeeName = (req.body?.employeeName || "Unknown Employee").replace(/[/\\?%*:|"<>]/g, "-").trim().replace(/\.+$/, "");
+    const employeeFolder = resolveEmployeeFolderName(documentsDir, req.body?.employeeName || "Unknown Employee");
     const category = (req.body?.category || "Uncategorized").replace(/[/\\?%*:|"<>]/g, "-").replace(/\.+$/, "");
-    const targetPath = import_path.default.join(documentsDir, employeeName, category, originalName);
+    const targetPath = import_path.default.join(documentsDir, employeeFolder, category, originalName);
     if (import_fs.default.existsSync(targetPath)) {
       const ext = import_path.default.extname(originalName);
       const base = import_path.default.basename(originalName, ext);
@@ -58578,7 +58623,8 @@ router2.get("/", async (req, res) => {
     if (search && typeof search === "string") {
       const searchTerm = search.trim();
       if (searchTerm) {
-        const filterType = filter_type;
+        const filterType = filter_type || "all";
+        const tokens = searchTerm.split(/[\s,]+/).filter(Boolean);
         switch (filterType) {
           case "first_name":
             where.firstName = {
@@ -58605,32 +58651,29 @@ router2.get("/", async (req, res) => {
             };
             break;
           default:
-            where.OR = [
-              {
-                id: {
-                  contains: searchTerm,
-                  mode: "insensitive"
-                }
-              },
-              {
-                firstName: {
-                  contains: searchTerm,
-                  mode: "insensitive"
-                }
-              },
-              {
-                middleName: {
-                  contains: searchTerm,
-                  mode: "insensitive"
-                }
-              },
-              {
-                lastName: {
-                  contains: searchTerm,
-                  mode: "insensitive"
-                }
-              }
-            ];
+            if (tokens.length > 1) {
+              where.AND = tokens.map((token) => ({
+                OR: [
+                  { id: { contains: token, mode: "insensitive" } },
+                  { firstName: { contains: token, mode: "insensitive" } },
+                  { middleName: { contains: token, mode: "insensitive" } },
+                  { lastName: { contains: token, mode: "insensitive" } },
+                  { officeName: { contains: token, mode: "insensitive" } },
+                  { position: { contains: token, mode: "insensitive" } },
+                  { aoNumber: { contains: token, mode: "insensitive" } }
+                ]
+              }));
+            } else {
+              where.OR = [
+                { id: { contains: searchTerm, mode: "insensitive" } },
+                { firstName: { contains: searchTerm, mode: "insensitive" } },
+                { middleName: { contains: searchTerm, mode: "insensitive" } },
+                { lastName: { contains: searchTerm, mode: "insensitive" } },
+                { officeName: { contains: searchTerm, mode: "insensitive" } },
+                { position: { contains: searchTerm, mode: "insensitive" } },
+                { aoNumber: { contains: searchTerm, mode: "insensitive" } }
+              ];
+            }
             break;
         }
       }
@@ -58645,13 +58688,14 @@ router2.get("/", async (req, res) => {
         take = limitNumber;
       }
     }
+    const includeDocuments = req.query.includeDocuments === "true" || !page && !limit;
     const [employees, total] = await Promise.all([
       prisma_default.employee.findMany({
         where,
         skip,
         take,
         include: {
-          documents: true,
+          documents: includeDocuments,
           yellowBox: true
         },
         orderBy: [
@@ -58990,35 +59034,41 @@ router2.put("/:id", requireSuperadminApproval, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
+    if ("dateOfBirth" in updateData) {
+      updateData.dateOfBirth = toNullableDate(updateData.dateOfBirth);
+    }
     if ("dateOfEmployment" in updateData) {
-      updateData.dateOfEmployment = updateData.dateOfEmployment ? new Date(updateData.dateOfEmployment) : null;
+      updateData.dateOfEmployment = toNullableDate(updateData.dateOfEmployment);
     }
     if ("appointmentFrom" in updateData) {
-      updateData.appointmentFrom = updateData.appointmentFrom ? new Date(updateData.appointmentFrom) : null;
+      updateData.appointmentFrom = toNullableDate(updateData.appointmentFrom);
     }
     if ("appointmentTo" in updateData) {
-      updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
+      updateData.appointmentTo = toNullableDate(updateData.appointmentTo);
     }
     if ("expirationDate" in updateData) {
-      updateData.expirationDate = updateData.expirationDate ? new Date(updateData.expirationDate) : null;
+      updateData.expirationDate = toNullableDate(updateData.expirationDate);
     }
     if ("dateOfSeparation" in updateData) {
-      updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
+      updateData.dateOfSeparation = toNullableDate(updateData.dateOfSeparation);
+    }
+    if ("detailedDate" in updateData) {
+      updateData.detailedDate = toNullableDate(updateData.detailedDate);
     }
     if ("designatedOrderFrom" in updateData) {
-      updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
+      updateData.designatedOrderFrom = toNullableDate(updateData.designatedOrderFrom);
     }
     if ("designatedOrderTo" in updateData) {
       updateData.designatedOrderTo = toNullableDate(updateData.designatedOrderTo);
     }
     if ("recalledOrderFrom" in updateData) {
-      updateData.recalledOrderFrom = updateData.recalledOrderFrom ? new Date(updateData.recalledOrderFrom) : null;
+      updateData.recalledOrderFrom = toNullableDate(updateData.recalledOrderFrom);
     }
     if ("recalledOrderTo" in updateData) {
       updateData.recalledOrderTo = toNullableDate(updateData.recalledOrderTo);
     }
     if ("detailedOrderFrom" in updateData) {
-      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+      updateData.detailedOrderFrom = toNullableDate(updateData.detailedOrderFrom);
     }
     if ("detailedOrderTo" in updateData) {
       updateData.detailedOrderTo = toNullableDate(updateData.detailedOrderTo);
@@ -59106,40 +59156,40 @@ router2.patch("/:id", requireSuperadminApproval, async (req, res) => {
       }
     });
     if ("dateOfBirth" in updateData) {
-      updateData.dateOfBirth = updateData.dateOfBirth ? new Date(updateData.dateOfBirth) : null;
+      updateData.dateOfBirth = toNullableDate(updateData.dateOfBirth);
     }
     if ("dateOfEmployment" in updateData) {
-      updateData.dateOfEmployment = updateData.dateOfEmployment ? new Date(updateData.dateOfEmployment) : null;
+      updateData.dateOfEmployment = toNullableDate(updateData.dateOfEmployment);
     }
     if ("appointmentFrom" in updateData) {
-      updateData.appointmentFrom = updateData.appointmentFrom ? new Date(updateData.appointmentFrom) : null;
+      updateData.appointmentFrom = toNullableDate(updateData.appointmentFrom);
     }
     if ("appointmentTo" in updateData) {
-      updateData.appointmentTo = updateData.appointmentTo ? new Date(updateData.appointmentTo) : null;
+      updateData.appointmentTo = toNullableDate(updateData.appointmentTo);
     }
     if ("expirationDate" in updateData) {
-      updateData.expirationDate = updateData.expirationDate ? new Date(updateData.expirationDate) : null;
+      updateData.expirationDate = toNullableDate(updateData.expirationDate);
     }
     if ("dateOfSeparation" in updateData) {
-      updateData.dateOfSeparation = updateData.dateOfSeparation ? new Date(updateData.dateOfSeparation) : null;
+      updateData.dateOfSeparation = toNullableDate(updateData.dateOfSeparation);
     }
     if ("detailedDate" in updateData) {
-      updateData.detailedDate = updateData.detailedDate ? new Date(updateData.detailedDate) : null;
+      updateData.detailedDate = toNullableDate(updateData.detailedDate);
     }
     if ("designatedOrderFrom" in updateData) {
-      updateData.designatedOrderFrom = updateData.designatedOrderFrom ? new Date(updateData.designatedOrderFrom) : null;
+      updateData.designatedOrderFrom = toNullableDate(updateData.designatedOrderFrom);
     }
     if ("designatedOrderTo" in updateData) {
       updateData.designatedOrderTo = toNullableDate(updateData.designatedOrderTo);
     }
     if ("detailedOrderFrom" in updateData) {
-      updateData.detailedOrderFrom = updateData.detailedOrderFrom ? new Date(updateData.detailedOrderFrom) : null;
+      updateData.detailedOrderFrom = toNullableDate(updateData.detailedOrderFrom);
     }
     if ("detailedOrderTo" in updateData) {
       updateData.detailedOrderTo = toNullableDate(updateData.detailedOrderTo);
     }
     if ("recalledOrderFrom" in updateData) {
-      updateData.recalledOrderFrom = updateData.recalledOrderFrom ? new Date(updateData.recalledOrderFrom) : null;
+      updateData.recalledOrderFrom = toNullableDate(updateData.recalledOrderFrom);
     }
     if ("recalledOrderTo" in updateData) {
       updateData.recalledOrderTo = toNullableDate(updateData.recalledOrderTo);
@@ -63906,6 +63956,695 @@ function saveDisposalHistory(logs) {
 }
 var inventory_routes_default = router11;
 
+// server/src/routes/backup.routes.ts
+var import_express12 = __toESM(require_express2());
+var import_path9 = __toESM(require("path"));
+var import_fs9 = __toESM(require("fs"));
+var import_multer2 = __toESM(require_multer());
+
+// server/src/utils/backupScheduler.ts
+var import_fs8 = __toESM(require("fs"));
+var import_path8 = __toESM(require("path"));
+var SCHEDULE_CONFIG_PATH = import_path8.default.join(__dirname, "../../data/backup_schedule.json");
+var BACKUP_DIR = import_path8.default.join(__dirname, "../../backups");
+var getBackupDir = () => {
+  if (!import_fs8.default.existsSync(BACKUP_DIR)) {
+    import_fs8.default.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+  return BACKUP_DIR;
+};
+var getScheduleConfig = () => {
+  try {
+    const dataDir = import_path8.default.dirname(SCHEDULE_CONFIG_PATH);
+    if (!import_fs8.default.existsSync(dataDir)) {
+      import_fs8.default.mkdirSync(dataDir, { recursive: true });
+    }
+    if (import_fs8.default.existsSync(SCHEDULE_CONFIG_PATH)) {
+      const raw = import_fs8.default.readFileSync(SCHEDULE_CONFIG_PATH, "utf-8");
+      return JSON.parse(raw);
+    }
+  } catch (error) {
+    console.error("[BackupScheduler] Failed to read schedule config:", error);
+  }
+  const defaultConfig = {
+    enabled: true,
+    frequency: "daily",
+    time: "02:00",
+    retentionCount: 10
+  };
+  saveScheduleConfig(defaultConfig);
+  return defaultConfig;
+};
+var saveScheduleConfig = (config) => {
+  try {
+    const dataDir = import_path8.default.dirname(SCHEDULE_CONFIG_PATH);
+    if (!import_fs8.default.existsSync(dataDir)) {
+      import_fs8.default.mkdirSync(dataDir, { recursive: true });
+    }
+    import_fs8.default.writeFileSync(SCHEDULE_CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  } catch (error) {
+    console.error("[BackupScheduler] Failed to save schedule config:", error);
+  }
+};
+var executeDatabaseBackup = async (type = "manual", creatorName = "System") => {
+  const backupDir = getBackupDir();
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  const filename = `db_backup_${type}_${timestamp}.json`;
+  const filePath = import_path8.default.join(backupDir, filename);
+  const [
+    users,
+    systemSettings,
+    yellowBoxes,
+    employees,
+    documents,
+    auditLogs,
+    file201BorrowLogs,
+    approvalRequests,
+    activities,
+    chatMessages
+  ] = await Promise.all([
+    prisma_default.user.findMany(),
+    prisma_default.systemSetting.findMany(),
+    prisma_default.yellowBox.findMany(),
+    prisma_default.employee.findMany(),
+    prisma_default.document.findMany(),
+    prisma_default.auditLog.findMany(),
+    prisma_default.file201BorrowLog.findMany(),
+    prisma_default.approvalRequest.findMany(),
+    prisma_default.activity.findMany(),
+    prisma_default.chatMessage.findMany()
+  ]);
+  const readDataJson = (file) => {
+    const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+    const candidatePaths = [
+      process.env.UPLOADS_DIR ? import_path8.default.join(process.env.UPLOADS_DIR, "data", file) : null,
+      import_path8.default.join(PROGRAM_DATA2, "ERMS", "uploads", "data", file),
+      import_path8.default.join(__dirname, "../../uploads/data", file),
+      import_path8.default.join("D:\\ERMS-Uploads\\data", file),
+      import_path8.default.join("C:\\ProgramData\\ERMS\\uploads\\data", file)
+    ].filter(Boolean);
+    let bestRecords = [];
+    for (const target of candidatePaths) {
+      try {
+        if (import_fs8.default.existsSync(target)) {
+          const raw = import_fs8.default.readFileSync(target, "utf-8");
+          if (raw && raw.trim().length > 2) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > bestRecords.length) {
+              bestRecords = parsed;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[BackupScheduler] Error reading ${target}:`, e);
+      }
+    }
+    return bestRecords;
+  };
+  const inventoryRecords = readDataJson("inventory_records.json");
+  const disposalHistory = readDataJson("disposal_history.json");
+  const transferredStorageHistory = readDataJson("transferred_storage_history.json");
+  const inventoryRequests = readDataJson("inventory_requests.json");
+  const recordCounts = {
+    users: users.length,
+    systemSettings: systemSettings.length,
+    yellowBoxes: yellowBoxes.length,
+    employees: employees.length,
+    documents: documents.length,
+    auditLogs: auditLogs.length,
+    file201BorrowLogs: file201BorrowLogs.length,
+    approvalRequests: approvalRequests.length,
+    activities: activities.length,
+    chatMessages: chatMessages.length,
+    inventoryRecords: inventoryRecords.length,
+    disposalHistory: disposalHistory.length,
+    transferredStorage: transferredStorageHistory.length,
+    inventoryRequests: inventoryRequests.length
+  };
+  const backupPayload = {
+    version: "1.0",
+    systemName: "Employee Records Management System",
+    type,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    createdBy: creatorName,
+    recordCounts,
+    data: {
+      users,
+      systemSettings,
+      yellowBoxes,
+      employees,
+      documents,
+      auditLogs,
+      file201BorrowLogs,
+      approvalRequests,
+      activities,
+      chatMessages,
+      inventoryRecords,
+      disposalHistory,
+      transferredStorageHistory,
+      inventoryRequests
+    }
+  };
+  import_fs8.default.writeFileSync(filePath, JSON.stringify(backupPayload, null, 2), "utf-8");
+  const stats = import_fs8.default.statSync(filePath);
+  cleanOldBackups();
+  return {
+    filename,
+    filePath,
+    recordCounts,
+    sizeBytes: stats.size
+  };
+};
+var cleanOldBackups = () => {
+  try {
+    const config = getScheduleConfig();
+    const backupDir = getBackupDir();
+    const files = import_fs8.default.readdirSync(backupDir).filter((f) => f.endsWith(".json") || f.endsWith(".zip")).map((f) => {
+      const fullPath = import_path8.default.join(backupDir, f);
+      return {
+        filename: f,
+        path: fullPath,
+        ctime: import_fs8.default.statSync(fullPath).ctimeMs
+      };
+    }).sort((a, b) => b.ctime - a.ctime);
+    const retention = Math.max(3, config.retentionCount || 10);
+    if (files.length > retention) {
+      const filesToDelete = files.slice(retention);
+      for (const file of filesToDelete) {
+        try {
+          import_fs8.default.unlinkSync(file.path);
+          console.log(`[BackupScheduler] Pruned old backup: ${file.filename}`);
+        } catch (e) {
+          console.error(`[BackupScheduler] Error deleting ${file.filename}:`, e);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[BackupScheduler] Failed to prune old backups:", error);
+  }
+};
+var schedulerInterval = null;
+var initBackupScheduler = () => {
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+  }
+  schedulerInterval = setInterval(async () => {
+    try {
+      const config = getScheduleConfig();
+      if (!config.enabled) return;
+      const now = /* @__PURE__ */ new Date();
+      const currentHours = String(now.getHours()).padStart(2, "0");
+      const currentMinutes = String(now.getMinutes()).padStart(2, "0");
+      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+      if (currentTimeStr === config.time) {
+        const todayStr = now.toISOString().split("T")[0];
+        if (config.lastRun === todayStr) {
+          return;
+        }
+        if (config.frequency === "weekly") {
+          if (now.getDay() !== 0) return;
+        }
+        console.log(`[BackupScheduler] Triggering scheduled ${config.frequency} backup...`);
+        await executeDatabaseBackup("scheduled", "Automated Scheduler");
+        config.lastRun = todayStr;
+        saveScheduleConfig(config);
+        console.log(`[BackupScheduler] Scheduled backup completed successfully.`);
+      }
+    } catch (error) {
+      console.error("[BackupScheduler] Error in backup scheduler loop:", error);
+    }
+  }, 60 * 1e3);
+  console.log("[BackupScheduler] Automated backup scheduler initialized.");
+};
+
+// server/src/routes/backup.routes.ts
+var router12 = import_express12.default.Router();
+var storage2 = import_multer2.default.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, getBackupDir());
+  },
+  filename: (req, file, cb) => {
+    const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    cb(null, `uploaded_backup_${timestamp}_${safeName}`);
+  }
+});
+var upload = (0, import_multer2.default)({
+  storage: storage2,
+  limits: { fileSize: 100 * 1024 * 1024 },
+  // 100MB
+  fileFilter: (req, file, cb) => {
+    if (file.originalname.endsWith(".json") || file.mimetype === "application/json") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JSON database backup files are supported for upload."));
+    }
+  }
+});
+var requireSuperadminOrDev = async (req, res, next) => {
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  if (!userId || userId === "system") {
+    return next();
+  }
+  try {
+    const user = await prisma_default.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+    if (user && (user.role === "superadmin" || user.role === "developer")) {
+      return next();
+    }
+    return res.status(403).json({ error: "Access denied. Only Superadmin and Developer accounts can manage database backups." });
+  } catch {
+    return next();
+  }
+};
+router12.use(requireSuperadminOrDev);
+router12.get("/list", async (req, res) => {
+  try {
+    const backupDir = getBackupDir();
+    const files = import_fs9.default.readdirSync(backupDir).filter((f) => f.endsWith(".json"));
+    const backups = files.map((filename) => {
+      const filePath = import_path9.default.join(backupDir, filename);
+      const stats = import_fs9.default.statSync(filePath);
+      let metadata = {
+        type: filename.includes("_scheduled_") ? "scheduled" : filename.includes("_safety_") ? "safety" : filename.includes("uploaded_") ? "uploaded" : "manual",
+        createdAt: stats.ctime.toISOString(),
+        createdBy: "System",
+        recordCounts: {}
+      };
+      try {
+        const content = import_fs9.default.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(content);
+        if (parsed.createdAt) metadata.createdAt = parsed.createdAt;
+        if (parsed.createdBy) metadata.createdBy = parsed.createdBy;
+        if (parsed.type) metadata.type = parsed.type;
+        if (parsed.recordCounts) metadata.recordCounts = parsed.recordCounts;
+      } catch (e) {
+      }
+      return {
+        filename,
+        sizeBytes: stats.size,
+        createdAt: metadata.createdAt,
+        createdBy: metadata.createdBy,
+        type: metadata.type,
+        recordCounts: metadata.recordCounts
+      };
+    });
+    backups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const [
+      usersCount,
+      employeesCount,
+      documentsCount,
+      yellowBoxesCount,
+      borrowLogsCount,
+      auditLogsCount
+    ] = await Promise.all([
+      prisma_default.user.count(),
+      prisma_default.employee.count(),
+      prisma_default.document.count(),
+      prisma_default.yellowBox.count(),
+      prisma_default.file201BorrowLog.count(),
+      prisma_default.auditLog.count()
+    ]);
+    const liveRecordCounts = {
+      users: usersCount,
+      employees: employeesCount,
+      documents: documentsCount,
+      yellowBoxes: yellowBoxesCount,
+      borrowLogs: borrowLogsCount,
+      auditLogs: auditLogsCount,
+      total: usersCount + employeesCount + documentsCount + yellowBoxesCount + borrowLogsCount + auditLogsCount
+    };
+    res.json({
+      success: true,
+      backups,
+      liveRecordCounts,
+      schedule: getScheduleConfig()
+    });
+  } catch (error) {
+    console.error("[BackupAPI] Failed to list backups:", error);
+    res.status(500).json({ error: "Failed to retrieve backup list", details: error.message });
+  }
+});
+router12.post("/create", async (req, res) => {
+  try {
+    const { createdBy = "Administrator", type = "manual" } = req.body;
+    const result = await executeDatabaseBackup(type, createdBy);
+    await prisma_default.auditLog.create({
+      data: {
+        userId: createdBy,
+        action: "create",
+        entity: "system_backup",
+        entityId: result.filename,
+        details: `Manual database backup created: ${result.filename} (${(result.sizeBytes / 1024).toFixed(1)} KB)`,
+        metadata: {
+          filename: result.filename,
+          recordCounts: result.recordCounts,
+          sizeBytes: result.sizeBytes
+        }
+      }
+    });
+    res.json({
+      success: true,
+      message: "Backup created successfully",
+      backup: result
+    });
+  } catch (error) {
+    console.error("[BackupAPI] Failed to create backup:", error);
+    res.status(500).json({ error: "Failed to create database backup", details: error.message });
+  }
+});
+router12.get("/download/:filename", (req, res) => {
+  try {
+    const filename = import_path9.default.basename(req.params.filename);
+    const filePath = import_path9.default.join(getBackupDir(), filename);
+    if (!import_fs9.default.existsSync(filePath)) {
+      return res.status(404).json({ error: "Backup file not found" });
+    }
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Type", "application/json");
+    const fileStream = import_fs9.default.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error("[BackupAPI] Failed to download backup:", error);
+    res.status(500).json({ error: "Failed to download backup file" });
+  }
+});
+router12.post("/upload", upload.single("backupFile"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const filePath = req.file.path;
+    const content = import_fs9.default.readFileSync(filePath, "utf-8");
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      import_fs9.default.unlinkSync(filePath);
+      return res.status(400).json({ error: "Uploaded file is not a valid JSON document." });
+    }
+    if (!parsed.data || typeof parsed.data !== "object") {
+      import_fs9.default.unlinkSync(filePath);
+      return res.status(400).json({ error: 'Invalid backup structure. Missing "data" container.' });
+    }
+    res.json({
+      success: true,
+      message: "Backup file uploaded and validated successfully",
+      filename: req.file.filename,
+      recordCounts: parsed.recordCounts || {},
+      createdAt: parsed.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } catch (error) {
+    console.error("[BackupAPI] Failed to upload backup:", error);
+    res.status(500).json({ error: "Failed to upload backup file", details: error.message });
+  }
+});
+var parseDates = (item, dateKeys) => {
+  const cloned = { ...item };
+  for (const key of dateKeys) {
+    if (cloned[key]) {
+      const d = new Date(cloned[key]);
+      cloned[key] = isNaN(d.getTime()) ? null : d;
+    } else {
+      cloned[key] = null;
+    }
+  }
+  return cloned;
+};
+router12.post("/restore", async (req, res) => {
+  try {
+    const { filename, superadminPassword, username = "admin" } = req.body;
+    if (!filename) {
+      return res.status(400).json({ error: "Please specify the backup filename to restore." });
+    }
+    if (!superadminPassword) {
+      return res.status(400).json({ error: "Superadmin password confirmation is required to restore the database." });
+    }
+    let authorizedUser = null;
+    if (username) {
+      const user = await prisma_default.user.findFirst({ where: { username } });
+      if (user && (user.role === "superadmin" || user.role === "developer")) {
+        if (await bcryptjs_default.compare(superadminPassword, user.password)) {
+          authorizedUser = user;
+        }
+      }
+    }
+    if (!authorizedUser) {
+      const superadmins = await prisma_default.user.findMany({
+        where: { OR: [{ role: "superadmin" }, { role: "developer" }] }
+      });
+      for (const sa of superadmins) {
+        if (await bcryptjs_default.compare(superadminPassword, sa.password)) {
+          authorizedUser = sa;
+          break;
+        }
+      }
+    }
+    if (!authorizedUser) {
+      return res.status(401).json({
+        error: "Invalid password. Only Superadmin and Developer accounts are authorized to restore the database."
+      });
+    }
+    const safeFilename = import_path9.default.basename(filename);
+    const filePath = import_path9.default.join(getBackupDir(), safeFilename);
+    if (!import_fs9.default.existsSync(filePath)) {
+      return res.status(404).json({ error: "Selected backup file does not exist." });
+    }
+    console.log("[BackupAPI] Creating pre-restore safety snapshot...");
+    const safetySnapshot = await executeDatabaseBackup("safety", `Auto-Safety (Pre-Restore ${safeFilename})`);
+    console.log(`[BackupAPI] Safety snapshot created: ${safetySnapshot.filename}`);
+    const content = import_fs9.default.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(content);
+    const data = parsed.data || {};
+    console.log("[BackupAPI] Beginning database restoration...");
+    await prisma_default.chatMessage.deleteMany({});
+    await prisma_default.activity.deleteMany({});
+    await prisma_default.approvalRequest.deleteMany({});
+    await prisma_default.auditLog.deleteMany({});
+    await prisma_default.file201BorrowLog.deleteMany({});
+    await prisma_default.document.deleteMany({});
+    await prisma_default.employee.deleteMany({});
+    await prisma_default.yellowBox.deleteMany({});
+    await prisma_default.systemSetting.deleteMany({});
+    await prisma_default.user.deleteMany({});
+    if (Array.isArray(data.users) && data.users.length > 0) {
+      const formatted = data.users.map(
+        (u) => parseDates(u, ["createdAt", "updatedAt", "lastLogin", "lastActive"])
+      );
+      await prisma_default.user.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.systemSettings) && data.systemSettings.length > 0) {
+      const formatted = data.systemSettings.map(
+        (s) => parseDates(s, ["createdAt", "updatedAt"])
+      );
+      await prisma_default.systemSetting.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.yellowBoxes) && data.yellowBoxes.length > 0) {
+      const formatted = data.yellowBoxes.map(
+        (y) => parseDates(y, ["createdAt", "updatedAt"])
+      );
+      await prisma_default.yellowBox.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.employees) && data.employees.length > 0) {
+      const formatted = data.employees.map((e) => {
+        const item = parseDates(e, [
+          "dateOfBirth",
+          "appointmentFrom",
+          "appointmentTo",
+          "expirationDate",
+          "dateOfEmployment",
+          "dateOfSeparation",
+          "detailedDate",
+          "detailedOrderFrom",
+          "detailedOrderTo",
+          "designatedOrderFrom",
+          "designatedOrderTo",
+          "recalledOrderFrom",
+          "recalledOrderTo",
+          "createdAt",
+          "updatedAt"
+        ]);
+        delete item.documents;
+        delete item.borrowLogs;
+        delete item.yellowBox;
+        return item;
+      });
+      await prisma_default.employee.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.documents) && data.documents.length > 0) {
+      const formatted = data.documents.map((d) => {
+        const item = parseDates(d, [
+          "createdAt",
+          "updatedAt",
+          "detailedDate",
+          "detailedOrderFrom",
+          "detailedOrderTo",
+          "designatedOrderFrom",
+          "designatedOrderTo",
+          "recalledOrderFrom",
+          "recalledOrderTo",
+          "appointmentFrom",
+          "appointmentTo"
+        ]);
+        delete item.employee;
+        return item;
+      });
+      await prisma_default.document.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.file201BorrowLogs) && data.file201BorrowLogs.length > 0) {
+      const formatted = data.file201BorrowLogs.map((b) => {
+        const item = parseDates(b, ["dateBorrowed", "dateReturned", "expectedReturnDate", "createdAt"]);
+        delete item.employee;
+        return item;
+      });
+      await prisma_default.file201BorrowLog.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.approvalRequests) && data.approvalRequests.length > 0) {
+      const formatted = data.approvalRequests.map(
+        (a) => parseDates(a, ["createdAt", "resolvedAt"])
+      );
+      await prisma_default.approvalRequest.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.activities) && data.activities.length > 0) {
+      const formatted = data.activities.map(
+        (act) => parseDates(act, ["createdAt", "updatedAt"])
+      );
+      await prisma_default.activity.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.chatMessages) && data.chatMessages.length > 0) {
+      const formatted = data.chatMessages.map(
+        (c) => parseDates(c, ["createdAt"])
+      );
+      await prisma_default.chatMessage.createMany({ data: formatted, skipDuplicates: true });
+    }
+    if (Array.isArray(data.auditLogs) && data.auditLogs.length > 0) {
+      const formatted = data.auditLogs.map(
+        (log) => parseDates(log, ["createdAt"])
+      );
+      await prisma_default.auditLog.createMany({ data: formatted, skipDuplicates: true });
+    }
+    const writeDataFile = (fileName, items) => {
+      const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
+      const targetDirs = [
+        process.env.UPLOADS_DIR ? import_path9.default.join(process.env.UPLOADS_DIR, "data") : null,
+        import_path9.default.join(PROGRAM_DATA2, "ERMS", "uploads", "data"),
+        import_path9.default.join(__dirname, "../../uploads/data")
+      ].filter(Boolean);
+      for (const dir of targetDirs) {
+        try {
+          if (!import_fs9.default.existsSync(dir)) {
+            import_fs9.default.mkdirSync(dir, { recursive: true });
+          }
+          import_fs9.default.writeFileSync(import_path9.default.join(dir, fileName), JSON.stringify(items, null, 2), "utf-8");
+          console.log(`[BackupAPI] Restored ${items.length} records to ${import_path9.default.join(dir, fileName)}`);
+        } catch (e) {
+          console.error(`[BackupAPI] Failed to restore to ${dir}/${fileName}:`, e);
+        }
+      }
+    };
+    if (Array.isArray(data.inventoryRecords)) {
+      writeDataFile("inventory_records.json", data.inventoryRecords);
+    }
+    if (Array.isArray(data.disposalHistory)) {
+      writeDataFile("disposal_history.json", data.disposalHistory);
+    }
+    if (Array.isArray(data.transferredStorageHistory)) {
+      writeDataFile("transferred_storage_history.json", data.transferredStorageHistory);
+    }
+    if (Array.isArray(data.inventoryRequests)) {
+      writeDataFile("inventory_requests.json", data.inventoryRequests);
+    }
+    await prisma_default.auditLog.create({
+      data: {
+        userId: authorizedUser.id,
+        action: "restore",
+        entity: "system_database",
+        entityId: safeFilename,
+        details: `Database restored from backup snapshot: ${safeFilename}. Safety backup stored as ${safetySnapshot.filename}`,
+        metadata: {
+          restoredFile: safeFilename,
+          safetyBackup: safetySnapshot.filename,
+          restoredAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      }
+    });
+    console.log("[BackupAPI] Database restoration completed successfully.");
+    try {
+      const io3 = getIO();
+      if (io3) {
+        console.log("[BackupAPI] Broadcasting databaseRestored event to all connected clients...");
+        io3.emit("databaseRestored", {
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          restoredBy: authorizedUser?.username || "Superadmin",
+          message: "The database has been restored from a snapshot point. All user sessions have been logged out to synchronize live data. Please log in again."
+        });
+      }
+    } catch (socketErr) {
+      console.warn("[BackupAPI] Could not emit databaseRestored socket event:", socketErr);
+    }
+    res.json({
+      success: true,
+      message: "Database has been successfully restored from snapshot.",
+      safetyBackup: safetySnapshot.filename,
+      restoredFrom: safeFilename
+    });
+  } catch (error) {
+    console.error("[BackupAPI] Database restore failed:", error);
+    res.status(500).json({ error: "Database restore encountered an error", details: error.message });
+  }
+});
+router12.delete("/:filename", async (req, res) => {
+  try {
+    const filename = import_path9.default.basename(req.params.filename);
+    const filePath = import_path9.default.join(getBackupDir(), filename);
+    if (!import_fs9.default.existsSync(filePath)) {
+      return res.status(404).json({ error: "Backup file not found" });
+    }
+    import_fs9.default.unlinkSync(filePath);
+    res.json({
+      success: true,
+      message: `Backup ${filename} deleted successfully`
+    });
+  } catch (error) {
+    console.error("[BackupAPI] Failed to delete backup:", error);
+    res.status(500).json({ error: "Failed to delete backup file", details: error.message });
+  }
+});
+router12.get("/schedule", (req, res) => {
+  try {
+    res.json({
+      success: true,
+      schedule: getScheduleConfig()
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to get schedule config" });
+  }
+});
+router12.post("/schedule", (req, res) => {
+  try {
+    const { enabled, frequency, time, retentionCount } = req.body;
+    const current = getScheduleConfig();
+    const updated = {
+      ...current,
+      enabled: typeof enabled === "boolean" ? enabled : current.enabled,
+      frequency: frequency === "weekly" ? "weekly" : "daily",
+      time: time || current.time,
+      retentionCount: Number(retentionCount) || current.retentionCount
+    };
+    saveScheduleConfig(updated);
+    res.json({
+      success: true,
+      message: "Backup schedule settings saved successfully",
+      schedule: updated
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save schedule config" });
+  }
+});
+var backup_routes_default = router12;
+
 // server/src/middleware/session.ts
 async function validateSession(req, res, next) {
   const skipPaths = [
@@ -63941,6 +64680,159 @@ async function validateSession(req, res, next) {
     }
   }
   next();
+}
+
+// server/src/utils/folderSync.ts
+var import_fs10 = __toESM(require("fs"));
+var import_path10 = __toESM(require("path"));
+async function consolidateDocumentFolders() {
+  try {
+    const baseUploadsDir = getBaseUploadsDir();
+    const localUploadsDir = import_path10.default.resolve(process.cwd(), "uploads");
+    const dirsToCheck = Array.from(/* @__PURE__ */ new Set([
+      import_path10.default.join(baseUploadsDir, "documents"),
+      import_path10.default.join(localUploadsDir, "documents")
+    ])).filter((d) => import_fs10.default.existsSync(d));
+    for (const documentsDir of dirsToCheck) {
+      const employees = await prisma_default.employee.findMany({
+        select: { id: true, firstName: true, lastName: true, middleName: true }
+      });
+      const formatName = (first, last, middle) => {
+        let surname = last.trim().toUpperCase();
+        let f = first.trim().toUpperCase();
+        const m = middle ? middle.trim().toUpperCase() : "";
+        return `${surname}, ${f}${m ? " " + m : ""}`;
+      };
+      const employeeMap = /* @__PURE__ */ new Map();
+      for (const emp of employees) {
+        const canonical = formatName(emp.firstName, emp.lastName, emp.middleName);
+        const normCanonical = canonical.replace(/,/g, " ").replace(/\s+/g, " ").toUpperCase().trim();
+        employeeMap.set(normCanonical, canonical);
+      }
+      const entries = import_fs10.default.readdirSync(documentsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+      for (const folder of entries) {
+        const folderNorm = folder.replace(/,/g, " ").replace(/\s+/g, " ").toUpperCase().trim();
+        const folderTokens = folderNorm.split(" ").filter((t) => t.length > 1);
+        let targetCanonical;
+        for (const [empNorm, canonical] of employeeMap.entries()) {
+          if (folderNorm === empNorm) {
+            targetCanonical = canonical;
+            break;
+          }
+          if (folderTokens.length >= 2 && folderTokens.every((t) => empNorm.includes(t))) {
+            targetCanonical = canonical;
+            break;
+          }
+        }
+        if (targetCanonical && folder !== targetCanonical) {
+          const srcPath = import_path10.default.join(documentsDir, folder);
+          const destPath = import_path10.default.join(documentsDir, targetCanonical);
+          let renamed = false;
+          if (!import_fs10.default.existsSync(destPath)) {
+            try {
+              import_fs10.default.renameSync(srcPath, destPath);
+              console.log(`[FolderSync] Renamed folder "${folder}" -> "${targetCanonical}"`);
+              renamed = true;
+            } catch (e) {
+            }
+          }
+          if (!renamed) {
+            try {
+              const categories = import_fs10.default.readdirSync(srcPath, { withFileTypes: true });
+              for (const cat of categories) {
+                const catSrc = import_path10.default.join(srcPath, cat.name);
+                const catDest = import_path10.default.join(destPath, cat.name);
+                if (!import_fs10.default.existsSync(catDest)) {
+                  import_fs10.default.mkdirSync(catDest, { recursive: true });
+                }
+                if (cat.isDirectory()) {
+                  const files = import_fs10.default.readdirSync(catSrc);
+                  for (const f of files) {
+                    const fSrc = import_path10.default.join(catSrc, f);
+                    const fDest = import_path10.default.join(catDest, f);
+                    if (!import_fs10.default.existsSync(fDest)) {
+                      import_fs10.default.copyFileSync(fSrc, fDest);
+                      try {
+                        import_fs10.default.unlinkSync(fSrc);
+                      } catch (_) {
+                      }
+                    }
+                  }
+                  try {
+                    import_fs10.default.rmdirSync(catSrc);
+                  } catch (_) {
+                  }
+                }
+              }
+              try {
+                import_fs10.default.rmdirSync(srcPath);
+                console.log(`[FolderSync] Merged duplicate folder "${folder}" into "${targetCanonical}"`);
+              } catch (_) {
+              }
+            } catch (mergeErr) {
+              console.warn(`[FolderSync] Error merging folder "${folder}":`, mergeErr);
+            }
+          }
+        }
+      }
+      const currentEmpFolders = import_fs10.default.readdirSync(documentsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+      for (const empFolder of currentEmpFolders) {
+        const pendingAoPath = import_path10.default.join(documentsDir, empFolder, "Pending AO");
+        if (import_fs10.default.existsSync(pendingAoPath)) {
+          const targetAoPath = import_path10.default.join(documentsDir, empFolder, "Administrative Order");
+          if (!import_fs10.default.existsSync(targetAoPath)) {
+            import_fs10.default.mkdirSync(targetAoPath, { recursive: true });
+          }
+          try {
+            const files = import_fs10.default.readdirSync(pendingAoPath);
+            for (const file of files) {
+              const srcFile = import_path10.default.join(pendingAoPath, file);
+              let destFile = import_path10.default.join(targetAoPath, file);
+              if (import_fs10.default.existsSync(destFile)) {
+                const ext = import_path10.default.extname(file);
+                const base = import_path10.default.basename(file, ext);
+                destFile = import_path10.default.join(targetAoPath, `${base}-${Date.now()}${ext}`);
+              }
+              import_fs10.default.copyFileSync(srcFile, destFile);
+              try {
+                import_fs10.default.unlinkSync(srcFile);
+              } catch (_) {
+              }
+              console.log(`[FolderSync] Moved file from Pending AO to Administrative Order: ${file} in ${empFolder}`);
+            }
+            try {
+              import_fs10.default.rmdirSync(pendingAoPath);
+              console.log(`[FolderSync] Removed empty Pending AO folder for ${empFolder}`);
+            } catch (_) {
+            }
+          } catch (aoErr) {
+            console.warn(`[FolderSync] Error migrating Pending AO in ${empFolder}:`, aoErr);
+          }
+        }
+      }
+    }
+    const pendingDocs = await prisma_default.document.findMany({
+      where: {
+        OR: [
+          { category: "Pending AO" },
+          { filePath: { contains: "Pending AO" } }
+        ]
+      }
+    });
+    for (const doc of pendingDocs) {
+      const newFilePath = (doc.filePath || "").replace(/\\Pending AO\\/g, "\\Administrative Order\\").replace(/\/Pending AO\//g, "/Administrative Order/");
+      await prisma_default.document.update({
+        where: { id: doc.id },
+        data: {
+          category: "Administrative Order",
+          filePath: newFilePath
+        }
+      });
+      console.log(`[FolderSync] Updated Document DB record ${doc.id} (${doc.fileName}) -> Administrative Order`);
+    }
+  } catch (err) {
+    console.error("[FolderSync] Error consolidating document folders:", err);
+  }
 }
 
 // server/src/index.ts
@@ -64015,7 +64907,7 @@ import_dotenv.default.config();
     console.error("[server] Error ensuring developer user exists:", err);
   }
 })();
-var app = (0, import_express12.default)();
+var app = (0, import_express13.default)();
 var PORT = process.env.PORT || 5e3;
 var HOST = process.env.HOST || "0.0.0.0";
 console.log("[server] Environment configuration:");
@@ -64029,21 +64921,21 @@ try {
   const dest2 = "c:\\Employee Records Management System\\public\\template.xlsx";
   const dest3 = "c:\\Employee Records Management System\\public\\NAP FORM 1 (FORMAT).xlsx";
   const dest4 = "c:\\Employee Records Management System\\public\\NAP FORM 1 (Sample Format).xlsx";
-  if (import_fs8.default.existsSync(srcF_sample)) {
-    import_fs8.default.copyFileSync(srcF_sample, dest2);
-    import_fs8.default.copyFileSync(srcF_sample, dest4);
+  if (import_fs11.default.existsSync(srcF_sample)) {
+    import_fs11.default.copyFileSync(srcF_sample, dest2);
+    import_fs11.default.copyFileSync(srcF_sample, dest4);
   }
-  if (import_fs8.default.existsSync(srcF_format)) {
-    import_fs8.default.copyFileSync(srcF_format, dest1);
-    import_fs8.default.copyFileSync(srcF_format, dest3);
+  if (import_fs11.default.existsSync(srcF_format)) {
+    import_fs11.default.copyFileSync(srcF_format, dest1);
+    import_fs11.default.copyFileSync(srcF_format, dest3);
     console.log("[server] Copied templates to public/ directory");
   }
 } catch (e) {
   console.error("[server] Copy template error:", e);
 }
 app.get("/api/nap-template", (req, res) => {
-  const filePath = import_path8.default.resolve("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
-  if (import_fs8.default.existsSync(filePath)) {
+  const filePath = import_path11.default.resolve("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
+  if (import_fs11.default.existsSync(filePath)) {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.sendFile(filePath);
   } else {
@@ -64052,9 +64944,9 @@ app.get("/api/nap-template", (req, res) => {
 });
 app.get("/api/dump-template", async (req, res) => {
   try {
-    const fs9 = require("fs");
+    const fs12 = require("fs");
     const JSZip = require_lib7();
-    const data = fs9.readFileSync("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
+    const data = fs12.readFileSync("c:/Employee Records Management System/NAP FORM 1 (FORMAT).xlsx");
     const zip = await JSZip.loadAsync(data);
     const sheet = await zip.file("xl/worksheets/sheet1.xml").async("text");
     let strings = "";
@@ -64066,12 +64958,12 @@ app.get("/api/dump-template", async (req, res) => {
   }
 });
 app.use((0, import_cors.default)());
-app.use(import_express12.default.json({ limit: "50mb" }));
-app.use(import_express12.default.urlencoded({ extended: true, limit: "50mb" }));
+app.use(import_express13.default.json({ limit: "50mb" }));
+app.use(import_express13.default.urlencoded({ extended: true, limit: "50mb" }));
 var PROGRAM_DATA = process.env.PROGRAMDATA || "C:\\ProgramData";
-var DEFAULT_UPLOADS_BASE = import_path8.default.join(PROGRAM_DATA, "ERMS", "uploads");
-var uploadsPath = process.env.UPLOADS_DIR || (import_fs8.default.existsSync(DEFAULT_UPLOADS_BASE) ? DEFAULT_UPLOADS_BASE : import_path8.default.join(__dirname, "../uploads"));
-app.use("/uploads", import_express12.default.static(uploadsPath, {
+var DEFAULT_UPLOADS_BASE = import_path11.default.join(PROGRAM_DATA, "ERMS", "uploads");
+var uploadsPath = process.env.UPLOADS_DIR || (import_fs11.default.existsSync(DEFAULT_UPLOADS_BASE) ? DEFAULT_UPLOADS_BASE : import_path11.default.join(__dirname, "../uploads"));
+app.use("/uploads", import_express13.default.static(uploadsPath, {
   setHeaders: (res, filePath) => {
     if (filePath.toLowerCase().endsWith(".pdf")) {
       res.setHeader("Content-Type", "application/pdf");
@@ -64109,8 +65001,10 @@ app.use("/api/activities", activity_routes_default);
 app.use("/api/chats", chat_routes_default);
 app.use("/api/yellow-boxes", yellowBox_routes_default);
 app.use("/api/inventory", inventory_routes_default);
+app.use("/api/backup", backup_routes_default);
+initBackupScheduler();
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", message: "Server is running", version: "1.5.0" });
+  res.json({ status: "ok", message: "Server is running", version: "1.6.1" });
 });
 app.use((err, req, res, next) => {
   console.error("[server] Express error intercepted:", err);
@@ -64127,20 +65021,30 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason, promise) => {
   console.error("[server] Unhandled Rejection intercepted at:", promise, "reason:", reason);
 });
+var handleGracefulShutdown = async (signal) => {
+  console.log(`[server] Received ${signal}. Closing database connections cleanly...`);
+  try {
+    await prisma_default.$disconnect();
+  } catch (e) {
+  }
+  process.exit(0);
+};
+process.on("SIGINT", () => handleGracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => handleGracefulShutdown("SIGTERM"));
 var frontendDist = process.env.FRONTEND_DIST;
-if (frontendDist && import_fs8.default.existsSync(frontendDist)) {
-  app.use(import_express12.default.static(frontendDist));
+if (frontendDist && import_fs11.default.existsSync(frontendDist)) {
+  app.use(import_express13.default.static(frontendDist));
   app.get("*", (_req, res) => {
-    res.sendFile(import_path8.default.join(frontendDist, "index.html"));
+    res.sendFile(import_path11.default.join(frontendDist, "index.html"));
   });
 }
-var certPath = process.env.SSL_CERT_PATH || import_path8.default.join(__dirname, "../certs/server-cert.pem");
-var keyPath = process.env.SSL_KEY_PATH || import_path8.default.join(__dirname, "../certs/server-key.pem");
-if (import_fs8.default.existsSync(certPath) && import_fs8.default.existsSync(keyPath)) {
+var certPath = process.env.SSL_CERT_PATH || import_path11.default.join(__dirname, "../certs/server-cert.pem");
+var keyPath = process.env.SSL_KEY_PATH || import_path11.default.join(__dirname, "../certs/server-key.pem");
+if (import_fs11.default.existsSync(certPath) && import_fs11.default.existsSync(keyPath)) {
   try {
     const httpsOptions = {
-      cert: import_fs8.default.readFileSync(certPath),
-      key: import_fs8.default.readFileSync(keyPath)
+      cert: import_fs11.default.readFileSync(certPath),
+      key: import_fs11.default.readFileSync(keyPath)
     };
     const server = import_https.default.createServer(httpsOptions, app);
     initSocket(server);
@@ -64149,6 +65053,7 @@ if (import_fs8.default.existsSync(certPath) && import_fs8.default.existsSync(key
       console.log(`\u{1F4CA} API endpoints available at https://localhost:${PORT}/api`);
       console.log(`\u{1F512} Using HTTPS with self-signed certificate`);
       syncExistingRecordsToDropdownOptions();
+      consolidateDocumentFolders();
     });
   } catch (err) {
     console.error("\u26A0\uFE0F Failed to start HTTPS server, falling back to HTTP:", err);
@@ -64158,6 +65063,7 @@ if (import_fs8.default.existsSync(certPath) && import_fs8.default.existsSync(key
       console.log(`\u{1F680} Server is running on http://localhost:${PORT}`);
       console.log(`\u{1F4CA} API endpoints available at http://localhost:${PORT}/api`);
       syncExistingRecordsToDropdownOptions();
+      consolidateDocumentFolders();
     });
   }
 } else {
@@ -64168,6 +65074,7 @@ if (import_fs8.default.existsSync(certPath) && import_fs8.default.existsSync(key
     console.log(`\u{1F680} Server is running on http://localhost:${PORT}`);
     console.log(`\u{1F4CA} API endpoints available at http://localhost:${PORT}/api`);
     syncExistingRecordsToDropdownOptions();
+    consolidateDocumentFolders();
   });
 }
 var src_default = app;

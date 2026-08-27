@@ -225,7 +225,7 @@ initBackupScheduler();
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', message: 'Server is running', version: '1.5.0' });
+  res.json({ status: 'ok', message: 'Server is running', version: '1.6.1' });
 });
 
 // Global Express error handler middleware
