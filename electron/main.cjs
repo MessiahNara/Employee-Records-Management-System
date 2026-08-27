@@ -383,13 +383,30 @@ function createWindow() {
   mainWindow.on('maximize', applyZoom);
   mainWindow.on('unmaximize', applyZoom);
 
-  // Allow manual Ctrl + 0 to reset zoom back to clean 0.65
+  // Allow manual Ctrl + 0, Ctrl + +, Ctrl + -, and zoom adjustments
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.control && (input.key === '0' || input.code === 'Digit0' || input.code === 'Numpad0')) {
       event.preventDefault();
       currentZoom = TARGET_ZOOM;
       applyZoom();
+    } else if (input.control && (input.key === '=' || input.key === '+' || input.code === 'NumpadAdd')) {
+      event.preventDefault();
+      currentZoom = Math.min(currentZoom + 0.05, 1.5);
+      applyZoom();
+    } else if (input.control && (input.key === '-' || input.code === 'NumpadSubtract')) {
+      event.preventDefault();
+      currentZoom = Math.max(currentZoom - 0.05, 0.4);
+      applyZoom();
     }
+  });
+
+  mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
+    if (zoomDirection === 'in') {
+      currentZoom = Math.min(currentZoom + 0.05, 1.5);
+    } else if (zoomDirection === 'out') {
+      currentZoom = Math.max(currentZoom - 0.05, 0.4);
+    }
+    applyZoom();
   });
 
 

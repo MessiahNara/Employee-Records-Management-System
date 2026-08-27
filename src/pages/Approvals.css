@@ -311,3 +311,188 @@
   background-color: rgba(239, 68, 68, 0.15);
   color: var(--color-danger);
 }
+
+/* Delete Button & Confirmation Modal Styles */
+.approvals__delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.approvals__delete-btn:hover {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+.approvals__delete-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.approvals__delete-warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--border-radius);
+}
+
+.approvals__delete-warning-icon {
+  font-size: 1.5rem;
+  color: #ef4444;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.approvals__delete-warning-text strong {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: #ef4444;
+  margin-bottom: 2px;
+}
+
+.approvals__delete-warning-text p {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.approvals__delete-section-title {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.approvals__delete-summary-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 14px 18px;
+}
+
+.approvals__delete-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 20px;
+}
+
+.approvals__delete-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.approvals__delete-summary-item--full {
+  grid-column: 1 / -1;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.approvals__delete-summary-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.approvals__delete-summary-val {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  word-break: break-word;
+}
+
+.approvals__delete-auth-section {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.approvals__delete-auth-subtitle {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.approvals__delete-fields-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 540px) {
+  .approvals__delete-summary-grid,
+  .approvals__delete-fields-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.approvals__delete-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--border-radius);
+  padding: 8px 12px;
+  font-size: var(--font-size-sm);
+}
+
+.approvals__password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.approvals__password-input-wrapper .approvals__field-input {
+  padding-right: 38px;
+}
+
+.approvals__password-toggle {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  transition: color 0.15s;
+}
+
+.approvals__password-toggle:hover {
+  color: var(--text-primary);
+}
+
+.approvals__modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+}

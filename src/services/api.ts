@@ -244,37 +244,58 @@ async function apiRequest<T>(
     }, timeoutMs);
   });
 
-  try {
-    const response = await Promise.race([
-      fetch(url, config),
-      timeoutPromise
-    ]);
-    
-    if (!response.ok) {
-      await handleResponseError(response);
-    }
+  const maxRetries = (options.method && options.method !== 'GET') ? 1 : 2;
+  let lastError: any = null;
 
-    return await response.json();
-  } catch (error: any) {
-    console.error('API Request Error:', error);
-    
-    // Enhance error message for network errors
-    const errorMsg = error?.message || '';
-    if (errorMsg.includes('timeout') || errorMsg.includes('Server connection')) {
-      throw error; // Re-throw timeout errors as-is
-    }
-    
-    if (errorMsg.includes('failed to fetch') || errorMsg.includes('network') || errorMsg.includes('ERR_')) {
-      const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1');
-      if (isLocalhost) {
-        throw new Error('Unable to reach the server. The backend server may not be running. Please wait a moment and try again.');
-      } else {
-        throw new Error(`Unable to reach the server at ${getApiBaseUrl()}. Please check the Server URL in Settings → System → Server Configuration.`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await Promise.race([
+        fetch(url, config),
+        timeoutPromise
+      ]);
+      
+      if (!response.ok) {
+        await handleResponseError(response);
       }
+
+      return await response.json();
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = String(error?.message || '').toLowerCase();
+      const isTransientNetworkError =
+        errorMsg.includes('failed to fetch') ||
+        errorMsg.includes('network') ||
+        errorMsg.includes('err_') ||
+        errorMsg.includes('load failed') ||
+        errorMsg.includes('econnrefused');
+
+      // If it's a transient network/connection error and we have retries left, wait briefly and retry
+      if (isTransientNetworkError && attempt < maxRetries) {
+        await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
+        continue;
+      }
+
+      console.error(`API Request Error (attempt ${attempt + 1}/${maxRetries + 1}):`, error);
+      
+      // Enhance error message for network errors
+      if (errorMsg.includes('timeout') || errorMsg.includes('server connection')) {
+        throw error; // Re-throw timeout errors as-is
+      }
+      
+      if (isTransientNetworkError) {
+        const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1');
+        if (isLocalhost) {
+          throw new Error('Unable to reach the server. The backend server may not be running. Please wait a moment and try again.');
+        } else {
+          throw new Error(`Unable to reach the server at ${getApiBaseUrl()}. Please check the Server URL in Settings → System → Server Configuration.`);
+        }
+      }
+      
+      throw error;
     }
-    
-    throw error;
   }
+
+  throw lastError;
 }
 
 // FormData upload handler (no Content-Type header — browser sets multipart boundary)

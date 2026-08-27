@@ -273,7 +273,7 @@ function File201RspModal({
             </Button>
           ) : (
             <Button variant="primary" onClick={handleTransfer} loading={loading}>
-              Transferred to RSP
+              Transfer
             </Button>
           )}
         </div>

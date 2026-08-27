@@ -2,13 +2,25 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
 import ApproveRequestModal from '../components/ApproveRequestModal';
 import RejectRequestModal from '../components/RejectRequestModal';
 import RequestDetailsModal from '../components/RequestDetailsModal';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
-import { MdCheckCircle, MdCancel, MdRefresh, MdPending } from 'react-icons/md';
+import {
+  MdCheckCircle,
+  MdCancel,
+  MdRefresh,
+  MdPending,
+  MdDeleteOutline,
+  MdLock,
+  MdWarning,
+  MdVisibility,
+  MdVisibilityOff,
+} from 'react-icons/md';
 import './Approvals.css';
 
 const ACTION_LABELS: Record<string, string> = {
@@ -61,6 +73,26 @@ function Approvals() {
 
   // View Details modal
   const [viewDetailsTarget, setViewDetailsTarget] = useState<any>(null);
+
+  // Delete modal state with password verification
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteUsername, setDeleteUsername] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const deleteUsernameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (deleteTarget) {
+      setDeleteUsername(currentUser?.username || '');
+      setDeletePassword('');
+      setDeleteError('');
+      setIsDeleting(false);
+      setShowDeletePassword(false);
+      setTimeout(() => deleteUsernameRef.current?.focus(), 80);
+    }
+  }, [deleteTarget]);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -264,7 +296,7 @@ function Approvals() {
           try {
             // Convert base64 back to File
             const { data, metadata } = payload._aoFile;
-            
+
             // Extract content type and base64 string
             const arr = data.split(',');
             const mimeMatch = arr[0].match(/:(.*?);/);
@@ -272,8 +304,8 @@ function Approvals() {
             const bstr = atob(arr[1]);
             let n = bstr.length;
             const u8arr = new Uint8Array(n);
-            while(n--){
-                u8arr[n] = bstr.charCodeAt(n);
+            while (n--) {
+              u8arr[n] = bstr.charCodeAt(n);
             }
             const file = new File([u8arr], metadata.fileName, { type: mime });
 
@@ -408,12 +440,47 @@ function Approvals() {
     fetchRequests();
   };
 
-  const handleDelete = async (id: string) => {
+  const handleConfirmDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deleteTarget) return;
+
+    if (!deleteUsername.trim()) {
+      setDeleteError('Dev/Super Admin is required.');
+      return;
+    }
+    if (!deletePassword.trim()) {
+      setDeleteError('Dev/Super Admin password is required.');
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError('');
+
     try {
-      await api.approvals.remove(id);
+      // Verify credentials with backend
+      const verifyRes = await api.user.verifyPassword(deleteUsername, deletePassword, '');
+      if (!verifyRes.valid) {
+        setDeleteError('Invalid Dev/Super Admin username or password.');
+        setIsDeleting(false);
+        return;
+      }
+
+      // Check role
+      const userRole = verifyRes.user?.role;
+      if (userRole !== 'superadmin' && userRole !== 'developer') {
+        setDeleteError('Only Superadmin and Developer accounts can delete approval records.');
+        setIsDeleting(false);
+        return;
+      }
+
+      await api.approvals.remove(deleteTarget.id);
+      showToast('Approval record deleted successfully.', 'success');
+      setDeleteTarget(null);
       fetchRequests();
-    } catch {
-      showToast('Failed to delete request', 'error');
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete approval record.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -495,8 +562,8 @@ function Approvals() {
       ) : (
         <div className="approvals__list">
           {requests.map((req) => (
-            <Card 
-              key={req.id} 
+            <Card
+              key={req.id}
               className={`approvals__card approvals__card--${req.status}`}
               onClick={() => setViewDetailsTarget(req)}
               style={{ cursor: 'pointer', transition: 'box-shadow 0.2s', padding: '1.5rem' }}
@@ -504,8 +571,8 @@ function Approvals() {
               <div className="approvals__card-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   {req.status === 'pending' && filter === 'pending' && (
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       className="approvals__checkbox"
                       checked={selectedIds.has(req.id)}
                       onClick={(e) => e.stopPropagation()}
@@ -549,10 +616,10 @@ function Approvals() {
                   <span className="approvals__info-label">
                     {req.action === 'update_employee' || req.action === 'update_user' ? 'Updated:' : 'Requested:'}
                   </span>
-                  <span className="approvals__info-value" style={{ 
-                    display: '-webkit-box', 
-                    WebkitLineClamp: 1, 
-                    WebkitBoxOrient: 'vertical', 
+                  <span className="approvals__info-value" style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis'
                   }}>
@@ -641,10 +708,16 @@ function Approvals() {
                 </div>
               )}
 
-              {req.status !== 'pending' && currentUser?.role === 'developer' && (
+              {req.status !== 'pending' && isSuperAdminOrDeveloper && (
                 <div className="approvals__card-actions" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(req.id)}>
-                    Delete
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className="approvals__delete-btn"
+                    onClick={() => setDeleteTarget(req)}
+                    title="Delete resolved request record"
+                  >
+                    <MdDeleteOutline /> Delete
                   </Button>
                 </div>
               )}
@@ -670,6 +743,7 @@ function Approvals() {
         onReject={handleReject}
       />
 
+      {/* Request Details Modal */}
       <RequestDetailsModal
         isOpen={!!viewDetailsTarget}
         target={viewDetailsTarget}
@@ -691,6 +765,143 @@ function Approvals() {
           setViewDetailsTarget(null);
         }}
       />
+
+      {/* Delete Confirmation Modal with Admin Password Verification */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (!isDeleting) setDeleteTarget(null);
+        }}
+        title="Confirm Request Deletion"
+        size="md"
+      >
+        {deleteTarget && (
+          <form onSubmit={handleConfirmDelete} className="approvals__delete-modal">
+            <div className="approvals__delete-warning-box">
+              <MdWarning className="approvals__delete-warning-icon" />
+              <div className="approvals__delete-warning-text">
+                <strong>Permanent Deletion Warning</strong>
+                <p>This action cannot be undone. This completed request record will be permanently removed from the approval history.</p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="approvals__delete-error">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="approvals__delete-summary-card">
+              <div className="approvals__delete-section-title">Request Details</div>
+              <div className="approvals__delete-summary-grid">
+                <div className="approvals__delete-summary-item">
+                  <span className="approvals__delete-summary-label">Action</span>
+                  <span className="approvals__delete-summary-val" style={{ fontWeight: 600 }}>
+                    {ACTION_LABELS[deleteTarget.action] || deleteTarget.action}
+                  </span>
+                </div>
+                <div className="approvals__delete-summary-item">
+                  <span className="approvals__delete-summary-label">Status</span>
+                  <div>
+                    <Badge
+                      variant={deleteTarget.status === 'approved' ? 'success' : 'danger'}
+                      size="sm"
+                    >
+                      {deleteTarget.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="approvals__delete-summary-item">
+                  <span className="approvals__delete-summary-label">Requested by</span>
+                  <span className="approvals__delete-summary-val">{deleteTarget.requestedByName}</span>
+                </div>
+                <div className="approvals__delete-summary-item">
+                  <span className="approvals__delete-summary-label">Date Requested</span>
+                  <span className="approvals__delete-summary-val">{new Date(deleteTarget.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div className="approvals__delete-summary-item approvals__delete-summary-item--full">
+                  <span className="approvals__delete-summary-label">Target Details</span>
+                  <span className="approvals__delete-summary-val">
+                    {formatRequestedInfo(deleteTarget)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Admin Authorization (Below Summary) */}
+            <div className="approvals__delete-auth-section">
+              <div className="approvals__delete-section-title">
+                <MdLock style={{ fontSize: '1.05rem', verticalAlign: 'middle', marginRight: '6px', color: 'var(--color-primary)' }} />
+                Admin Authorization
+              </div>
+              <p className="approvals__delete-auth-subtitle">
+                Please enter your Dev/Super Admin credentials to authorize permanent deletion:
+              </p>
+
+              <div className="approvals__delete-fields-row">
+                <div className="approvals__field">
+                  <label className="approvals__field-label">Dev/Super Admin Username</label>
+                  <input
+                    ref={deleteUsernameRef}
+                    type="text"
+                    className="approvals__field-input"
+                    value={deleteUsername}
+                    onChange={(e) => setDeleteUsername(e.target.value)}
+                    placeholder="Enter username"
+                    disabled={isDeleting}
+                    autoComplete="username"
+                  />
+                </div>
+
+                <div className="approvals__field">
+                  <label className="approvals__field-label">Dev/Super Admin Password</label>
+                  <div className="approvals__password-input-wrapper">
+                    <input
+                      type={showDeletePassword ? 'text' : 'password'}
+                      className="approvals__field-input"
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      placeholder="Enter password"
+                      disabled={isDeleting}
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className="approvals__password-toggle"
+                      onClick={() => setShowDeletePassword(!showDeletePassword)}
+                      tabIndex={-1}
+                    >
+                      {showDeletePassword ? <MdVisibilityOff /> : <MdVisibility />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="approvals__modal-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                disabled={isDeleting || !deleteUsername.trim() || !deletePassword.trim()}
+              >
+                {isDeleting ? 'Deleting...' : (
+                  <>
+                    <MdDeleteOutline /> Confirm &amp; Delete
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

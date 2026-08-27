@@ -9,7 +9,7 @@ import Input from '../components/ui/Input';
 import { User, UserStatus, UserPermissions, Role, PermissionAction } from '../types';
 import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
-import { MdEdit, MdAdd, MdLock, MdDelete } from 'react-icons/md';
+import { MdEdit, MdAdd, MdLock, MdDelete, MdWarning, MdDeleteOutline } from 'react-icons/md';
 import api from '../services/api';
 import './Users.css';
 
@@ -1261,21 +1261,87 @@ function Users() {
         <Modal
           isOpen={true}
           onClose={() => setPendingDeleteUser(null)}
-          title="Delete User"
+          title="Confirm User Account Deletion"
+          size="md"
           footer={
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
               <Button variant="ghost" onClick={() => setPendingDeleteUser(null)}>
                 Cancel
               </Button>
               <Button variant="danger" onClick={confirmDeleteUser}>
-                Delete User
+                <MdDeleteOutline /> Delete User
               </Button>
             </div>
           }
         >
-          <p>
-            Are you sure you want to delete user <strong>{pendingDeleteUser.lastName}, {pendingDeleteUser.firstName}</strong>? This action cannot be undone.
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              padding: '12px 14px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 'var(--border-radius)',
+            }}>
+              <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                  Permanent Account Deletion
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                  Are you sure you want to delete this user account? This action cannot be undone and will revoke all access immediately.
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--border-radius)',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: '6px',
+                borderBottom: '1px solid var(--border-color)',
+              }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>
+                  User Details
+                </span>
+                <Badge
+                  variant={pendingDeleteUser.status === 'active' || (pendingDeleteUser.status as any) === 'ACTIVE' ? 'success' : 'secondary'}
+                  size="sm"
+                >
+                  {((pendingDeleteUser.status as string) || 'ACTIVE').toUpperCase()}
+                </Badge>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', fontSize: '0.875rem' }}>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Full Name</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{pendingDeleteUser.lastName}, {pendingDeleteUser.firstName} {pendingDeleteUser.middleName || ''}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Username</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{(pendingDeleteUser as any).username || (pendingDeleteUser.email ? pendingDeleteUser.email.split('@')[0] : 'N/A')}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Role</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{getRoleName(pendingDeleteUser.roleId).toUpperCase()}</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Office / Section</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{(pendingDeleteUser as any).office || pendingDeleteUser.department || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </Modal>
       )}
 

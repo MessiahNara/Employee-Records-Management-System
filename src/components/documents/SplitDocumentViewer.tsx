@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import {
@@ -73,8 +73,33 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
   const [layoutMode, setLayoutMode] = useState<'50-50' | '65-35' | '35-65' | '100-0'>('50-50');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const paneRef = useRef<HTMLDivElement>(null);
 
   const activeSrc = pdfUrl || pdfData;
+
+  // Support Ctrl + Mouse Wheel zoom and trackpad pinch zoom
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane || !isOpen) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const step = 15;
+        if (e.deltaY < 0) {
+          setZoom((prev) => Math.min(300, prev + step));
+        } else {
+          setZoom((prev) => Math.max(40, prev - step));
+        }
+      }
+    };
+
+    pane.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      pane.removeEventListener('wheel', handleWheel);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && activeSrc) {
@@ -249,6 +274,7 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
         <div className="split-viewer__main">
           {/* Left: PDF Frame */}
           <div
+            ref={paneRef}
             className="split-viewer__pane-left"
             style={{ flex: getFlexLeft() }}
           >

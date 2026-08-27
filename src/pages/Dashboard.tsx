@@ -29,7 +29,7 @@ import { generateImportTemplate } from '../utils/exportUtils';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { formatDateDDMMYYYY, convertToDateInputFormat, formatDateMDY } from '../utils/dateUtils';
-import { MdEdit, MdDelete, MdFileUpload, MdFileDownload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel, MdPrint } from 'react-icons/md';
+import { MdEdit, MdDelete, MdDeleteOutline, MdFileUpload, MdFileDownload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel, MdPrint } from 'react-icons/md';
 import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
 import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
@@ -4521,7 +4521,7 @@ function Dashboard() {
       // Get selected employees
       const selectedEmployees = allEmployees.filter(emp => employeeIds.includes(emp.id));
 
-      // Generate and download ZIP
+      // Generate and download (PDF for barcodes, ZIP for QR codes)
       await bulkDownloadCodes(selectedEmployees, type);
 
       showToast(`Successfully downloaded ${type === 'barcode' ? 'barcode(s)' : 'QR code(s)'}!`, 'success');
@@ -6061,7 +6061,7 @@ function Dashboard() {
         employeeName={selectedReportEmployeeName}
       />
 
-      {/* Delete Report Entries Confirmation Modal */}
+      {/* Delete Report Entries Confirmation Modal (Administrative Order) */}
       <Modal
         isOpen={isDeleteReportConfirmOpen}
         onClose={() => {
@@ -6070,12 +6070,12 @@ function Dashboard() {
             setPendingDeleteReportIds([]);
           }
         }}
-        title="Request Deletion - Generated Reports"
-        size="sm"
+        title="Confirm Deletion Request — Administrative Order"
+        size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
             <Button
-              variant="secondary"
+              variant="ghost"
               onClick={() => {
                 setIsDeleteReportConfirmOpen(false);
                 setPendingDeleteReportIds([]);
@@ -6090,34 +6090,97 @@ function Dashboard() {
               loading={isDeletingReport}
               disabled={isDeletingReport}
             >
-              Submit for Approval
+              <MdDeleteOutline /> Submit Delete Request
             </Button>
           </div>
         }
       >
-        <div style={{ padding: '0.5rem 0' }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem', lineHeight: '1.5' }}>
-            You are requesting deletion of <strong>{pendingDeleteReportIds.length}</strong> report entry/entries.
-          </p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginTop: '0.75rem' }}>
-            This request will be sent to a Super Admin for approval. Once approved, the selected entries and their corresponding Administrative Order documents will be permanently removed.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--border-radius)',
+          }}>
+            <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                Permanent Removal Warning
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                You are requesting deletion of <strong>{pendingDeleteReportIds.length}</strong> Administrative Order entry/entries. This action requires approval from a Super Admin / Developer.
+              </p>
+            </div>
+          </div>
+
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--border-radius)',
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: '6px',
+              borderBottom: '1px solid var(--border-color)',
+            }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>
+                Selected Administrative Order Entries
+              </span>
+              <Badge variant="danger" size="sm">
+                {pendingDeleteReportIds.length} {pendingDeleteReportIds.length === 1 ? 'ENTRY' : 'ENTRIES'}
+              </Badge>
+            </div>
+
+            <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+              {pendingDeleteReportIds.slice(0, 6).map((id) => {
+                const row = sortedReportRows.find((r) => r.id === id);
+                return (
+                  <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem', padding: '4px 0', borderBottom: '1px dashed var(--border-color)' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{row?.name || id}</span>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                      {row?.aoNumber ? `AO ${row.aoNumber}` : 'No AO Number'}{row?.seriesNumber ? `, S. ${row.seriesNumber}` : ''} • {row?.position || 'N/A'}
+                    </span>
+                  </div>
+                );
+              })}
+              {pendingDeleteReportIds.length > 6 && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', paddingTop: '4px' }}>
+                  + and {pendingDeleteReportIds.length - 6} more entries
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+            Once submitted, this request will appear under <strong>Admin Tools ➔ Request &amp; Approvals</strong>. Once approved, the corresponding Administrative Order documents will be permanently removed.
           </p>
         </div>
       </Modal>
 
-      {/* Delete Borrow Logs Confirmation Modal */}
+      {/* Delete Borrow Logs Confirmation Modal (Pulled-Out Files) */}
       <Modal
         isOpen={isDeleteBorrowConfirmOpen}
         onClose={() => {
-          setIsDeleteBorrowConfirmOpen(false);
-          setPendingDeleteBorrowIds([]);
+          if (!isDeletingBorrow) {
+            setIsDeleteBorrowConfirmOpen(false);
+            setPendingDeleteBorrowIds([]);
+          }
         }}
-        title="Request Deletion - Pulled-Out Files Log"
-        size="sm"
+        title="Confirm Deletion Request — Pulled-Out Files Log"
+        size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
             <Button
-              variant="secondary"
+              variant="ghost"
               onClick={() => {
                 setIsDeleteBorrowConfirmOpen(false);
                 setPendingDeleteBorrowIds([]);
@@ -6132,17 +6195,80 @@ function Dashboard() {
               loading={isDeletingBorrow}
               disabled={isDeletingBorrow}
             >
-              Submit for Approval
+              <MdDeleteOutline /> Submit Delete Request
             </Button>
           </div>
         }
       >
-        <div style={{ padding: '0.5rem 0' }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem', lineHeight: '1.5' }}>
-            You are requesting deletion of <strong>{pendingDeleteBorrowIds.length}</strong> pulled-out file log entry/entries.
-          </p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginTop: '0.75rem' }}>
-            This request will be sent to a Super Admin for approval. Once approved, the selected transaction history entries will be permanently removed.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--border-radius)',
+          }}>
+            <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                Permanent Removal Warning
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                You are requesting deletion of <strong>{pendingDeleteBorrowIds.length}</strong> pulled-out file log entry/entries.
+              </p>
+            </div>
+          </div>
+
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--border-radius)',
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: '6px',
+              borderBottom: '1px solid var(--border-color)',
+            }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>
+                Selected Pulled-Out File Records
+              </span>
+              <Badge variant="danger" size="sm">
+                {pendingDeleteBorrowIds.length} {pendingDeleteBorrowIds.length === 1 ? 'RECORD' : 'RECORDS'}
+              </Badge>
+            </div>
+
+            <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+              {pendingDeleteBorrowIds.slice(0, 6).map((id) => {
+                const row = borrowLogs.find((r) => r.id === id);
+                const emp = row?.employee;
+                const empName = emp ? `${emp.lastName}, ${emp.firstName}` : (row?.employeeId || 'N/A');
+                return (
+                  <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem', padding: '4px 0', borderBottom: '1px dashed var(--border-color)' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{empName}</span>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                      Borrowed by: {row?.borrowerName || 'N/A'} • {row?.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+                );
+              })}
+              {pendingDeleteBorrowIds.length > 6 && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', paddingTop: '4px' }}>
+                  + and {pendingDeleteBorrowIds.length - 6} more records
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+            This deletion request will be submitted to a Super Admin or Developer for review in the Approvals queue.
           </p>
         </div>
       </Modal>
@@ -7406,12 +7532,12 @@ function Dashboard() {
             setPendingDeleteTransferredIds([]);
           }
         }}
-        title="Submit Delete Request for Transferred File Records"
+        title="Confirm Deletion Request — Transferred 201 Files Log"
         size="md"
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
             <Button
-              variant="secondary"
+              variant="ghost"
               onClick={() => {
                 setIsDeleteTransferredConfirmOpen(false);
                 setPendingDeleteTransferredIds([]);
@@ -7425,14 +7551,82 @@ function Dashboard() {
               onClick={handleConfirmDeleteTransferredEntries}
               loading={isDeletingTransferred}
             >
-              Submit Delete Request
+              <MdDeleteOutline /> Submit Delete Request
             </Button>
           </div>
         }
       >
-        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-          Are you sure you want to submit a delete request for <strong>{pendingDeleteTransferredIds.length}</strong> transferred file transaction log(s)?
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--border-radius)',
+          }}>
+            <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                Permanent Removal Warning
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                You are requesting deletion of <strong>{pendingDeleteTransferredIds.length}</strong> transferred file transaction log(s).
+              </p>
+            </div>
+          </div>
+
+          <div style={{
+            backgroundColor: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--border-radius)',
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: '6px',
+              borderBottom: '1px solid var(--border-color)',
+            }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>
+                Selected Transferred File Records
+              </span>
+              <Badge variant="danger" size="sm">
+                {pendingDeleteTransferredIds.length} {pendingDeleteTransferredIds.length === 1 ? 'RECORD' : 'RECORDS'}
+              </Badge>
+            </div>
+
+            <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+              {pendingDeleteTransferredIds.slice(0, 6).map((id) => {
+                const row = transferredLogs.find((r) => r.id === id);
+                const emp = row?.employee;
+                const empName = emp ? `${emp.lastName}, ${emp.firstName}` : (row?.employeeId || 'N/A');
+                return (
+                  <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem', padding: '4px 0', borderBottom: '1px dashed var(--border-color)' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{empName}</span>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                      Transferred to: {row?.borrowerName || 'RSP'} • {row?.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+                );
+              })}
+              {pendingDeleteTransferredIds.length > 6 && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', paddingTop: '4px' }}>
+                  + and {pendingDeleteTransferredIds.length - 6} more records
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+            This deletion request will be submitted to a Super Admin or Developer for review in the Approvals queue.
+          </p>
+        </div>
       </Modal>
     </div>
   );

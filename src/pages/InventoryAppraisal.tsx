@@ -1,9 +1,10 @@
-﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
 import Table, { Column } from '../components/ui/Table';
 import Modal from '../components/ui/Modal';
+import Badge from '../components/ui/Badge';
 import CreateRecordSeriesModal, { RecordSeriesFormData } from '../components/CreateRecordSeriesModal';
 import { useToast } from '../contexts/ToastContext';
 import api, { getAbsoluteUrl } from '../services/api';
@@ -709,7 +710,6 @@ function InventoryAppraisal() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerSrc, setViewerSrc] = useState('');
   const [viewerTitle, setViewerTitle] = useState('');
-  const [isViewerMaximized, setIsViewerMaximized] = useState(false);
 
   const handleNativeFileAction = async (e: React.MouseEvent<HTMLAnchorElement>, url?: string, filename?: string) => {
     e.preventDefault();
@@ -734,7 +734,6 @@ function InventoryAppraisal() {
     const encodedUrl = encodeURI(absoluteUrl);
     setViewerSrc(`${encodedUrl}#toolbar=0&navpanes=0`);
     setViewerTitle(filename || 'Document Viewer');
-    setIsViewerMaximized(false);
     setViewerOpen(true);
   };
   const [viewingRecord, setViewingRecord] = useState<InventoryRecord | null>(null);
@@ -5765,22 +5764,11 @@ function InventoryAppraisal() {
           isOpen={!!deletingRecord}
           onClose={() => !isDeleting && setDeletingRecord(null)}
           title="Confirm Delete Record Series"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#ef4444' }}>
-              <MdWarning style={{ fontSize: '1.75rem', flexShrink: 0 }} />
-              <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                Are you sure you want to delete this entry?
-              </div>
-            </div>
-
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-              You are about to delete <strong>"{deletingRecord.seriesTitle}"</strong>. This action will submit a deletion request to the Super Admin for approval in the Requests & Approvals tab.
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+          size="md"
+          footer={
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
               <Button
-                variant="secondary"
+                variant="ghost"
                 onClick={() => setDeletingRecord(null)}
                 disabled={isDeleting}
               >
@@ -5791,8 +5779,54 @@ function InventoryAppraisal() {
                 onClick={confirmDelete}
                 loading={isDeleting}
               >
-                Confirm Delete
+                <MdDeleteOutline /> Submit Delete Request
               </Button>
+            </div>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              padding: '12px 14px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 'var(--border-radius)',
+            }}>
+              <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                  Permanent Removal Warning
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                  You are about to delete this record series. This action will submit a deletion request to the Super Admin / Developer for approval.
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--border-radius)',
+              padding: '14px 16px',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '10px 16px',
+              fontSize: '0.875rem',
+            }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Series Title</span>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{deletingRecord.seriesTitle}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Classification</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deletingRecord.classificationCategory}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Inclusive Dates</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deletingRecord.inclusiveDates || 'N/A'}</span>
+              </div>
             </div>
           </div>
         </Modal>
@@ -5804,22 +5838,11 @@ function InventoryAppraisal() {
           isOpen={showBulkDeleteModal}
           onClose={() => !isDeleting && setShowBulkDeleteModal(false)}
           title="Confirm Bulk Delete Records"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#ef4444' }}>
-              <MdWarning style={{ fontSize: '1.75rem', flexShrink: 0 }} />
-              <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                Are you sure you want to delete {selectedIds.length} selected record series entries?
-              </div>
-            </div>
-
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-              This action will submit a bulk deletion request to the Super Admin for approval in the Requests & Approvals tab.
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+          size="md"
+          footer={
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
               <Button
-                variant="secondary"
+                variant="ghost"
                 onClick={() => setShowBulkDeleteModal(false)}
                 disabled={isDeleting}
               >
@@ -5830,8 +5853,30 @@ function InventoryAppraisal() {
                 onClick={confirmBulkDelete}
                 loading={isDeleting}
               >
-                Confirm Bulk Delete ({selectedIds.length})
+                <MdDeleteOutline /> Confirm Bulk Delete ({selectedIds.length})
               </Button>
+            </div>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              padding: '12px 14px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 'var(--border-radius)',
+            }}>
+              <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                  Bulk Record Deletion ({selectedIds.length} Selected)
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                  This action will submit a bulk deletion request for <strong>{selectedIds.length}</strong> record series entries to the Super Admin for approval in the Requests &amp; Approvals tab.
+                </p>
+              </div>
             </div>
           </div>
         </Modal>
@@ -6318,12 +6363,13 @@ function InventoryAppraisal() {
             </div>
           }
           size="xl"
-          isMaximized={isViewerMaximized}
+          allowMinimize={true}
+          allowFullscreen={true}
         >
-          <div style={{ height: isViewerMaximized ? 'calc(100vh - 120px)' : '70vh', width: '100%', position: 'relative' }}>
+          <div style={{ height: '100%', minHeight: '75vh', width: '100%', position: 'relative' }}>
             <iframe
               src={viewerSrc}
-              style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }}
+              style={{ width: '100%', height: '100%', minHeight: '75vh', border: 'none', borderRadius: '4px' }}
               title="Document Viewer"
             />
           </div>
@@ -6420,22 +6466,11 @@ function InventoryAppraisal() {
           isOpen={showBulkDeleteHistoryModal}
           onClose={() => !isDeletingHistoryLogs && setShowBulkDeleteHistoryModal(false)}
           title="Confirm Bulk Delete History"
-        >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#ef4444' }}>
-              <MdWarning style={{ fontSize: '1.75rem', flexShrink: 0 }} />
-              <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                Are you sure you want to delete {historyDeleteTarget === 'storage' ? storageHistorySelectedIds.length : historySelectedIds.length} selected history logs?
-              </div>
-            </div>
-
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.5 }}>
-              This action will revert the original records back to their previous stage. This action cannot be undone.
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+          size="md"
+          footer={
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
               <Button
-                variant="secondary"
+                variant="ghost"
                 onClick={() => setShowBulkDeleteHistoryModal(false)}
                 disabled={isDeletingHistoryLogs}
               >
@@ -6446,8 +6481,30 @@ function InventoryAppraisal() {
                 onClick={confirmBulkDeleteHistory}
                 loading={isDeletingHistoryLogs}
               >
-                Confirm Delete ({(historyDeleteTarget === 'storage' ? storageHistorySelectedIds : historySelectedIds).length})
+                <MdDeleteOutline /> Confirm Delete ({(historyDeleteTarget === 'storage' ? storageHistorySelectedIds : historySelectedIds).length})
               </Button>
+            </div>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              padding: '12px 14px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 'var(--border-radius)',
+            }}>
+              <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                  Revert &amp; Delete History Logs ({(historyDeleteTarget === 'storage' ? storageHistorySelectedIds : historySelectedIds).length} Selected)
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                  This action will revert the original records back to their previous stage. This operation cannot be undone.
+                </p>
+              </div>
             </div>
           </div>
         </Modal>

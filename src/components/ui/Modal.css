@@ -72,6 +72,7 @@
 .modal--xl {
   width: 95vw;
   max-width: 1550px;
+  height: 88vh;
 }
 
 .modal__header {
@@ -134,10 +135,14 @@
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal__body--no-padding {
   padding: 0;
+  overflow: hidden;
 }
 
 .modal__footer {
@@ -176,6 +181,12 @@
   border-radius: 0 !important;
   margin: 0 !important;
   border: none !important;
+}
+
+.modal--maximized .modal__body,
+.modal--fullscreen .modal__body {
+  min-height: 0;
+  flex: 1;
 }
 
 /* Minimized Floating Dock Card */

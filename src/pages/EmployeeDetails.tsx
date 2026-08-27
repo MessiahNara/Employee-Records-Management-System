@@ -508,7 +508,7 @@ function EmployeeDetails() {
                                 onClick={() => setShow201History(true)}
                                 title="Click to view 201 File History"
                               >
-                                Transferred to RSP
+                                Transferred
                               </button>
                             );
                           }
@@ -532,7 +532,7 @@ function EmployeeDetails() {
                         className={`employee-details__rsp-btn ${isTransferredToRsp ? 'employee-details__rsp-btn--return' : ''}`}
                         onClick={() => setShowRspModal(true)}
                       >
-                        {isTransferredToRsp ? '📥 Returned back to Records' : '🔄 Transferred to RSP'}
+                        {isTransferredToRsp ? '📥 Returned back to Records' : '🔄 Transfer'}
                       </button>
                     )}
                   </div>

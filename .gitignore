@@ -33,11 +33,16 @@ server/.env
 out/
 electron/client-config.json
 db_backup/
+backups/
+server/backups/
+**/backups/**
 server/uploads/
 uploads/
 **/uploads/**
 server/uploads/data/
+server/data/
 *.json.bak
 *.zip
 *.dump
 ERMS-Clean-Update.zip
+

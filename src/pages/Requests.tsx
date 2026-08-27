@@ -6,7 +6,20 @@ import Modal from '../components/ui/Modal';
 import api, { getServerBaseUrl } from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
-import { MdRefresh, MdAccessTime, MdCheckCircle, MdCancel, MdPending, MdVisibility, MdPrint, MdDownload } from 'react-icons/md';
+import {
+  MdRefresh,
+  MdAccessTime,
+  MdCheckCircle,
+  MdCancel,
+  MdPending,
+  MdVisibility,
+  MdPrint,
+  MdDownload,
+  MdZoomIn,
+  MdZoomOut,
+  MdRotateRight,
+  MdRestartAlt,
+} from 'react-icons/md';
 import './Requests.css';
 
 const TTL_MINUTES = 30;
@@ -57,7 +70,16 @@ function Requests() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerSrc, setViewerSrc] = useState('');
   const [viewerTitle, setViewerTitle] = useState('');
-  const [isViewerMaximized, setIsViewerMaximized] = useState(false);
+  const [zoom, setZoom] = useState(100);
+  const [rotation, setRotation] = useState(0);
+
+  const handleZoomIn = () => setZoom((z) => Math.min(250, z + 25));
+  const handleZoomOut = () => setZoom((z) => Math.max(50, z - 25));
+  const handleRotate = () => setRotation((r) => (r + 90) % 360);
+  const handleResetZoom = () => {
+    setZoom(100);
+    setRotation(0);
+  };
 
   // Secondary-request (print/download needs new approval)
   const [secondaryAction, setSecondaryAction] = useState<{ req: any; action: 'print_document' | 'download_document' } | null>(null);
@@ -140,7 +162,6 @@ function Requests() {
     }
     setViewerSrc(`${docUrl}#toolbar=0&navpanes=0`);
     setViewerTitle(req.payload?.fileName || req.entityName || 'Document');
-    setIsViewerMaximized(false);
     setViewerOpen(true);
   };
 
@@ -177,7 +198,7 @@ function Requests() {
   };
 
   // ── Print action ───────────────────────────────────────────────────────────
-  const handlePrint = (req: any) => {
+  const handlePrint = async (req: any) => {
     const remaining = getTimeRemaining(req);
     if (remaining <= 0) {
       showToast('Your access has expired.', 'warning');
@@ -189,9 +210,56 @@ function Requests() {
       ? `${getServerBaseUrl()}/api/documents/${req.payload.documentId}/file`
       : null;
 
-    if (!docUrl) { showToast('Document URL not found.', 'error'); return; }
-    const win = window.open(docUrl, '_blank');
-    if (win) win.addEventListener('load', () => win.print(), true);
+    if (!docUrl) {
+      showToast('Document URL not found.', 'error');
+      return;
+    }
+
+    try {
+      let blobUrl = docUrl;
+      let isCreatedBlob = false;
+      if (!docUrl.startsWith('blob:') && !docUrl.startsWith('data:')) {
+        const response = await fetch(docUrl);
+        if (!response.ok) throw new Error('Failed to fetch document for printing');
+        const blob = await response.blob();
+        blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        isCreatedBlob = true;
+      }
+
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = 'none';
+      printFrame.style.opacity = '0';
+      printFrame.style.pointerEvents = 'none';
+      printFrame.src = blobUrl;
+
+      printFrame.onload = () => {
+        setTimeout(() => {
+          try {
+            printFrame.contentWindow?.focus();
+            printFrame.contentWindow?.print();
+          } catch (err) {
+            console.error('Print trigger failed:', err);
+          } finally {
+            setTimeout(() => {
+              if (document.body.contains(printFrame)) {
+                document.body.removeChild(printFrame);
+              }
+              if (isCreatedBlob) URL.revokeObjectURL(blobUrl);
+            }, 60000);
+          }
+        }, 500);
+      };
+
+      document.body.appendChild(printFrame);
+    } catch (err) {
+      console.error('Print failed:', err);
+      showToast('Failed to start printing.', 'error');
+    }
   };
 
   // ── Secondary request (from within viewer — print/download needs new approval) ──
@@ -424,25 +492,75 @@ function Requests() {
       {/* ── Inline PDF Viewer Modal ────────────────────────────────────────── */}
       <Modal
         isOpen={viewerOpen}
-        onClose={() => setViewerOpen(false)}
+        onClose={() => {
+          setViewerOpen(false);
+          setZoom(100);
+          setRotation(0);
+        }}
         title={viewerTitle}
-        size={isViewerMaximized ? 'xl' : 'lg'}
+        size="xl"
+        allowMinimize={true}
+        allowFullscreen={true}
+        noPadding
       >
         <div className="requests__viewer">
           <div className="requests__viewer-toolbar">
-            <button
-              className="requests__viewer-window-btn"
-              onClick={() => setIsViewerMaximized((v) => !v)}
-              title={isViewerMaximized ? 'Minimize' : 'Maximize'}
-            >
-              {isViewerMaximized ? '🗗' : '🗖'}
-            </button>
+            <div className="requests__viewer-btn-group">
+              <button
+                type="button"
+                className="requests__viewer-tool-btn"
+                onClick={handleZoomOut}
+                title="Zoom Out"
+                aria-label="Zoom Out"
+              >
+                <MdZoomOut size={16} />
+              </button>
+              <span className="requests__viewer-zoom-val">{zoom}%</span>
+              <button
+                type="button"
+                className="requests__viewer-tool-btn"
+                onClick={handleZoomIn}
+                title="Zoom In"
+                aria-label="Zoom In"
+              >
+                <MdZoomIn size={16} />
+              </button>
+            </div>
+
+            <div className="requests__viewer-btn-group">
+              <button
+                type="button"
+                className="requests__viewer-tool-btn"
+                onClick={handleRotate}
+                title="Rotate 90° Clockwise"
+                aria-label="Rotate 90°"
+              >
+                <MdRotateRight size={16} /> Rotate
+              </button>
+              <button
+                type="button"
+                className="requests__viewer-tool-btn"
+                onClick={handleResetZoom}
+                title="Reset View"
+                aria-label="Reset View"
+              >
+                <MdRestartAlt size={16} /> Reset
+              </button>
+            </div>
           </div>
-          <iframe
-            src={viewerSrc}
-            className="requests__viewer-iframe"
-            title={viewerTitle}
-          />
+          <div className="requests__viewer-doc-container">
+            <iframe
+              key={`${zoom}-${rotation}`}
+              src={viewerSrc}
+              className="requests__viewer-iframe"
+              title={viewerTitle}
+              style={{
+                transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
+                transformOrigin: 'center center',
+                transition: 'transform 0.2s ease-out',
+              }}
+            />
+          </div>
         </div>
       </Modal>
 

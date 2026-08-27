@@ -4,12 +4,14 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
+import Badge from '../components/ui/Badge';
 import SearchableDropdown from '../components/ui/SearchableDropdown';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
 import {
   MdFolderOpen, MdAdd, MdDelete, MdEdit, MdSearch,
-  MdFolder, MdAssignment, MdBusiness, MdClass, MdCancel
+  MdFolder, MdAssignment, MdBusiness, MdClass, MdCancel,
+  MdWarning, MdDeleteOutline
 } from 'react-icons/md';
 import './File201.css';
 
@@ -911,46 +913,42 @@ function File201() {
         )}
       </Modal>
 
-      {/* Remove Employee Confirmation Modal */}
+      {/* Remove Employee from Box Confirmation Modal */}
       <Modal
         isOpen={!!removeTarget}
         onClose={() => setRemoveTarget(null)}
-        title="Confirm Removal"
-        size="sm"
-      >
-        <div className="file201-modal-form">
-          <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', margin: '0 0 var(--spacing-md) 0', lineHeight: 1.5 }}>
-            Are you sure you want to remove <strong>{removeTarget?.employeeName}</strong>'s 201 file from this box?
-          </p>
-          <div className="file201-form-actions">
+        title="Confirm File Removal from Box"
+        size="md"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
             <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
               Cancel
             </Button>
             <Button variant="danger" onClick={() => handleRemoveEmployee(removeTarget!.boxId, removeTarget!.employeeId)}>
-              Remove File
+              <MdDeleteOutline /> Remove from Box
             </Button>
           </div>
-        </div>
-      </Modal>
-
-      {/* Remove Employee Confirmation Modal */}
-      <Modal
-        isOpen={!!removeTarget}
-        onClose={() => setRemoveTarget(null)}
-        title="Confirm Removal"
-        size="sm"
+        }
       >
-        <div className="file201-modal-form">
-          <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', margin: '0 0 var(--spacing-md) 0', lineHeight: 1.5 }}>
-            Are you sure you want to remove <strong>{removeTarget?.employeeName}</strong>'s 201 file from this box?
-          </p>
-          <div className="file201-form-actions">
-            <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={() => handleRemoveEmployee(removeTarget!.boxId, removeTarget!.employeeId)}>
-              Remove File
-            </Button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--border-radius)',
+          }}>
+            <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                Unassign Employee File
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Are you sure you want to remove <strong>{removeTarget?.employeeName}</strong>'s 201 file from this storage box? The employee record itself will remain safely in the system.
+              </p>
+            </div>
           </div>
         </div>
       </Modal>
@@ -959,18 +957,10 @@ function File201() {
       <Modal
         isOpen={!!deleteBoxTarget}
         onClose={() => setDeleteBoxTarget(null)}
-        title="Delete Box"
-        size="sm"
-      >
-        <div className="file201-modal-form">
-          <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', margin: '0 0 var(--spacing-md) 0', lineHeight: 1.5 }}>
-            Are you sure you want to delete Box <strong>{deleteBoxTarget?.boxLabel}</strong>?
-            <br /><br />
-            <span style={{ color: 'var(--color-danger)', fontSize: '12px', fontWeight: 600 }}>
-              * Any employee files inside this box will be unassigned, but they will not be deleted from the system.
-            </span>
-          </p>
-          <div className="file201-form-actions">
+        title="Confirm Box Deletion"
+        size="md"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
             <Button variant="ghost" onClick={() => setDeleteBoxTarget(null)}>
               Cancel
             </Button>
@@ -980,9 +970,61 @@ function File201() {
                 setDeleteBoxTarget(null);
               }
             }}>
-              Delete Box
+              <MdDeleteOutline /> Delete Box
             </Button>
           </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--border-radius)',
+          }}>
+            <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                Permanent Box Deletion Warning
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Are you sure you want to delete <strong>{deleteBoxTarget?.boxLabel}</strong>? All assigned files will be unassigned but not deleted.
+              </p>
+            </div>
+          </div>
+
+          {deleteBoxTarget && (
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--border-radius)',
+              padding: '14px 16px',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '10px 16px',
+              fontSize: '0.875rem',
+            }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Box Label</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{deleteBoxTarget.boxLabel}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Category</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.category || 'Standard'}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Year Span</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.yearFrom || 'N/A'} – {deleteBoxTarget.yearTo || 'Present'}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>File Count</span>
+                <Badge variant="secondary" size="sm">{deleteBoxTarget.currentFilesCount || 0} Files</Badge>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -990,24 +1032,38 @@ function File201() {
       <Modal
         isOpen={isBulkDeleteModalOpen}
         onClose={() => setIsBulkDeleteModalOpen(false)}
-        title="Bulk Delete Boxes"
-        size="sm"
-      >
-        <div className="file201-modal-form">
-          <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)', margin: '0 0 var(--spacing-md) 0', lineHeight: 1.5 }}>
-            Are you sure you want to delete <strong>{checkedBoxIds.length}</strong> selected box(es)?
-            <br /><br />
-            <span style={{ color: 'var(--color-danger)', fontSize: '12px', fontWeight: 600 }}>
-              * Employee records inside these boxes will be unassigned from boxes, but their records will remain safely intact.
-            </span>
-          </p>
-          <div className="file201-form-actions">
+        title="Confirm Bulk Box Deletion"
+        size="md"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
             <Button variant="ghost" onClick={() => setIsBulkDeleteModalOpen(false)}>
               Cancel
             </Button>
             <Button variant="danger" onClick={handleBulkDeleteBoxes}>
-              Delete {checkedBoxIds.length} Box(es)
+              <MdDeleteOutline /> Delete {checkedBoxIds.length} Box(es)
             </Button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--border-radius)',
+          }}>
+            <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                Bulk Box Deletion ({checkedBoxIds.length} Selected)
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Are you sure you want to permanently delete <strong>{checkedBoxIds.length}</strong> storage box(es)? All contained employee files will become unassigned safely.
+              </p>
+            </div>
           </div>
         </div>
       </Modal>

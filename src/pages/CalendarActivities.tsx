@@ -2,10 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import Badge from '../components/ui/Badge';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
-import { MdCalendarToday, MdChevronLeft, MdChevronRight, MdEvent, MdAccessTime, MdLocationOn, MdAdd } from 'react-icons/md';
+import {
+  MdCalendarToday, MdChevronLeft, MdChevronRight, MdEvent,
+  MdAccessTime, MdLocationOn, MdAdd, MdWarning, MdDeleteOutline
+} from 'react-icons/md';
 import './CalendarActivities.css';
 
 interface Activity {
@@ -643,22 +647,73 @@ export default function CalendarActivities() {
         <Modal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
-          title="Confirm Deletion"
-          size="sm"
-        >
-          <div style={{ padding: '12px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
-              Are you sure you want to delete this activity? This action cannot be undone.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>
+          title="Confirm Activity Deletion"
+          size="md"
+          footer={
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', width: '100%' }}>
+              <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>
                 Cancel
               </Button>
               <Button variant="danger" onClick={handleConfirmDelete}>
-                Delete
+                <MdDeleteOutline /> Delete Activity
               </Button>
             </div>
-          </div>
+          }
+        >
+          {(() => {
+            const act = activities.find((a) => a.id === activityToDeleteId);
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px 0' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '12px 14px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: 'var(--border-radius)',
+                }}>
+                  <MdWarning style={{ fontSize: '1.4rem', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong style={{ display: 'block', fontSize: '0.875rem', color: '#ef4444', marginBottom: '2px' }}>
+                      Permanent Event Deletion
+                    </strong>
+                    <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                      Are you sure you want to delete this scheduled activity? This will remove it from the organization calendar for all users.
+                    </p>
+                  </div>
+                </div>
+
+                {act && (
+                  <div style={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--border-radius)',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    fontSize: '0.875rem',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9375rem' }}>{act.title}</span>
+                      <Badge variant="primary" size="sm">{act.category?.toUpperCase() || 'EVENT'}</Badge>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: '4px' }}>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Date</span>
+                        <span style={{ color: 'var(--text-primary)' }}>{act.dateFrom} {act.dateTo ? `– ${act.dateTo}` : ''}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Location</span>
+                        <span style={{ color: 'var(--text-primary)' }}>{act.location || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </Modal>
       )}
     </div>

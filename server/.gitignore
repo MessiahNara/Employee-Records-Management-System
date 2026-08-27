@@ -21,3 +21,10 @@ Thumbs.db
 
 # Prisma
 prisma/migrations/
+
+# Backups and Storage
+backups/
+data/
+uploads/
+*.dump
+

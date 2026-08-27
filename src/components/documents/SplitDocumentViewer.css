@@ -2,7 +2,8 @@
 .split-viewer {
   display: flex;
   flex-direction: column;
-  height: 80vh;
+  height: 100%;
+  flex: 1;
   min-height: 540px;
   background: var(--bg-primary, #ffffff);
   border-radius: var(--border-radius-lg, 12px);
