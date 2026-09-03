@@ -178,6 +178,7 @@ function Approvals() {
           recalledOrderTo: 'Recalled Order (To)',
           fileboxLocation: 'Filebox Location',
           file201Status: '201 File Status',
+          aoFile: 'AO Document',
           username: 'Username',
           email: 'Email',
           role: 'Role',
@@ -190,7 +191,7 @@ function Approvals() {
           ? (payload.changedFields || {})
           : payload;
 
-        const fields = Object.keys(fields_map).filter(k => k !== 'userId');
+        const fields = Object.keys(fields_map).filter(k => k !== 'userId' && k !== '_aoFile');
         if (fields.length === 0) return 'No changes detected';
 
         return fields.map(k => {
@@ -228,6 +229,12 @@ function Approvals() {
       case 'bulk_delete_document': {
         const docNames = (payload.documentNames || []).map((d: any) => d.fileName).join('; ');
         return `Delete ${payload.ids?.length || 0} documents${docNames ? ': ' + docNames : ''}`;
+      }
+      case 'bulk_update_status': {
+        const count = payload.ids?.length || 0;
+        const status = payload.status || 'Updated';
+        const reason = payload.reason ? ` (${payload.reason})` : '';
+        return `Update ${count} employee status to ${status}${reason}`;
       }
       case 'delete_inventory_record':
         return `Delete Inventory Record: ${payload.seriesTitle}`;
@@ -287,7 +294,7 @@ function Approvals() {
         // Extract only the 'to' values from { from, to } structure
         const flatPayload: any = {};
         for (const [k, v] of Object.entries(payload)) {
-          if (k === '_aoFile') continue;
+          if (k === '_aoFile' || k === 'aoFile') continue;
           flatPayload[k] = (v && typeof v === 'object' && 'to' in (v as any)) ? (v as any).to : v;
         }
 
@@ -320,7 +327,9 @@ function Approvals() {
           }
         }
 
-        await api.employee.partialUpdate(entityId, flatPayload, requestedBy, requestedByName, approvalToken);
+        if (Object.keys(flatPayload).length > 0) {
+          await api.employee.partialUpdate(entityId, flatPayload, requestedBy, requestedByName, approvalToken);
+        }
         break;
       }
       case 'delete_employee':

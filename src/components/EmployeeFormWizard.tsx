@@ -19,6 +19,7 @@ export interface EmployeeWizardFormData {
   dateOfEmployment: string;
   dateOfSeparation: string;
   reasonForSeparation: string;
+  remarks?: string;
   appointmentStatus: string;
   appointmentFrom: string;
   appointmentTo: string;
@@ -124,17 +125,11 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
 
   // Determine if Step 2 is valid
   const isStep2Valid = useMemo(() => {
-    const baseValid = (
+    return (
       localFormData.officeHospitalName.trim().length > 0 &&
-      localFormData.positionFunction.trim().length > 0 &&
-      localFormData.appointmentStatus.trim().length > 0
+      localFormData.positionFunction.trim().length > 0
     );
-    if (!baseValid) return false;
-    if (localFormData.status === 'Inactive' && !localFormData.reasonForSeparation.trim()) {
-      return false;
-    }
-    return true;
-  }, [localFormData.officeHospitalName, localFormData.positionFunction, localFormData.appointmentStatus, localFormData.status, localFormData.reasonForSeparation]);
+  }, [localFormData.officeHospitalName, localFormData.positionFunction]);
 
   // Validate step before advancing
   const handleNextStep = () => {
@@ -155,10 +150,6 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
       setCurrentStep(2);
     } else if (currentStep === 2) {
       if (!localFormData.officeHospitalName.trim()) errs.officeHospitalName = 'Office / Hospital is required';
-      if (!localFormData.appointmentStatus.trim()) errs.appointmentStatus = 'Appointment Status is required';
-      if (localFormData.status === 'Inactive' && !localFormData.reasonForSeparation.trim()) {
-        errs.reasonForSeparation = 'Reason for separation is required for inactive employees';
-      }
 
       if (Object.keys(errs).length > 0) {
         setStepErrors(errs);
@@ -530,49 +521,64 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
             </div>
 
             {localFormData.status === 'Inactive' && (
-              <div className="form-wizard__row" style={{ background: 'rgba(239,68,68,0.03)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.15)' }}>
-                <div className="form-wizard__field">
-                  <label className="form-wizard__label" htmlFor="wizard-date-of-separation">
-                    Date of Separation
-                  </label>
-                  <Input
-                    id="wizard-date-of-separation"
-                    type="date"
-                    value={localFormData.dateOfSeparation}
-                    onChange={(e) => handleChange('dateOfSeparation', e.target.value)}
-                    error={formErrors.dateOfSeparation}
-                    fullWidth
-                  />
+              <div style={{ background: 'rgba(239,68,68,0.03)', padding: '0.85rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.15)', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div className="form-wizard__row">
+                  <div className="form-wizard__field">
+                    <label className="form-wizard__label" htmlFor="wizard-date-of-separation">
+                      Date of Separation
+                    </label>
+                    <Input
+                      id="wizard-date-of-separation"
+                      type="date"
+                      value={localFormData.dateOfSeparation}
+                      onChange={(e) => handleChange('dateOfSeparation', e.target.value)}
+                      error={formErrors.dateOfSeparation}
+                      fullWidth
+                    />
+                  </div>
+
+                  <div className="form-wizard__field">
+                    <label className="form-wizard__label" htmlFor="wizard-reason-separation">
+                      <span>Reason for Separation <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Optional)</span></span>
+                    </label>
+                    <select
+                      id="wizard-reason-separation"
+                      className={`form-wizard__select ${stepErrors.reasonForSeparation || formErrors.reasonForSeparation ? 'form-wizard__select--error' : ''}`}
+                      value={localFormData.reasonForSeparation}
+                      onChange={(e) => {
+                        handleChange('reasonForSeparation', e.target.value);
+                        if (stepErrors.reasonForSeparation) setStepErrors(prev => ({ ...prev, reasonForSeparation: '' }));
+                      }}
+                    >
+                      <option value="">Select reason for separation</option>
+                      {dropdownOptions.reasonsForSeparation.map((reason) => (
+                        <option key={reason} value={reason}>{reason}</option>
+                      ))}
+                    </select>
+                    {(stepErrors.reasonForSeparation || formErrors.reasonForSeparation) && (
+                      <span className="form-wizard__error-text">⚠️ {stepErrors.reasonForSeparation || formErrors.reasonForSeparation}</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="form-wizard__field">
-                  <label className="form-wizard__label" htmlFor="wizard-reason-separation">
-                    <span>Reason for Separation <span className="form-wizard__required">*</span></span>
+                  <label className="form-wizard__label" htmlFor="wizard-remarks">
+                    <span>Remarks <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Optional)</span></span>
                   </label>
-                  <select
-                    id="wizard-reason-separation"
-                    className={`form-wizard__select ${stepErrors.reasonForSeparation || formErrors.reasonForSeparation ? 'form-wizard__select--error' : ''}`}
-                    value={localFormData.reasonForSeparation}
-                    onChange={(e) => {
-                      handleChange('reasonForSeparation', e.target.value);
-                      if (stepErrors.reasonForSeparation) setStepErrors(prev => ({ ...prev, reasonForSeparation: '' }));
-                    }}
-                  >
-                    <option value="">Select reason for separation</option>
-                    {dropdownOptions.reasonsForSeparation.map((reason) => (
-                      <option key={reason} value={reason}>{reason}</option>
-                    ))}
-                  </select>
-                  {(stepErrors.reasonForSeparation || formErrors.reasonForSeparation) && (
-                    <span className="form-wizard__error-text">⚠️ {stepErrors.reasonForSeparation || formErrors.reasonForSeparation}</span>
-                  )}
+                  <Input
+                    id="wizard-remarks"
+                    placeholder="Enter remarks for inactive status"
+                    value={localFormData.remarks || ''}
+                    onChange={(e) => handleChange('remarks', e.target.value)}
+                    fullWidth
+                  />
                 </div>
               </div>
             )}
 
             <div className="form-wizard__field">
               <label className="form-wizard__label" htmlFor="wizard-appointment-status">
-                <span>Appointment Status <span className="form-wizard__required">*</span></span>
+                <span>Appointment Status <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Optional)</span></span>
                 {localFormData.appointmentStatus.trim() && (
                   <span className="form-wizard__validation-status form-wizard__validation-status--valid">
                     <MdCheck />

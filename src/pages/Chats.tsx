@@ -577,7 +577,13 @@ function Chats() {
                   >
                     <div className="contact-item__avatar-container">
                       <div className={`contact-item__avatar ${contact.isGroup ? 'contact-item__avatar--group' : ''}`}>
-                        {contact.isGroup ? <MdGroup size={22} style={{ color: '#ffffff' }} /> : getInitials(contact.firstName, contact.lastName)}
+                        {contact.isGroup ? (
+                          <MdGroup size={22} style={{ color: '#ffffff' }} />
+                        ) : contact.profilePicture ? (
+                          <img src={contact.profilePicture} alt={contact.firstName} className="chat-avatar-img" />
+                        ) : (
+                          getInitials(contact.firstName, contact.lastName)
+                        )}
                       </div>
                       {!contact.isGroup && checkIsOnline(contact.lastActive) && <span className="online-indicator" />}
                     </div>
@@ -611,7 +617,13 @@ function Chats() {
                 <div className="chats-main__header-info">
                   <div className="chats-main__avatar-container">
                     <div className={`chats-main__contact-avatar ${activeContact.isGroup ? 'chats-main__contact-avatar--group' : ''}`}>
-                      {activeContact.isGroup ? <MdGroup size={24} style={{ color: '#ffffff' }} /> : getInitials(activeContact.firstName, activeContact.lastName)}
+                      {activeContact.isGroup ? (
+                        <MdGroup size={24} style={{ color: '#ffffff' }} />
+                      ) : activeContact.profilePicture ? (
+                        <img src={activeContact.profilePicture} alt={activeContact.firstName} className="chat-avatar-img" />
+                      ) : (
+                        getInitials(activeContact.firstName, activeContact.lastName)
+                      )}
                     </div>
                     {!activeContact.isGroup && checkIsOnline(activeContact.lastActive) && <span className="online-indicator" />}
                   </div>
@@ -909,7 +921,13 @@ function Chats() {
                           />
                         )}
                         <div className="chat-modal__user-avatar-container">
-                          <div className="chat-modal__user-avatar">{getInitials(user.firstName, user.lastName)}</div>
+                          <div className="chat-modal__user-avatar">
+                            {user.profilePicture ? (
+                              <img src={user.profilePicture} alt={user.firstName} className="chat-avatar-img" />
+                            ) : (
+                              getInitials(user.firstName, user.lastName)
+                            )}
+                          </div>
                           {checkIsOnline(user.lastActive) && <span className="online-indicator" />}
                         </div>
                         <div className="chat-modal__user-info" style={{ flex: 1 }}>
@@ -1055,7 +1073,13 @@ function Chats() {
                   <div key={m.id} className="chat-modal__user-item" style={{ justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div className="chat-modal__user-avatar-container">
-                        <div className="chat-modal__user-avatar">{getInitials(m.firstName, m.lastName)}</div>
+                        <div className="chat-modal__user-avatar">
+                          {m.profilePicture ? (
+                            <img src={m.profilePicture} alt={m.firstName} className="chat-avatar-img" />
+                          ) : (
+                            getInitials(m.firstName, m.lastName)
+                          )}
+                        </div>
                         {checkIsOnline(m.lastActive) && <span className="online-indicator" />}
                       </div>
                       <div className="chat-modal__user-info">
@@ -1123,7 +1147,13 @@ function Chats() {
                           style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#3b82f6' }}
                         />
                         <div className="chat-modal__user-avatar-container">
-                          <div className="chat-modal__user-avatar">{getInitials(u.firstName, u.lastName)}</div>
+                          <div className="chat-modal__user-avatar">
+                            {u.profilePicture ? (
+                              <img src={u.profilePicture} alt={u.firstName} className="chat-avatar-img" />
+                            ) : (
+                              getInitials(u.firstName, u.lastName)
+                            )}
+                          </div>
                         </div>
                         <div className="chat-modal__user-info" style={{ flex: 1 }}>
                           <div className="chat-modal__user-name">

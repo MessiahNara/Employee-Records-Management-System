@@ -21,6 +21,7 @@ export interface Employee {
   dateOfEmployment: string;
   dateOfSeparation?: string;
   reasonForSeparation?: string;
+  remarks?: string;
   motherUnit?: string;
   detailedTo?: string;
   detailedDivision?: string;
@@ -66,6 +67,7 @@ export interface EmployeeFormData {
   dateOfEmployment: string;
   dateOfSeparation: string;
   reasonForSeparation: string;
+  remarks?: string;
   motherUnit: string;
   detailedTo: string;
   detailedDivision: string;

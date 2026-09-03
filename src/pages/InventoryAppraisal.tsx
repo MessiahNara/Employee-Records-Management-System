@@ -1131,6 +1131,7 @@ function InventoryAppraisal() {
       if (prev.some((r) => r.id === record.id)) return prev;
       return [...prev, { ...record, stagedAt: new Date().toISOString() }];
     });
+    setStagedSelectedIds((prev) => (prev.includes(record.id) ? prev : [...prev, record.id]));
     showToast(`"${record.seriesTitle}" staged in Storage Management under Confirmation of Storage tab.`, 'info');
   };
 
@@ -1278,6 +1279,7 @@ function InventoryAppraisal() {
         .map((r) => ({ ...r, stagedAt: r.stagedAt || new Date().toISOString() }));
       return [...prev, ...newRecs];
     });
+    setStagedSelectedIds((prev) => Array.from(new Set([...prev, ...recs.map(r => r.id)])));
     showToast(`${recs.length} record(s) staged in Storage Management under Confirmation of Storage tab.`, 'info');
   };
 
@@ -1288,6 +1290,7 @@ function InventoryAppraisal() {
         .map((r) => ({ ...r, stagedAt: r.stagedAt || new Date().toISOString() }));
       return [...prev, ...newRecs];
     });
+    setStagedDisposalSelectedIds((prev) => Array.from(new Set([...prev, ...recs.map(r => r.id)])));
     showToast(`${recs.length} record(s) staged in Disposal Management under Confirmation of Disposal tab.`, 'info');
   };
 
@@ -3513,7 +3516,7 @@ function InventoryAppraisal() {
           }
           size="xl"
         >
-          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', minHeight: '520px', justifyContent: 'space-between' }}>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1, minHeight: 0 }}>
             {/* Navigation Tabs Bar */}
             <div style={{
               display: 'flex',
@@ -3617,7 +3620,7 @@ function InventoryAppraisal() {
 
             {/* TAB 1: Confirmation of Storage (Staging for request) */}
             {storageModalTab === 'confirmation' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
                 {stagedStorageRecords.length === 0 ? (
                   <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', margin: 'auto 0' }}>
                     No record series currently staged for storage. Click <strong>"Move to Storage"</strong> on any record series in the table to add it here.
@@ -3731,58 +3734,59 @@ function InventoryAppraisal() {
                       </table>
                     </div>
 
-                    {stagedSelectedIds.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.75rem', transition: 'all 0.2s ease-in-out' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                            Reason for Storage Confirmation *
-                          </label>
-                          <textarea
-                            style={{
-                              width: '100%',
-                              minHeight: '80px',
-                              padding: '0.65rem 0.75rem',
-                              borderRadius: '6px',
-                              border: '1px solid var(--border-color)',
-                              background: 'var(--bg-primary)',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.875rem',
-                              fontFamily: 'inherit',
-                            }}
-                            placeholder="Explain why these record entries are being transferred to storage..."
-                            value={storageReason}
-                            onChange={(e) => setStorageReason(e.target.value)}
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                            Attach Proof Document / Authorization File (Optional)
-                          </label>
-                          <input
-                            type="file"
-                            onChange={(e) => setStorageFile(e.target.files?.[0] || null)}
-                            style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}
-                          />
-                          {storageFile && (
-                            <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
-                              Selected file: {storageFile.name} ({(storageFile.size / 1024).toFixed(1)} KB)
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.35rem' }}>
-                          <Button
-                            variant="primary"
-                            disabled={isSendingStorageRequest}
-                            loading={isSendingStorageRequest}
-                            onClick={handleSendStorageConfirmation}
-                          >
-                            Send Request for Confirmation ({stagedSelectedIds.length})
-                          </Button>
-                        </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.75rem', transition: 'all 0.2s ease-in-out' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                          Reason for Storage Confirmation *
+                        </label>
+                        <textarea
+                          style={{
+                            width: '100%',
+                            minHeight: '80px',
+                            padding: '0.65rem 0.75rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-primary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.875rem',
+                            fontFamily: 'inherit',
+                          }}
+                          placeholder="Explain why these record entries are being transferred to storage..."
+                          value={storageReason}
+                          onChange={(e) => setStorageReason(e.target.value)}
+                        />
                       </div>
-                    )}
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                          Attach Proof Document / Authorization File (Optional)
+                        </label>
+                        <input
+                          type="file"
+                          onChange={(e) => setStorageFile(e.target.files?.[0] || null)}
+                          style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}
+                        />
+                        {storageFile && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
+                            Selected file: {storageFile.name} ({(storageFile.size / 1024).toFixed(1)} KB)
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.35rem' }}>
+                        <div style={{ fontSize: '0.8rem', color: stagedSelectedIds.length === 0 ? '#dc2626' : 'var(--text-secondary)', fontWeight: stagedSelectedIds.length === 0 ? 600 : 400 }}>
+                          {stagedSelectedIds.length === 0 ? 'Please select at least 1 record from the table above.' : `${stagedSelectedIds.length} of ${stagedStorageRecords.length} record(s) selected.`}
+                        </div>
+                        <Button
+                          variant="primary"
+                          disabled={isSendingStorageRequest || stagedSelectedIds.length === 0}
+                          loading={isSendingStorageRequest}
+                          onClick={handleSendStorageConfirmation}
+                        >
+                          Send Request for Confirmation ({stagedSelectedIds.length})
+                        </Button>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
@@ -4185,7 +4189,7 @@ function InventoryAppraisal() {
           }
           size="xl"
         >
-          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', minHeight: '480px' }}>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1, minHeight: 0 }}>
             {/* Navigation Tabs Bar */}
             <div style={{
               display: 'flex',
@@ -4289,7 +4293,7 @@ function InventoryAppraisal() {
 
             {/* TAB 1: Confirmation of Disposal */}
             {disposalModalTab === 'confirmation' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
                 {stagedDisposalRecords.length === 0 ? (
                   <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', margin: 'auto 0' }}>
                     No record series currently staged for disposal evaluation. Click <strong>"Evaluate & Dispose"</strong> on any eligible record to add it here.
@@ -4403,58 +4407,59 @@ function InventoryAppraisal() {
                       </table>
                     </div>
 
-                    {stagedDisposalSelectedIds.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.75rem', transition: 'all 0.2s ease-in-out' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                            Reason for Disposal Confirmation *
-                          </label>
-                          <textarea
-                            style={{
-                              width: '100%',
-                              minHeight: '80px',
-                              padding: '0.65rem 0.75rem',
-                              borderRadius: '6px',
-                              border: '1px solid var(--border-color)',
-                              background: 'var(--bg-primary)',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.875rem',
-                              fontFamily: 'inherit',
-                            }}
-                            placeholder="Explain why these record entries are recommended for disposal..."
-                            value={disposalReason}
-                            onChange={(e) => setDisposalReason(e.target.value)}
-                          />
-                        </div>
-
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                            Attach Proof Document / Authorization File (Optional)
-                          </label>
-                          <input
-                            type="file"
-                            onChange={(e) => setDisposalFile(e.target.files?.[0] || null)}
-                            style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}
-                          />
-                          {disposalFile && (
-                            <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
-                              Selected file: {disposalFile.name} ({(disposalFile.size / 1024).toFixed(1)} KB)
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.35rem' }}>
-                          <Button
-                            variant="danger"
-                            disabled={isSendingDisposalRequest}
-                            loading={isSendingDisposalRequest}
-                            onClick={handleSendDisposalConfirmation}
-                          >
-                            Send Request for Confirmation ({stagedDisposalSelectedIds.length})
-                          </Button>
-                        </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '0.75rem', transition: 'all 0.2s ease-in-out' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                          Reason for Disposal Confirmation *
+                        </label>
+                        <textarea
+                          style={{
+                            width: '100%',
+                            minHeight: '80px',
+                            padding: '0.65rem 0.75rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)',
+                            background: 'var(--bg-primary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.875rem',
+                            fontFamily: 'inherit',
+                          }}
+                          placeholder="Explain why these record entries are recommended for disposal..."
+                          value={disposalReason}
+                          onChange={(e) => setDisposalReason(e.target.value)}
+                        />
                       </div>
-                    )}
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                          Attach Proof Document / Authorization File (Optional)
+                        </label>
+                        <input
+                          type="file"
+                          onChange={(e) => setDisposalFile(e.target.files?.[0] || null)}
+                          style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}
+                        />
+                        {disposalFile && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', marginTop: '0.25rem', fontWeight: 600 }}>
+                            Selected file: {disposalFile.name} ({(disposalFile.size / 1024).toFixed(1)} KB)
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.35rem' }}>
+                        <div style={{ fontSize: '0.8rem', color: stagedDisposalSelectedIds.length === 0 ? '#dc2626' : 'var(--text-secondary)', fontWeight: stagedDisposalSelectedIds.length === 0 ? 600 : 400 }}>
+                          {stagedDisposalSelectedIds.length === 0 ? 'Please select at least 1 record from the table above.' : `${stagedDisposalSelectedIds.length} of ${stagedDisposalRecords.length} record(s) selected.`}
+                        </div>
+                        <Button
+                          variant="danger"
+                          disabled={isSendingDisposalRequest || stagedDisposalSelectedIds.length === 0}
+                          loading={isSendingDisposalRequest}
+                          onClick={handleSendDisposalConfirmation}
+                        >
+                          Send Request for Confirmation ({stagedDisposalSelectedIds.length})
+                        </Button>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
@@ -4462,7 +4467,7 @@ function InventoryAppraisal() {
 
             {/* TAB 2: Requests Status Queue */}
             {disposalModalTab === 'requests' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '75%' }}>
                     Track the status of your submitted disposal requests, including pending, approved, and rejected.

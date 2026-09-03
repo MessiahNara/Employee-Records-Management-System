@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Employee, EmployeeStatus, AppointmentStatus } from '../types/employee';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
@@ -6,6 +7,8 @@ import Input from './ui/Input';
 import SearchableDropdown from './ui/SearchableDropdown';
 import { convertToDateInputFormat } from '../utils/dateUtils';
 import { MdLock } from 'react-icons/md';
+
+import api from '../services/api';
 
 export interface EditEmployeeFormData {
   id: string;
@@ -26,6 +29,7 @@ export interface EditEmployeeFormData {
   dateOfEmployment: string;
   dateOfSeparation: string;
   reasonForSeparation: string;
+  remarks?: string;
   motherUnit: string;
   detailedTo: string;
   detailedDivision: string;
@@ -56,7 +60,8 @@ interface EditEmployeeModalProps {
   onSave: (
     formData: EditEmployeeFormData,
     aoFile: File | null,
-    autoRename: boolean
+    autoRename: boolean,
+    replace?: boolean
   ) => Promise<void>;
   isSaving?: boolean;
 }
@@ -80,6 +85,7 @@ const defaultFormData: EditEmployeeFormData = {
   dateOfEmployment: '',
   dateOfSeparation: '',
   reasonForSeparation: '',
+  remarks: '',
   motherUnit: '',
   detailedTo: '',
   detailedDivision: '',
@@ -109,6 +115,12 @@ function EditEmployeeModal({
   const [showIdUpdate, setShowIdUpdate] = useState(false);
   const [aoFile, setAoFile] = useState<File | null>(null);
   const [autoRename, setAutoRename] = useState(false);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{
+    isOpen: boolean;
+    existingFileName: string;
+    existingAoNumber?: string;
+    existingAoYear?: string;
+  } | null>(null);
 
   // Sync state when employee opens
   useEffect(() => {
@@ -131,7 +143,34 @@ function EditEmployeeModal({
         positionFunction: employee.positionFunction || (employee as any).position || '',
         dateOfEmployment: convertToDateInputFormat(employee.dateOfEmployment),
         dateOfSeparation: convertToDateInputFormat(employee.dateOfSeparation),
-        reasonForSeparation: employee.reasonForSeparation || (employee as any).reasonOfSeparation || '',
+        reasonForSeparation: (() => {
+          const raw = String(employee.reasonForSeparation || (employee as any).reasonOfSeparation || '').trim();
+          if (!raw) return '';
+          if (raw.includes(' - ')) return raw.split(' - ')[0].trim();
+          const knownReasons = [
+            'Resigned', 'Retired', 'Terminated', 'Contract Ended', 'Deceased',
+            'AWOL', 'Dismissed', 'Transferred', 'End of Contract', 'Separated',
+            'Dropped from the Rolls', 'End of Term',
+            ...(dropdownOptions.reasonsForSeparation || [])
+          ];
+          const isReason = knownReasons.some((r) => r.toLowerCase() === raw.toLowerCase());
+          return isReason ? raw : '';
+        })(),
+        remarks: (() => {
+          const explicitRemarks = (employee as any).remarks;
+          if (explicitRemarks && String(explicitRemarks).trim()) return String(explicitRemarks).trim();
+          const raw = String(employee.reasonForSeparation || (employee as any).reasonOfSeparation || '').trim();
+          if (!raw) return '';
+          if (raw.includes(' - ')) return raw.split(' - ').slice(1).join(' - ').trim();
+          const knownReasons = [
+            'Resigned', 'Retired', 'Terminated', 'Contract Ended', 'Deceased',
+            'AWOL', 'Dismissed', 'Transferred', 'End of Contract', 'Separated',
+            'Dropped from the Rolls', 'End of Term',
+            ...(dropdownOptions.reasonsForSeparation || [])
+          ];
+          const isReason = knownReasons.some((r) => r.toLowerCase() === raw.toLowerCase());
+          return isReason ? '' : raw;
+        })(),
         motherUnit: employee.motherUnit || '',
         detailedTo: employee.detailedTo || '',
         detailedDivision: employee.detailedDivision || '',
@@ -151,6 +190,7 @@ function EditEmployeeModal({
       setShowIdUpdate(false);
       setAoFile(null);
       setAutoRename(false);
+      setDuplicateConfirm(null);
     }
   }, [isOpen, employee]);
 
@@ -164,17 +204,13 @@ function EditEmployeeModal({
   const validate = (): boolean => {
     const errors: Partial<Record<keyof EditEmployeeFormData, string>> = {};
 
-    if (formData.lastName.trim() === '') errors.lastName = 'Last name cannot be empty';
-    if (formData.firstName.trim() === '') errors.firstName = 'First name cannot be empty';
-    if (formData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
+    if (!formData.lastName || formData.lastName.trim() === '') errors.lastName = 'Last name cannot be empty';
+    if (!formData.firstName || formData.firstName.trim() === '') errors.firstName = 'First name cannot be empty';
+    if (!formData.officeHospitalName || formData.officeHospitalName.trim() === '') errors.officeHospitalName = 'Office/Hospital name cannot be empty';
 
     if (formData.aoNumber && formData.aoNumber.trim() !== '') {
       if (!formData.aoYear) {
         errors.aoYear = 'Series (Year) is required when AO number is provided';
-      }
-      const isAoChanged = formData.aoNumber !== (employee?.aoNumber || '');
-      if (isAoChanged && !aoFile) {
-        errors.aoNumber = 'An Administrative Order file upload is required when modifying AO';
       }
     }
 
@@ -184,12 +220,79 @@ function EditEmployeeModal({
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    await onSave(formData, aoFile, autoRename);
+
+    try {
+      if (employee) {
+        let existingDocs: any[] = (employee as any).documents || [];
+        if (employee.id) {
+          try {
+            const fetched = await api.document.getByEmployee(employee.id);
+            if (Array.isArray(fetched) && fetched.length > 0) {
+              existingDocs = fetched;
+            }
+          } catch (err) {
+            console.warn('Failed to load employee documents for duplicate check', err);
+          }
+        }
+
+        let targetFileName = aoFile ? aoFile.name : '';
+        if (aoFile && autoRename) {
+          const surname = (formData.lastName || employee.lastName || '').trim().toUpperCase();
+          const firstName = (formData.firstName || employee.firstName || '').trim().toUpperCase();
+          const middleInitial = formData.middleName && formData.middleName.trim() !== ''
+            ? formData.middleName.trim().charAt(0).toUpperCase()
+            : '';
+          const namePart = middleInitial ? `${surname}, ${firstName}, ${middleInitial}.` : `${surname}, ${firstName}`;
+          const aoNum = formData.aoNumber.trim() || (employee.aoNumber ? employee.aoNumber.trim() : 'NO AO');
+          const aoYr = formData.aoYear.trim() || ((employee as any).aoYear ? String((employee as any).aoYear).trim() : 'NO SERIES');
+          const ext = aoFile.name.substring(aoFile.name.lastIndexOf('.')) || '.pdf';
+          targetFileName = `${namePart}_AO. ${aoNum}, S. ${aoYr}`.replace(/[/\\?%*:|"<>]/g, '-') + ext;
+        }
+
+        const matchActiveAo = Boolean(
+          formData.aoNumber &&
+          formData.aoNumber.trim() !== '' &&
+          employee.aoNumber &&
+          String(employee.aoNumber).trim().toLowerCase() === formData.aoNumber.trim().toLowerCase() &&
+          String((employee as any).aoYear || '').trim().toLowerCase() === String(formData.aoYear || '').trim().toLowerCase()
+        );
+
+        const duplicate = existingDocs.find((doc: any) => {
+          if (doc.category !== 'Administrative Order') return false;
+          const matchFileName = aoFile && (
+            doc.fileName.toLowerCase() === targetFileName.toLowerCase() ||
+            doc.fileName.toLowerCase() === aoFile.name.toLowerCase()
+          );
+          const matchAoNumber =
+            doc.aoNumber &&
+            formData.aoNumber &&
+            formData.aoNumber.trim() !== '' &&
+            String(doc.aoNumber).trim().toLowerCase() === formData.aoNumber.trim().toLowerCase() &&
+            String(doc.aoYear || '').trim().toLowerCase() === String(formData.aoYear || '').trim().toLowerCase();
+          return matchFileName || matchAoNumber;
+        });
+
+        if (aoFile && (duplicate || matchActiveAo)) {
+          setDuplicateConfirm({
+            isOpen: true,
+            existingFileName: duplicate?.fileName || (employee.aoNumber ? `AO ${employee.aoNumber}, Series ${(employee as any).aoYear || ''}` : targetFileName),
+            existingAoNumber: duplicate?.aoNumber || employee.aoNumber || undefined,
+            existingAoYear: duplicate?.aoYear || (employee as any).aoYear || undefined,
+          });
+          return;
+        }
+      }
+
+      await onSave(formData, aoFile, autoRename, false);
+    } catch (err: any) {
+      console.error('Error submitting employee update:', err);
+    }
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
+    <>
+      <Modal
+        isOpen={isOpen}
       onClose={onClose}
       title="Update Employee"
       size="lg"
@@ -433,40 +536,55 @@ function EditEmployeeModal({
           </div>
 
           {formData.status === 'Inactive' && (
-            <div className="dashboard__form-row">
-              <Input
-                id="edit-date-of-separation"
-                label="Date of Separation"
-                type="date"
-                value={formData.dateOfSeparation}
-                onChange={(e) => handleChange('dateOfSeparation', e.target.value)}
-                fullWidth
-              />
+            <div style={{ background: 'rgba(239, 68, 68, 0.04)', padding: '0.85rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.15)', marginBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div className="dashboard__form-row">
+                <Input
+                  id="edit-date-of-separation"
+                  label="Date of Separation"
+                  type="date"
+                  value={formData.dateOfSeparation}
+                  onChange={(e) => handleChange('dateOfSeparation', e.target.value)}
+                  fullWidth
+                />
+
+                <div className="dashboard__form-field">
+                  <label htmlFor="update-reasonForSeparation" className="dashboard__form-label">
+                    Reason for Separation <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Optional)</span>
+                  </label>
+                  <select
+                    id="update-reasonForSeparation"
+                    className="dashboard__form-select"
+                    value={formData.reasonForSeparation}
+                    onChange={(e) => handleChange('reasonForSeparation', e.target.value)}
+                  >
+                    <option value="">Select reason for separation</option>
+                    {dropdownOptions.reasonsForSeparation.map((reason) => (
+                      <option key={reason} value={reason}>
+                        {reason}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
               <div className="dashboard__form-field">
-                <label htmlFor="update-reasonForSeparation" className="dashboard__form-label">
-                  Reason for Separation
+                <label htmlFor="edit-remarks" className="dashboard__form-label">
+                  Remarks <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Optional)</span>
                 </label>
-                <select
-                  id="update-reasonForSeparation"
-                  className="dashboard__form-select"
-                  value={formData.reasonForSeparation}
-                  onChange={(e) => handleChange('reasonForSeparation', e.target.value)}
-                >
-                  <option value="">Select reason for separation</option>
-                  {dropdownOptions.reasonsForSeparation.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
+                <Input
+                  id="edit-remarks"
+                  placeholder="Enter remarks for inactive status"
+                  value={formData.remarks || ''}
+                  onChange={(e) => handleChange('remarks', e.target.value)}
+                  fullWidth
+                />
               </div>
             </div>
           )}
 
           <div className="dashboard__form-field">
             <label htmlFor="update-appointmentStatus" className="dashboard__form-label">
-              Appointment Status
+              Appointment Status <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Optional)</span>
             </label>
             <select
               id="update-appointmentStatus"
@@ -869,6 +987,139 @@ function EditEmployeeModal({
         </div>
       </div>
     </Modal>
+
+    {duplicateConfirm && createPortal(
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(5px)',
+          WebkitBackdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999999,
+          padding: '1rem',
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setDuplicateConfirm(null);
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: 'var(--bg-primary)',
+            borderRadius: 'var(--border-radius-lg, 12px)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.55)',
+            width: '100%',
+            maxWidth: '560px',
+            overflow: 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              padding: '1.25rem 1.5rem',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'var(--bg-primary)',
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              Duplicate Administrative Order Document
+            </h3>
+            <button
+              type="button"
+              onClick={() => setDuplicateConfirm(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '1.25rem',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ padding: '1.5rem' }}>
+            <p style={{ margin: '0 0 1rem 0', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              An Administrative Order document with this name or AO Number already exists for this employee in <strong>Documents</strong>:
+            </p>
+            <div
+              style={{
+                padding: '0.875rem 1.25rem',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--border-radius, 8px)',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <p style={{ margin: 0, fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-all', fontSize: '0.95rem' }}>
+                📄 {duplicateConfirm?.existingFileName}
+              </p>
+              {(duplicateConfirm?.existingAoNumber || duplicateConfirm?.existingAoYear) && (
+                <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  AO Number: {duplicateConfirm?.existingAoNumber || '—'} {duplicateConfirm?.existingAoYear ? `, Series: ${duplicateConfirm.existingAoYear}` : ''}
+                </p>
+              )}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.925rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+              Do you want to <strong>replace</strong> the existing file with your newly selected file, or <strong>keep the existing file</strong> and proceed to submit the update request?
+            </p>
+          </div>
+          <div
+            style={{
+              padding: '1rem 1.5rem',
+              backgroundColor: 'var(--bg-secondary)',
+              borderTop: '1px solid var(--border-color)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '0.75rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Button
+              variant="secondary"
+              onClick={() => setDuplicateConfirm(null)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                setDuplicateConfirm(null);
+                await onSave(formData, null, false, false);
+              }}
+              disabled={isSaving}
+            >
+              Keep Existing File
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                setDuplicateConfirm(null);
+                await onSave(formData, aoFile, autoRename, true);
+              }}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Replace Existing File'}
+            </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 }
 

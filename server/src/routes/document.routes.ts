@@ -396,20 +396,6 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
       const ext = path.extname(uploadedFile.originalname) || '.pdf';
       const newBaseName = `${namePart}_AO. ${aoNum}, S. ${aoYr}`.replace(/[/\\?%*:|"<>]/g, '-');
       finalFileName = `${newBaseName}${ext}`;
-      
-      // Perform physical file rename
-      const destDir = path.dirname(uploadedFile.path);
-      const newFilePath = path.join(destDir, finalFileName);
-      
-      try {
-        if (fs.existsSync(uploadedFile.path)) {
-          fs.renameSync(uploadedFile.path, newFilePath);
-          finalFilePath = newFilePath;
-          console.log(`[document] Renamed AO document from ${uploadedFile.path} to ${newFilePath}`);
-        }
-      } catch (renameError) {
-        console.error('[document] Error renaming AO file:', renameError);
-      }
     }
 
     // Check if a document with the same name already exists for this employee in the same category
@@ -424,7 +410,7 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
     if (duplicate) {
       if (req.body.replace === 'true') {
         try {
-          if (fs.existsSync(duplicate.filePath) && duplicate.filePath !== finalFilePath) {
+          if (duplicate.filePath && fs.existsSync(duplicate.filePath) && duplicate.filePath !== uploadedFile.path) {
             fs.unlinkSync(duplicate.filePath);
           }
         } catch (err) {
@@ -434,10 +420,29 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
           where: { id: duplicate.id },
         });
       } else {
-        if (fs.existsSync(finalFilePath)) {
-          fs.unlinkSync(finalFilePath);
+        // Safely remove only the new temp file without touching existing file
+        if (uploadedFile.path && fs.existsSync(uploadedFile.path)) {
+          try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
         }
         return res.status(409).json({ error: 'A document with this name already exists' });
+      }
+    }
+
+    // Ensure the physical file on disk matches finalFileName for ALL documents and categories
+    const destDir = path.dirname(uploadedFile.path);
+    const targetFilePath = path.join(destDir, finalFileName);
+    if (uploadedFile.path !== targetFilePath) {
+      try {
+        if (fs.existsSync(targetFilePath)) {
+          fs.unlinkSync(targetFilePath);
+        }
+        if (fs.existsSync(uploadedFile.path)) {
+          fs.renameSync(uploadedFile.path, targetFilePath);
+          finalFilePath = targetFilePath;
+          console.log(`[document] Renamed document file from ${uploadedFile.path} to ${targetFilePath}`);
+        }
+      } catch (renameError) {
+        console.error('[document] Error renaming document file:', renameError);
       }
     }
 
@@ -589,10 +594,9 @@ router.delete('/:id', requireSuperadminApproval, async (req: Request, res: Respo
     // or if the deleted document has no specific AO info (legacy).
     if (document.category === 'Administrative Order') {
       const emp = document.employee;
-      const isLegacyDoc = !document.aoNumber;
-      const isMatchingActiveAo = emp && emp.aoNumber === document.aoNumber && emp.aoYear === document.aoYear;
+      const isMatchingActiveAo = emp && document.aoNumber && emp.aoNumber === document.aoNumber && emp.aoYear === document.aoYear;
 
-      if (isLegacyDoc || isMatchingActiveAo) {
+      if (isMatchingActiveAo) {
         try {
           await prisma.employee.update({
             where: { id: document.employeeId },
@@ -701,10 +705,9 @@ router.post('/bulk-delete', requireSuperadminApproval, async (req: Request, res:
       try {
         for (const doc of aoDocuments) {
           const emp = doc.employee;
-          const isLegacyDoc = !doc.aoNumber;
-          const isMatchingActiveAo = emp && emp.aoNumber === doc.aoNumber && emp.aoYear === doc.aoYear;
+          const isMatchingActiveAo = emp && doc.aoNumber && emp.aoNumber === doc.aoNumber && emp.aoYear === doc.aoYear;
 
-          if (isLegacyDoc || isMatchingActiveAo) {
+          if (isMatchingActiveAo) {
             await prisma.employee.update({
               where: { id: doc.employeeId },
               data: {

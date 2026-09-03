@@ -39,6 +39,7 @@ function Login() {
   });
   const [errors, setErrors] = useState<Partial<Record<keyof LoginFormData, string>>>({});
   const [loginError, setLoginError] = useState('');
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isServerConfigOpen, setIsServerConfigOpen] = useState(false);
@@ -62,12 +63,13 @@ function Login() {
     checkServerHealth();
     const interval = setInterval(checkServerHealth, 15000);
 
-    const restoreNotice = sessionStorage.getItem('restoreLogoutNotice');
-    if (restoreNotice) {
+    const storedNotice = localStorage.getItem('restoreLogoutNotice') || sessionStorage.getItem('restoreLogoutNotice');
+    if (storedNotice) {
+      localStorage.removeItem('restoreLogoutNotice');
       sessionStorage.removeItem('restoreLogoutNotice');
-      setLoginError(restoreNotice);
+      setRestoreNotice(storedNotice);
       if (showToast) {
-        showToast(restoreNotice, 'warning');
+        showToast(storedNotice, 'warning');
       }
     }
 
@@ -262,6 +264,27 @@ function Login() {
               <h1 className="login__title">Sign In</h1>
               <p className="login__subtitle">Enter your credentials to access the Employee Records Management System</p>
             </div>
+
+            {restoreNotice && (
+              <div className="login__restore-banner" role="alert">
+                <div className="login__restore-banner-icon-wrap">
+                  <MdWarning className="login__restore-banner-icon" />
+                </div>
+                <div className="login__restore-banner-content">
+                  <strong className="login__restore-banner-title">Database Restored</strong>
+                  <p className="login__restore-banner-text">{restoreNotice}</p>
+                </div>
+                <button
+                  type="button"
+                  className="login__restore-banner-dismiss"
+                  onClick={() => setRestoreNotice(null)}
+                  title="Dismiss notification"
+                  aria-label="Dismiss notification"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             <form className="login__form" onSubmit={handleSubmit}>
               {loginError && (

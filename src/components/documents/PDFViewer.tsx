@@ -17,6 +17,7 @@ import {
   MdZoomOut,
   MdRotateRight,
   MdRestartAlt,
+  MdViewSidebar,
 } from 'react-icons/md';
 import './PDFViewer.css';
 
@@ -370,7 +371,7 @@ function PDFViewer({
                 title={showSplitDetails ? 'Hide details panel' : 'Show details side-by-side'}
                 aria-label="Toggle details split view"
               >
-                📋 {showSplitDetails ? 'Hide Details' : 'Split View'}
+                <MdViewSidebar size={16} /> {showSplitDetails ? 'Hide Details' : 'Split View'}
               </button>
 
               {/* Print & Download Buttons */}

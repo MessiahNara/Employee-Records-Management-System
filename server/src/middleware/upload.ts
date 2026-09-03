@@ -8,20 +8,38 @@ export function getBaseUploadsDir(): string {
   return process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
 }
 
-// Configure storage for profile pictures
-const storage = multer.diskStorage({
+// Configure storage for USER profile pictures (stored in "user's profile picture" folder)
+const userProfileStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     const baseUploadsDir = getBaseUploadsDir();
-    const uploadsDir = path.join(baseUploadsDir, 'profile-pictures');
+    const uploadsDir = path.join(baseUploadsDir, "user's profile picture");
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    const userId = req.params.id;
+    const userId = req.params.id || 'user';
     const ext = path.extname(file.originalname);
     const filename = `${userId}-${Date.now()}${ext}`;
+    cb(null, filename);
+  },
+});
+
+// Configure storage for EMPLOYEE profile pictures (stored in "employee's profile picture" folder)
+const employeeProfileStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const baseUploadsDir = getBaseUploadsDir();
+    const uploadsDir = path.join(baseUploadsDir, "employee's profile picture");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const employeeId = req.params.id || 'employee';
+    const ext = path.extname(file.originalname);
+    const filename = `${employeeId}-${Date.now()}${ext}`;
     cb(null, filename);
   },
 });
@@ -46,10 +64,18 @@ const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterC
   }
 };
 
-export const uploadProfilePicture = multer({
-  storage,
+export const uploadUserProfilePicture = multer({
+  storage: userProfileStorage,
   fileFilter,
 });
+
+export const uploadEmployeeProfilePicture = multer({
+  storage: employeeProfileStorage,
+  fileFilter,
+});
+
+// Backward compatibility alias
+export const uploadProfilePicture = uploadUserProfilePicture;
 
 // ── Document file upload ──────────────────────────────────────────────────────
 

@@ -10,13 +10,16 @@ import File201Modal from '../components/File201Modal';
 import File201HistoryModal from '../components/File201HistoryModal';
 import File201RspModal from '../components/File201RspModal';
 import File201RspHistoryModal from '../components/File201RspHistoryModal';
+import EditEmployeeModal from '../components/EditEmployeeModal';
 import '../components/File201Modal.css';
 import '../components/File201HistoryModal.css';
 import { Employee } from '../types/employee';
 import { formatDateDDMMYYYY, formatDateLong, formatDateMDY } from '../utils/dateUtils';
+import { formatEmployeeNameForFolder } from '../utils/formatUtils';
 import api from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
+import { MdArrowBack, MdEdit } from 'react-icons/md';
 import './EmployeeDetails.css';
 
 function EmployeeDetails() {
@@ -38,6 +41,9 @@ function EmployeeDetails() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const { showToast } = useToast();
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [showRenewalModal, setShowRenewalModal] = useState(false);
   const [isNearingExpiration, setIsNearingExpiration] = useState(false);
@@ -69,7 +75,14 @@ function EmployeeDetails() {
     officeNames: string[];
     positions: string[];
     reasonsForSeparation: string[];
-  }>({ appointmentStatuses: [], officeNames: [], positions: [], reasonsForSeparation: [] });
+    aoYears: string[];
+  }>({
+    appointmentStatuses: [],
+    officeNames: [],
+    positions: [],
+    reasonsForSeparation: [],
+    aoYears: [],
+  });
 
   useEffect(() => {
     api.systemSettings.get().then((s) => {
@@ -78,6 +91,7 @@ function EmployeeDetails() {
         officeNames: s.officeNames ?? [],
         positions: s.positions ?? [],
         reasonsForSeparation: s.reasonsForSeparation ?? [],
+        aoYears: s.aoYears ?? Array.from({ length: 30 }, (_, i) => String(new Date().getFullYear() - i)),
       });
     }).catch(() => { });
   }, []);
@@ -319,30 +333,7 @@ function EmployeeDetails() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="employee-details">
-        <div className="employee-details__not-found">
-          <h1>Loading...</h1>
-          <p>Please wait while we load the employee details.</p>
-        </div>
-      </div>
-    );
-  }
 
-  if (notFound || !employee) {
-    return (
-      <div className="employee-details">
-        <div className="employee-details__not-found">
-          <h1>Employee Not Found</h1>
-          <p>The employee you're looking for doesn't exist.</p>
-          <Button variant="primary" onClick={() => navigate('/')}>
-            Back to Dashboard
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   const getStatusVariant = (status: string) => {
     return status === 'Active' ? 'success' : 'danger';
@@ -372,6 +363,223 @@ function EmployeeDetails() {
     if (avatarInputRef.current) avatarInputRef.current.value = '';
   };
 
+  const handleUpdateEmployee = async (
+    updatedFormData: any,
+    updatedAoFile?: File | null,
+    updatedAutoRename?: boolean,
+    updatedReplace?: boolean
+  ) => {
+    if (!employee) return;
+    setIsSavingEdit(true);
+
+    try {
+      const origData: any = {
+        id: employee.id || '',
+        lastName: employee.lastName || '',
+        firstName: employee.firstName || '',
+        middleName: employee.middleName || '',
+        dateOfBirth: employee.dateOfBirth || '',
+        gender: employee.gender || '',
+        officeHospitalName: employee.officeHospitalName || '',
+        appointmentStatus: employee.appointmentStatus || '',
+        appointmentFrom: employee.appointmentFrom || '',
+        appointmentTo: employee.appointmentTo || '',
+        aoNumber: employee.aoNumber || '',
+        aoYear: (employee as any).aoYear ? String((employee as any).aoYear) : '',
+        aoType: (employee as any).aoType || '',
+        status: employee.status || '',
+        positionFunction: employee.positionFunction || '',
+        dateOfEmployment: employee.dateOfEmployment || '',
+        dateOfSeparation: (employee as any).dateOfSeparation || '',
+        reasonForSeparation: (employee as any).reasonOfSeparation || (employee as any).reasonForSeparation || '',
+        motherUnit: (employee as any).motherUnit || '',
+        detailedTo: (employee as any).detailedTo || '',
+        detailedDivision: (employee as any).detailedDivision || '',
+        detailedOrderFrom: (employee as any).detailedOrderFrom || '',
+        detailedOrderTo: (employee as any).detailedOrderTo || '',
+        designatedPositionFunction: (employee as any).designatedPositionFunction || '',
+        designatedOrderFrom: (employee as any).designatedOrderFrom || '',
+        designatedOrderTo: (employee as any).designatedOrderTo || '',
+        recalledFrom: (employee as any).recalledFrom || '',
+        recalledTo: (employee as any).recalledTo || '',
+        recalledOrderFrom: (employee as any).recalledOrderFrom || '',
+        recalledOrderTo: (employee as any).recalledOrderTo || '',
+        fileboxLocation: (employee as any).fileboxLocation || '',
+        file201Status: (employee as any).file201Status || 'Available',
+        remarks: (employee as any).remarks || '',
+      };
+
+      const changedFields: any = {};
+      const fieldMapping: Record<string, string> = {
+        id: 'id',
+        lastName: 'lastName',
+        firstName: 'firstName',
+        middleName: 'middleName',
+        dateOfBirth: 'dateOfBirth',
+        gender: 'gender',
+        officeHospitalName: 'officeName',
+        appointmentStatus: 'appointmentStatus',
+        appointmentFrom: 'appointmentFrom',
+        appointmentTo: 'appointmentTo',
+        aoNumber: 'aoNumber',
+        aoYear: 'aoYear',
+        aoType: 'aoType',
+        status: 'status',
+        positionFunction: 'position',
+        dateOfEmployment: 'dateOfEmployment',
+        dateOfSeparation: 'dateOfSeparation',
+        reasonForSeparation: 'reasonOfSeparation',
+        remarks: 'remarks',
+        motherUnit: 'motherUnit',
+        detailedTo: 'detailedTo',
+        detailedDivision: 'detailedDivision',
+        detailedOrderFrom: 'detailedOrderFrom',
+        detailedOrderTo: 'detailedOrderTo',
+        designatedPositionFunction: 'designatedPositionFunction',
+        designatedOrderFrom: 'designatedOrderFrom',
+        designatedOrderTo: 'designatedOrderTo',
+        recalledFrom: 'recalledFrom',
+        recalledTo: 'recalledTo',
+        recalledOrderFrom: 'recalledOrderFrom',
+        recalledOrderTo: 'recalledOrderTo',
+        fileboxLocation: 'fileboxLocation',
+        file201Status: 'file201Status',
+      };
+
+      Object.keys(fieldMapping).forEach((key) => {
+        const currentValue = updatedFormData[key];
+        const originalValue = origData[key];
+
+        const normCurrent = currentValue === undefined || currentValue === null ? '' : String(currentValue).trim();
+        const normOriginal = originalValue === undefined || originalValue === null ? '' : String(originalValue).trim();
+
+        if (normCurrent !== normOriginal) {
+          const backendField = fieldMapping[key];
+          changedFields[backendField] = {
+            from: normOriginal === '' ? null : originalValue,
+            to: normCurrent === '' ? null : currentValue,
+          };
+        }
+      });
+
+      if (Object.keys(changedFields).length === 0) {
+        if (updatedAoFile) {
+          changedFields.aoFile = {
+            from: 'Current AO Document',
+            to: `${updatedAoFile.name}${updatedReplace ? ' (Replace Existing)' : ''}`,
+          };
+        } else {
+          changedFields.aoNumber = {
+            from: origData.aoNumber || '—',
+            to: updatedFormData.aoNumber || '—',
+          };
+          changedFields.aoYear = {
+            from: origData.aoYear || '—',
+            to: updatedFormData.aoYear || '—',
+          };
+          changedFields.aoType = {
+            from: origData.aoType || '—',
+            to: updatedFormData.aoType || '—',
+          };
+        }
+      }
+
+      const empName = formatEmployeeNameForFolder(
+        employee.firstName,
+        employee.lastName,
+        employee.middleName
+      );
+
+      let payloadToSubmit: any = { ...changedFields };
+
+      if (updatedAoFile) {
+        try {
+          const aoFileData = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(updatedAoFile);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+          });
+
+          payloadToSubmit._aoFile = {
+            data: aoFileData,
+            metadata: {
+              employeeId: employee.id,
+              employeeName: empName,
+              category: 'Administrative Order',
+              fileName: updatedAoFile.name,
+              fileSize: Math.round(updatedAoFile.size / 1024),
+              mimeType: updatedAoFile.type || 'application/pdf',
+              aoNumber: updatedFormData.aoNumber,
+              aoYear: updatedFormData.aoYear,
+              aoType: updatedFormData.aoType,
+              detailedTo: updatedFormData.detailedTo,
+              detailedOrderFrom: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderFrom || undefined : undefined,
+              detailedOrderTo: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderTo || undefined : undefined,
+              designatedPositionFunction: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedPositionFunction || undefined : undefined,
+              designatedOrderFrom: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderFrom || undefined : undefined,
+              designatedOrderTo: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderTo || undefined : undefined,
+              recalledFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledFrom || undefined : undefined,
+              recalledTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledTo || undefined : undefined,
+              recalledOrderFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderFrom || undefined : undefined,
+              recalledOrderTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderTo || undefined : undefined,
+              autoRename: updatedAutoRename,
+              replace: updatedReplace,
+            },
+          };
+        } catch (fileErr) {
+          console.error('Failed to encode AO file:', fileErr);
+          showToast('Failed to attach AO file to request.', 'error');
+          setIsSavingEdit(false);
+          return;
+        }
+      }
+
+      await api.approvals.submit({
+        requestedBy: currentUser?.id || '',
+        requestedByName: `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim(),
+        action: 'update_employee',
+        entityType: 'employee',
+        entityId: employee.id,
+        entityName: empName,
+        payload: payloadToSubmit,
+      });
+
+      setIsEditModalOpen(false);
+      showToast('Update request submitted to Request & Approvals.', 'info');
+      fetchEmployee(employee.id);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to submit update request.', 'error');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="employee-details">
+        <div className="employee-details__not-found">
+          <h1>Loading...</h1>
+          <p>Please wait while we load the employee details.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound || !employee) {
+    return (
+      <div className="employee-details">
+        <div className="employee-details__not-found">
+          <h1>Employee Not Found</h1>
+          <p>The employee you're looking for doesn't exist.</p>
+          <Button variant="primary" onClick={() => navigate('/')}>
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="employee-details">
       <div className="employee-details__header">
@@ -381,8 +589,18 @@ function EmployeeDetails() {
           onClick={() => navigate('/')}
           className="employee-details__back-btn"
         >
-          ← Back to Dashboard
+          <MdArrowBack style={{ marginRight: '0.35rem', fontSize: '1.1rem' }} /> Back to Dashboard
         </Button>
+        {canEditEmployee && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsEditModalOpen(true)}
+            className="employee-details__update-btn"
+          >
+            <MdEdit style={{ marginRight: '0.35rem', fontSize: '1.1rem' }} /> Update Employee
+          </Button>
+        )}
       </div>
 
       <div className="employee-details__title-section">
@@ -639,8 +857,7 @@ function EmployeeDetails() {
               </p>
             </div>
             {(() => {
-              const aoDoc = (employee as any)?.documents?.find((d: any) => d.category === 'Administrative Order') || {};
-              const aoType = (employee as any).aoType || aoDoc.aoType || ((employee as any).isDetailed ? 'Detailed' : '');
+              const aoType = (employee as any).aoType || ((employee as any).isDetailed ? 'Detailed' : '');
               return (
                 <div className="employee-details__field">
                   <label className="employee-details__label">Type of AO</label>
@@ -652,27 +869,26 @@ function EmployeeDetails() {
 
           {/* Detailed Section (AO Type = Detailed) */}
           {(() => {
-            const aoDoc = (employee as any)?.documents?.find((d: any) => d.category === 'Administrative Order') || {};
-            const aoType = (employee as any).aoType || aoDoc.aoType || ((employee as any).isDetailed ? 'Detailed' : '');
+            const aoType = (employee as any).aoType || ((employee as any).isDetailed ? 'Detailed' : '');
             const typeLower = (aoType || '').toLowerCase().trim();
             const isDetailed = typeLower === 'detailed';
             const isDesignated = typeLower === 'designated';
             const isRecalled = typeLower === 'recalled';
 
-            const recalledFrom = (employee as any).recalledFrom || aoDoc.recalledFrom || '—';
-            const recalledTo = (employee as any).recalledTo || aoDoc.recalledTo || employee.officeHospitalName || (employee as any).officeName || '—';
-            const recalledOrderFrom = (employee as any).recalledOrderFrom || aoDoc.recalledOrderFrom;
-            const recalledOrderTo = (employee as any).recalledOrderTo || aoDoc.recalledOrderTo;
+            const recalledFrom = (employee as any).recalledFrom || '—';
+            const recalledTo = (employee as any).recalledTo || employee.officeHospitalName || (employee as any).officeName || '—';
+            const recalledOrderFrom = (employee as any).recalledOrderFrom;
+            const recalledOrderTo = (employee as any).recalledOrderTo;
 
-            const detailedTo = employee.detailedTo || (employee as any).detailedOffice || aoDoc.detailedTo || '—';
-            const detailedDivision = employee.detailedDivision || aoDoc.detailedDivision || '—';
-            const detailedOrderFrom = employee.detailedOrderFrom || (employee as any).durationFrom || aoDoc.detailedOrderFrom;
-            const detailedOrderTo = employee.detailedOrderTo || (employee as any).durationTo || aoDoc.detailedOrderTo;
+            const detailedTo = employee.detailedTo || (employee as any).detailedOffice || '—';
+            const detailedDivision = employee.detailedDivision || '—';
+            const detailedOrderFrom = employee.detailedOrderFrom || (employee as any).durationFrom;
+            const detailedOrderTo = employee.detailedOrderTo || (employee as any).durationTo;
 
-            const designatedOffice = (employee as any).detailedTo || aoDoc.detailedTo || '—';
-            const designatedPositionFunction = (employee as any).designatedPositionFunction || aoDoc.designatedPositionFunction || '—';
-            const designatedOrderFrom = (employee as any).designatedOrderFrom || aoDoc.designatedOrderFrom;
-            const designatedOrderTo = (employee as any).designatedOrderTo || aoDoc.designatedOrderTo;
+            const designatedOffice = (employee as any).detailedTo || '—';
+            const designatedPositionFunction = (employee as any).designatedPositionFunction || '—';
+            const designatedOrderFrom = (employee as any).designatedOrderFrom;
+            const designatedOrderTo = (employee as any).designatedOrderTo;
 
             return (
               <>
@@ -770,9 +986,43 @@ function EmployeeDetails() {
                 <label className="employee-details__label">Date of Separation</label>
                 <p className="employee-details__value">{formatDateDDMMYYYY(employee.dateOfSeparation)}</p>
               </div>
-              <div className="employee-details__field employee-details__field--full">
+              <div className="employee-details__field">
                 <label className="employee-details__label">Reason for Separation</label>
-                <p className="employee-details__value">{employee.reasonForSeparation || 'N/A'}</p>
+                <p className="employee-details__value">
+                  {(() => {
+                    const raw = String(employee.reasonForSeparation || (employee as any).reasonOfSeparation || '').trim();
+                    if (!raw) return 'N/A';
+                    if (raw.includes(' - ')) return raw.split(' - ')[0].trim() || 'N/A';
+                    const knownReasons = [
+                      'Resigned', 'Retired', 'Terminated', 'Contract Ended', 'Deceased',
+                      'AWOL', 'Dismissed', 'Transferred', 'End of Contract', 'Separated',
+                      'Dropped from the Rolls', 'End of Term',
+                      ...(dropdownOptions.reasonsForSeparation || [])
+                    ];
+                    const isReason = knownReasons.some((r) => r.toLowerCase() === raw.toLowerCase());
+                    return isReason ? raw : 'N/A';
+                  })()}
+                </p>
+              </div>
+              <div className="employee-details__field employee-details__field--full">
+                <label className="employee-details__label">Remarks</label>
+                <p className="employee-details__value">
+                  {(() => {
+                    const explicit = employee.remarks || (employee as any).remarks;
+                    if (explicit && String(explicit).trim()) return String(explicit).trim();
+                    const raw = String(employee.reasonForSeparation || (employee as any).reasonOfSeparation || '').trim();
+                    if (!raw) return 'N/A';
+                    if (raw.includes(' - ')) return raw.split(' - ').slice(1).join(' - ').trim() || 'N/A';
+                    const knownReasons = [
+                      'Resigned', 'Retired', 'Terminated', 'Contract Ended', 'Deceased',
+                      'AWOL', 'Dismissed', 'Transferred', 'End of Contract', 'Separated',
+                      'Dropped from the Rolls', 'End of Term',
+                      ...(dropdownOptions.reasonsForSeparation || [])
+                    ];
+                    const isReason = knownReasons.some((r) => r.toLowerCase() === raw.toLowerCase());
+                    return isReason ? 'N/A' : raw;
+                  })()}
+                </p>
               </div>
             </div>
           </Card>
@@ -1168,6 +1418,18 @@ function EmployeeDetails() {
         employeeId={employee.id}
         employeeName={`${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`}
       />
+
+      {/* Edit / Update Employee Modal */}
+      {employee && (
+        <EditEmployeeModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={handleUpdateEmployee}
+          employee={employee}
+          dropdownOptions={dropdownOptions}
+          isSaving={isSavingEdit}
+        />
+      )}
     </div>
   );
 }

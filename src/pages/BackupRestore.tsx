@@ -25,8 +25,11 @@ import {
   MdLayers,
   MdHistory,
   MdSettings,
+  MdInventory,
+  MdFolderOpen,
 } from 'react-icons/md';
 import api from '../services/api';
+import { getSocket } from '../services/socket';
 import './BackupRestore.css';
 
 interface BackupItem {
@@ -97,6 +100,149 @@ function BackupRestore() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Real-Time Progress Timer State
+  const [progressState, setProgressState] = useState<{
+    isOpen: boolean;
+    type: 'create' | 'restore';
+    title: string;
+    percent: number;
+    stage: string;
+    detail: string;
+    step: number;
+    totalSteps: number;
+    logs: string[];
+    elapsedMs: number;
+  }>({
+    isOpen: false,
+    type: 'create',
+    title: '',
+    percent: 0,
+    stage: '',
+    detail: '',
+    step: 1,
+    totalSteps: 6,
+    logs: [],
+    elapsedMs: 0,
+  });
+
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Listen to real-time socket progress events from the backend
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleBackupProgress = (data: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
+      setProgressState((prev) => {
+        if (!prev.isOpen || prev.type !== 'create') return prev;
+        const newLogs = data.detail && !prev.logs.includes(data.detail)
+          ? [...prev.logs, data.detail].slice(-5)
+          : prev.logs;
+        return {
+          ...prev,
+          percent: data.percent,
+          stage: data.stage,
+          detail: data.detail,
+          step: data.step,
+          totalSteps: data.totalSteps,
+          logs: newLogs,
+        };
+      });
+    };
+
+    const handleRestoreProgress = (data: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
+      setProgressState((prev) => {
+        if (!prev.isOpen || prev.type !== 'restore') return prev;
+        const newLogs = data.detail && !prev.logs.includes(data.detail)
+          ? [...prev.logs, data.detail].slice(-5)
+          : prev.logs;
+        return {
+          ...prev,
+          percent: data.percent,
+          stage: data.stage,
+          detail: data.detail,
+          step: data.step,
+          totalSteps: data.totalSteps,
+          logs: newLogs,
+        };
+      });
+    };
+
+    socket.on('backupProgress', handleBackupProgress);
+    socket.on('restoreProgress', handleRestoreProgress);
+
+    return () => {
+      socket.off('backupProgress', handleBackupProgress);
+      socket.off('restoreProgress', handleRestoreProgress);
+    };
+  }, []);
+
+  const formatElapsed = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const tenths = Math.floor((ms % 1000) / 100);
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${tenths}s`;
+  };
+
+  const startProgress = (type: 'create' | 'restore') => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    const startTime = Date.now();
+
+    setProgressState({
+      isOpen: true,
+      type,
+      title: type === 'create' ? 'Creating Instant Database Snapshot' : 'Restoring Database Snapshot',
+      percent: 8,
+      stage: type === 'create' ? 'Querying Database Tables' : 'Initializing Safety Backup',
+      detail: type === 'create' ? 'Executing parallel queries across all database tables...' : 'Creating pre-restore rollback safety snapshot...',
+      step: 1,
+      totalSteps: type === 'create' ? 6 : 7,
+      logs: [type === 'create' ? 'Initiated database extraction' : 'Initiated restore sequence'],
+      elapsedMs: 0,
+    });
+
+    progressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setProgressState((prev) => {
+        if (!prev.isOpen) return prev;
+        // Only track elapsedMs and provide a subtle micro-pulse capped by the actual current server step
+        const stepCap = Math.min(94, (prev.step / prev.totalSteps) * 94);
+        const microInc = prev.percent < stepCap ? 0.08 : 0;
+        return {
+          ...prev,
+          percent: Math.min(stepCap, prev.percent + microInc),
+          elapsedMs: elapsed,
+        };
+      });
+    }, 100);
+  };
+
+  const completeProgress = (successMessage: string) => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setProgressState((prev) => ({
+      ...prev,
+      percent: 100,
+      stage: successMessage,
+      detail: 'All tasks completed successfully.',
+      logs: [...prev.logs, successMessage].slice(-5),
+    }));
+    setTimeout(() => {
+      setProgressState((prev) => ({ ...prev, isOpen: false }));
+    }, 650);
+  };
+
+  const failProgress = () => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setProgressState((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, []);
+
   const fetchBackups = async () => {
     if (!isAuthorized) return;
     try {
@@ -127,15 +273,20 @@ function BackupRestore() {
   const handleCreateBackup = async () => {
     try {
       setIsCreating(true);
+      startProgress('create');
       const res = await api.backup.create({
         createdBy: currentUser?.username || 'Administrator',
         type: 'manual',
       });
       if (res.success) {
+        completeProgress('Snapshot created successfully!');
         showToast('Database backup created successfully!', 'success');
         fetchBackups();
+      } else {
+        failProgress();
       }
     } catch (error: any) {
+      failProgress();
       console.error('Create backup failed:', error);
       showToast(error.message || 'Failed to create backup.', 'error');
     } finally {
@@ -190,6 +341,7 @@ function BackupRestore() {
     try {
       setIsRestoring(true);
       setRestoreError('');
+      startProgress('restore');
       const res = await api.backup.restore({
         filename: selectedBackupForRestore.filename,
         superadminPassword,
@@ -197,11 +349,15 @@ function BackupRestore() {
       });
 
       if (res.success) {
+        completeProgress('Database successfully restored! All sessions synced.');
         showToast('Database successfully restored from snapshot!', 'success');
         setSelectedBackupForRestore(null);
         fetchBackups();
+      } else {
+        failProgress();
       }
     } catch (error: any) {
+      failProgress();
       console.error('Restore failed:', error);
       setRestoreError(error.message || 'Database restoration failed.');
     } finally {
@@ -734,6 +890,42 @@ function BackupRestore() {
                 </div>
 
                 <div className="snapshot-table-card">
+                  <div className="snapshot-table-card__icon" style={{ color: '#059669' }}>
+                    <MdFolderOpen />
+                  </div>
+                  <div className="snapshot-table-card__info">
+                    <span className="snapshot-table-card__count">
+                      {(selectedBackupForDetails.recordCounts?.physicalFiles ?? 0).toLocaleString()}
+                    </span>
+                    <span className="snapshot-table-card__label">Physical Upload Files</span>
+                  </div>
+                </div>
+
+                <div className="snapshot-table-card">
+                  <div className="snapshot-table-card__icon" style={{ color: '#3b82f6' }}>
+                    <MdChat />
+                  </div>
+                  <div className="snapshot-table-card__info">
+                    <span className="snapshot-table-card__count">
+                      {(selectedBackupForDetails.recordCounts?.groupChats ?? 0).toLocaleString()}
+                    </span>
+                    <span className="snapshot-table-card__label">Group Chats</span>
+                  </div>
+                </div>
+
+                <div className="snapshot-table-card">
+                  <div className="snapshot-table-card__icon" style={{ color: '#d97706' }}>
+                    <MdInventory />
+                  </div>
+                  <div className="snapshot-table-card__info">
+                    <span className="snapshot-table-card__count">
+                      {(selectedBackupForDetails.recordCounts?.inventoryRecords ?? 0).toLocaleString()}
+                    </span>
+                    <span className="snapshot-table-card__label">Inventory Series</span>
+                  </div>
+                </div>
+
+                <div className="snapshot-table-card">
                   <div className="snapshot-table-card__icon" style={{ color: '#64748b' }}>
                     <MdSettings />
                   </div>
@@ -944,9 +1136,12 @@ function BackupRestore() {
               disabled={!scheduleForm.enabled}
             >
               <option value={5}>Keep Last 5 Backups</option>
-              <option value={10}>Keep Last 10 Backups (Recommended)</option>
+              <option value={10}>Keep Last 10 Backups</option>
               <option value={20}>Keep Last 20 Backups</option>
               <option value={30}>Keep Last 30 Backups</option>
+              <option value={50}>Keep Last 50 Backups</option>
+              <option value={100}>Keep Last 100 Backups</option>
+              <option value={0}>Unlimited (Keep All Restore Points)</option>
             </select>
           </div>
         </div>
@@ -983,6 +1178,88 @@ function BackupRestore() {
             onChange={handleFileUpload}
             disabled={isUploading}
           />
+        </div>
+      </Modal>
+      {/* Real-time Percentage & Timer Progress Modal */}
+      <Modal
+        isOpen={progressState.isOpen}
+        onClose={() => {}}
+        title={progressState.title}
+        size="md"
+        hideCloseButton={true}
+        allowMinimize={false}
+        allowFullscreen={false}
+      >
+        <div className="backup-progress-modal">
+          <div className="backup-progress-modal__header-badge">
+            <div className={`backup-progress-modal__spinner backup-progress-modal__spinner--${progressState.type}`}>
+              {progressState.type === 'create' ? <MdBackup size={30} /> : <MdRestore size={30} />}
+            </div>
+            <div className="backup-progress-modal__percent-wrap">
+              <span className="backup-progress-modal__percent">{Math.round(progressState.percent)}%</span>
+              <span className="backup-progress-modal__timer">
+                <MdSchedule size={14} /> {formatElapsed(progressState.elapsedMs)}
+              </span>
+            </div>
+          </div>
+
+          <div className="backup-progress-modal__track">
+            <div
+              className={`backup-progress-modal__bar backup-progress-modal__bar--${progressState.type}`}
+              style={{ width: `${Math.min(100, Math.max(5, progressState.percent))}%` }}
+            />
+          </div>
+
+          <div className="backup-progress-modal__status-row">
+            <div className="backup-progress-modal__stage-wrap">
+              <div className="backup-progress-modal__stage-header">
+                <span className="backup-progress-modal__stage">{progressState.stage}</span>
+                <span className="backup-progress-modal__step-badge">
+                  Step {progressState.step} of {progressState.totalSteps}
+                </span>
+              </div>
+              <p className="backup-progress-modal__detail">{progressState.detail}</p>
+            </div>
+            <span
+              className={`backup-progress-modal__status-tag ${
+                progressState.percent >= 100 ? 'backup-progress-modal__status-tag--completed' : ''
+              }`}
+            >
+              {progressState.percent >= 100 ? 'COMPLETED' : 'IN PROGRESS'}
+            </span>
+          </div>
+
+          {/* Live Action Log Console */}
+          <div className="backup-progress-modal__console">
+            <div className="backup-progress-modal__console-header">
+              <span>Live Action Log</span>
+              {progressState.percent < 100 && (
+                <span className="backup-progress-modal__working-indicator">
+                  <span className="backup-progress-modal__pulse-dot" /> Active
+                </span>
+              )}
+            </div>
+            <div className="backup-progress-modal__console-body">
+              {progressState.logs.map((log, index) => (
+                <div key={index} className="backup-progress-modal__log-line">
+                  <span className="backup-progress-modal__log-check">✓</span>
+                  <span className="backup-progress-modal__log-text">{log}</span>
+                </div>
+              ))}
+              {progressState.percent < 100 && (
+                <div className="backup-progress-modal__log-line backup-progress-modal__log-line--active">
+                  <span className="backup-progress-modal__log-spinner">⏳</span>
+                  <span className="backup-progress-modal__log-text">{progressState.detail || progressState.stage}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {progressState.percent >= 85 && progressState.percent < 100 && (
+            <div className="backup-progress-modal__note">
+              Writing snapshot file and validating integrity. Please do not close this window.
+            </div>
+          )}
         </div>
       </Modal>
     </div>

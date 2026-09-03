@@ -4177,13 +4177,51 @@ function Dashboard() {
   const handleUpdateEmployee = async (
     updatedFormData: any,
     updatedAoFile: File | null,
-    updatedAutoRename: boolean
+    updatedAutoRename: boolean,
+    updatedReplace: boolean = false
   ) => {
-    if (!selectedEmployee || !originalEmployeeData) {
+    if (!selectedEmployee) {
+      showToast('No employee selected for update.', 'error');
       return;
     }
 
     try {
+      const origData: any = originalEmployeeData || {
+        id: selectedEmployee.id || '',
+        lastName: selectedEmployee.lastName || '',
+        firstName: selectedEmployee.firstName || '',
+        middleName: selectedEmployee.middleName || '',
+        dateOfBirth: convertToDateInputFormat(selectedEmployee.dateOfBirth),
+        gender: selectedEmployee.gender || '',
+        officeHospitalName: selectedEmployee.officeHospitalName || (selectedEmployee as any).officeName || '',
+        appointmentStatus: (selectedEmployee.appointmentStatus as AppointmentStatus) || '',
+        appointmentFrom: convertToDateInputFormat(selectedEmployee.appointmentFrom),
+        appointmentTo: convertToDateInputFormat(selectedEmployee.appointmentTo),
+        aoNumber: (selectedEmployee as any).aoNumber || '',
+        aoYear: (selectedEmployee as any).aoYear || '',
+        aoType: ((selectedEmployee as any).aoType || ((selectedEmployee as any).isDetailed ? 'Detailed' : '')) as any,
+        status: selectedEmployee.status || 'Active',
+        positionFunction: selectedEmployee.positionFunction || (selectedEmployee as any).position || '',
+        dateOfEmployment: convertToDateInputFormat(selectedEmployee.dateOfEmployment),
+        dateOfSeparation: convertToDateInputFormat(selectedEmployee.dateOfSeparation),
+        reasonForSeparation: selectedEmployee.reasonForSeparation || (selectedEmployee as any).reasonOfSeparation || '',
+        motherUnit: (selectedEmployee as any).motherUnit || '',
+        detailedTo: (selectedEmployee as any).detailedTo || '',
+        detailedDivision: (selectedEmployee as any).detailedDivision || '',
+        detailedOrderFrom: convertToDateInputFormat((selectedEmployee as any).detailedOrderFrom),
+        detailedOrderTo: convertToDateInputFormat((selectedEmployee as any).detailedOrderTo),
+        designatedPositionFunction: (selectedEmployee as any).designatedPositionFunction || '',
+        designatedOrderFrom: convertToDateInputFormat((selectedEmployee as any).designatedOrderFrom),
+        designatedOrderTo: convertToDateInputFormat((selectedEmployee as any).designatedOrderTo),
+        recalledFrom: (selectedEmployee as any).recalledFrom || '',
+        recalledTo: (selectedEmployee as any).recalledTo || '',
+        recalledOrderFrom: convertToDateInputFormat((selectedEmployee as any).recalledOrderFrom),
+        recalledOrderTo: convertToDateInputFormat((selectedEmployee as any).recalledOrderTo),
+        fileboxLocation: (selectedEmployee as any).fileboxLocation || '',
+        file201Status: (selectedEmployee as any).file201Status || 'Available',
+        remarks: (selectedEmployee as any).remarks || '',
+      };
+
       // Detect changed fields by comparing with original data
       const changedFields: any = {};
       const fieldMapping: Record<string, string> = {
@@ -4205,6 +4243,7 @@ function Dashboard() {
         dateOfEmployment: 'dateOfEmployment',
         dateOfSeparation: 'dateOfSeparation',
         reasonForSeparation: 'reasonOfSeparation',
+        remarks: 'remarks',
         motherUnit: 'motherUnit',
         detailedTo: 'detailedTo',
         detailedDivision: 'detailedDivision',
@@ -4223,63 +4262,41 @@ function Dashboard() {
 
       Object.keys(fieldMapping).forEach((key) => {
         const currentValue = updatedFormData[key];
-        const originalValue = originalEmployeeData[key as keyof EmployeeFormData];
+        const originalValue = origData[key];
 
-        if (currentValue !== originalValue) {
+        const normCurrent = currentValue === undefined || currentValue === null ? '' : String(currentValue).trim();
+        const normOriginal = originalValue === undefined || originalValue === null ? '' : String(originalValue).trim();
+
+        if (normCurrent !== normOriginal) {
           const backendField = fieldMapping[key];
-          const fromValue = originalValue === '' || originalValue === undefined ? null : originalValue;
-          const toValue = currentValue === '' || currentValue === undefined ? null : currentValue;
-          changedFields[backendField] = { from: fromValue, to: toValue };
+          changedFields[backendField] = {
+            from: normOriginal === '' ? null : originalValue,
+            to: normCurrent === '' ? null : currentValue,
+          };
         }
       });
 
       // Check if any fields were changed or if an AO file was uploaded
       if (Object.keys(changedFields).length === 0) {
         if (updatedAoFile) {
-          try {
-            const empName = formatEmployeeNameForFolder(
-              selectedEmployee.firstName,
-              selectedEmployee.lastName,
-              selectedEmployee.middleName
-            );
-            await api.document.upload(
-              updatedAoFile,
-              {
-                employeeId: selectedEmployee.id,
-                employeeName: empName,
-                category: 'Administrative Order',
-                fileName: updatedAoFile.name,
-                fileSize: Math.round(updatedAoFile.size / 1024),
-                mimeType: updatedAoFile.type || 'application/pdf',
-                aoNumber: updatedFormData.aoNumber,
-                aoYear: updatedFormData.aoYear,
-                aoType: updatedFormData.aoType,
-                detailedTo: updatedFormData.detailedTo,
-                detailedOrderFrom: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderFrom || undefined : undefined,
-                detailedOrderTo: updatedFormData.aoType === 'Detailed' ? updatedFormData.detailedOrderTo || undefined : undefined,
-                designatedPositionFunction: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedPositionFunction || undefined : undefined,
-                designatedOrderFrom: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderFrom || undefined : undefined,
-                designatedOrderTo: updatedFormData.aoType === 'Designated' ? updatedFormData.designatedOrderTo || undefined : undefined,
-                recalledFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledFrom || undefined : undefined,
-                recalledTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledTo || undefined : undefined,
-                recalledOrderFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderFrom || undefined : undefined,
-                recalledOrderTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderTo || undefined : undefined,
-                autoRename: updatedAutoRename,
-              },
-              currentUser?.id,
-              `${currentUser?.lastName || ''}, ${currentUser?.firstName || ''}`.trim()
-            );
-            showToast(`✅ AO PDF file "${updatedAoFile.name}" uploaded successfully.`, 'success');
-            handleCloseUpdateEmployeeModal();
-            fetchEmployees();
-            fetchAllEmployeesForKPI();
-          } catch (uploadErr: any) {
-            showToast(`Failed to upload AO PDF file: ${uploadErr.message}`, 'error');
-          }
-          return;
+          changedFields.aoFile = {
+            from: 'Current AO Document',
+            to: `${updatedAoFile.name}${updatedReplace ? ' (Replace Existing)' : ''}`,
+          };
+        } else {
+          changedFields.aoNumber = {
+            from: origData.aoNumber || '—',
+            to: updatedFormData.aoNumber || '—',
+          };
+          changedFields.aoYear = {
+            from: origData.aoYear || '—',
+            to: updatedFormData.aoYear || '—',
+          };
+          changedFields.aoType = {
+            from: origData.aoType || '—',
+            to: updatedFormData.aoType || '—',
+          };
         }
-        showToast('No changes detected. Please modify at least one field to update.', 'info');
-        return;
       }
 
       setPendingUpdatePayload({ employeeId: selectedEmployee.id, changedFields });
@@ -4327,6 +4344,7 @@ function Dashboard() {
                 recalledOrderFrom: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderFrom || undefined : undefined,
                 recalledOrderTo: updatedFormData.aoType === 'Recalled' ? updatedFormData.recalledOrderTo || undefined : undefined,
                 autoRename: updatedAutoRename,
+                replace: updatedReplace,
               }
             };
           } catch (fileErr) {

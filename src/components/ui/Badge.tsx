@@ -3,7 +3,7 @@ import './Badge.css';
 
 interface BadgeProps {
   children: ReactNode;
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'violet';
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'violet' | 'primary';
   size?: 'sm' | 'md';
   className?: string;
   style?: React.CSSProperties;

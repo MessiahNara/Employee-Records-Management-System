@@ -2,13 +2,17 @@
   "watch": ["src"],
   "ext": "ts",
   "ignore": [
+    "backups/**",
     "backups/*",
+    "data/**",
     "data/*",
+    "uploads/**",
     "uploads/*",
-    "certs/*",
+    "certs/**",
     "*.json",
     "*.dump",
-    "dist/*"
+    "dist/**",
+    "*.log"
   ],
   "exec": "ts-node src/index.ts"
 }

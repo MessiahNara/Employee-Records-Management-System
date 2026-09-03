@@ -7,6 +7,7 @@ import prisma from '../lib/prisma';
 import { getIO } from '../socket';
 import {
   getBackupDir,
+  getBaseUploadsDir,
   getScheduleConfig,
   saveScheduleConfig,
   executeDatabaseBackup,
@@ -87,12 +88,27 @@ router.get('/list', async (req: Request, res: Response) => {
       };
 
       try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const parsed = JSON.parse(content);
-        if (parsed.createdAt) metadata.createdAt = parsed.createdAt;
-        if (parsed.createdBy) metadata.createdBy = parsed.createdBy;
-        if (parsed.type) metadata.type = parsed.type;
-        if (parsed.recordCounts) metadata.recordCounts = parsed.recordCounts;
+        const fd = fs.openSync(filePath, 'r');
+        const buffer = Buffer.alloc(4096);
+        const bytesRead = fs.readSync(fd, buffer, 0, 4096, 0);
+        fs.closeSync(fd);
+        const chunk = buffer.toString('utf-8', 0, bytesRead);
+
+        const typeMatch = chunk.match(/"type":\s*"([^"]+)"/);
+        if (typeMatch) metadata.type = typeMatch[1];
+
+        const createdByMatch = chunk.match(/"createdBy":\s*"([^"]+)"/);
+        if (createdByMatch) metadata.createdBy = createdByMatch[1];
+
+        const createdAtMatch = chunk.match(/"createdAt":\s*"([^"]+)"/);
+        if (createdAtMatch) metadata.createdAt = createdAtMatch[1];
+
+        const recordCountsMatch = chunk.match(/"recordCounts":\s*({[^}]+})/);
+        if (recordCountsMatch) {
+          try {
+            metadata.recordCounts = JSON.parse(recordCountsMatch[1]);
+          } catch (_) {}
+        }
       } catch (e) {
         // Fallback to basic stats
       }
@@ -173,6 +189,16 @@ router.post('/create', async (req: Request, res: Response) => {
         },
       },
     });
+
+    try {
+      getIO()?.emit('backupProgress', {
+        step: 6,
+        totalSteps: 6,
+        percent: 100,
+        stage: 'Snapshot Complete',
+        detail: `Database snapshot ${result.filename} is saved and verified.`,
+      });
+    } catch (_) {}
 
     res.json({
       success: true,
@@ -315,18 +341,45 @@ router.post('/restore', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Selected backup file does not exist.' });
     }
 
+    const emitRestoreProgress = (payload: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
+      try {
+        getIO()?.emit('restoreProgress', payload);
+      } catch (_) {}
+    };
+
     // Step 1: Automatically create a pre-restore safety snapshot
     console.log('[BackupAPI] Creating pre-restore safety snapshot...');
+    emitRestoreProgress({
+      step: 1,
+      totalSteps: 7,
+      percent: 10,
+      stage: 'Creating Safety Rollback Snapshot',
+      detail: 'Generating automatic safety rollback snapshot before restore...',
+    });
     const safetySnapshot = await executeDatabaseBackup('safety', `Auto-Safety (Pre-Restore ${safeFilename})`);
     console.log(`[BackupAPI] Safety snapshot created: ${safetySnapshot.filename}`);
 
     // Step 2: Read and parse backup file
+    emitRestoreProgress({
+      step: 2,
+      totalSteps: 7,
+      percent: 25,
+      stage: 'Validating Snapshot Archive',
+      detail: `Reading and parsing ${safeFilename} (${(fs.statSync(filePath).size / 1024).toFixed(1)} KB)...`,
+    });
     const content = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(content);
     const data = parsed.data || {};
 
     // Step 3: Execute full database restore in ordered sequence
     console.log('[BackupAPI] Beginning database restoration...');
+    emitRestoreProgress({
+      step: 3,
+      totalSteps: 7,
+      percent: 40,
+      stage: 'Purging Current Records',
+      detail: 'Safely clearing existing relational tables and records...',
+    });
 
     // A. Clear dependent child tables first
     await prisma.chatMessage.deleteMany({});
@@ -339,6 +392,14 @@ router.post('/restore', async (req: Request, res: Response) => {
     await prisma.yellowBox.deleteMany({});
     await prisma.systemSetting.deleteMany({});
     await prisma.user.deleteMany({});
+
+    emitRestoreProgress({
+      step: 4,
+      totalSteps: 7,
+      percent: 65,
+      stage: 'Restoring Database Tables',
+      detail: `Re-inserting ${data.employees?.length || 0} employees, ${data.documents?.length || 0} docs, ${data.users?.length || 0} users...`,
+    });
 
     // B. Re-insert Users (Bulk)
     if (Array.isArray(data.users) && data.users.length > 0) {
@@ -442,9 +503,13 @@ router.post('/restore', async (req: Request, res: Response) => {
 
     // J. Re-insert Chat Messages (Bulk)
     if (Array.isArray(data.chatMessages) && data.chatMessages.length > 0) {
-      const formatted = data.chatMessages.map((c: any) =>
-        parseDates(c, ['createdAt'])
-      );
+      const formatted = data.chatMessages.map((c: any) => {
+        const item = parseDates(c, ['createdAt']);
+        // Ensure deleted flags are reset upon restore so all chat history comes back!
+        item.deletedBySender = false;
+        item.deletedByRecipient = false;
+        return item;
+      });
       await prisma.chatMessage.createMany({ data: formatted, skipDuplicates: true });
     }
 
@@ -471,12 +536,20 @@ router.post('/restore', async (req: Request, res: Response) => {
             fs.mkdirSync(dir, { recursive: true });
           }
           fs.writeFileSync(path.join(dir, fileName), JSON.stringify(items, null, 2), 'utf-8');
-          console.log(`[BackupAPI] Restored ${items.length} records to ${path.join(dir, fileName)}`);
+          console.log(`[BackupAPI] Restored ${Array.isArray(items) ? items.length : 'JSON'} records to ${path.join(dir, fileName)}`);
         } catch (e) {
           console.error(`[BackupAPI] Failed to restore to ${dir}/${fileName}:`, e);
         }
       }
     };
+
+    emitRestoreProgress({
+      step: 5,
+      totalSteps: 7,
+      percent: 80,
+      stage: 'Restoring Auxiliary App Storage',
+      detail: 'Restoring inventory records, disposal history, and group chats...',
+    });
 
     if (Array.isArray(data.inventoryRecords)) {
       writeDataFile('inventory_records.json', data.inventoryRecords);
@@ -490,6 +563,56 @@ router.post('/restore', async (req: Request, res: Response) => {
     if (Array.isArray(data.inventoryRequests)) {
       writeDataFile('inventory_requests.json', data.inventoryRequests);
     }
+    if (Array.isArray(data.groupChats)) {
+      writeDataFile('group_chats.json', data.groupChats);
+    }
+    if (data.groupChatReads && typeof data.groupChatReads === 'object') {
+      writeDataFile('group_chat_reads.json', data.groupChatReads);
+    }
+
+    // M. Restore All Physical Files (Documents, Employee profile pictures, User profile pictures, Chat attachments)
+    const baseUploadsDir = getBaseUploadsDir();
+    let restoredFilesCount = 0;
+
+    emitRestoreProgress({
+      step: 6,
+      totalSteps: 7,
+      percent: 92,
+      stage: 'Synchronizing Physical Files',
+      detail: 'Restoring physical upload assets, document files, and profile images...',
+    });
+
+    // 1. Restore from companion files directory if present on server
+    const companionDir = path.join(getBackupDir(), `${path.parse(safeFilename).name}_files`);
+    if (fs.existsSync(companionDir)) {
+      try {
+        fs.cpSync(companionDir, baseUploadsDir, { recursive: true });
+        console.log(`[BackupAPI] Restored physical files from companion directory: ${companionDir}`);
+      } catch (err) {
+        console.error('[BackupAPI] Error copying from companion directory:', err);
+      }
+    }
+
+    // 2. Restore from embedded files payload in the backup JSON package
+    if (Array.isArray(parsed.files) && parsed.files.length > 0) {
+      for (const f of parsed.files) {
+        try {
+          if (f.path && f.data) {
+            const targetPath = path.join(baseUploadsDir, f.path);
+            const targetFolder = path.dirname(targetPath);
+            if (!fs.existsSync(targetFolder)) {
+              fs.mkdirSync(targetFolder, { recursive: true });
+            }
+            const buffer = Buffer.from(f.data, 'base64');
+            fs.writeFileSync(targetPath, buffer);
+            restoredFilesCount++;
+          }
+        } catch (fileErr) {
+          console.error(`[BackupAPI] Failed to restore file ${f.path}:`, fileErr);
+        }
+      }
+      console.log(`[BackupAPI] Restored ${restoredFilesCount} physical files directly from backup payload.`);
+    }
 
     // Create a new Audit Log recording the successful restore
     await prisma.auditLog.create({
@@ -498,27 +621,39 @@ router.post('/restore', async (req: Request, res: Response) => {
         action: 'restore',
         entity: 'system_database',
         entityId: safeFilename,
-        details: `Database restored from backup snapshot: ${safeFilename}. Safety backup stored as ${safetySnapshot.filename}`,
+        details: `Database restored from backup snapshot: ${safeFilename}. Safety backup stored as ${safetySnapshot.filename}. Restored ${restoredFilesCount} physical files.`,
         metadata: {
           restoredFile: safeFilename,
           safetyBackup: safetySnapshot.filename,
           restoredAt: new Date().toISOString(),
+          physicalFilesRestored: restoredFilesCount,
         },
       },
     });
 
-    console.log('[BackupAPI] Database restoration completed successfully.');
+    emitRestoreProgress({
+      step: 7,
+      totalSteps: 7,
+      percent: 100,
+      stage: 'Restoration Complete',
+      detail: 'Database restore finished! Broadcasting session reset to connected clients...',
+    });
+
+    console.log('[BackupAPI] Database and physical files restoration completed successfully.');
 
     // Step 5: Broadcast real-time global logout & sync event to all open client systems
     try {
       const io = getIO();
       if (io) {
-        console.log('[BackupAPI] Broadcasting databaseRestored event to all connected clients...');
+        console.log('[BackupAPI] Broadcasting databaseRestored and sync events to all connected clients...');
         io.emit('databaseRestored', {
           timestamp: new Date().toISOString(),
           restoredBy: authorizedUser?.username || 'Superadmin',
-          message: 'The database has been restored from a snapshot point. All user sessions have been logged out to synchronize live data. Please log in again.',
+          message: 'The database and files have been restored from a snapshot point. All user sessions have been logged out to synchronize live data. Please log in again.',
         });
+        io.emit('chatsUpdated');
+        io.emit('employeesUpdated');
+        io.emit('inventoryUpdated');
       }
     } catch (socketErr) {
       console.warn('[BackupAPI] Could not emit databaseRestored socket event:', socketErr);

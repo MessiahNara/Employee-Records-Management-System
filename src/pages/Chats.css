@@ -88,6 +88,16 @@
   justify-content: center;
   font-size: 0.9rem;
   font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.chat-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .chats-main__contact-name {
@@ -383,6 +393,7 @@
   font-size: 0.85rem;
   font-weight: 700;
   flex-shrink: 0;
+  overflow: hidden;
   border: 1px solid var(--border-color);
 }
 
@@ -590,6 +601,7 @@
   justify-content: center;
   font-size: 0.8rem;
   font-weight: 700;
+  overflow: hidden;
   border: 1px solid var(--border-color);
 }
 

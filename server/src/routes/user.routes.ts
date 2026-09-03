@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
-import { uploadProfilePicture } from '../middleware/upload';
+import { uploadUserProfilePicture, getBaseUploadsDir } from '../middleware/upload';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
 import { issueSuperadminApprovalToken } from '../lib/superadminApproval';
 import { createAuditLog, getUserName } from '../utils/auditHelper';
@@ -11,20 +11,70 @@ import fs from 'fs';
 
 const SALT_ROUNDS = 10;
 
-// Resolve the profile-pictures upload directory in a way that works both in
-// development (source-relative __dirname) and in the bundled Electron installer
-// (where __dirname points to the resources/ folder, not the original source tree).
+// Resolve the user's profile picture directory
 function getProfilePicturesDir(): string {
-  return process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'profile-pictures')
-    : path.join(__dirname, '../../uploads/profile-pictures');
+  const baseUploadsDir = getBaseUploadsDir();
+  const dir = path.join(baseUploadsDir, "user's profile picture");
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
 }
 
 function getDeletedUsersDir(): string {
-  return process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'deleted-users')
-    : path.join(__dirname, '../../uploads/deleted-users');
+  const baseUploadsDir = getBaseUploadsDir();
+  const dir = path.join(baseUploadsDir, 'deleted-users');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
 }
+
+// Migrate any existing user profile pictures from legacy 'profile-pictures' to "user's profile picture"
+(async () => {
+  try {
+    const baseUploadsDir = getBaseUploadsDir();
+    const legacyDir = path.join(baseUploadsDir, 'profile-pictures');
+    const targetDir = path.join(baseUploadsDir, "user's profile picture");
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        profilePicture: {
+          contains: '/uploads/profile-pictures/',
+        },
+      },
+      select: { id: true, profilePicture: true },
+    });
+
+    for (const u of users) {
+      if (u.profilePicture) {
+        const fileName = path.basename(u.profilePicture);
+        const legacyFile = path.join(legacyDir, fileName);
+        const targetFile = path.join(targetDir, fileName);
+
+        if (fs.existsSync(legacyFile) && !fs.existsSync(targetFile)) {
+          try {
+            fs.copyFileSync(legacyFile, targetFile);
+          } catch (e) {
+            console.warn(`[user] Failed to copy legacy profile picture ${fileName}:`, e);
+          }
+        }
+
+        const newUrl = `/uploads/user's profile picture/${fileName}`;
+        await prisma.user.update({
+          where: { id: u.id },
+          data: { profilePicture: newUrl },
+        });
+        console.log(`[user] Migrated profile picture for user ${u.id} to ${newUrl}`);
+      }
+    }
+  } catch (err) {
+    console.error('[user] Error migrating user profile pictures:', err);
+  }
+})();
 
 const router = Router();
 
@@ -703,7 +753,7 @@ router.post('/verify-password', async (req: Request, res: Response) => {
 });
 
 // Upload profile picture
-router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'), async (req: Request, res: Response) => {
+router.post('/:id/profile-picture', uploadUserProfilePicture.single('profilePicture'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
@@ -727,12 +777,12 @@ router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'
     if (user.profilePicture) {
       const oldFilePath = path.join(getProfilePicturesDir(), path.basename(user.profilePicture));
       if (fs.existsSync(oldFilePath)) {
-        fs.unlinkSync(oldFilePath);
+        try { fs.unlinkSync(oldFilePath); } catch (_) {}
       }
     }
 
-    // Generate URL for the uploaded file
-    const profilePictureUrl = `/uploads/profile-pictures/${req.file.filename}`;
+    // Generate URL for the uploaded file in "user's profile picture"
+    const profilePictureUrl = `/uploads/user's profile picture/${req.file.filename}`;
 
     // Update user with new profile picture
     const updatedUser = await prisma.user.update({

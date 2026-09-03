@@ -5,13 +5,23 @@
 }
 
 .employee-details__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: var(--spacing-lg);
 }
 
 .employee-details__back-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  font-weight: 500;
+}
+
+.employee-details__update-btn {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .employee-details__title-section {

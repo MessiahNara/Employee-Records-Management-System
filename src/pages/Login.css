@@ -258,6 +258,83 @@
   gap: 1.25rem;
 }
 
+.login__restore-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+  background-color: rgba(245, 158, 11, 0.12);
+  border: 1.5px solid rgba(245, 158, 11, 0.5);
+  border-radius: 12px;
+  color: #b45309;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.08);
+  animation: slideUp 0.3s ease-out;
+}
+
+[data-theme='dark'] .login__restore-banner {
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #fbbf24;
+}
+
+.login__restore-banner-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+[data-theme='dark'] .login__restore-banner-icon-wrap {
+  color: #fbbf24;
+}
+
+.login__restore-banner-icon {
+  font-size: 1.35rem;
+}
+
+.login__restore-banner-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.login__restore-banner-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.login__restore-banner-text {
+  font-size: 0.825rem;
+  line-height: 1.45;
+  margin: 0;
+  opacity: 0.95;
+}
+
+.login__restore-banner-dismiss {
+  background: transparent;
+  border: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 4px;
+  transition: opacity 0.2s ease;
+}
+
+.login__restore-banner-dismiss:hover {
+  opacity: 1;
+}
+
 .login__error-banner {
   display: flex;
   align-items: center;

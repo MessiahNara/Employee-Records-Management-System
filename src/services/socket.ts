@@ -82,14 +82,16 @@ export const initSocketClient = async () => {
   socket.on('databaseRestored', (data: any) => {
     console.warn('[socket] Database restore detected! Safely logging out active session and refreshing application...', data);
     
-    // Clear all auth and cached user state
-    localStorage.removeItem('authUser');
-    localStorage.removeItem('currentUserId');
-    sessionStorage.clear();
-    sessionStorage.setItem(
-      'restoreLogoutNotice',
-      data?.message || 'A database restore was executed. All user sessions were safely logged out to synchronize live data. Please log in again.'
-    );
+    const message = data?.message || 'A database restore was executed. All active accounts were logged out to synchronize live data. Please sign in again.';
+
+    // Clear active auth state and persist restore warning for the login screen
+    try {
+      localStorage.removeItem('authUser');
+      localStorage.removeItem('currentUserId');
+      localStorage.setItem('restoreLogoutNotice', message);
+      localStorage.setItem('restoreLogoutTime', new Date().toISOString());
+      sessionStorage.setItem('restoreLogoutNotice', message);
+    } catch (_) {}
 
     // Redirect to login and reload app window
     if (window.location.hash !== '#/login') {

@@ -9,7 +9,7 @@ import Input from '../components/ui/Input';
 import { User, UserStatus, UserPermissions, Role, PermissionAction } from '../types';
 import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
-import { MdEdit, MdAdd, MdLock, MdDelete, MdWarning, MdDeleteOutline } from 'react-icons/md';
+import { MdEdit, MdAdd, MdLock, MdDelete, MdWarning, MdDeleteOutline, MdInfo } from 'react-icons/md';
 import api from '../services/api';
 import './Users.css';
 
@@ -182,6 +182,7 @@ function Users() {
         department: u.department || 'General',
         roleId: u.role === 'developer' ? 'role-4' : u.role === 'superadmin' ? 'role-1' : u.role === 'admin' ? 'role-2' : 'role-3',
         status: UserStatus.ACTIVE,
+        profilePicture: u.profilePicture,
         lastLogin: u.lastLogin || null,
         activeSessionId: u.activeSessionId || null,
         permissions: u.permissions || { create: false, read: true, update: false, delete: false },
@@ -937,7 +938,7 @@ function Users() {
                 alignItems: 'center',
                 gap: '0.5rem'
               }}>
-                <span>ℹ️</span> Update only the fields you want to change. Unchanged fields will retain their existing values.
+                <MdInfo style={{ color: '#3b82f6', fontSize: '1.1rem', flexShrink: 0 }} /> Update only the fields you want to change. Unchanged fields will retain their existing values.
               </p>
             )}
 
@@ -956,21 +957,25 @@ function Users() {
             )}
 
             {selectedUser && (
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                  Current User ID
-                </label>
-                <div style={{ 
-                  padding: '0.75rem', 
-                  backgroundColor: 'var(--bg-primary)', 
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--border-radius)',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-primary)',
-                  fontFamily: 'monospace',
-                  fontWeight: 600
-                }}>
-                  {selectedUser.id}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', padding: '0.875rem 1rem', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)' }}>
+                <div className="users__avatar" style={{ width: '48px', height: '48px', fontSize: '1.1rem' }}>
+                  {selectedUser.profilePicture ? (
+                    <img
+                      src={selectedUser.profilePicture}
+                      alt={`${selectedUser.lastName}, ${selectedUser.firstName}`}
+                      className="users__avatar-image"
+                    />
+                  ) : (
+                    <>{selectedUser.firstName[0]}{selectedUser.lastName[0] || selectedUser.firstName[1]}</>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                    {selectedUser.lastName}, {selectedUser.firstName}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    User ID: <code style={{ backgroundColor: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>{selectedUser.id}</code>
+                  </div>
                 </div>
               </div>
             )}

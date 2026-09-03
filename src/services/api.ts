@@ -1110,8 +1110,28 @@ export const activityApi = {
 export const chatsApi = {
   getMessages: (recipientId: string) => apiRequest<any[]>(`/chats?recipientId=${recipientId}`),
   getUnreadCounts: () => apiRequest<Record<string, number>>('/chats/unread'),
-  getRecentContacts: () => apiRequest<any[]>('/chats/recent'),
-  getGroups: () => apiRequest<any[]>('/chats/groups'),
+  getRecentContacts: async () => {
+    const contacts = await apiRequest<any[]>('/chats/recent');
+    return (contacts || []).map((c) => ({
+      ...c,
+      profilePicture: getAbsoluteUrl(c.profilePicture),
+      members: c.members?.map((m: any) => ({
+        ...m,
+        profilePicture: getAbsoluteUrl(m.profilePicture),
+      })),
+    }));
+  },
+  getGroups: async () => {
+    const groups = await apiRequest<any[]>('/chats/groups');
+    return (groups || []).map((g) => ({
+      ...g,
+      profilePicture: getAbsoluteUrl(g.profilePicture),
+      members: g.members?.map((m: any) => ({
+        ...m,
+        profilePicture: getAbsoluteUrl(m.profilePicture),
+      })),
+    }));
+  },
   createGroup: (data: { id?: string; name: string; creatorId?: string; creatorName?: string; memberIds: string[] }) =>
     apiRequest<any>('/chats/groups', {
       method: 'POST',

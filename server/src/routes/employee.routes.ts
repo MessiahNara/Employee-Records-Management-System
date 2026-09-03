@@ -3,7 +3,7 @@ import prisma from '../lib/prisma';
 import { createAuditLog, getEmployeeName } from '../utils/auditHelper';
 import { checkAndAddDropdownOptions } from '../utils/dropdownOptionsHelper';
 import { requireSuperadminApproval } from '../middleware/superadminApproval';
-import { uploadProfilePicture } from '../middleware/upload';
+import { uploadEmployeeProfilePicture, getBaseUploadsDir } from '../middleware/upload';
 import fs from 'fs';
 import path from 'path';
 import { getIO } from '../socket';
@@ -39,10 +39,15 @@ const normalizeImportedEmployee = (payload: any) => ({
   position: String(payload.position || payload.positionFunction || '').trim(),
   dateOfEmployment: toNullableDate(payload.dateOfEmployment),
   dateOfSeparation: toNullableDate(payload.dateOfSeparation),
-  reasonOfSeparation:
-    payload.reasonOfSeparation !== undefined
-      ? String(payload.reasonOfSeparation || '').trim() || null
-      : String(payload.reasonForSeparation || '').trim() || null,
+  reasonOfSeparation: (() => {
+    const rawReason = payload.reasonOfSeparation !== undefined ? payload.reasonOfSeparation : payload.reasonForSeparation;
+    const cleanReason = String(rawReason || '').trim();
+    const cleanRemarks = String(payload.remarks || '').trim();
+    if (cleanReason && cleanRemarks) {
+      return cleanReason.includes(cleanRemarks) ? cleanReason : `${cleanReason} - ${cleanRemarks}`;
+    }
+    return cleanReason || cleanRemarks || null;
+  })(),
   isDetailed: payload.isDetailed === true || payload.isDetailed === 'true' ? true : false,
   motherUnit: payload.motherUnit ? String(payload.motherUnit).trim() || null : null,
   detailedTo: payload.detailedTo ? String(payload.detailedTo).trim() || null : null,
@@ -704,7 +709,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
     const allowedFields = [
       'id', 'lastName', 'firstName', 'middleName', 'dateOfBirth', 'gender',
       'officeName', 'appointmentStatus', 'status', 'position',
-      'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'aoYear', 'aoType', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation',
+      'appointmentFrom', 'appointmentTo', 'expirationDate', 'aoNumber', 'aoYear', 'aoType', 'dateOfEmployment', 'dateOfSeparation', 'reasonOfSeparation', 'remarks',
       'isDetailed', 'motherUnit', 'detailedTo', 'detailedDivision', 'detailedFunction', 'detailedDate', 'detailedOrderFrom', 'detailedOrderTo',
       'designatedPositionFunction', 'designatedOrderFrom', 'designatedOrderTo',
       'recalledFrom', 'recalledTo', 'recalledOrderFrom', 'recalledOrderTo',
@@ -716,6 +721,24 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
         updateData[field] = req.body[field];
       }
     });
+
+    // Merge remarks with reasonOfSeparation if provided, and delete remarks from updateData to prevent Prisma Unknown Argument error
+    if (req.body.remarks !== undefined || updateData.remarks !== undefined) {
+      const remarksVal = String(req.body.remarks ?? updateData.remarks ?? '').trim();
+      const existingReason = updateData.reasonOfSeparation !== undefined
+        ? String(updateData.reasonOfSeparation || '').trim()
+        : (req.body.reasonForSeparation ? String(req.body.reasonForSeparation).trim() : '');
+      if (remarksVal && existingReason) {
+        if (!existingReason.includes(remarksVal)) {
+          updateData.reasonOfSeparation = `${existingReason} - ${remarksVal}`;
+        } else {
+          updateData.reasonOfSeparation = existingReason;
+        }
+      } else if (remarksVal) {
+        updateData.reasonOfSeparation = remarksVal;
+      }
+      delete updateData.remarks;
+    }
 
     // Convert date strings to Date objects and treat blank values as null
     if ('dateOfBirth' in updateData) {
@@ -842,7 +865,7 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
             profilePicture: oldEmployee.profilePicture,
             createdAt: oldEmployee.createdAt,
             updatedAt: new Date(),
-          },
+          } as any,
         });
 
         // Update all documents to point to new employee ID
@@ -1135,13 +1158,62 @@ router.get('/stats/summary', async (req: Request, res: Response) => {
 // ── Employee Profile Picture ──────────────────────────────────────────────────
 
 function getProfilePicturesDir(): string {
-  return process.env.UPLOADS_DIR
-    ? path.join(process.env.UPLOADS_DIR, 'profile-pictures')
-    : path.join(__dirname, '../../uploads/profile-pictures');
+  const baseUploadsDir = getBaseUploadsDir();
+  const dir = path.join(baseUploadsDir, "employee's profile picture");
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
 }
 
+// Migrate any existing employee profile pictures from legacy 'profile-pictures' to "employee's profile picture"
+(async () => {
+  try {
+    const baseUploadsDir = getBaseUploadsDir();
+    const legacyDir = path.join(baseUploadsDir, 'profile-pictures');
+    const targetDir = path.join(baseUploadsDir, "employee's profile picture");
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const employees = await prisma.employee.findMany({
+      where: {
+        profilePicture: {
+          contains: '/uploads/profile-pictures/',
+        },
+      },
+      select: { id: true, profilePicture: true },
+    });
+
+    for (const emp of employees) {
+      if (emp.profilePicture) {
+        const fileName = path.basename(emp.profilePicture);
+        const legacyFile = path.join(legacyDir, fileName);
+        const targetFile = path.join(targetDir, fileName);
+
+        if (fs.existsSync(legacyFile) && !fs.existsSync(targetFile)) {
+          try {
+            fs.copyFileSync(legacyFile, targetFile);
+          } catch (e) {
+            console.warn(`[employee] Failed to copy legacy profile picture ${fileName}:`, e);
+          }
+        }
+
+        const newUrl = `/uploads/employee's profile picture/${fileName}`;
+        await prisma.employee.update({
+          where: { id: emp.id },
+          data: { profilePicture: newUrl },
+        });
+        console.log(`[employee] Migrated profile picture for employee ${emp.id} to ${newUrl}`);
+      }
+    }
+  } catch (err) {
+    console.error('[employee] Error migrating employee profile pictures:', err);
+  }
+})();
+
 // Upload employee profile picture
-router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'), async (req: Request, res: Response) => {
+router.post('/:id/profile-picture', uploadEmployeeProfilePicture.single('profilePicture'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -1162,10 +1234,12 @@ router.post('/:id/profile-picture', uploadProfilePicture.single('profilePicture'
     // Delete old profile picture if exists
     if (employee.profilePicture) {
       const oldPath = path.join(getProfilePicturesDir(), path.basename(employee.profilePicture));
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      if (fs.existsSync(oldPath)) {
+        try { fs.unlinkSync(oldPath); } catch (_) {}
+      }
     }
 
-    const profilePictureUrl = `/uploads/profile-pictures/${req.file.filename}`;
+    const profilePictureUrl = `/uploads/employee's profile picture/${req.file.filename}`;
 
     const updated = await prisma.employee.update({
       where: { id },

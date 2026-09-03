@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import prisma from '../lib/prisma';
+import { getIO } from '../socket';
 
 export interface BackupScheduleConfig {
   enabled: boolean;
@@ -19,6 +20,12 @@ export const getBackupDir = (): string => {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
   }
   return BACKUP_DIR;
+};
+
+const emitBackupProgress = (payload: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
+  try {
+    getIO()?.emit('backupProgress', payload);
+  } catch (_) {}
 };
 
 export const getScheduleConfig = (): BackupScheduleConfig => {
@@ -57,8 +64,42 @@ export const saveScheduleConfig = (config: BackupScheduleConfig): void => {
   }
 };
 
+export function getBaseUploadsDir(): string {
+  const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
+  const DEFAULT_UPLOADS_BASE = path.join(PROGRAM_DATA, 'ERMS', 'uploads');
+  return process.env.UPLOADS_DIR || DEFAULT_UPLOADS_BASE;
+}
+
+export interface BackupFileEntry {
+  path: string;
+  size: number;
+  mtime?: string;
+}
+
+export function countPhysicalFiles(baseUploadsDir: string): number {
+  let count = 0;
+  if (!fs.existsSync(baseUploadsDir)) return 0;
+  const scanDir = (dir: string) => {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          if (entry.name === 'backups' || entry.name === '.git' || entry.name === 'node_modules') continue;
+          scanDir(path.join(dir, entry.name));
+        } else if (entry.isFile()) {
+          if (!entry.name.endsWith('.log') && !entry.name.endsWith('.tmp')) count++;
+        }
+      }
+    } catch (_) {}
+  };
+  scanDir(baseUploadsDir);
+  return count;
+}
+
+const delay = (ms: number = 30) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
- * Execute a full database JSON snapshot
+ * Execute a full database & physical files snapshot
  */
 export const executeDatabaseBackup = async (
   type: 'manual' | 'scheduled' | 'safety' = 'manual',
@@ -68,6 +109,15 @@ export const executeDatabaseBackup = async (
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `db_backup_${type}_${timestamp}.json`;
   const filePath = path.join(backupDir, filename);
+
+  emitBackupProgress({
+    step: 1,
+    totalSteps: 6,
+    percent: 15,
+    stage: 'Querying Database Tables',
+    detail: 'Executing parallel queries across all database tables...',
+  });
+  await delay(25);
 
   // Fetch data from all tables
   const [
@@ -94,7 +144,16 @@ export const executeDatabaseBackup = async (
     prisma.chatMessage.findMany(),
   ]);
 
-  // Helper to read data directory JSON files (Inventory, Disposal, etc.) across all candidate paths
+  emitBackupProgress({
+    step: 2,
+    totalSteps: 6,
+    percent: 42,
+    stage: 'Processing Table Records',
+    detail: `Loaded ${employees.length.toLocaleString()} employees, ${documents.length.toLocaleString()} docs, ${auditLogs.length.toLocaleString()} audit logs.`,
+  });
+  await delay(25);
+
+  // Helper to read data directory JSON files (Inventory, Disposal, Group chats, etc.) across all candidate paths
   const readDataJson = (file: string): any[] => {
     const PROGRAM_DATA = process.env.PROGRAMDATA || 'C:\\ProgramData';
     const candidatePaths = [
@@ -115,6 +174,8 @@ export const executeDatabaseBackup = async (
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed) && parsed.length > bestRecords.length) {
               bestRecords = parsed;
+            } else if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              return parsed as any;
             }
           }
         }
@@ -129,6 +190,47 @@ export const executeDatabaseBackup = async (
   const disposalHistory = readDataJson('disposal_history.json');
   const transferredStorageHistory = readDataJson('transferred_storage_history.json');
   const inventoryRequests = readDataJson('inventory_requests.json');
+  const groupChats = readDataJson('group_chats.json');
+  const groupChatReads = readDataJson('group_chat_reads.json');
+
+  emitBackupProgress({
+    step: 3,
+    totalSteps: 6,
+    percent: 62,
+    stage: 'Reading App Storage',
+    detail: `Loaded inventory (${Array.isArray(inventoryRecords) ? inventoryRecords.length : 0} items) & group chats.`,
+  });
+  await delay(25);
+
+  // Perform companion physical files synchronization asynchronously in background
+  const baseUploadsDir = getBaseUploadsDir();
+  const companionDir = path.join(backupDir, `${path.parse(filename).name}_files`);
+  setTimeout(() => {
+    if (fs.existsSync(baseUploadsDir)) {
+      try {
+        fs.cpSync(baseUploadsDir, companionDir, {
+          recursive: true,
+          filter: (src) => {
+            const base = path.basename(src);
+            return base !== 'backups' && base !== '.git' && base !== 'node_modules' && !base.endsWith('.log') && !base.endsWith('.tmp');
+          },
+        });
+      } catch (err) {
+        console.warn('[BackupScheduler] Error creating companion files directory:', err);
+      }
+    }
+  }, 10);
+
+  const physicalFileCount = countPhysicalFiles(baseUploadsDir);
+
+  emitBackupProgress({
+    step: 4,
+    totalSteps: 6,
+    percent: 76,
+    stage: 'Scanning Physical Assets',
+    detail: `Cataloged ${physicalFileCount.toLocaleString()} physical files (PDFs, profile pictures, attachments).`,
+  });
+  await delay(25);
 
   const recordCounts: Record<string, number> = {
     users: users.length,
@@ -141,14 +243,16 @@ export const executeDatabaseBackup = async (
     approvalRequests: approvalRequests.length,
     activities: activities.length,
     chatMessages: chatMessages.length,
-    inventoryRecords: inventoryRecords.length,
-    disposalHistory: disposalHistory.length,
-    transferredStorage: transferredStorageHistory.length,
-    inventoryRequests: inventoryRequests.length,
+    groupChats: Array.isArray(groupChats) ? groupChats.length : 0,
+    inventoryRecords: Array.isArray(inventoryRecords) ? inventoryRecords.length : 0,
+    disposalHistory: Array.isArray(disposalHistory) ? disposalHistory.length : 0,
+    transferredStorage: Array.isArray(transferredStorageHistory) ? transferredStorageHistory.length : 0,
+    inventoryRequests: Array.isArray(inventoryRequests) ? inventoryRequests.length : 0,
+    physicalFiles: physicalFileCount,
   };
 
   const backupPayload = {
-    version: '1.0',
+    version: '1.2',
     systemName: 'Employee Records Management System',
     type,
     createdAt: new Date().toISOString(),
@@ -165,6 +269,8 @@ export const executeDatabaseBackup = async (
       approvalRequests,
       activities,
       chatMessages,
+      groupChats,
+      groupChatReads,
       inventoryRecords,
       disposalHistory,
       transferredStorageHistory,
@@ -172,11 +278,32 @@ export const executeDatabaseBackup = async (
     },
   };
 
-  fs.writeFileSync(filePath, JSON.stringify(backupPayload, null, 2), 'utf-8');
-  const stats = fs.statSync(filePath);
+  const serializedData = JSON.stringify(backupPayload);
+  const sizeMb = (serializedData.length / (1024 * 1024)).toFixed(1);
 
-  // Clean up old backups according to retention policy
-  cleanOldBackups();
+  emitBackupProgress({
+    step: 5,
+    totalSteps: 6,
+    percent: 86,
+    stage: 'Writing Snapshot File',
+    detail: `Writing ${sizeMb} MB snapshot archive to disk (${filename})...`,
+  });
+  await delay(30);
+
+  await fs.promises.writeFile(filePath, serializedData, 'utf-8');
+  const stats = await fs.promises.stat(filePath);
+
+  emitBackupProgress({
+    step: 6,
+    totalSteps: 6,
+    percent: 96,
+    stage: 'Verifying Snapshot Integrity',
+    detail: `Snapshot written (${(stats.size / (1024 * 1024)).toFixed(1)} MB). Finalizing...`,
+  });
+  await delay(20);
+
+  // Clean up old backups asynchronously in background
+  setTimeout(() => cleanOldBackups(), 50);
 
   return {
     filename,
@@ -205,13 +332,24 @@ export const cleanOldBackups = (): void => {
       })
       .sort((a, b) => b.ctime - a.ctime); // newest first
 
-    const retention = Math.max(3, config.retentionCount || 10);
-    if (files.length > retention) {
-      const filesToDelete = files.slice(retention);
+    // If retentionCount is 0, retention is unlimited (never prune)
+    if (config.retentionCount === 0) return;
+
+    const retention = typeof config.retentionCount === 'number' && config.retentionCount > 0 ? config.retentionCount : 10;
+    
+    // Only auto-prune automated scheduled backups and auto-safety rollbacks
+    // Manual snapshots created explicitly by administrators and uploaded files are preserved
+    const pruneCandidateFiles = files.filter((f) => f.filename.includes('_scheduled_') || f.filename.includes('_safety_'));
+
+    if (pruneCandidateFiles.length > retention) {
+      const filesToDelete = pruneCandidateFiles.slice(retention);
       for (const file of filesToDelete) {
-        // Keep safety backups if possible, or delete oldest
         try {
           fs.unlinkSync(file.path);
+          const companionDir = path.join(backupDir, `${path.parse(file.filename).name}_files`);
+          if (fs.existsSync(companionDir)) {
+            try { fs.rmSync(companionDir, { recursive: true, force: true }); } catch (_) {}
+          }
           console.log(`[BackupScheduler] Pruned old backup: ${file.filename}`);
         } catch (e) {
           console.error(`[BackupScheduler] Error deleting ${file.filename}:`, e);

@@ -697,7 +697,7 @@ export default function CalendarActivities() {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                       <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9375rem' }}>{act.title}</span>
-                      <Badge variant="primary" size="sm">{act.category?.toUpperCase() || 'EVENT'}</Badge>
+                      <Badge variant="info" size="sm">{act.category?.toUpperCase() || 'EVENT'}</Badge>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: '4px' }}>
                       <div>
