@@ -1320,7 +1320,7 @@ function Users() {
                   User Details
                 </span>
                 <Badge
-                  variant={pendingDeleteUser.status === 'active' || (pendingDeleteUser.status as any) === 'ACTIVE' ? 'success' : 'secondary'}
+                  variant={pendingDeleteUser.status === 'active' || (pendingDeleteUser.status as any) === 'ACTIVE' ? 'success' : 'default'}
                   size="sm"
                 >
                   {((pendingDeleteUser.status as string) || 'ACTIVE').toUpperCase()}

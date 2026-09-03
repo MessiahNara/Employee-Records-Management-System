@@ -31,6 +31,10 @@ interface YellowBox {
   office: string;
   type: string;
   color?: string;
+  category?: string;
+  yearFrom?: string;
+  yearTo?: string;
+  currentFilesCount?: number;
   employees: EmployeeMini[];
 }
 
@@ -1012,16 +1016,16 @@ function File201() {
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{deleteBoxTarget.boxLabel}</span>
               </div>
               <div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Category</span>
-                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.category || 'Standard'}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Office</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.office || 'N/A'}</span>
               </div>
               <div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Year Span</span>
-                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.yearFrom || 'N/A'} – {deleteBoxTarget.yearTo || 'Present'}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Type</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.type || deleteBoxTarget.category || 'Standard'}</span>
               </div>
               <div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>File Count</span>
-                <Badge variant="secondary" size="sm">{deleteBoxTarget.currentFilesCount || 0} Files</Badge>
+                <Badge variant="default" size="sm">{deleteBoxTarget.employees?.length ?? deleteBoxTarget.currentFilesCount ?? 0} Files</Badge>
               </div>
             </div>
           )}

@@ -10,6 +10,12 @@ const https = require('https');
 app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-insecure-localhost');
 
+// Completely bypass TLS/SSL certificate errors for local Vite dev server
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  event.preventDefault();
+  callback(true);
+});
+
 // Global server URL (set during startup)
 let GLOBAL_SERVER_URL = 'https://127.0.0.1:5000';
 
@@ -397,6 +403,9 @@ function createWindow() {
       event.preventDefault();
       currentZoom = Math.max(currentZoom - 0.05, 0.4);
       applyZoom();
+    } else if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      event.preventDefault();
+      mainWindow.webContents.toggleDevTools();
     }
   });
 
@@ -410,18 +419,32 @@ function createWindow() {
   });
 
 
-  // Show window when ready to avoid flickering
+  // Show window when ready to avoid flickering and white screens
   mainWindow.once('ready-to-show', () => {
     console.log('[ui] Window ready to show');
     mainWindow.show();
   });
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.log('[ui] Showing window on did-finish-load');
+      mainWindow.show();
+    }
+  });
+
+  // Safety fallback to guarantee window becomes visible even if ready-to-show is delayed
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.log('[ui] Showing window via safety timeout');
+      mainWindow.show();
+    }
+  }, 2500);
 
   // Intercept all target="_blank" links and window.open calls
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     const lowerUrl = url.toLowerCase();
     
     // For PDFs and DOCX, hand them over to the OS to open in native apps (Acrobat, Word)
-    // This is the most reliable way to "view" them since Electron lacks built-in document viewers.
     if (lowerUrl.endsWith('.pdf') || lowerUrl.endsWith('.docx') || lowerUrl.endsWith('.doc')) {
       require('electron').shell.openExternal(url);
       return { action: 'deny' };
@@ -432,17 +455,38 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  const devUrl = `https://127.0.0.1:5174`;
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.warn(`[ui] Load notice for ${validatedURL}: ${errorDescription} (${errorCode})`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      if (!app.isPackaged && errorCode !== -3) {
+        // In dev mode, Vite might still be compiling chunks; retry in 1.5s
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            console.log('[ui] Retrying loadURL after dev server warm-up...');
+            mainWindow.loadURL(devUrl);
+          }
+        }, 1500);
+      }
+    }
+  });
+
+  // Forward renderer console logs directly to terminal stdout
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levelNames = ['verbose', 'info', 'warning', 'error'];
+    console.log(`[renderer ${levelNames[level] || level}] ${message} (${sourceId}:${line})`);
+  });
 
   // Load the app
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
     // Development mode - load from Vite dev server
-    const devUrl = `https://localhost:5174`;
-    // In dev mode, server runs on localhost on port 5000 with HTTPS
-    GLOBAL_SERVER_URL = `https://localhost:5000`;
+    GLOBAL_SERVER_URL = `https://127.0.0.1:5000`;
     console.log('[ui] Loading from Vite dev server at', devUrl);
     console.log('[server-url] Set to', GLOBAL_SERVER_URL);
     mainWindow.loadURL(devUrl);
-    // DevTools can be opened manually via Ctrl+Shift+I if needed
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     // Production mode
     const clientConfig = readClientConfig();

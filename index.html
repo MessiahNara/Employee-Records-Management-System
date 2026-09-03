@@ -51,6 +51,24 @@
       <div class="splash-text">Loading HRMDO ERMS...</div>
     </div>
     <div id="root"></div>
+    <script>
+      // Safety auto-dismiss for splash screen after 3.5s so it never freezes the window
+      setTimeout(function() {
+        var splash = document.getElementById('app-splash');
+        if (splash && splash.style.opacity !== '0') {
+          splash.style.opacity = '0';
+          setTimeout(function() { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 300);
+        }
+      }, 3500);
+
+      // Catch and display any startup errors on screen with retry
+      window.addEventListener('error', function(e) {
+        var splashText = document.querySelector('#app-splash .splash-text');
+        if (splashText) {
+          splashText.innerHTML = '<span style="color:#ef4444;font-weight:600">Failed to load application:</span><br/><span style="font-size:12px;color:#4b5563">' + (e.message || 'Unknown error') + '</span><br/><button onclick="location.reload()" style="margin-top:10px;padding:6px 14px;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;">Retry</button>';
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

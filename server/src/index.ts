@@ -125,12 +125,12 @@ try {
   const dest3 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (FORMAT).xlsx';
   const dest4 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (Sample Format).xlsx';
   
-  if (fs.existsSync(srcF_sample)) {
-    fs.copyFileSync(srcF_sample, dest2); // Keep dashboard reports using sample format
+  if (fs.existsSync(srcF_sample) && (!fs.existsSync(dest2) || !fs.existsSync(dest4))) {
+    fs.copyFileSync(srcF_sample, dest2);
     fs.copyFileSync(srcF_sample, dest4);
   }
-  if (fs.existsSync(srcF_format)) {
-    fs.copyFileSync(srcF_format, dest1); // Inventory apprasial uses FORMAT
+  if (fs.existsSync(srcF_format) && (!fs.existsSync(dest1) || !fs.existsSync(dest3))) {
+    fs.copyFileSync(srcF_format, dest1);
     fs.copyFileSync(srcF_format, dest3); 
     console.log('[server] Copied templates to public/ directory');
   }
@@ -287,8 +287,9 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       console.log(`🚀 Server is running on https://localhost:${PORT}`);
       console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
       console.log(`🔒 Using HTTPS with self-signed certificate`);
-      syncExistingRecordsToDropdownOptions();
-      consolidateDocumentFolders();
+      setTimeout(() => {
+        syncExistingRecordsToDropdownOptions().catch(() => {});
+      }, 3000);
     });
   } catch (err) {
     console.error('⚠️ Failed to start HTTPS server, falling back to HTTP:', err);
@@ -297,8 +298,9 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     server.listen(Number(PORT), HOST, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
-      syncExistingRecordsToDropdownOptions();
-      consolidateDocumentFolders();
+      setTimeout(() => {
+        syncExistingRecordsToDropdownOptions().catch(() => {});
+      }, 3000);
     });
   }
 } else {
@@ -308,8 +310,9 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   server.listen(Number(PORT), HOST, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
-    syncExistingRecordsToDropdownOptions();
-    consolidateDocumentFolders();
+    setTimeout(() => {
+      syncExistingRecordsToDropdownOptions().catch(() => {});
+    }, 3000);
   });
 }
 

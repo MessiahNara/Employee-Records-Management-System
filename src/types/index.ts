@@ -43,8 +43,10 @@ export interface Role {
 export interface User {
   id: UUID;
   email: string;
+  username?: string;
   firstName: string;
   lastName: string;
+  middleName?: string;
   avatar?: string;
   profilePicture?: string; // URL or file path to profile picture (optional)
   roleId: UUID;

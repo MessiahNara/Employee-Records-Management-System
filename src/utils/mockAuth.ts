@@ -58,14 +58,20 @@ export const saveAuthState = (user: any, rememberMe: boolean) => {
 
 // Get auth state from storage
 export const getAuthState = (): any | null => {
-  const localUser = localStorage.getItem('authUser');
-  const sessionUser = sessionStorage.getItem('authUser');
-  
-  if (localUser) {
-    return JSON.parse(localUser);
-  }
-  if (sessionUser) {
-    return JSON.parse(sessionUser);
+  try {
+    const localUser = localStorage.getItem('authUser');
+    const sessionUser = sessionStorage.getItem('authUser');
+    
+    if (localUser && localUser !== 'undefined' && localUser !== 'null') {
+      return JSON.parse(localUser);
+    }
+    if (sessionUser && sessionUser !== 'undefined' && sessionUser !== 'null') {
+      return JSON.parse(sessionUser);
+    }
+  } catch (e) {
+    console.error('Failed to parse authUser from storage:', e);
+    localStorage.removeItem('authUser');
+    sessionStorage.removeItem('authUser');
   }
   return null;
 };
