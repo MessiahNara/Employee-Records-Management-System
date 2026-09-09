@@ -1,6 +1,5 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import { getOfficeFullName } from '../data/provincialOffices';
 
 export interface ReportOfficeRow {
   abbreviation: string;
@@ -171,7 +170,7 @@ function applySheetStructureAndData(
   // 2. Set Column Widths (18 Columns total, A through R, NO Overall column)
   const colWidths: Record<number, number> = {
     1: 6,   // A: No.
-    2: 38,  // B: Office / Hospital
+    2: 20,  // B: Office / Hospital (Abbreviation)
     3: 10,  // C: Regular Emp
     4: 10,  // D: Casual Emp
     5: 11,  // E: Job Order Emp
@@ -385,7 +384,7 @@ function applySheetStructureAndData(
 
     const values = [
       index + 1,                                                // A: No.
-      getOfficeFullName(item.name || item.abbreviation),        // B: Office / Hospital
+      item.abbreviation,                                        // B: Office / Hospital (Abbreviation)
       item.employees.regular || 0,                              // C: Employees Regular
       item.employees.casual || 0,                       // D: Employees Casual
       item.employees.jobOrder || 0,                     // E: Employees Job Order

@@ -195,7 +195,6 @@ const BASE_OFFICES: { abbr: string; name: string; type: 'Department' | 'Hospital
   { abbr: 'Archives', name: 'Provincial Archives and Records Center', type: 'Department' },
   { abbr: 'Assessor', name: 'Provincial Assessment Office', type: 'Department' },
   { abbr: 'BAC', name: 'Bids and Awards Committee', type: 'Department' },
-  { abbr: 'BM Staff', name: 'Office of the Board Members Staff', type: 'Department' },
   { abbr: 'Board Members', name: 'Office of the Sangguniang Panlalawigan Members', type: 'Department' },
   { abbr: 'Board Secretary', name: 'Office of the Provincial Board Secretary', type: 'Department' },
   { abbr: 'Budget', name: 'Provincial Budget Office', type: 'Department' },
@@ -285,65 +284,127 @@ interface DynamicOfficeDef {
   name: string;
   type: 'Department' | 'Hospital';
   names: Set<string>;
-  pattern?: RegExp;
 }
 
 function buildDynamicOfficeMap(settingsOfficeNames: string[] = []): {
   defs: DynamicOfficeDef[];
   matchOffice: (name: string) => string | null;
 } {
-  const map = new Map<string, DynamicOfficeDef>();
-
-  // 1. Seed with BASE_OFFICES
-  for (const base of BASE_OFFICES) {
-    const def: DynamicOfficeDef = {
-      abbr: base.abbr,
-      name: base.name,
-      names: new Set([base.name, base.abbr]),
-      type: base.type,
-      pattern: base.abbr === 'BM Staff' ? /^Office of BM /i : undefined,
-    };
-    if (base.aliases) {
-      base.aliases.forEach((a) => def.names.add(a));
+  const baseByName = new Map<string, (typeof BASE_OFFICES)[number]>();
+  const baseByAbbr = new Map<string, (typeof BASE_OFFICES)[number]>();
+  for (const b of BASE_OFFICES) {
+    baseByName.set(b.name.toLowerCase().trim(), b);
+    baseByAbbr.set(b.abbr.toLowerCase().trim(), b);
+    if (b.aliases) {
+      for (const a of b.aliases) {
+        baseByName.set(a.toLowerCase().trim(), b);
+      }
     }
-    map.set(base.abbr.toLowerCase(), def);
   }
 
-  // 2. Incorporate dynamic entries from Settings
-  for (const entry of settingsOfficeNames) {
+  // Helper to parse option
+  const parseOption = (entry: string): { abbreviation: string; fullName: string } => {
     const trimmed = (entry || '').trim();
-    if (!trimmed) continue;
+    if (!trimmed) return { abbreviation: '', fullName: '' };
 
-    const { abbreviation, fullName } = parseOfficeEntry(trimmed);
+    // Known base full names or aliases that contain " - "
+    if (baseByName.has(trimmed.toLowerCase())) {
+      return { abbreviation: '', fullName: trimmed };
+    }
 
-    // Only process if it has an acronym/abbreviation OR matches an existing base office
-    if (abbreviation) {
-      const key = abbreviation.toLowerCase();
-      const isHospital =
-        fullName.toLowerCase().includes('hospital') ||
-        abbreviation.toLowerCase().includes('hospital');
-
-      let def = map.get(key);
-      if (!def) {
-        // Brand new dynamic office or hospital added by user with acronym!
-        def = {
-          abbr: abbreviation,
-          name: fullName,
-          names: new Set<string>(),
-          type: isHospital ? 'Hospital' : 'Department',
-        };
-        map.set(key, def);
+    if (trimmed.includes(' - ')) {
+      const parts = trimmed.split(' - ').map((p) => p.trim());
+      if (parts[0] && parts.slice(1).join(' - ')) {
+        return { abbreviation: parts[0], fullName: parts.slice(1).join(' - ') };
       }
-      def.names.add(fullName);
-      def.names.add(trimmed);
-      def.names.add(abbreviation);
-    } else {
-      // Entry has no acronym prefix. Check if it matches any base office name or alias
-      for (const def of map.values()) {
-        for (const existingName of def.names) {
-          if (existingName.toLowerCase() === trimmed.toLowerCase()) {
-            def.names.add(trimmed);
-            break;
+    }
+    return { abbreviation: '', fullName: trimmed };
+  };
+
+  const officeMap = new Map<string, DynamicOfficeDef>();
+
+  if (!settingsOfficeNames || settingsOfficeNames.length === 0) {
+    for (const b of BASE_OFFICES) {
+      officeMap.set(b.name.toLowerCase(), {
+        abbr: b.abbr,
+        name: b.name,
+        type: b.type,
+        names: new Set([b.name, b.abbr, ...(b.aliases || [])]),
+      });
+    }
+  } else {
+    // PASS 1: Options with EXPLICIT abbreviations ("Abbr - Full Name")
+    for (const raw of settingsOfficeNames) {
+      const entry = (raw || '').trim();
+      if (!entry) continue;
+
+      const { abbreviation, fullName } = parseOption(entry);
+      if (abbreviation) {
+        const normFull = fullName.toLowerCase();
+        const matchedBase = baseByName.get(normFull) || baseByAbbr.get(abbreviation.toLowerCase());
+        const officeKey = matchedBase ? matchedBase.name.toLowerCase() : normFull;
+
+        const isHospital =
+          matchedBase?.type === 'Hospital' ||
+          fullName.toLowerCase().includes('hospital') ||
+          abbreviation.toLowerCase().includes('hospital');
+
+        const names = new Set([fullName, abbreviation, entry]);
+        if (matchedBase) {
+          names.add(matchedBase.name);
+          names.add(matchedBase.abbr);
+          if (matchedBase.aliases) matchedBase.aliases.forEach((a) => names.add(a));
+        }
+
+        officeMap.set(officeKey, {
+          abbr: abbreviation,
+          name: matchedBase ? matchedBase.name : fullName,
+          type: isHospital ? 'Hospital' : (matchedBase?.type || 'Department'),
+          names,
+        });
+      }
+    }
+
+    // PASS 2: Options WITHOUT explicit abbreviation
+    for (const raw of settingsOfficeNames) {
+      const entry = (raw || '').trim();
+      if (!entry) continue;
+
+      const { abbreviation } = parseOption(entry);
+      if (abbreviation) continue; // Already handled in Pass 1
+
+      const normEntry = entry.toLowerCase();
+
+      // Never include BM Staff or individual Office of BM entries as abbreviations
+      if (/^Office of BM /i.test(entry) || normEntry === 'bm staff' || normEntry === 'office of the board members staff') {
+        continue;
+      }
+
+      const matchedBase = baseByName.get(normEntry);
+      if (matchedBase) {
+        const officeKey = matchedBase.name.toLowerCase();
+
+        // If already customized in Pass 1, just register this name as alias
+        if (officeMap.has(officeKey)) {
+          officeMap.get(officeKey)!.names.add(entry);
+          continue;
+        }
+
+        // If this is the exact base office name
+        if (matchedBase.name.toLowerCase() === normEntry) {
+          const names = new Set([matchedBase.name, matchedBase.abbr, entry]);
+          if (matchedBase.aliases) matchedBase.aliases.forEach((a) => names.add(a));
+
+          officeMap.set(officeKey, {
+            abbr: matchedBase.abbr,
+            name: matchedBase.name,
+            type: matchedBase.type,
+            names,
+          });
+        } else {
+          // Sub-unit or alias: add to parent office names if present
+          if (officeMap.has(officeKey)) {
+            officeMap.get(officeKey)!.names.add(entry);
           }
         }
       }
@@ -351,12 +412,17 @@ function buildDynamicOfficeMap(settingsOfficeNames: string[] = []): {
   }
 
   // Sort definitions: Departments first (alphabetical by abbr), then Hospitals (alphabetical by abbr)
-  const defsList = Array.from(map.values()).sort((a, b) => {
+  const defsList = Array.from(officeMap.values()).sort((a, b) => {
     if (a.type !== b.type) {
       return a.type === 'Department' ? -1 : 1;
     }
     return a.abbr.localeCompare(b.abbr);
   });
+
+  const abbrLookup = new Map<string, DynamicOfficeDef>();
+  for (const def of defsList) {
+    abbrLookup.set(def.abbr.toLowerCase(), def);
+  }
 
   // Matcher function
   const matchOffice = (officeName: string): string | null => {
@@ -364,39 +430,36 @@ function buildDynamicOfficeMap(settingsOfficeNames: string[] = []): {
     const clean = officeName.trim();
     const lower = clean.toLowerCase();
 
-    // 1. Exact case-sensitive match against known names
+    // 1. Exact match against known names
     for (const def of defsList) {
       if (def.names.has(clean)) return def.abbr;
     }
 
-    // 2. Pattern match (e.g. BM Staff)
-    for (const def of defsList) {
-      if (def.pattern && def.pattern.test(clean)) return def.abbr;
-    }
-
-    // 3. Case-insensitive match against known names
+    // 2. Case-insensitive match against known names
     for (const def of defsList) {
       for (const name of def.names) {
         if (name.toLowerCase() === lower) return def.abbr;
       }
     }
 
-    // 4. If clean has " - ", parse and match abbreviation or fullName
+    // 3. If clean has " - ", parse and match abbreviation or full name
     if (clean.includes(' - ')) {
-      const parsed = parseOfficeEntry(clean);
-      if (parsed.abbreviation && map.has(parsed.abbreviation.toLowerCase())) {
-        return map.get(parsed.abbreviation.toLowerCase())!.abbr;
+      const parts = clean.split(' - ').map((p) => p.trim());
+      const abbrKey = parts[0].toLowerCase();
+      if (abbrLookup.has(abbrKey)) {
+        return abbrLookup.get(abbrKey)!.abbr;
       }
+      const fullNamePart = parts.slice(1).join(' - ').toLowerCase();
       for (const def of defsList) {
         for (const name of def.names) {
-          if (name.toLowerCase() === parsed.fullName.toLowerCase()) return def.abbr;
+          if (name.toLowerCase() === fullNamePart) return def.abbr;
         }
       }
     }
 
-    // 5. Check if clean itself matches any abbreviation directly
-    if (map.has(lower)) {
-      return map.get(lower)!.abbr;
+    // 4. Check if clean itself matches any abbreviation directly
+    if (abbrLookup.has(lower)) {
+      return abbrLookup.get(lower)!.abbr;
     }
 
     return null;

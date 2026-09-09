@@ -173,7 +173,9 @@
   position: sticky;
   left: 40px;
   z-index: 8;
-  min-width: 260px;
+  width: 170px;
+  min-width: 170px;
+  max-width: 190px;
   vertical-align: middle;
   background-color: #ffffff;
 }

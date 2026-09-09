@@ -11,7 +11,6 @@ import generateScanningSummaryExcel, {
   ReportOfficeRow,
   ReportTotals,
 } from '../utils/generateScanningSummaryExcel';
-import { getOfficeFullName } from '../data/provincialOffices';
 import './OfficeScanningReportModal.css';
 
 interface OfficeScanningReportModalProps {
@@ -184,8 +183,15 @@ export default function OfficeScanningReportModal({
                     <td className="scanning-report__td-no">{idx + 1}</td>
                     <td className="scanning-report__td-office">
                       <div className="scanning-report__office-cell">
-                        <span className="scanning-report__office-name" title={getOfficeFullName(row.name || row.abbreviation)}>
-                          {getOfficeFullName(row.name || row.abbreviation)}
+                        <span className="scanning-report__office-name" title={row.name ? `${row.abbreviation} - ${row.name}` : row.abbreviation}>
+                          {row.abbreviation}
+                        </span>
+                        <span
+                          className={`scanning-report__type-tag ${
+                            row.type === 'Hospital' ? 'scanning-report__type-tag--hosp' : ''
+                          }`}
+                        >
+                          {row.type === 'Hospital' ? 'Hospital' : 'Office'}
                         </span>
                       </div>
                     </td>

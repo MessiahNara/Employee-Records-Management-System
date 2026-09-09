@@ -34,7 +34,7 @@ dotenv.config();
     const devUsername = 'dev';
     const devPassword = 'password123';
     const hashedPassword = await bcrypt.hash(devPassword, 10);
-    
+
     await prisma.user.upsert({
       where: { username: devUsername },
       update: {
@@ -119,19 +119,19 @@ console.log(`  - UPLOADS_DIR: ${process.env.UPLOADS_DIR}`);
 try {
   const srcF_sample = 'c:\\Employee Records Management System\\NAP FORM 1 (Sample Format).xlsx';
   const srcF_format = 'c:\\Employee Records Management System\\NAP FORM 1 (FORMAT).xlsx';
-  
+
   const dest1 = 'c:\\Employee Records Management System\\public\\nap_template.xlsx';
   const dest2 = 'c:\\Employee Records Management System\\public\\template.xlsx';
   const dest3 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (FORMAT).xlsx';
   const dest4 = 'c:\\Employee Records Management System\\public\\NAP FORM 1 (Sample Format).xlsx';
-  
+
   if (fs.existsSync(srcF_sample) && (!fs.existsSync(dest2) || !fs.existsSync(dest4))) {
     fs.copyFileSync(srcF_sample, dest2);
     fs.copyFileSync(srcF_sample, dest4);
   }
   if (fs.existsSync(srcF_format) && (!fs.existsSync(dest1) || !fs.existsSync(dest3))) {
     fs.copyFileSync(srcF_format, dest1);
-    fs.copyFileSync(srcF_format, dest3); 
+    fs.copyFileSync(srcF_format, dest3);
     console.log('[server] Copied templates to public/ directory');
   }
 } catch (e) {
@@ -160,7 +160,7 @@ app.get('/api/dump-template', async (req: Request, res: Response) => {
     const sf = zip.file('xl/sharedStrings.xml');
     if (sf) strings = await sf.async('text');
     res.json({ sheet, strings });
-  } catch(e: any) {
+  } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -300,7 +300,7 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       console.log(`📊 API endpoints available at https://localhost:${PORT}/api`);
       console.log(`🔒 Using HTTPS with self-signed certificate`);
       setTimeout(() => {
-        syncExistingRecordsToDropdownOptions().catch(() => {});
+        syncExistingRecordsToDropdownOptions().catch(() => { });
       }, 3000);
     });
   } catch (err) {
@@ -318,7 +318,7 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
       setTimeout(() => {
-        syncExistingRecordsToDropdownOptions().catch(() => {});
+        syncExistingRecordsToDropdownOptions().catch(() => { });
       }, 3000);
     });
   }
@@ -337,7 +337,7 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
     setTimeout(() => {
-      syncExistingRecordsToDropdownOptions().catch(() => {});
+      syncExistingRecordsToDropdownOptions().catch(() => { });
     }, 3000);
   });
 }
