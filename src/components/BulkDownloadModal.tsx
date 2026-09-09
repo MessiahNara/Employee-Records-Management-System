@@ -3,6 +3,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import SearchableDropdown from './ui/SearchableDropdown';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../data/provincialOffices';
 import { Employee } from '../types/employee';
 import './BulkDownloadModal.css';
 
@@ -28,7 +29,7 @@ const EmployeeRow = memo(function EmployeeRow({
   disabled,
   onToggle,
 }: EmployeeRowProps) {
-  const officeName = employee.officeHospitalName || (employee as any).officeName;
+  const officeName = getOfficeFullName(employee.officeHospitalName || (employee as any).officeName);
   const status = employee.status || 'Active';
   const isActive = status.toLowerCase() === 'active';
 
@@ -87,18 +88,18 @@ function BulkDownloadModal({
     setDisplayCount(80);
   }, [deferredSearch, selectedOffice, selectedStatus, fromDate, toDate]);
 
-  // Extract unique offices and hospitals (memoized)
+  // Extract unique offices and hospitals (memoized, full names only)
   const uniqueOffices = useMemo(() => {
     if (!isOpen) return [];
-    const offices = new Set<string>();
+    const rawOffices: string[] = [];
     for (let i = 0; i < employees.length; i++) {
       const emp = employees[i];
-      const office = (emp.officeHospitalName || (emp as any).officeName || emp.yellowBox?.office || '').trim();
+      const office = emp.officeHospitalName || (emp as any).officeName || emp.yellowBox?.office || '';
       if (office) {
-        offices.add(office);
+        rawOffices.push(office);
       }
     }
-    return Array.from(offices).sort((a, b) => a.localeCompare(b));
+    return cleanOfficeDropdownOptions(rawOffices);
   }, [employees, isOpen]);
 
   // Filter employees based on search, office/hospital, status, and date range
@@ -126,7 +127,7 @@ function BulkDownloadModal({
     if (selectedOffice) {
       const targetOffice = selectedOffice.toLowerCase();
       filtered = filtered.filter((emp) => {
-        const empOffice = (emp.officeHospitalName || (emp as any).officeName || emp.yellowBox?.office || '').trim().toLowerCase();
+        const empOffice = getOfficeFullName(emp.officeHospitalName || (emp as any).officeName || emp.yellowBox?.office || '').trim().toLowerCase();
         return empOffice === targetOffice;
       });
     }

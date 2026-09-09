@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { Employee } from '../types/employee';
 import { ExportOptions, TemplateColumn } from '../types/importExport';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 // Export utilities for employees and audit logs
 
@@ -32,7 +33,7 @@ export function exportEmployeesToFile(employees: Employee[], options: ExportOpti
     { wch: 15 }, // Middle Name
     { wch: 15 }, // Date of Birth
     { wch: 10 }, // Gender
-    { wch: 25 }, // Office/Hospital Name
+    { wch: 35 }, // Office/Hospital Name
     { wch: 18 }, // Appointment Status
     { wch: 10 }, // Status
     { wch: 25 }, // Position/Function
@@ -334,7 +335,7 @@ export function mapEmployeeToExportRow(employee: Employee): Record<string, strin
     'Middle Name': employee.middleName,
     'Date of Birth': formatDateForExport(employee.dateOfBirth),
     Gender: employee.gender,
-    'Office/Hospital Name': employee.officeHospitalName,
+    'Office/Hospital Name': getOfficeFullName(employee.officeHospitalName),
     'Appointment Status': employee.appointmentStatus,
     'Appointment From': formatDateForExport(employee.appointmentFrom),
     'Appointment To': formatDateForExport(employee.appointmentTo),

@@ -83,13 +83,12 @@ function getDefaultServerBaseUrl(): string {
     return 'http://localhost:5000';
   }
 
-  if (window.location.protocol === 'https:') {
+  if (window.location.port === '5174' || window.location.port === '5175' || window.location.protocol === 'https:') {
     return window.location.origin;
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
   const hostname = window.location.hostname || 'localhost';
-  return `${protocol}//${hostname}:5000`;
+  return `https://${hostname}:5000`;
 }
 
 function normalizeApiUrlForLan(apiUrl: string): string {
@@ -128,7 +127,7 @@ export function getApiBaseUrl(): string {
   // This avoids direct backend calls that would fail on self-signed cert errors.
   const isBrowser = typeof window !== 'undefined';
   const isElectron = isBrowser && typeof (window as any).electron !== 'undefined';
-  const isDev = isBrowser && window.location.port === '5174';
+  const isDev = isBrowser && (window.location.port === '5174' || window.location.port === '5175');
 
   if (isElectron && isDev) {
     return '/api';
@@ -233,26 +232,31 @@ async function apiRequest<T>(
     },
   };
 
-  // Create a timeout promise
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1');
-      const msg = isLocalhost
-        ? 'Server connection timeout. The backend server may not be running. Please wait a moment and try again.'
-        : 'Server connection timeout. Please check the Server URL in Settings and ensure the server is running.';
-      reject(new Error(msg));
-    }, timeoutMs);
-  });
-
-  const maxRetries = (options.method && options.method !== 'GET') ? 1 : 2;
+  const maxRetries = (options.method && options.method !== 'GET') ? 0 : 2;
   let lastError: any = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let timeoutTimer: any = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutTimer = setTimeout(() => {
+        const isLocalhost =
+          url.includes('localhost') ||
+          url.includes('127.0.0.1') ||
+          url.startsWith('/api') ||
+          url.startsWith('/');
+        const msg = isLocalhost
+          ? 'Server connection timeout. The backend server may not be running. Please wait a moment and try again.'
+          : 'Server connection timeout. Please check the Server URL in Settings and ensure the server is running.';
+        reject(new Error(msg));
+      }, timeoutMs);
+    });
+
     try {
       const response = await Promise.race([
         fetch(url, config),
         timeoutPromise
       ]);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
       
       if (!response.ok) {
         await handleResponseError(response);
@@ -260,6 +264,7 @@ async function apiRequest<T>(
 
       return await response.json();
     } catch (error: any) {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
       lastError = error;
       const errorMsg = String(error?.message || '').toLowerCase();
       const isTransientNetworkError =
@@ -725,6 +730,106 @@ export const documentApi = {
     const query = params.toString();
     return apiRequest<any[]>(`/documents${query ? `?${query}` : ''}`);
   },
+  getScanningStatus: (params?: {
+    search?: string;
+    office?: string;
+    employeeStatus?: 'all' | 'Active' | 'Inactive';
+    scanFilter?: 'all' | 'with_docs' | 'without_docs';
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.search) q.append('search', params.search);
+    if (params?.office) q.append('office', params.office);
+    if (params?.employeeStatus) q.append('employeeStatus', params.employeeStatus);
+    if (params?.scanFilter) q.append('scanFilter', params.scanFilter);
+    if (params?.page) q.append('page', String(params.page));
+    if (params?.limit) q.append('limit', String(params.limit));
+    if (params?.sortBy) q.append('sortBy', params.sortBy);
+    if (params?.sortOrder) q.append('sortOrder', params.sortOrder);
+    const qs = q.toString();
+    return apiRequest<{
+      success: boolean;
+      data: any[];
+      pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      };
+      stats: {
+        employeesWithScannedFiles: number;
+        totalDocumentsScanned: number;
+        averageFilesPerEmployee: number;
+        totalEmployeesInScope: number;
+        activeEmployeesCount?: number;
+        inactiveEmployeesCount?: number;
+      };
+      offices: string[];
+    }>(`/documents/scanning-status${qs ? `?${qs}` : ''}`);
+  },
+  getOfficeScanningMatrix: (params?: { dateFrom?: string; dateTo?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.dateFrom) qs.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) qs.set('dateTo', params.dateTo);
+    const queryString = qs.toString();
+    return apiRequest<{
+      success: boolean;
+      rows: Array<{
+        abbreviation: string;
+        name?: string;
+        type: 'Department' | 'Hospital';
+        employees: {
+          regular: number;
+          casual: number;
+          jobOrder: number;
+          consultant: number;
+          total: number;
+        };
+        pdf: {
+          regular: number;
+          casual: number;
+          jobOrder: number;
+          consultant: number;
+          total: number;
+        };
+        file201: {
+          regular: number;
+          casual: number;
+          jobOrder: number;
+          consultant: number;
+          total: number;
+        };
+        overall: string;
+        remarks: string;
+      }>;
+      totals: {
+        employees: {
+          regular: number;
+          casual: number;
+          jobOrder: number;
+          consultant: number;
+          total: number;
+        };
+        pdf: {
+          regular: number;
+          casual: number;
+          jobOrder: number;
+          consultant: number;
+          total: number;
+        };
+        file201: {
+          regular: number;
+          casual: number;
+          jobOrder: number;
+          consultant: number;
+          total: number;
+        };
+      };
+    }>(`/documents/scanning-status/office-matrix${queryString ? `?${queryString}` : ''}`);
+  },
   getById: (id: string) => apiRequest<any>(`/documents/${id}`),
   getByEmployee: (employeeId: string) => apiRequest<any[]>(`/documents/employee/${employeeId}`),
   create: (data: any, userId?: string, userName?: string) => {
@@ -977,7 +1082,13 @@ export const approvalApi = {
 };
 
 // Health check
-export const healthCheck = () => apiRequest<{ status: string; message: string; version?: string }>('/health');
+export const healthCheck = () =>
+  apiRequest<{
+    status: string;
+    message: string;
+    version?: string;
+    lastRestore?: { timestamp: string; restoredBy: string; filename: string; message?: string } | null;
+  }>('/health');
 
 // 201 File Borrow/Return API
 export const file201Api = {

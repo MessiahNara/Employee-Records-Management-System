@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
 import { jsPDF } from 'jspdf';
 import { Employee } from '../types/employee';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 /**
  * Generate a barcode as a data URL for embedding in PDF
@@ -301,7 +302,8 @@ async function generateBarcodePDF(
  */
 function generateQRCodeDataUrl(employee: Employee, sizePx: number): Promise<string> {
   const employeeName = `${employee.firstName} ${employee.middleName || ''} ${employee.lastName}`.trim();
-  const value = `Employee ID: ${employee.id}\nName: ${employeeName}\nPosition: ${employee.positionFunction || 'N/A'}\nOffice: ${employee.officeHospitalName || 'N/A'}`;
+  const officeName = getOfficeFullName(employee.officeHospitalName) || 'N/A';
+  const value = `Employee ID: ${employee.id}\nName: ${employeeName}\nPosition: ${employee.positionFunction || 'N/A'}\nOffice: ${officeName}`;
 
   return new Promise((resolve, reject) => {
     const qrCanvas = document.createElement('canvas');

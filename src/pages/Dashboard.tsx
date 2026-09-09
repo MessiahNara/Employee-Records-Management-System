@@ -39,6 +39,7 @@ import generateAOStatusDesignatedExcel from '../utils/generateAOStatusDesignated
 import generateAOStatusRecalledExcel from '../utils/generateAOStatusRecalledExcel';
 import generatePulledOutFilesExcel from '../utils/generatePulledOutFilesExcel';
 import generateTransferredFilesExcel from '../utils/generateTransferredFilesExcel';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../data/provincialOffices';
 import './Dashboard.css';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
@@ -288,7 +289,7 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
       'Republic of the Philippines',
       'Province of Pangasinan',
       'Lingayen',
-      'HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE',
+      'HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE',
       ''
     ];
 
@@ -590,7 +591,7 @@ const modifyBorrowSheetXml = (xmlStr: string, title: string, rowsData: any[]) =>
       'Republic of the Philippines',
       'Province of Pangasinan',
       'Lingayen',
-      'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE',
+      'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE',
       ''
     ];
 
@@ -759,7 +760,7 @@ const modifyBorrowSheetXml = (xmlStr: string, title: string, rowsData: any[]) =>
       const noVal = String(dataIdx + i + 1);
       const emp = row.employee;
       const nameVal = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
-      const officeVal = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
+      const officeVal = getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—';
       const statusVal = row.employee?.status || '—'; // Active or Inactive
 
       const borrowerNameVal = row.borrowerName || '';
@@ -916,7 +917,7 @@ function Dashboard() {
   const [returnDateFromFilter, setReturnDateFromFilter] = useState('');
   const [returnDateToFilter, setReturnDateToFilter] = useState('');
   const [borrowCurrentPage, setBorrowCurrentPage] = useState(1);
-  const [borrowItemsPerPage, setBorrowItemsPerPage] = useState(10);
+  const [borrowItemsPerPage, setBorrowItemsPerPage] = useState(15);
   const [selectedBorrowLog, setSelectedBorrowLog] = useState<any>(null);
   const [isBorrowDetailsModalOpen, setIsBorrowDetailsModalOpen] = useState(false);
   const [selectedBorrowRowIds, setSelectedBorrowRowIds] = useState<Set<string>>(new Set());
@@ -935,7 +936,7 @@ function Dashboard() {
   const [transferredReturnDateFromFilter, setTransferredReturnDateFromFilter] = useState('');
   const [transferredReturnDateToFilter, setTransferredReturnDateToFilter] = useState('');
   const [transferredCurrentPage, setTransferredCurrentPage] = useState(1);
-  const [transferredItemsPerPage, setTransferredItemsPerPage] = useState(10);
+  const [transferredItemsPerPage, setTransferredItemsPerPage] = useState(15);
   const [selectedTransferredLog, setSelectedTransferredLog] = useState<any>(null);
   const [isTransferredDetailsModalOpen, setIsTransferredDetailsModalOpen] = useState(false);
   const [selectedTransferredRowIds, setSelectedTransferredRowIds] = useState<Set<string>>(new Set());
@@ -1014,7 +1015,7 @@ function Dashboard() {
   }, []);
 
   const [reportCurrentPage, setReportCurrentPage] = useState(1);
-  const [reportItemsPerPage, setReportItemsPerPage] = useState(10);
+  const [reportItemsPerPage, setReportItemsPerPage] = useState(15);
 
   useEffect(() => {
     setReportCurrentPage(1);
@@ -1096,7 +1097,7 @@ function Dashboard() {
       const s = await api.systemSettings.get();
       setDropdownOptions({
         appointmentStatuses: s.appointmentStatuses ?? [],
-        officeNames: s.officeNames ?? [],
+        officeNames: cleanOfficeDropdownOptions(s.officeNames ?? []),
         positions: s.positions ?? [],
         aoYears: s.aoYears ?? [],
         reasonsForSeparation: s.reasonsForSeparation ?? [],
@@ -1416,7 +1417,7 @@ function Dashboard() {
       const dateOfBirth = birthDate ? formatDateDDMMYYYY(source.dateOfBirth) : '-';
 
       // Mother unit = Office/Hospital Name (employment information) — the primary source
-      const motherUnit = source.officeHospitalName || source.officeName || source.motherUnit || '';
+      const motherUnit = getOfficeFullName(source.officeHospitalName || source.officeName || source.motherUnit) || '';
 
       // position / positionFunction — the API maps position → positionFunction, but
       // audit log oldValues store the raw DB column name "position"
@@ -1430,10 +1431,10 @@ function Dashboard() {
         motherUnit,
         aoType,
         assignedUnit: motherUnit || '-',
-        detailedOffice: String(activeSource.detailedTo || '').trim(),
+        detailedOffice: getOfficeFullName(String(activeSource.detailedTo || '').trim()),
         designatedPositionFunction: String(activeSource.designatedPositionFunction || '').trim(),
-        recalledFrom: String(activeSource.recalledFrom || '').trim(),
-        recalledTo: String(activeSource.recalledTo || '').trim(),
+        recalledFrom: getOfficeFullName(String(activeSource.recalledFrom || '').trim()),
+        recalledTo: getOfficeFullName(String(activeSource.recalledTo || '').trim()),
         durationFrom,
         durationTo,
         dateOfBirth,
@@ -1604,7 +1605,7 @@ function Dashboard() {
 
   const uniqueMotherUnitsInDatabase = useMemo(() => {
     const motherUnits = allEmployees.flatMap(emp => [(emp as any).motherUnit, emp.officeHospitalName]).filter(Boolean);
-    return [...new Set(motherUnits)].sort();
+    return cleanOfficeDropdownOptions(motherUnits);
   }, [allEmployees]);
 
   const filteredReportRows = useMemo(() => {
@@ -1986,7 +1987,7 @@ function Dashboard() {
       case 'employeeName':
         return row.employee ? `${row.employee.lastName}, ${row.employee.firstName}` : row.employeeId || '';
       case 'officeName':
-        return row.employee?.yellowBox?.office || row.employee?.officeName || '';
+        return getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '';
       case 'position':
         return row.employee?.position || '';
       case 'appointmentStatus':
@@ -2171,7 +2172,7 @@ function Dashboard() {
       {
         key: 'officeName',
         header: renderBorrowSortableHeader('Office/Hospital', 'officeName'),
-        render: (row) => row.employee?.yellowBox?.office || row.employee?.officeName || '—'
+        render: (row) => getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'
       },
       {
         key: 'position',
@@ -2325,7 +2326,7 @@ function Dashboard() {
           <td>${empName}</td>
           <td>${row.employee?.appointmentStatus || '—'}</td>
           <td>${row.employee?.position || '—'}</td>
-          <td>${row.employee?.yellowBox?.office || row.employee?.officeName || '—'}</td>
+          <td>${getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}</td>
           <td>${row.borrowerName || '—'}</td>
           <td>${row.purpose || '—'}</td>
           <td>${formatDateMDY(row.dateBorrowed)}</td>
@@ -2481,7 +2482,7 @@ function Dashboard() {
       case 'employeeName':
         return row.employee ? `${row.employee.lastName}, ${row.employee.firstName}` : row.employeeId || '';
       case 'officeName':
-        return row.employee?.yellowBox?.office || row.employee?.officeName || '';
+        return getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '';
       case 'position':
         return row.employee?.position || '';
       case 'appointmentStatus':
@@ -2681,7 +2682,7 @@ function Dashboard() {
       {
         key: 'officeName',
         header: renderTransferredSortableHeader('Office/Hospital', 'officeName'),
-        render: (row) => row.employee?.yellowBox?.office || row.employee?.officeName || '—'
+        render: (row) => getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'
       },
       {
         key: 'position',
@@ -3431,7 +3432,7 @@ function Dashboard() {
           <div style="font-size:10.5pt;font-style:italic;font-weight:normal;">Republic of the Philippines</div>
           <div style="font-size:11pt;font-weight:bold;margin-top:2px;">Province of Pangasinan</div>
           <div style="font-size:10pt;font-weight:normal;margin-top:2px;">Lingayen</div>
-          <div style="font-size:11.5pt;font-weight:bold;margin-top:4px;font-family:Calibri,Arial,sans-serif;">HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+          <div style="font-size:11.5pt;font-weight:bold;margin-top:4px;font-family:Calibri,Arial,sans-serif;">HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
         </div>
       </div>`;
 
@@ -4092,7 +4093,7 @@ function Dashboard() {
         middleName: dataToSave.middleName || undefined,
         dateOfBirth: dataToSave.dateOfBirth || undefined,
         gender: dataToSave.gender,
-        officeName: dataToSave.officeHospitalName,
+        officeName: getOfficeFullName(dataToSave.officeHospitalName) || dataToSave.officeHospitalName,
         appointmentStatus: dataToSave.appointmentStatus,
         appointmentFrom: dataToSave.appointmentFrom || undefined,
         appointmentTo: dataToSave.appointmentTo || undefined,
@@ -4104,16 +4105,16 @@ function Dashboard() {
         dateOfEmployment: dataToSave.dateOfEmployment,
         dateOfSeparation: dataToSave.dateOfSeparation || undefined,
         reasonOfSeparation: dataToSave.reasonForSeparation || undefined,
-        motherUnit: dataToSave.motherUnit || undefined,
-        detailedTo: (dataToSave.aoType === 'Detailed' || dataToSave.aoType === 'Designated') ? dataToSave.detailedTo || undefined : undefined,
+        motherUnit: dataToSave.motherUnit ? (getOfficeFullName(dataToSave.motherUnit) || dataToSave.motherUnit) : undefined,
+        detailedTo: (dataToSave.aoType === 'Detailed' || dataToSave.aoType === 'Designated') ? (dataToSave.detailedTo ? (getOfficeFullName(dataToSave.detailedTo) || dataToSave.detailedTo) : undefined) : undefined,
         detailedDivision: dataToSave.aoType === 'Detailed' ? dataToSave.detailedDivision || undefined : undefined,
         detailedOrderFrom: dataToSave.aoType === 'Detailed' ? dataToSave.detailedOrderFrom || undefined : undefined,
         detailedOrderTo: dataToSave.aoType === 'Detailed' ? dataToSave.detailedOrderTo || undefined : undefined,
         designatedPositionFunction: dataToSave.aoType === 'Designated' ? dataToSave.designatedPositionFunction || undefined : undefined,
         designatedOrderFrom: dataToSave.aoType === 'Designated' ? dataToSave.designatedOrderFrom || undefined : undefined,
         designatedOrderTo: dataToSave.aoType === 'Designated' ? dataToSave.designatedOrderTo || undefined : undefined,
-        recalledFrom: dataToSave.aoType === 'Recalled' ? dataToSave.recalledFrom || undefined : undefined,
-        recalledTo: dataToSave.aoType === 'Recalled' ? dataToSave.recalledTo || undefined : undefined,
+        recalledFrom: dataToSave.aoType === 'Recalled' ? (dataToSave.recalledFrom ? (getOfficeFullName(dataToSave.recalledFrom) || dataToSave.recalledFrom) : undefined) : undefined,
+        recalledTo: dataToSave.aoType === 'Recalled' ? (dataToSave.recalledTo ? (getOfficeFullName(dataToSave.recalledTo) || dataToSave.recalledTo) : undefined) : undefined,
         recalledOrderFrom: dataToSave.aoType === 'Recalled' ? dataToSave.recalledOrderFrom || undefined : undefined,
         recalledOrderTo: dataToSave.aoType === 'Recalled' ? dataToSave.recalledOrderTo || undefined : undefined,
         fileboxLocation: dataToSave.fileboxLocation || undefined,
@@ -4260,9 +4261,14 @@ function Dashboard() {
         file201Status: 'file201Status',
       };
 
+      const officeKeys = ['officeHospitalName', 'motherUnit', 'detailedTo', 'recalledFrom', 'recalledTo'];
       Object.keys(fieldMapping).forEach((key) => {
-        const currentValue = updatedFormData[key];
+        let currentValue = updatedFormData[key];
         const originalValue = origData[key];
+
+        if (officeKeys.includes(key) && currentValue) {
+          currentValue = getOfficeFullName(String(currentValue));
+        }
 
         const normCurrent = currentValue === undefined || currentValue === null ? '' : String(currentValue).trim();
         const normOriginal = originalValue === undefined || originalValue === null ? '' : String(originalValue).trim();
@@ -5181,61 +5187,50 @@ function Dashboard() {
                   </div>
                 </div>
                 {reportsForActiveTab.length > 0 && (
-                  <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
-                    <div className="dashboard__page-size">
-                      <span className="dashboard__page-size-label">Rows per page:</span>
-                      {PAGE_SIZE_OPTIONS.map((size) => (
-                        <button
-                          key={size}
-                          className={`dashboard__page-size-btn${reportItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                          onClick={() => {
-                            setReportItemsPerPage(size);
-                            setReportCurrentPage(1);
-                          }}
-                        >
-                          {size}
-                        </button>
-                      ))}
+                  <div className="reports-view__pagination-bar">
+                    <div className="reports-view__pagination-size">
+                      <span>Show per page:</span>
+                      <select
+                        className="reports-view__select-compact"
+                        value={reportItemsPerPage}
+                        onChange={(e) => {
+                          setReportItemsPerPage(parseInt(e.target.value, 10));
+                          setReportCurrentPage(1);
+                        }}
+                      >
+                        <option value={15}>15</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
                     </div>
-                    {reportTotalPages > 1 && (
-                      <div className="dashboard__pagination-controls">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setReportCurrentPage(1)}
-                          disabled={reportCurrentPage === 1}
-                        >
-                          First
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setReportCurrentPage(reportCurrentPage - 1)}
-                          disabled={reportCurrentPage === 1}
-                        >
-                          Previous
-                        </Button>
-                        <div className="dashboard__pagination-info">
-                          Page {reportCurrentPage} of {reportTotalPages}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setReportCurrentPage(reportCurrentPage + 1)}
-                          disabled={reportCurrentPage === reportTotalPages}
-                        >
-                          Next
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setReportCurrentPage(reportTotalPages)}
-                          disabled={reportCurrentPage === reportTotalPages}
-                        >
-                          Last
-                        </Button>
-                      </div>
-                    )}
+
+                    <div className="reports-view__pagination-info">
+                      Showing {(reportCurrentPage - 1) * reportItemsPerPage + 1} to{' '}
+                      {Math.min(reportCurrentPage * reportItemsPerPage, reportsForActiveTab.length)} of {reportsForActiveTab.length.toLocaleString()}
+                    </div>
+
+                    <div className="reports-view__pagination-controls">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setReportCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={reportCurrentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="reports-view__page-number">
+                        Page {reportCurrentPage} of {reportTotalPages || 1}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setReportCurrentPage((p) => Math.min(reportTotalPages, p + 1))}
+                        disabled={reportCurrentPage === reportTotalPages || reportTotalPages <= 1}
+                      >
+                        Next
+                      </Button>
+                    </div>
                   </div>
                 )}
               </Card>
@@ -5425,61 +5420,50 @@ function Dashboard() {
                     </div>
 
                     {filteredBorrowRows.length > 0 && (
-                      <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
-                        <div className="dashboard__page-size">
-                          <span className="dashboard__page-size-label">Rows per page:</span>
-                          {PAGE_SIZE_OPTIONS.map((size) => (
-                            <button
-                              key={size}
-                              className={`dashboard__page-size-btn${borrowItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                              onClick={() => {
-                                setBorrowItemsPerPage(size);
-                                setBorrowCurrentPage(1);
-                              }}
-                            >
-                              {size}
-                            </button>
-                          ))}
+                      <div className="reports-view__pagination-bar">
+                        <div className="reports-view__pagination-size">
+                          <span>Show per page:</span>
+                          <select
+                            className="reports-view__select-compact"
+                            value={borrowItemsPerPage}
+                            onChange={(e) => {
+                              setBorrowItemsPerPage(parseInt(e.target.value, 10));
+                              setBorrowCurrentPage(1);
+                            }}
+                          >
+                            <option value={15}>15</option>
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
                         </div>
-                        {borrowTotalPages > 1 && (
-                          <div className="dashboard__pagination-controls">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setBorrowCurrentPage(1)}
-                              disabled={borrowCurrentPage === 1}
-                            >
-                              First
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setBorrowCurrentPage(borrowCurrentPage - 1)}
-                              disabled={borrowCurrentPage === 1}
-                            >
-                              Previous
-                            </Button>
-                            <div className="dashboard__pagination-info">
-                              Page {borrowCurrentPage} of {borrowTotalPages}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setBorrowCurrentPage(borrowCurrentPage + 1)}
-                              disabled={borrowCurrentPage === borrowTotalPages}
-                            >
-                              Next
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setBorrowCurrentPage(borrowTotalPages)}
-                              disabled={borrowCurrentPage === borrowTotalPages}
-                            >
-                              Last
-                            </Button>
-                          </div>
-                        )}
+
+                        <div className="reports-view__pagination-info">
+                          Showing {(borrowCurrentPage - 1) * borrowItemsPerPage + 1} to{' '}
+                          {Math.min(borrowCurrentPage * borrowItemsPerPage, filteredBorrowRows.length)} of {filteredBorrowRows.length.toLocaleString()}
+                        </div>
+
+                        <div className="reports-view__pagination-controls">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setBorrowCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={borrowCurrentPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <span className="reports-view__page-number">
+                            Page {borrowCurrentPage} of {borrowTotalPages || 1}
+                          </span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setBorrowCurrentPage((p) => Math.min(borrowTotalPages, p + 1))}
+                            disabled={borrowCurrentPage === borrowTotalPages || borrowTotalPages <= 1}
+                          >
+                            Next
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -5671,61 +5655,50 @@ function Dashboard() {
                     </div>
 
                     {filteredTransferredRows.length > 0 && (
-                      <div className="dashboard__pagination" style={{ borderBottomLeftRadius: 'var(--border-radius-lg)', borderBottomRightRadius: 'var(--border-radius-lg)', border: '1px solid var(--border-color)', borderTop: 'none', backgroundColor: 'var(--bg-primary)' }}>
-                        <div className="dashboard__page-size">
-                          <span className="dashboard__page-size-label">Rows per page:</span>
-                          {PAGE_SIZE_OPTIONS.map((size) => (
-                            <button
-                              key={size}
-                              className={`dashboard__page-size-btn${transferredItemsPerPage === size ? ' dashboard__page-size-btn--active' : ''}`}
-                              onClick={() => {
-                                setTransferredItemsPerPage(size);
-                                setTransferredCurrentPage(1);
-                              }}
-                            >
-                              {size}
-                            </button>
-                          ))}
+                      <div className="reports-view__pagination-bar">
+                        <div className="reports-view__pagination-size">
+                          <span>Show per page:</span>
+                          <select
+                            className="reports-view__select-compact"
+                            value={transferredItemsPerPage}
+                            onChange={(e) => {
+                              setTransferredItemsPerPage(parseInt(e.target.value, 10));
+                              setTransferredCurrentPage(1);
+                            }}
+                          >
+                            <option value={15}>15</option>
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                          </select>
                         </div>
-                        {transferredTotalPages > 1 && (
-                          <div className="dashboard__pagination-controls">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setTransferredCurrentPage(1)}
-                              disabled={transferredCurrentPage === 1}
-                            >
-                              First
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setTransferredCurrentPage(transferredCurrentPage - 1)}
-                              disabled={transferredCurrentPage === 1}
-                            >
-                              Previous
-                            </Button>
-                            <div className="dashboard__pagination-info">
-                              Page {transferredCurrentPage} of {transferredTotalPages}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setTransferredCurrentPage(transferredCurrentPage + 1)}
-                              disabled={transferredCurrentPage === transferredTotalPages}
-                            >
-                              Next
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setTransferredCurrentPage(transferredTotalPages)}
-                              disabled={transferredCurrentPage === transferredTotalPages}
-                            >
-                              Last
-                            </Button>
-                          </div>
-                        )}
+
+                        <div className="reports-view__pagination-info">
+                          Showing {(transferredCurrentPage - 1) * transferredItemsPerPage + 1} to{' '}
+                          {Math.min(transferredCurrentPage * transferredItemsPerPage, filteredTransferredRows.length)} of {filteredTransferredRows.length.toLocaleString()}
+                        </div>
+
+                        <div className="reports-view__pagination-controls">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setTransferredCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={transferredCurrentPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <span className="reports-view__page-number">
+                            Page {transferredCurrentPage} of {transferredTotalPages || 1}
+                          </span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setTransferredCurrentPage((p) => Math.min(transferredTotalPages, p + 1))}
+                            disabled={transferredCurrentPage === transferredTotalPages || transferredTotalPages <= 1}
+                          >
+                            Next
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -6414,7 +6387,7 @@ function Dashboard() {
                   <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
                   <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
                   <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
                 </div>
               </div>
             );
@@ -6546,11 +6519,11 @@ function Dashboard() {
                               if (col.key === 'no') val = globalIdx + 1;
                               else if (col.key === 'name') val = row.name;
                               else if (col.key === 'position') val = row.position || '';
-                              else if (col.key === 'motherUnit') val = row.motherUnit || '';
-                              else if (col.key === 'detailedOffice') val = row.detailedOffice || '';
+                              else if (col.key === 'motherUnit') val = getOfficeFullName(row.motherUnit) || '';
+                              else if (col.key === 'detailedOffice') val = getOfficeFullName(row.detailedOffice) || '';
                               else if (col.key === 'designatedPositionFunction') val = row.designatedPositionFunction || '';
-                              else if (col.key === 'recalledFrom') val = row.recalledFrom || '';
-                              else if (col.key === 'recalledTo') val = row.recalledTo || '';
+                              else if (col.key === 'recalledFrom') val = getOfficeFullName(row.recalledFrom) || '';
+                              else if (col.key === 'recalledTo') val = getOfficeFullName(row.recalledTo) || '';
                               else if (col.key === 'durationFrom') val = renderPrintDuration(row.durationFrom);
                               else if (col.key === 'durationTo') val = renderPrintDuration(row.durationTo);
                               else if (col.key === 'administrativeOrder') val = ao;
@@ -6619,7 +6592,7 @@ function Dashboard() {
                   <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
                   <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
                   <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
                 </div>
               </div>
             );
@@ -6730,7 +6703,7 @@ function Dashboard() {
                             </td>
                             {/* Office/Hospital */}
                             <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                              {row.employee?.yellowBox?.office || row.employee?.officeName || '—'}
+                              {getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}
                             </td>
                             {/* Employment Status */}
                             <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
@@ -7059,7 +7032,7 @@ function Dashboard() {
                   <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
                   <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
                   <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
                 </div>
               </div>
             );
@@ -7198,7 +7171,7 @@ function Dashboard() {
                                 {empName}
                               </td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                                {row.employee?.yellowBox?.office || row.employee?.officeName || '—'}
+                                {getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}
                               </td>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
                                 {row.employee?.position || '—'}
@@ -7240,7 +7213,7 @@ function Dashboard() {
                               {empName}
                             </td>
                             <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                              {row.employee?.yellowBox?.office || row.employee?.officeName || '—'}
+                              {getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}
                             </td>
                             <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
                               {row.employee?.position || '—'}
@@ -7343,7 +7316,7 @@ function Dashboard() {
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Position & Office</div>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{emp?.position || '—'}</div>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>{emp?.yellowBox?.office || emp?.officeName || '—'}</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>{getOfficeFullName(emp?.yellowBox?.office || emp?.officeName) || '—'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Employment Status</div>

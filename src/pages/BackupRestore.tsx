@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../contexts/ToastContext';
-import { getAuthState } from '../utils/mockAuth';
+import { getAuthState, clearAuthState } from '../utils/mockAuth';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
@@ -29,7 +29,7 @@ import {
   MdFolderOpen,
 } from 'react-icons/md';
 import api from '../services/api';
-import { getSocket } from '../services/socket';
+import { getSocket, initSocketClient } from '../services/socket';
 import './BackupRestore.css';
 
 interface BackupItem {
@@ -126,21 +126,30 @@ function BackupRestore() {
   });
 
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const consoleBodyRef = useRef<HTMLDivElement | null>(null);
 
-  // Listen to real-time socket progress events from the backend
+  // Auto-scroll console log body whenever logs update
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
+    if (consoleBodyRef.current) {
+      consoleBodyRef.current.scrollTop = consoleBodyRef.current.scrollHeight;
+    }
+  }, [progressState.logs, progressState.detail]);
 
-    const handleBackupProgress = (data: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
+  // Robust, persistent real-time socket progress listeners
+  useEffect(() => {
+    let boundSocket: any = null;
+
+    const handleBackupProgress = (data: { step: number; totalSteps: number; percent: number; stage: string; detail: string; timestamp?: string }) => {
       setProgressState((prev) => {
         if (!prev.isOpen || prev.type !== 'create') return prev;
-        const newLogs = data.detail && !prev.logs.includes(data.detail)
-          ? [...prev.logs, data.detail].slice(-5)
+        const time = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const logLine = `[${time}] ${data.stage} — ${data.detail}`;
+        const newLogs = !prev.logs.some((l) => l.includes(data.detail))
+          ? [...prev.logs, logLine]
           : prev.logs;
         return {
           ...prev,
-          percent: data.percent,
+          percent: Math.max(prev.percent, data.percent),
           stage: data.stage,
           detail: data.detail,
           step: data.step,
@@ -150,15 +159,17 @@ function BackupRestore() {
       });
     };
 
-    const handleRestoreProgress = (data: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
+    const handleRestoreProgress = (data: { step: number; totalSteps: number; percent: number; stage: string; detail: string; timestamp?: string }) => {
       setProgressState((prev) => {
         if (!prev.isOpen || prev.type !== 'restore') return prev;
-        const newLogs = data.detail && !prev.logs.includes(data.detail)
-          ? [...prev.logs, data.detail].slice(-5)
+        const time = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const logLine = `[${time}] ${data.stage} — ${data.detail}`;
+        const newLogs = !prev.logs.some((l) => l.includes(data.detail))
+          ? [...prev.logs, logLine]
           : prev.logs;
         return {
           ...prev,
-          percent: data.percent,
+          percent: Math.max(prev.percent, data.percent),
           stage: data.stage,
           detail: data.detail,
           step: data.step,
@@ -168,12 +179,37 @@ function BackupRestore() {
       });
     };
 
-    socket.on('backupProgress', handleBackupProgress);
-    socket.on('restoreProgress', handleRestoreProgress);
+    const bindListeners = (sock: any) => {
+      if (!sock) return;
+      boundSocket = sock;
+      sock.off('backupProgress', handleBackupProgress);
+      sock.off('restoreProgress', handleRestoreProgress);
+      sock.on('backupProgress', handleBackupProgress);
+      sock.on('restoreProgress', handleRestoreProgress);
+    };
+
+    const sock = getSocket();
+    if (sock) {
+      bindListeners(sock);
+    } else {
+      initSocketClient().then((s) => {
+        if (s) bindListeners(s);
+      });
+    }
+
+    const checkInterval = setInterval(() => {
+      const current = getSocket();
+      if (current && current !== boundSocket) {
+        bindListeners(current);
+      }
+    }, 600);
 
     return () => {
-      socket.off('backupProgress', handleBackupProgress);
-      socket.off('restoreProgress', handleRestoreProgress);
+      clearInterval(checkInterval);
+      if (boundSocket) {
+        boundSocket.off('backupProgress', handleBackupProgress);
+        boundSocket.off('restoreProgress', handleRestoreProgress);
+      }
     };
   }, []);
 
@@ -188,17 +224,22 @@ function BackupRestore() {
   const startProgress = (type: 'create' | 'restore') => {
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     const startTime = Date.now();
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     setProgressState({
       isOpen: true,
       type,
       title: type === 'create' ? 'Creating Instant Database Snapshot' : 'Restoring Database Snapshot',
-      percent: 8,
+      percent: type === 'create' ? 12 : 10,
       stage: type === 'create' ? 'Querying Database Tables' : 'Initializing Safety Backup',
       detail: type === 'create' ? 'Executing parallel queries across all database tables...' : 'Creating pre-restore rollback safety snapshot...',
       step: 1,
       totalSteps: type === 'create' ? 6 : 7,
-      logs: [type === 'create' ? 'Initiated database extraction' : 'Initiated restore sequence'],
+      logs: [
+        type === 'create'
+          ? `[${time}] Initiated database snapshot extraction`
+          : `[${time}] Initiated database restore sequence`,
+      ],
       elapsedMs: 0,
     });
 
@@ -206,9 +247,9 @@ function BackupRestore() {
       const elapsed = Date.now() - startTime;
       setProgressState((prev) => {
         if (!prev.isOpen) return prev;
-        // Only track elapsedMs and provide a subtle micro-pulse capped by the actual current server step
+        // Subtle micro-pulse between server milestone packets capped by current server step
         const stepCap = Math.min(94, (prev.step / prev.totalSteps) * 94);
-        const microInc = prev.percent < stepCap ? 0.08 : 0;
+        const microInc = prev.percent < stepCap ? 0.05 : 0;
         return {
           ...prev,
           percent: Math.min(stepCap, prev.percent + microInc),
@@ -220,16 +261,17 @@ function BackupRestore() {
 
   const completeProgress = (successMessage: string) => {
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     setProgressState((prev) => ({
       ...prev,
       percent: 100,
       stage: successMessage,
       detail: 'All tasks completed successfully.',
-      logs: [...prev.logs, successMessage].slice(-5),
+      logs: [...prev.logs, `[${time}] ✓ ${successMessage}`],
     }));
     setTimeout(() => {
       setProgressState((prev) => ({ ...prev, isOpen: false }));
-    }, 650);
+    }, 1200);
   };
 
   const failProgress = () => {
@@ -349,10 +391,27 @@ function BackupRestore() {
       });
 
       if (res.success) {
-        completeProgress('Database successfully restored! All sessions synced.');
-        showToast('Database successfully restored from snapshot!', 'success');
+        completeProgress('Database successfully restored! Logging out all accounts...');
+        showToast('Database restore complete. Logging out all active accounts...', 'info');
+        
+        try {
+          clearAuthState();
+          localStorage.removeItem('currentUserId');
+          localStorage.removeItem('sessionId');
+          sessionStorage.removeItem('currentUserId');
+          sessionStorage.removeItem('sessionId');
+          const notice = 'Database restoration completed successfully. All accounts have been logged out to synchronize live data. Please sign in again.';
+          localStorage.setItem('restoreLogoutNotice', notice);
+          sessionStorage.setItem('restoreLogoutNotice', notice);
+        } catch (_) {}
+
         setSelectedBackupForRestore(null);
-        fetchBackups();
+
+        // Allow user to see 100% completion for 1.2s, then navigate and reload
+        setTimeout(() => {
+          window.location.hash = '#/login';
+          window.location.reload();
+        }, 1200);
       } else {
         failProgress();
       }
@@ -1239,7 +1298,7 @@ function BackupRestore() {
                 </span>
               )}
             </div>
-            <div className="backup-progress-modal__console-body">
+            <div className="backup-progress-modal__console-body" ref={consoleBodyRef}>
               {progressState.logs.map((log, index) => (
                 <div key={index} className="backup-progress-modal__log-line">
                   <span className="backup-progress-modal__log-check">✓</span>

@@ -613,6 +613,24 @@ router.put('/:id', requireSuperadminApproval, async (req: Request, res: Response
     const { id } = req.params;
     const updateData = req.body;
 
+    // Merge remarks with reasonOfSeparation if provided, and delete remarks from updateData to prevent Prisma Unknown Argument error
+    if (req.body.remarks !== undefined || updateData.remarks !== undefined) {
+      const remarksVal = String(req.body.remarks ?? updateData.remarks ?? '').trim();
+      const existingReason = updateData.reasonOfSeparation !== undefined
+        ? String(updateData.reasonOfSeparation || '').trim()
+        : (req.body.reasonForSeparation ? String(req.body.reasonForSeparation).trim() : '');
+      if (remarksVal && existingReason) {
+        if (!existingReason.includes(remarksVal)) {
+          updateData.reasonOfSeparation = `${existingReason} - ${remarksVal}`;
+        } else {
+          updateData.reasonOfSeparation = existingReason;
+        }
+      } else if (remarksVal) {
+        updateData.reasonOfSeparation = remarksVal;
+      }
+      delete updateData.remarks;
+    }
+
     // Convert date strings to Date objects and treat blank values as null
     if ('dateOfBirth' in updateData) {
       updateData.dateOfBirth = toNullableDate(updateData.dateOfBirth);
@@ -721,24 +739,6 @@ router.patch('/:id', requireSuperadminApproval, async (req: Request, res: Respon
         updateData[field] = req.body[field];
       }
     });
-
-    // Merge remarks with reasonOfSeparation if provided, and delete remarks from updateData to prevent Prisma Unknown Argument error
-    if (req.body.remarks !== undefined || updateData.remarks !== undefined) {
-      const remarksVal = String(req.body.remarks ?? updateData.remarks ?? '').trim();
-      const existingReason = updateData.reasonOfSeparation !== undefined
-        ? String(updateData.reasonOfSeparation || '').trim()
-        : (req.body.reasonForSeparation ? String(req.body.reasonForSeparation).trim() : '');
-      if (remarksVal && existingReason) {
-        if (!existingReason.includes(remarksVal)) {
-          updateData.reasonOfSeparation = `${existingReason} - ${remarksVal}`;
-        } else {
-          updateData.reasonOfSeparation = existingReason;
-        }
-      } else if (remarksVal) {
-        updateData.reasonOfSeparation = remarksVal;
-      }
-      delete updateData.remarks;
-    }
 
     // Convert date strings to Date objects and treat blank values as null
     if ('dateOfBirth' in updateData) {

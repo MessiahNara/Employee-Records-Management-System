@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import api from '../services/api';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 interface UpdateConditionModalProps {
   isOpen: boolean;
@@ -154,7 +155,7 @@ function UpdateConditionModal({ isOpen, onClose, employeeId, employeeName, onUpd
                 {returnedSuggestions.map((emp, idx) => {
                   const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
                   const pos = emp.position || emp.positionFunction || '';
-                  const office = emp.officeName || emp.officeHospitalName || '';
+                  const office = getOfficeFullName(emp.officeName || emp.officeHospitalName) || '';
                   const subText = [pos, office].filter(Boolean).join(' — ');
                   return (
                     <button key={emp.id || `returned-${idx}`} className="file201-modal__suggestion-item"
@@ -194,7 +195,7 @@ function UpdateConditionModal({ isOpen, onClose, employeeId, employeeName, onUpd
                 {receivedSuggestions.map((emp, idx) => {
                   const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
                   const pos = emp.position || emp.positionFunction || '';
-                  const office = emp.officeName || emp.officeHospitalName || '';
+                  const office = getOfficeFullName(emp.officeName || emp.officeHospitalName) || '';
                   const subText = [pos, office].filter(Boolean).join(' — ');
                   return (
                     <button key={emp.id || `received-${idx}`} className="file201-modal__suggestion-item"

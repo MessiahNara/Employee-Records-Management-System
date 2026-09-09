@@ -1,0 +1,1003 @@
+/* Office and Hospital Scanning Matrix Styles */
+
+.office-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+/* Controls Card */
+.office-matrix__controls-card {
+  padding: 1rem 1.25rem;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.office-matrix__controls-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Search Wrap */
+.office-matrix__search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+  max-width: 380px;
+  display: flex;
+  align-items: center;
+}
+
+.office-matrix__search-icon {
+  position: absolute;
+  left: 0.85rem;
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.office-matrix__search-input {
+  width: 100%;
+  padding: 0.55rem 2.2rem 0.55rem 2.3rem;
+  background-color: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.office-matrix__search-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  background-color: var(--bg-primary);
+}
+
+.office-matrix__search-clear {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* Type Filter Buttons */
+.office-matrix__type-filters {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-secondary);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  gap: 2px;
+}
+
+.office-matrix__type-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.office-matrix__type-btn:hover {
+  color: var(--text-primary);
+}
+
+.office-matrix__type-btn--active {
+  background-color: var(--bg-primary);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* As Of Date Input */
+.office-matrix__date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.office-matrix__date-icon {
+  font-size: 1rem;
+  color: var(--color-primary);
+}
+
+.office-matrix__date-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.office-matrix__date-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed var(--border-color);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  outline: none;
+  width: 135px;
+  padding: 0 2px;
+}
+
+.office-matrix__date-input:focus {
+  border-bottom-color: var(--color-primary);
+}
+
+.office-matrix__refresh-btn {
+  font-weight: 600;
+}
+
+.office-matrix__report-btn {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.office-matrix__action-icon {
+  font-size: 1.05rem;
+  margin-right: 4px;
+}
+
+/* Table Card & Scroll Container */
+.office-matrix__table-card {
+  padding: 0 !important;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.office-matrix__table-container {
+  width: 100%;
+  max-height: calc(100vh - 210px);
+  min-height: 480px;
+  overflow-x: auto;
+  overflow-y: auto;
+  position: relative;
+}
+
+/* Table */
+.office-matrix__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+/* Sticky Headers Base - 100% Solid Opaque Background */
+.office-matrix__table thead th {
+  position: sticky !important;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  font-size: 0.775rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+[data-theme='dark'] .office-matrix__table thead th {
+  border-right: 1px solid #334155;
+  border-bottom: 1px solid #334155;
+}
+
+/* Row 1 Sticky at top: 0 with exact locked height */
+.office-matrix__header-row-1 th {
+  top: 0 !important;
+  z-index: 25 !important;
+  height: 42px !important;
+  padding: 0.5rem 0.65rem !important;
+  box-sizing: border-box !important;
+}
+
+/* Row 2 Sticky right below Row 1 at top: 42px with exact locked height */
+.office-matrix__header-row-2 th {
+  top: 42px !important;
+  z-index: 24 !important;
+  height: 42px !important;
+  padding: 0.4rem 0.55rem !important;
+  box-sizing: border-box !important;
+}
+
+/* Row 3 Sticky right below Row 2 at top: 84px */
+.office-matrix__header-row-3 th {
+  top: 84px !important;
+  z-index: 23 !important;
+  height: 36px !important;
+  padding: 0.3rem 0.5rem !important;
+  box-sizing: border-box !important;
+}
+
+/* 1st Column (Office / Hospital) Sticky Left & Vertically (rowSpan=2) */
+.office-matrix__th-office-top {
+  position: sticky !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 35 !important;
+  height: 120px !important;
+  vertical-align: middle !important;
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  border-right: 2px solid #94a3b8 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+  text-align: left !important;
+  padding-left: 1rem !important;
+  min-width: 190px;
+  max-width: 220px;
+}
+
+[data-theme='dark'] .office-matrix__th-office-top {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-right: 2px solid #475569 !important;
+  border-bottom: 2px solid #475569 !important;
+}
+
+.office-matrix__td-office {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 15 !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-right: 2px solid #cbd5e1 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  text-align: left !important;
+  padding: 0.55rem 1rem !important;
+  min-width: 190px;
+  max-width: 220px;
+}
+
+[data-theme='dark'] .office-matrix__td-office {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-right: 2px solid #334155 !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+.office-matrix__tr:hover .office-matrix__td-office {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme='dark'] .office-matrix__tr:hover .office-matrix__td-office {
+  background-color: #1e293b !important;
+}
+
+.office-matrix__office-badge-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.office-matrix__office-abbr {
+  font-weight: 700;
+  color: inherit;
+  font-size: 0.825rem;
+}
+
+.office-matrix__office-type-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+[data-theme='dark'] .office-matrix__office-type-tag {
+  background-color: #1e3a5f;
+  color: #93c5fd;
+  border-color: #2563eb;
+}
+
+.office-matrix__office-type-tag--hosp {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+[data-theme='dark'] .office-matrix__office-type-tag--hosp {
+  background-color: #450a0a;
+  color: #fca5a5;
+  border-color: #991b1b;
+}
+
+/* Row 1 Section Headers - 100% SOLID OPAQUE */
+.office-matrix__th-section {
+  font-size: 0.825rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #94a3b8 !important;
+}
+
+.office-matrix__th-section--employees {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+  border-left: 2px solid #93c5fd !important;
+  border-right: 2px solid #93c5fd !important;
+}
+
+[data-theme='dark'] .office-matrix__th-section--employees {
+  background-color: #1e3a5f !important;
+  color: #bfdbfe !important;
+  border-left: 2px solid #2563eb !important;
+  border-right: 2px solid #2563eb !important;
+}
+
+.office-matrix__th-section--pdf {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+  border-right: 2px solid #cbd5e1 !important;
+}
+
+[data-theme='dark'] .office-matrix__th-section--pdf {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-right: 2px solid #334155 !important;
+}
+
+.office-matrix__th-section--201 {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-right: 2px solid #6ee7b7 !important;
+}
+
+[data-theme='dark'] .office-matrix__th-section--201 {
+  background-color: #064e3b !important;
+  color: #a7f3d0 !important;
+  border-right: 2px solid #10b981 !important;
+}
+
+.office-matrix__th-extra-top {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 25 !important;
+  height: 120px !important;
+  vertical-align: middle !important;
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  font-size: 0.775rem !important;
+  border-bottom: 2px solid #94a3b8 !important;
+  border-right: 1px solid #cbd5e1 !important;
+  min-width: 100px;
+}
+
+[data-theme='dark'] .office-matrix__th-extra-top {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-bottom: 2px solid #475569 !important;
+  border-right: 1px solid #334155 !important;
+}
+
+.office-matrix__th-extra {
+  vertical-align: middle;
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  font-size: 0.775rem !important;
+  min-width: 100px;
+  border-bottom: 2px solid #94a3b8 !important;
+}
+
+[data-theme='dark'] .office-matrix__th-extra {
+  background-color: #0f172a !important;
+  color: #94a3b8 !important;
+  border-bottom: 2px solid #475569 !important;
+}
+
+/* Row 2 Sub-headers - 100% SOLID OPAQUE */
+.office-matrix__th-col {
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+}
+
+[data-theme='dark'] .office-matrix__th-col {
+  border-bottom: 2px solid #475569 !important;
+}
+
+.office-matrix__col-header-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.office-matrix__nonreg-badge {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: #1e40af;
+  background-color: #bfdbfe;
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-theme='dark'] .office-matrix__nonreg-badge {
+  color: #ffffff;
+  background-color: #2563eb;
+}
+
+/* Number of Employees Columns: Solid Opaque */
+.office-matrix__th-col--regular {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border: 1px solid #bfdbfe !important;
+  min-width: 75px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--regular {
+  background-color: #172554 !important;
+  color: #93c5fd !important;
+  border: 1px solid #1e3a8a !important;
+}
+
+/* Non-Regular Parent Header (spans Casual, Job Order, Consultant) */
+.office-matrix__th-col--nonregular-parent {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+  border: 1px solid #93c5fd !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.725rem !important;
+  min-width: 75px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--nonregular-parent {
+  background-color: #1e3a5f !important;
+  color: #bfdbfe !important;
+  border: 1px solid #2563eb !important;
+}
+
+.office-matrix__th-col--casual {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border: 1px solid #bfdbfe !important;
+  min-width: 75px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--casual {
+  background-color: #172554 !important;
+  color: #93c5fd !important;
+  border: 1px solid #1e3a8a !important;
+}
+
+.office-matrix__th-col--joborder {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border: 1px solid #bfdbfe !important;
+  min-width: 75px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--joborder {
+  background-color: #172554 !important;
+  color: #93c5fd !important;
+  border: 1px solid #1e3a8a !important;
+}
+
+.office-matrix__th-col--consultant {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+  border: 1px solid #bfdbfe !important;
+  min-width: 80px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--consultant {
+  background-color: #172554 !important;
+  color: #93c5fd !important;
+  border: 1px solid #1e3a8a !important;
+}
+
+.office-matrix__th-col--total-emp {
+  background-color: #bfdbfe !important;
+  color: #1e3a8a !important;
+  border-right: 2px solid #3b82f6 !important;
+  border-bottom: 2px solid #3b82f6 !important;
+  min-width: 95px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--total-emp {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  border-right: 2px solid #60a5fa !important;
+  border-bottom: 2px solid #60a5fa !important;
+}
+
+/* Position Description Form (PDF) Columns: Solid Opaque */
+.office-matrix__th-col--pdf {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  min-width: 70px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--pdf {
+  background-color: #182234 !important;
+  color: #cbd5e1 !important;
+  border: 1px solid #334155 !important;
+}
+
+.office-matrix__th-col--pdf-total {
+  background-color: #e2e8f0 !important;
+  color: #1e293b !important;
+  border-right: 2px solid #94a3b8 !important;
+  border-bottom: 2px solid #94a3b8 !important;
+  min-width: 90px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--pdf-total {
+  background-color: #273549 !important;
+  color: #f8fafc !important;
+  border-right: 2px solid #475569 !important;
+  border-bottom: 2px solid #475569 !important;
+}
+
+/* 201 File Columns: Solid Opaque */
+.office-matrix__th-col--201 {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1px solid #a7f3d0 !important;
+  min-width: 75px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--201 {
+  background-color: #04392b !important;
+  color: #a7f3d0 !important;
+  border: 1px solid #065f46 !important;
+}
+
+.office-matrix__th-col--201-total {
+  background-color: #a7f3d0 !important;
+  color: #064e3b !important;
+  border-right: 2px solid #10b981 !important;
+  border-bottom: 2px solid #10b981 !important;
+  min-width: 100px;
+}
+
+[data-theme='dark'] .office-matrix__th-col--201-total {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+  border-right: 2px solid #34d399 !important;
+  border-bottom: 2px solid #34d399 !important;
+}
+
+/* Table Body Cells - 100% Solid Non-Transparent */
+.office-matrix__tr {
+  background-color: #ffffff;
+  transition: background-color 0.1s ease;
+}
+
+[data-theme='dark'] .office-matrix__tr {
+  background-color: #0f172a;
+}
+
+.office-matrix__tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+[data-theme='dark'] .office-matrix__tr:nth-child(even) {
+  background-color: #141f33;
+}
+
+.office-matrix__tr:hover td {
+  background-color: #f1f5f9;
+}
+
+[data-theme='dark'] .office-matrix__tr:hover td {
+  background-color: #1e293b;
+}
+
+.office-matrix__table tbody td {
+  padding: 0.55rem 0.6rem;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+  background-color: inherit;
+}
+
+.office-matrix__td-num {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.office-matrix__td-total-emp {
+  background-color: #eff6ff !important;
+  border-right: 2px solid #93c5fd !important;
+  font-size: 0.85rem;
+  color: #1e3a8a !important;
+  font-weight: 700;
+}
+
+[data-theme='dark'] .office-matrix__td-total-emp {
+  background-color: #172554 !important;
+  border-right: 2px solid #1e3a8a !important;
+  color: #93c5fd !important;
+}
+
+.office-matrix__td-blank {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  font-size: 0.8rem;
+}
+
+.office-matrix__td-pdf-total {
+  background-color: #f1f5f9 !important;
+  border-right: 2px solid #94a3b8 !important;
+  font-weight: 700;
+}
+
+[data-theme='dark'] .office-matrix__td-pdf-total {
+  background-color: #1e293b !important;
+  border-right: 2px solid #475569 !important;
+}
+
+.office-matrix__td-201-val {
+  background-color: #f0fdf4 !important;
+}
+
+[data-theme='dark'] .office-matrix__td-201-val {
+  background-color: #042f24 !important;
+}
+
+.office-matrix__td-201-total {
+  background-color: #d1fae5 !important;
+  border-right: 2px solid #6ee7b7 !important;
+  color: #064e3b !important;
+  font-weight: 700;
+}
+
+[data-theme='dark'] .office-matrix__td-201-total {
+  background-color: #064e3b !important;
+  border-right: 2px solid #059669 !important;
+  color: #34d399 !important;
+}
+
+.office-matrix__zero {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.office-matrix__has-scanned {
+  font-weight: 700;
+  color: #059669;
+}
+
+[data-theme='dark'] .office-matrix__has-scanned {
+  color: #34d399;
+}
+
+.office-matrix__total-scanned-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.55rem;
+  background-color: #10b981;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.8rem;
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+}
+
+/* Footer (TOTAL Row) */
+.office-matrix__tfoot-row td {
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  background-color: var(--bg-secondary) !important;
+  border-top: 2.5px solid var(--border-color) !important;
+  border-bottom: none;
+  font-weight: 800 !important;
+  padding: 0.75rem 0.6rem !important;
+}
+
+.office-matrix__td-office-total {
+  z-index: 35 !important;
+  background-color: var(--bg-secondary) !important;
+  font-size: 0.875rem !important;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+  font-weight: 900 !important;
+}
+
+.office-matrix__td-foot-val {
+  font-size: 0.85rem !important;
+  color: var(--text-primary);
+  background-color: #f8fafc !important;
+}
+
+[data-theme='dark'] .office-matrix__td-foot-val {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.office-matrix__td-foot-grand {
+  background-color: #bfdbfe !important;
+  color: #1e3a8a !important;
+  border-right: 2px solid #3b82f6 !important;
+  font-size: 0.9rem !important;
+}
+
+[data-theme='dark'] .office-matrix__td-foot-grand {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  border-right: 2px solid #60a5fa !important;
+}
+
+.office-matrix__td-foot-201 {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  font-size: 0.85rem !important;
+}
+
+[data-theme='dark'] .office-matrix__td-foot-201 {
+  background-color: #04392b !important;
+  color: #a7f3d0 !important;
+}
+
+.office-matrix__td-foot-grand-201 {
+  background-color: #a7f3d0 !important;
+  color: #064e3b !important;
+  border-right: 2px solid #10b981 !important;
+  font-size: 0.925rem !important;
+}
+
+[data-theme='dark'] .office-matrix__td-foot-grand-201 {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+  border-right: 2px solid #34d399 !important;
+}
+
+.office-matrix__empty {
+  padding: 3rem !important;
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* ===== Date Range Filter ===== */
+.office-matrix__date-filter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.office-matrix__date-filter-wrap:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.office-matrix__date-filter-icon {
+  font-size: 1.05rem;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.office-matrix__date-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.office-matrix__date-filter-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.office-matrix__date-filter-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0.15rem 0;
+  min-width: 120px;
+  cursor: pointer;
+}
+
+.office-matrix__date-filter-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  filter: var(--calendar-icon-filter, none);
+}
+
+[data-theme='dark'] .office-matrix__date-filter-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.office-matrix__date-filter-separator {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin: 0 0.1rem;
+}
+
+.office-matrix__date-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.office-matrix__date-filter-clear:hover {
+  background-color: rgba(239, 68, 68, 0.2);
+  transform: scale(1.1);
+}
+
+/* Active date filter indicator */
+.office-matrix__date-filter-active {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  animation: fadeIn 0.2s ease;
+}
+
+.office-matrix__date-filter-active > svg {
+  color: var(--color-primary);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.office-matrix__date-filter-active-clear {
+  margin-left: auto;
+  background: none;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.office-matrix__date-filter-active-clear:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== PDF Value Cells ===== */
+.office-matrix__td-pdf-val {
+  background-color: rgba(100, 116, 139, 0.02);
+}
+
+.office-matrix__td-pdf-val .office-matrix__has-scanned {
+  color: #6366f1;
+  font-weight: 700;
+}
+
+[data-theme='dark'] .office-matrix__td-pdf-val .office-matrix__has-scanned {
+  color: #a5b4fc;
+}
+
+.office-matrix__td-pdf-total .office-matrix__total-scanned-badge {
+  background-color: #6366f1;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+}
+
+/* ===== PDF Footer Totals ===== */
+.office-matrix__td-foot-pdf {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  font-size: 0.85rem !important;
+}
+
+[data-theme='dark'] .office-matrix__td-foot-pdf {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+
+.office-matrix__td-foot-grand-pdf {
+  background-color: #e2e8f0 !important;
+  color: #1e293b !important;
+  border-right: 2px solid #94a3b8 !important;
+  font-size: 0.9rem !important;
+}
+
+[data-theme='dark'] .office-matrix__td-foot-grand-pdf {
+  background-color: #334155 !important;
+  color: #f8fafc !important;
+  border-right: 2px solid #475569 !important;
+}
+
+/* ===== Remarks / Notes Cell & Input ===== */
+.office-matrix__td-remarks {
+  min-width: 170px;
+  max-width: 260px;
+  padding: 3px 6px !important;
+  vertical-align: middle;
+}
+
+.office-matrix__remarks-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.office-matrix__remarks-input:hover {
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  border-color: var(--border-color);
+}
+
+.office-matrix__remarks-input:focus {
+  background-color: var(--bg-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.office-matrix__remarks-input::placeholder {
+  color: var(--text-tertiary, #94a3b8);
+  opacity: 0.75;
+}
+

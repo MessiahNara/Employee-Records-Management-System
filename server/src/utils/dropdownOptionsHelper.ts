@@ -64,7 +64,40 @@ export async function checkAndAddDropdownOptions(data: {
       }
     };
 
-    addItemsToSet(data.officeNames, currentOfficeNames);
+    const parseOffice = (entry: string) => {
+      const dash = entry.match(/^([A-Za-z0-9/&.-]+)\s*[-–—]\s*(.+)$/);
+      if (dash) return { abbr: dash[1].trim(), full: dash[2].trim() };
+      return { abbr: '', full: entry.trim() };
+    };
+
+    const addOfficeItemsToSet = (items: (string | null | undefined)[] | undefined, targetSet: Set<string>) => {
+      if (!items) return;
+      for (const item of items) {
+        if (!item || item.trim() === '') continue;
+        const trimmed = item.trim();
+        const parsedNew = parseOffice(trimmed);
+
+        let found = false;
+        for (const existing of Array.from(targetSet)) {
+          const parsedExisting = parseOffice(existing);
+          if (parsedExisting.full.toLowerCase() === parsedNew.full.toLowerCase()) {
+            found = true;
+            if (parsedNew.abbr && !parsedExisting.abbr) {
+              targetSet.delete(existing);
+              targetSet.add(trimmed);
+              needsUpdate = true;
+            }
+            break;
+          }
+        }
+        if (!found) {
+          targetSet.add(trimmed);
+          needsUpdate = true;
+        }
+      }
+    };
+
+    addOfficeItemsToSet(data.officeNames, currentOfficeNames);
     addItemsToSet(data.positions, currentPositions);
     addItemsToSet(data.recordLocations, currentRecordLocations);
     addItemsToSet(data.divisions, currentDivisions);

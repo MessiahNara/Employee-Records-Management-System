@@ -74,6 +74,7 @@ const ALL_TABS = [
   'Chats',
   'Users',
   'File Locator',
+  'Scanning Status',
   'Audit Logs',
   'Requests',
   'Request & Approvals'
@@ -81,10 +82,10 @@ const ALL_TABS = [
 
 const getDefaultTabsForRole = (roleId: string): string[] => {
   if (roleId === 'role-1' || roleId === 'role-4') { // Super Admin, Developer
-    return ['Dashboard', 'Inventory and Appraisal', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Users', 'File Locator', 'Audit Logs', 'Request & Approvals'];
+    return ['Dashboard', 'Inventory and Appraisal', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Users', 'File Locator', 'Scanning Status', 'Audit Logs', 'Request & Approvals'];
   }
   if (roleId === 'role-2') { // Admin
-    return ['Dashboard', 'Inventory and Appraisal', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Users', 'File Locator', 'Audit Logs', 'Requests'];
+    return ['Dashboard', 'Inventory and Appraisal', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Users', 'File Locator', 'Scanning Status', 'Audit Logs', 'Requests'];
   }
   // Staff
   return ['Dashboard', 'Inventory and Appraisal', 'Calendar', 'Generated Reports', 'Settings', 'Chats', 'Requests'];

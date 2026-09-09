@@ -79,15 +79,19 @@ export const initSocketClient = async () => {
   });
 
   // Global force logout and full reload when a restore point is executed
-  socket.on('databaseRestored', (data: any) => {
+  const handleRestoreLogout = (data: any) => {
     console.warn('[socket] Database restore detected! Safely logging out active session and refreshing application...', data);
     
     const message = data?.message || 'A database restore was executed. All active accounts were logged out to synchronize live data. Please sign in again.';
 
-    // Clear active auth state and persist restore warning for the login screen
+    // Clear active auth state from both localStorage and sessionStorage
     try {
       localStorage.removeItem('authUser');
       localStorage.removeItem('currentUserId');
+      localStorage.removeItem('sessionId');
+      sessionStorage.removeItem('authUser');
+      sessionStorage.removeItem('currentUserId');
+      sessionStorage.removeItem('sessionId');
       localStorage.setItem('restoreLogoutNotice', message);
       localStorage.setItem('restoreLogoutTime', new Date().toISOString());
       sessionStorage.setItem('restoreLogoutNotice', message);
@@ -100,7 +104,10 @@ export const initSocketClient = async () => {
     setTimeout(() => {
       window.location.reload();
     }, 150);
-  });
+  };
+
+  socket.on('databaseRestored', handleRestoreLogout);
+  socket.on('forceLogout', handleRestoreLogout);
 
   return socket;
 };

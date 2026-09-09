@@ -356,9 +356,22 @@ const generatePreviewHtml = (records: any[], type: 'Storage' | 'Disposal', prepN
   `;
 };
 
+export function isYearStored(recordId: string, yr: number, storageLogs: any[]): boolean {
+  if (!recordId || !yr || !storageLogs || storageLogs.length === 0) return false;
+  return storageLogs.some((log) => {
+    const matchedRecord = (log.recordId === recordId || log.id === recordId);
+    if (!matchedRecord) return false;
+    const disp = String(log.disposedYears || '');
+    if (!disp) return false;
+    if (new RegExp(`\\b${yr}\\b`).test(disp)) return true;
+    const covered = extractCoveredYears(disp);
+    return covered.years.includes(yr);
+  });
+}
+
 export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number, retentionStage?: string) {
   const stage = (retentionStage || '').trim().toLowerCase();
-  if (stage === 'disposed' || stage === 'storage') return null;
+  if (stage === 'disposed') return null;
   if (!datesStr || !activeDeskYrs || activeDeskYrs <= 0) return null;
 
   const currentYear = new Date().getFullYear();
@@ -367,6 +380,9 @@ export function getOngoingActiveDeskInfo(datesStr: string, activeDeskYrs: number
 
   const eligibleYears = covered.years.filter(yr => (currentYear - yr) >= activeDeskYrs);
   if (eligibleYears.length === 0) return null;
+
+  const isOngoing = covered.isOngoing || datesStr.toLowerCase().includes('present');
+  if (stage === 'storage' && !isOngoing) return null;
 
   const startYear = Math.min(...eligibleYears);
   const elapsedYears = currentYear - startYear;
@@ -509,7 +525,7 @@ const generateNapForm3PreviewHtml = (records: any[], telephone: string, volume: 
             <td style="width: 50%;">
               <div style="font-size: 10pt;"><strong>AGENCY NAME:</strong></div>
               <div style="font-weight: bold; font-size: 11pt;">PROVINCIAL GOVERNMENT OF PANGASINAN</div>
-              <div style="font-size: 10pt;">Human, Resource Management and Development Office</div>
+              <div style="font-size: 10pt;">Human Resource Management and Development Office</div>
               <div style="border-top: 1px solid black; margin-top: 5px; padding-top: 5px; font-size: 10pt;"><strong>ADDRESS:</strong></div>
               <div style="text-align: center; font-size: 10pt;">1st Floor, Palaris Building, Capitol Compound,<br/>Lingayen, Pangasinan</div>
             </td>
@@ -548,7 +564,7 @@ const generateNapForm3PreviewHtml = (records: any[], telephone: string, volume: 
         
         <table class="header-table" style="margin-top: -1px;">
           <tr>
-            <td style="width: 60%;"><strong>LOCATION OF RECORDS:</strong><br/><br/><strong>HRMDO Records Room</strong></td>
+            <td style="width: 60%;"><strong>LOCATION OF RECORDS:</strong><br/><br/><strong>Human Resource Management and Development Office Records Room</strong></td>
             <td style="width: 40%;"><strong>VOLUME IN CUBIC METER:</strong><br/><br/><div style="text-align: center; font-weight: bold;">${volume || ''}</div></td>
           </tr>
           <tr>
@@ -561,7 +577,7 @@ const generateNapForm3PreviewHtml = (records: any[], telephone: string, volume: 
               <div style="text-align: center; font-size: 9pt; margin-top: 5px;">This is to certify that the above mentioned records are no longer needed and<br/>not involved nor connected in any administrative or judicial cases.</div>
               <div style="text-align: right; margin-top: 40px; padding-right: 50px;">
                 <div style="font-weight: bold; font-size: 11pt;">JANETTE C. ASIS</div>
-                <div style="font-weight: bold;">Prov'l. Gov't. Department Head-HRMD Officer</div>
+                <div style="font-weight: bold;">Provincial Government Department Head - Human Resource Management and Development Officer</div>
               </div>
             </td>
           </tr>
@@ -697,6 +713,11 @@ function InventoryAppraisal() {
   const [utilityFilter, setUtilityFilter] = useState('ALL');
   const [locationFilter, setLocationFilter] = useState('ALL');
   const [divisionTab, setDivisionTab] = useState('ALL');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showEvaluateModal, setShowEvaluateModal] = useState(false);
   const [modalDisposalDivisionFilter, setModalDisposalDivisionFilter] = useState('ALL');
@@ -1078,9 +1099,7 @@ function InventoryAppraisal() {
       if (!activeDeskInfoRaw) return false;
       const covered = extractCoveredYears(r.inclusiveDates);
       const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(r.activeDeskYrs));
-      const hasUnstored = eligibleYrs.some(yr => {
-        return !storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
-      });
+      const hasUnstored = eligibleYrs.some(yr => !isYearStored(r.id, yr, storageLogs));
       return hasUnstored;
     });
   }, [authorizedRecords, storageLogs]);
@@ -1585,6 +1604,7 @@ function InventoryAppraisal() {
     setFrequencyFilter('ALL');
     setUtilityFilter('ALL');
     setLocationFilter('ALL');
+    setCurrentPage(1);
   };
 
   const hasActiveFilters =
@@ -1595,14 +1615,6 @@ function InventoryAppraisal() {
     frequencyFilter !== 'ALL' ||
     utilityFilter !== 'ALL' ||
     locationFilter !== 'ALL';
-
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(records.map(r => r.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
 
   const handleToggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1837,7 +1849,7 @@ function InventoryAppraisal() {
     const items = getGroupedNapItems(list);
     const pageCount = Math.max(1, Math.ceil(items.length / ROWS_PER_PAGE));
     const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const deptLabel = 'Human Resource Management and Development Office (HRMDO)';
+    const deptLabel = 'Human Resource Management and Development Office';
     const sectionLabel = divisionLabel && divisionLabel !== 'ALL' ? divisionLabel : '';
 
     return Array.from({ length: pageCount }, (_, pi) => {
@@ -2031,7 +2043,7 @@ function InventoryAppraisal() {
   ): string => {
     const items = getGroupedNapItems(list);
     const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const deptLabel = 'Human Resource Management and Development Office (HRMDO)';
+    const deptLabel = 'Human Resource Management and Development Office';
     const sectionLabel = divisionLabel && divisionLabel !== 'ALL' ? divisionLabel : '';
 
     return `
@@ -2338,9 +2350,9 @@ function InventoryAppraisal() {
     return Array.from(new Set(locs)).sort();
   }, [records]);
 
-  // Group and sort records
-  const groupedAndSortedRecords = useMemo(() => {
-    const filtered = authorizedRecords.filter((r) => {
+  // Filter records based on active criteria
+  const filteredRecords = useMemo(() => {
+    return authorizedRecords.filter((r) => {
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         query === '' ||
@@ -2378,10 +2390,30 @@ function InventoryAppraisal() {
 
       return matchesSearch && matchesDivision && matchesCategory && matchesMedium && matchesRetention && matchesFrequency && matchesUtility && matchesLocation;
     });
+  }, [authorizedRecords, searchQuery, divisionTab, categoryFilter, mediumFilter, retentionFilter, frequencyFilter, utilityFilter, locationFilter]);
 
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, divisionTab, categoryFilter, mediumFilter, retentionFilter, frequencyFilter, utilityFilter, locationFilter]);
+
+  // Pagination calculations
+  const totalRecords = filteredRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / itemsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalRecords);
+
+  // Paginated records subset for current page
+  const paginatedRecords = useMemo(() => {
+    return filteredRecords.slice(startIndex, endIndex);
+  }, [filteredRecords, startIndex, endIndex]);
+
+  // Group and sort only the records on current page
+  const groupedAndSortedRecords = useMemo(() => {
     const categoryDivisionMap: Record<string, Record<string, Record<string, InventoryRecord[]>>> = {};
 
-    filtered.forEach((r) => {
+    paginatedRecords.forEach((r) => {
       const rawCat = (r.classificationCategory || '').trim().toUpperCase();
       const cat = rawCat || 'ADMINISTRATIVE';
       const div = (r.division || 'General').trim().toUpperCase();
@@ -2431,7 +2463,18 @@ function InventoryAppraisal() {
     });
 
     return result;
-  }, [authorizedRecords, searchQuery, divisionTab, categoryFilter, mediumFilter, retentionFilter, frequencyFilter, utilityFilter, locationFilter]);
+  }, [paginatedRecords]);
+
+  // Handle select all for current paginated page
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const pageIds = paginatedRecords.map((r) => r.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    } else {
+      const pageIds = new Set(paginatedRecords.map((r) => r.id));
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    }
+  };
 
   return (
     <div className="inventory-page">
@@ -2896,6 +2939,57 @@ function InventoryAppraisal() {
             </button>
           </div>
         </div>
+
+        {/* Pagination Footer */}
+        {totalRecords > 0 && (
+          <div className="inventory-pagination-bar">
+            <div className="inventory-pagination-size">
+              <span>Show per page:</span>
+              <select
+                className="inventory-select-compact"
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(parseInt(e.target.value, 10));
+                  setCurrentPage(1);
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+
+            <div className="inventory-pagination-info">
+              Showing {totalRecords === 0 ? 0 : startIndex + 1} to {endIndex} of {totalRecords.toLocaleString()}
+            </div>
+
+            <div className="inventory-pagination-controls">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="inventory-page-number">
+                Page {safeCurrentPage} of {totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Division Pill Tabs Bar */}
@@ -2945,10 +3039,21 @@ function InventoryAppraisal() {
 
       {/* Official Form Grid Table View */}
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Records Series Inventory Table</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Records Series Inventory Table</span>
+            {selectedIds.length > 0 && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setShowBulkDeleteModal(true)}
+                style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', height: '30px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+              >
+                <MdDelete style={{ fontSize: '0.9rem' }} /> Delete Selected ({selectedIds.length})
+              </Button>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-
             <Button variant="secondary" onClick={() => setShowNapFormPreview(true)}>
               <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print NAP Form 1
             </Button>
@@ -2958,27 +3063,15 @@ function InventoryAppraisal() {
           <table className="official-table">
             <thead>
               <tr>
-                <th rowSpan={2} style={{ width: selectedIds.length > 0 ? '160px' : '45px', textAlign: 'center', transition: 'width 0.2s ease', padding: '0.4rem 0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={records.length > 0 && selectedIds.length === records.length}
-                      onChange={handleSelectAll}
-                      title="Select All"
-                    />
-                    {selectedIds.length > 0 && (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); setShowBulkDeleteModal(true); }}
-                        style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', height: '28px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                      >
-                        <MdDelete style={{ fontSize: '0.85rem' }} /> Delete ({selectedIds.length})
-                      </Button>
-                    )}
-                  </div>
+                <th rowSpan={2} className="official-table__th-checkbox" style={{ position: 'static' }}>
+                  <input
+                    type="checkbox"
+                    checked={paginatedRecords.length > 0 && paginatedRecords.every((r) => selectedIds.includes(r.id))}
+                    onChange={handleSelectAll}
+                    title="Select All on this page"
+                  />
                 </th>
-                <th rowSpan={2} style={{ minWidth: '90px', textAlign: 'center' }}>ITEM NO.</th>
+                <th rowSpan={2} className="official-table__th-itemno" style={{ position: 'static' }}>ITEM NO.</th>
                 <th rowSpan={2} style={{ minWidth: '220px' }}>9. Records Series Title and Description</th>
                 <th rowSpan={2} style={{ minWidth: '120px' }}>10. Period Covered / Inclusive Dates</th>
                 <th rowSpan={2} style={{ minWidth: '90px' }}>11. Volume</th>
@@ -3009,8 +3102,8 @@ function InventoryAppraisal() {
                 groupedAndSortedRecords.map((group) => (
                   <React.Fragment key={`group-${group.category}`}>
                     {/* Category Header Row */}
-                    <tr className="official-table__category-row">
-                      <td colSpan={16}>
+                    <tr className="official-table__category-row" style={{ position: 'static' }}>
+                      <td colSpan={16} style={{ position: 'static' }}>
                         {group.category}
                       </td>
                     </tr>
@@ -3020,8 +3113,8 @@ function InventoryAppraisal() {
                       <React.Fragment key={`subgrp-${group.category}-${subGrp.subCategory}-${sIdx}`}>
                         {/* Sub Category Subheader Row (render if subCategory exists) */}
                         {subGrp.subCategory && (
-                          <tr className="official-table__subcategory-row">
-                            <td colSpan={16} style={{ paddingLeft: '1.5rem' }}>
+                          <tr className="official-table__subcategory-row" style={{ position: 'static' }}>
+                            <td colSpan={16} style={{ paddingLeft: '1.5rem', position: 'static' }}>
                               {subGrp.subCategory}
                             </td>
                           </tr>
@@ -3038,9 +3131,7 @@ function InventoryAppraisal() {
                             if (activeDeskInfoRaw) {
                               const covered = extractCoveredYears(r.inclusiveDates);
                               const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(r.activeDeskYrs));
-                              const hasUnstored = eligibleYrs.some(yr => {
-                                return !storageLogs.some(log => (log.recordId === r.id || log.id === r.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
-                              });
+                              const hasUnstored = eligibleYrs.some(yr => !isYearStored(r.id, yr, storageLogs));
                               if (hasUnstored) activeDeskInfo = activeDeskInfoRaw;
                             }
                           }
@@ -3055,14 +3146,14 @@ function InventoryAppraisal() {
                               onClick={() => setViewingRecord(r)}
                               style={{ cursor: 'pointer', backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined }}
                             >
-                              <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                              <td className="official-table__td-checkbox" style={{ position: 'static' }} onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={(e) => handleToggleSelect(r.id, e as any)}
                                 />
                               </td>
-                              <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              <td className="official-table__td-itemno" style={{ position: 'static' }}>
                                 {r.prdsGrds && r.itemNo ? (
                                   <div>
                                     <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{r.prdsGrds}</div>
@@ -3255,7 +3346,7 @@ function InventoryAppraisal() {
                     Click a year below to mark it as disposed (e.g. disposing 2024 from <code>2023 - 2026</code> saves as <code>2023, 2025 - 2026</code>):
                   </span>
 
-                  {Number(evaluatingRecord.record.storageYrs) > 0 && eligibleDisposalYears.some(yr => !storageLogs.some(log => (log.recordId === evaluatingRecord.record.id || log.id === evaluatingRecord.record.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()))) && (
+                  {Number(evaluatingRecord.record.storageYrs) > 0 && eligibleDisposalYears.some(yr => !isYearStored(evaluatingRecord.record.id, yr, storageLogs)) && (
                     <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.4)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.75rem', color: '#b45309', fontWeight: 600, display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
                       <MdWarning style={{ fontSize: '1.2rem', flexShrink: 0 }} />
                       <div>
@@ -3272,10 +3363,7 @@ function InventoryAppraisal() {
                         log.status === 'Decline' &&
                         String(log.disposedYears || '').includes(yr.toString())
                       );
-                      const isStored = storageLogs.some(log =>
-                        (log.recordId === evaluatingRecord.record.id || log.id === evaluatingRecord.record.id) &&
-                        String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString())
-                      );
+                      const isStored = isYearStored(evaluatingRecord.record.id, yr, storageLogs);
 
                       return (
                         <div key={`yr-pill-container-${yr}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
@@ -5314,14 +5402,11 @@ function InventoryAppraisal() {
                     💡 Or Select Specific Year(s) to Storage:
                   </label>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    Click a year below to move it to Storage (e.g. moving 2024 from <code>2023 - 2026</code> leaves active dates as <code>2023, 2025 - 2026</code>):
+                    Click a year below to move it to Storage:
                   </span>
                   <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
                     {eligibleStorageYears.map((yr) => {
-                      const isStored = storageLogs.some(log =>
-                        (log.recordId === singleStorageRecord.id || log.id === singleStorageRecord.id) &&
-                        String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString())
-                      );
+                      const isStored = isYearStored(singleStorageRecord.id, yr, storageLogs);
                       const isStorageSelected = customStorageYears.includes(yr);
 
                       return (
@@ -5364,7 +5449,7 @@ function InventoryAppraisal() {
 
               {isCustomSelected && (
                 <p style={{ margin: 0, fontSize: '0.835rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  Moving year(s) <strong>{customStorageYears.sort().join(', ')}</strong> to Storage will update active inclusive dates to <strong>{computedCustomDates || 'None (Fully in Storage)'}</strong>.
+                  Moving year(s) <strong>{customStorageYears.sort().join(', ')}</strong> to Storage will transition those records into the Storage stage. Period Covered (Column 10) will remain intact.
                 </p>
               )}
 
@@ -5383,11 +5468,21 @@ function InventoryAppraisal() {
                     setSingleStorageRecord(null);
                     setViewingRecord(null);
 
+                    const unstoredEligible = eligibleStorageYears.filter(yr => !isYearStored(rec.id, yr, storageLogs));
+
                     if (isCustomSelected) {
                       const yearRecords = customStorageYears.map((yr) => ({
                         ...rec,
                         id: `${rec.id}-yr-${yr}`,
-                        inclusiveDates: String(yr),
+                        inclusiveDates: rec.inclusiveDates,
+                        seriesTitle: `${rec.seriesTitle} (${yr})`,
+                      }));
+                      openStorageRequestModal(yearRecords);
+                    } else if (unstoredEligible.length > 0 && unstoredEligible.length < eligibleStorageYears.length) {
+                      const yearRecords = unstoredEligible.map((yr) => ({
+                        ...rec,
+                        id: `${rec.id}-yr-${yr}`,
+                        inclusiveDates: rec.inclusiveDates,
                         seriesTitle: `${rec.seriesTitle} (${yr})`,
                       }));
                       openStorageRequestModal(yearRecords);
@@ -5530,9 +5625,7 @@ function InventoryAppraisal() {
               if (activeDeskInfoRaw) {
                 const covered = extractCoveredYears(viewingRecord.inclusiveDates);
                 const eligibleYrs = covered.years.filter(yr => (new Date().getFullYear() - yr) >= Number(viewingRecord.activeDeskYrs));
-                const hasUnstored = eligibleYrs.some(yr => {
-                  return !storageLogs.some(log => (log.recordId === viewingRecord.id || log.id === viewingRecord.id) && String(log.disposedYears || log.inclusiveDates || '').includes(yr.toString()));
-                });
+                const hasUnstored = eligibleYrs.some(yr => !isYearStored(viewingRecord.id, yr, storageLogs));
                 if (hasUnstored) activeDeskInfo = activeDeskInfoRaw;
               }
 

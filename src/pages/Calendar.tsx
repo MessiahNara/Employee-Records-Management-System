@@ -21,6 +21,7 @@ import { useToast } from '../contexts/ToastContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import { getOfficeFullName } from '../data/provincialOffices';
 import './Calendar.css';
 
 interface EmployeeAlert {
@@ -224,7 +225,7 @@ export default function Calendar() {
           id: emp.id,
           name: `${emp.lastName}, ${emp.firstName} ${emp.middleName || ''}`.trim(),
           position: emp.positionFunction || 'Employee',
-          office: emp.officeHospitalName || emp.motherUnit || 'N/A',
+          office: getOfficeFullName(emp.officeHospitalName || emp.motherUnit) || 'N/A',
           aoType: alertAoType,
           expDate: parseDateKey(expDateStr),
           color,

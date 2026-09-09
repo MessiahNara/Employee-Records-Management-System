@@ -19,6 +19,7 @@ import { formatEmployeeNameForFolder } from '../utils/formatUtils';
 import api from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../data/provincialOffices';
 import { MdArrowBack, MdEdit } from 'react-icons/md';
 import './EmployeeDetails.css';
 
@@ -88,7 +89,7 @@ function EmployeeDetails() {
     api.systemSettings.get().then((s) => {
       setDropdownOptions({
         appointmentStatuses: s.appointmentStatuses ?? [],
-        officeNames: s.officeNames ?? [],
+        officeNames: cleanOfficeDropdownOptions(s.officeNames ?? []),
         positions: s.positions ?? [],
         reasonsForSeparation: s.reasonsForSeparation ?? [],
         aoYears: s.aoYears ?? Array.from({ length: 30 }, (_, i) => String(new Date().getFullYear() - i)),
@@ -668,7 +669,7 @@ function EmployeeDetails() {
                             className="employee-details__location-link-btn"
                             title="Click to view and highlight this box"
                           >
-                            Box {employee.yellowBox.boxLabel} ({employee.yellowBox.office})
+                            Box {employee.yellowBox.boxLabel} ({getOfficeFullName(employee.yellowBox.office)})
                           </button>
                         ) : (
                           employee.fileboxLocation || <span className="employee-details__meta-empty">—</span>
@@ -821,7 +822,7 @@ function EmployeeDetails() {
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Office / Hospital Assigned</label>
-              <p className="employee-details__value">{employee.officeHospitalName || (employee as any).officeName || '—'}</p>
+              <p className="employee-details__value">{getOfficeFullName(employee.officeHospitalName || (employee as any).officeName) || '—'}</p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Position / Function</label>
@@ -875,12 +876,12 @@ function EmployeeDetails() {
             const isDesignated = typeLower === 'designated';
             const isRecalled = typeLower === 'recalled';
 
-            const recalledFrom = (employee as any).recalledFrom || '—';
-            const recalledTo = (employee as any).recalledTo || employee.officeHospitalName || (employee as any).officeName || '—';
+            const recalledFrom = getOfficeFullName((employee as any).recalledFrom) || '—';
+            const recalledTo = getOfficeFullName((employee as any).recalledTo || employee.officeHospitalName || (employee as any).officeName) || '—';
             const recalledOrderFrom = (employee as any).recalledOrderFrom;
             const recalledOrderTo = (employee as any).recalledOrderTo;
 
-            const detailedTo = employee.detailedTo || (employee as any).detailedOffice || '—';
+            const detailedTo = getOfficeFullName(employee.detailedTo || (employee as any).detailedOffice) || '—';
             const detailedDivision = employee.detailedDivision || '—';
             const detailedOrderFrom = employee.detailedOrderFrom || (employee as any).durationFrom;
             const detailedOrderTo = employee.detailedOrderTo || (employee as any).durationTo;

@@ -4,6 +4,7 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import api from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 interface File201ModalProps {
   isOpen: boolean;
@@ -144,7 +145,7 @@ function File201Modal({
     const fullName = [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ');
     setBorrowerName(fullName);
     setBorrowerPosition(emp.position || emp.positionFunction || '');
-    setBorrowerOffice(emp.officeName || emp.officeHospitalName || '');
+    setBorrowerOffice(getOfficeFullName(emp.officeName || emp.officeHospitalName) || '');
     setSuggestions([]);
     setShowSuggestions(false);
   };
@@ -317,7 +318,7 @@ function File201Modal({
               </div>
               <div className="file201-modal__employee-row">
                 <span className="file201-modal__info-label">Office/Hospital:</span>
-                <span className="file201-modal__info-value">{ownerEmp.yellowBox?.office || ownerEmp.officeName || '—'}</span>
+                <span className="file201-modal__info-value">{getOfficeFullName(ownerEmp.yellowBox?.office || ownerEmp.officeName) || '—'}</span>
               </div>
             </>
           )}
@@ -381,7 +382,7 @@ function File201Modal({
                       >
                         <span className="file201-modal__suggestion-name">{fullName}</span>
                         <span className="file201-modal__suggestion-sub">
-                          {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
+                          {emp.position || emp.positionFunction} — {getOfficeFullName(emp.officeName || emp.officeHospitalName)}
                         </span>
                       </button>
                     );
@@ -420,7 +421,7 @@ function File201Modal({
                       >
                         <span className="file201-modal__suggestion-name">{fullName}</span>
                         <span className="file201-modal__suggestion-sub">
-                          {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
+                          {emp.position || emp.positionFunction} — {getOfficeFullName(emp.officeName || emp.officeHospitalName)}
                         </span>
                       </button>
                     );
@@ -475,7 +476,7 @@ function File201Modal({
                       >
                         <span className="file201-modal__suggestion-name">{fullName}</span>
                         <span className="file201-modal__suggestion-sub">
-                          {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
+                          {emp.position || emp.positionFunction} — {getOfficeFullName(emp.officeName || emp.officeHospitalName)}
                         </span>
                       </button>
                     );
@@ -514,7 +515,7 @@ function File201Modal({
                       >
                         <span className="file201-modal__suggestion-name">{fullName}</span>
                         <span className="file201-modal__suggestion-sub">
-                          {emp.position || emp.positionFunction} — {emp.officeName || emp.officeHospitalName}
+                          {emp.position || emp.positionFunction} — {getOfficeFullName(emp.officeName || emp.officeHospitalName)}
                         </span>
                       </button>
                     );

@@ -1060,6 +1060,64 @@
   font-size: 0.9rem;
 }
 
+/* Reports View Pagination Bar matching Scanning Status */
+.reports-view__pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-bottom-left-radius: var(--border-radius-lg);
+  border-bottom-right-radius: var(--border-radius-lg);
+  background-color: var(--bg-primary);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.reports-view__pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.reports-view__select-compact {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+}
+
+.reports-view__select-compact:focus {
+  border-color: var(--color-primary);
+}
+
+.reports-view__pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.reports-view__pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reports-view__page-number {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0 0.4rem;
+}
+
 .reports-view__birthday-month-select {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
 import * as ExcelJS from 'exceljs';
 import { formatDateDDMMYYYY } from './dateUtils';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 export default async function generatePulledOutFilesExcel(
   title: string,
@@ -30,7 +31,7 @@ export default async function generatePulledOutFilesExcel(
   const colDefs = [
     { key: 'colA', width: 5 },   // NO.
     { key: 'colB', width: 20 },  // EMPLOYEE NAME
-    { key: 'colC', width: 20 },  // OFFICE/HOSPITAL
+    { key: 'colC', width: 28 },  // OFFICE/HOSPITAL
     { key: 'colD', width: 15 },  // EMPLOYMENT STATUS
     { key: 'colE', width: 18 },  // BORROWER NAME
     { key: 'colF', width: 12 },  // BORROWER DATE
@@ -53,7 +54,7 @@ export default async function generatePulledOutFilesExcel(
     'Republic of the Philippines',
     'Province of Pangasinan',
     'Lingayen',
-    'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE'
+    'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE'
   ];
 
   const headerFonts = [
@@ -192,7 +193,7 @@ export default async function generatePulledOutFilesExcel(
 
     const emp = row.employee;
     const nameVal = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
-    const officeVal = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
+    const officeVal = getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—';
     const statusVal = row.employee?.status || '—';
 
     const borrowerNameVal = row.borrowerName || '';

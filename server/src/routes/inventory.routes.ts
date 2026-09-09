@@ -207,6 +207,21 @@ function readRecords(): InventoryRecord[] {
     const rawData = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(rawData);
     if (Array.isArray(parsed)) {
+      let hasChanges = false;
+      parsed.forEach((r: InventoryRecord) => {
+        if (r.inclusiveDates && r.inclusiveDates.toLowerCase().includes('present') && r.retentionStage === 'Storage') {
+          r.retentionStage = 'Active';
+          r.frequencyOfUse = 'Active';
+          hasChanges = true;
+        }
+      });
+      if (hasChanges) {
+        try {
+          fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), 'utf8');
+        } catch (e) {
+          console.error('Failed to auto-heal ongoing records in storage stage:', e);
+        }
+      }
       cachedRecords = parsed;
       return parsed;
     }
@@ -683,21 +698,19 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
         const currentYear = new Date().getFullYear();
 
         if (targetStage === 'Storage') {
-          if (uniqueTargetYears.length > 0 && r.inclusiveDates) {
-            const { newDatesStr, isDisposed } = calculateNewInclusiveDates(String(r.inclusiveDates), uniqueTargetYears);
-
-            if (isDisposed) {
-              r.retentionStage = 'Storage';
-              r.storageStartDate = new Date().toISOString();
-              r.frequencyOfUse = 'Inactive';
-            } else {
-              r.inclusiveDates = newDatesStr;
-            }
-          } else {
+          // Moving to storage transitions the stage to Storage and frequencyOfUse to Inactive,
+          // but does NOT remove or modify the record's period covered (inclusiveDates).
+          // Only disposal is allowed to remove years from inclusiveDates.
+          const isOngoing = previousInclusiveDates.toLowerCase().includes('present');
+          if (!isOngoing) {
             r.retentionStage = 'Storage';
-            r.storageStartDate = new Date().toISOString();
             r.frequencyOfUse = 'Inactive';
+          } else {
+            // Ongoing series (Present) remains Active because current document accumulation is ongoing
+            r.retentionStage = 'Active';
+            r.frequencyOfUse = 'Active';
           }
+          r.storageStartDate = new Date().toISOString();
 
           const sortedTargetYears = uniqueTargetYears.sort((a, b) => a - b);
           if (sortedTargetYears.length > 0) {
@@ -714,7 +727,7 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
                 subCategory: r.subCategory || '',
                 disposedYears: `Moved to Storage: ${year}`,
                 previousInclusiveDates: previousInclusiveDates,
-                newInclusiveDates: r.inclusiveDates,
+                newInclusiveDates: previousInclusiveDates,
                 disposedAt: new Date().toISOString(),
                 disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
                 reason: reqItem.reason,
@@ -735,7 +748,7 @@ router.post('/requests/:id/confirm', async (req: Request, res: Response) => {
               subCategory: r.subCategory || '',
               disposedYears: `Moved to Storage: ${previousInclusiveDates}`,
               previousInclusiveDates: previousInclusiveDates,
-              newInclusiveDates: r.inclusiveDates,
+              newInclusiveDates: previousInclusiveDates,
               disposedAt: new Date().toISOString(),
               disposedBy: `${userName} (Approved for ${reqItem.requesterName})`,
               reason: reqItem.reason,

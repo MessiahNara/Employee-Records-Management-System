@@ -1,3 +1,4 @@
+import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { getAuthState } from '../utils/mockAuth';
 import Card from './ui/Card';
@@ -31,6 +32,8 @@ function RoleProtectedRoute({
   const routeToTabMap: Record<string, string> = {
     '/users': 'Users',
     '/file201': 'File Locator',
+    '/scanning-status': 'Scanning Status',
+    '/scanning-status/office': 'Scanning Status',
     '/audit-logs': 'Audit Logs',
     '/backup-restore': 'Backup & Restore',
     '/analytics': 'Dashboard Analytics',
@@ -53,7 +56,9 @@ function RoleProtectedRoute({
     hasAccess = allowedRoles.includes(userRole);
   } else if (currentUser?.permissions?.allowedTabs) {
     const tabName = routeToTabMap[currentPath];
-    if (tabName) {
+    if (currentPath === '/scanning-status' || currentPath === '/scanning-status/office') {
+      hasAccess = true;
+    } else if (tabName) {
       hasAccess = hasAccess && currentUser.permissions.allowedTabs.includes(tabName);
     } else if (currentPath.startsWith('/employees/')) {
       hasAccess = hasAccess && (currentUser.permissions.allowedTabs.includes('Dashboard') || currentUser.permissions.allowedTabs.includes('File Locator'));

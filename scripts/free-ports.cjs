@@ -22,9 +22,3 @@ function freePort(port) {
 
 freePort(5000);
 freePort(5174);
-
-// Brief pause to allow Windows socket stack to transition from TIME_WAIT
-try {
-  const start = Date.now();
-  while (Date.now() - start < 400) {}
-} catch (_) {}

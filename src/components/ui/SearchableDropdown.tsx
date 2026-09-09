@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { cleanOfficeDropdownOptions, DEFAULT_PROVINCIAL_OFFICES, getOfficeFullName } from '../../data/provincialOffices';
 import './SearchableDropdown.css';
 
 interface SearchableDropdownProps {
@@ -23,18 +24,47 @@ export default function SearchableDropdown({
   disabled = false,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(value === 'All' ? '' : value);
+
+  // Automatically sanitize options so abbreviations or combined "Abbr - Full Name" strings are never shown as options
+  const sanitizedOptions = useMemo(() => {
+    const isOfficeList = options.some((opt) => {
+      if (!opt) return false;
+      const clean = opt.trim();
+      return (
+        clean.includes(' - ') ||
+        clean.includes('(') ||
+        clean.includes('[') ||
+        DEFAULT_PROVINCIAL_OFFICES.some(
+          (o) =>
+            o.fullName.toLowerCase() === clean.toLowerCase() ||
+            (o.abbreviation && o.abbreviation.toLowerCase() === clean.toLowerCase()) ||
+            (o.aliases && o.aliases.some((a) => a.toLowerCase() === clean.toLowerCase()))
+        ) ||
+        getOfficeFullName(clean) !== clean
+      );
+    });
+    if (isOfficeList) {
+      return cleanOfficeDropdownOptions(options);
+    }
+    return options;
+  }, [options]);
+
+  const displayVal = useMemo(() => {
+    if (!value || value === 'All') return '';
+    return getOfficeFullName(value);
+  }, [value]);
+
+  const [searchTerm, setSearchTerm] = useState(displayVal);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const searchTermRef = useRef(value === 'All' ? '' : value);
+  const searchTermRef = useRef(displayVal);
 
   // Sync with value prop changes
   useEffect(() => {
-    const nextVal = value === 'All' ? '' : value;
-    setSearchTerm(nextVal);
-    searchTermRef.current = nextVal;
-  }, [value]);
+    setSearchTerm(displayVal);
+    searchTermRef.current = displayVal;
+  }, [displayVal]);
 
   // Click outside to close
   useEffect(() => {
@@ -55,14 +85,23 @@ export default function SearchableDropdown({
     };
   }, [onChange]);
 
-  // Memoize filtered options based on search term
+  // Memoize filtered options based on search term (supports typing abbreviation to find full name)
   const filteredOptions = useMemo(() => {
-    if (!searchTerm.trim()) return options;
+    if (!searchTerm.trim()) return sanitizedOptions;
     const lower = searchTerm.toLowerCase();
-    return options.filter((option) =>
-      option.toLowerCase().includes(lower)
-    );
-  }, [options, searchTerm]);
+    return sanitizedOptions.filter((option) => {
+      const full = getOfficeFullName(option);
+      if (full.toLowerCase().includes(lower)) return true;
+      const matched = DEFAULT_PROVINCIAL_OFFICES.find(
+        (o) => o.fullName.toLowerCase() === full.toLowerCase()
+      );
+      if (matched) {
+        if (matched.abbreviation && matched.abbreviation.toLowerCase().includes(lower)) return true;
+        if (matched.aliases && matched.aliases.some((a) => a.toLowerCase().includes(lower))) return true;
+      }
+      return false;
+    });
+  }, [sanitizedOptions, searchTerm]);
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,9 +115,10 @@ export default function SearchableDropdown({
 
   // Handle option select
   const selectOption = (opt: string) => {
-    setSearchTerm(opt);
-    searchTermRef.current = opt;
-    onChange(opt);
+    const clean = getOfficeFullName(opt);
+    setSearchTerm(clean);
+    searchTermRef.current = clean;
+    onChange(clean);
     setIsOpen(false);
     setHighlightedIndex(-1);
   };
@@ -139,13 +179,13 @@ export default function SearchableDropdown({
   };
 
   const handleClear = (e: React.MouseEvent) => {
-     e.stopPropagation();
-     setSearchTerm('');
-     searchTermRef.current = '';
-     onChange('');
-     setIsOpen(false);
-     setHighlightedIndex(-1);
-   };
+    e.stopPropagation();
+    setSearchTerm('');
+    searchTermRef.current = '';
+    onChange('');
+    setIsOpen(false);
+    setHighlightedIndex(-1);
+  };
 
   return (
     <div ref={containerRef} className={`searchable-dropdown ${className}`}>
@@ -204,7 +244,7 @@ export default function SearchableDropdown({
                   }}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                 >
-                  {option}
+                  {getOfficeFullName(option)}
                 </li>
               ))}
             </ul>

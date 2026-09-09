@@ -353,28 +353,47 @@
 .official-table-wrapper {
   width: 100%;
   overflow-x: auto;
+  overflow-y: auto;
+  min-height: 600px;
+  max-height: max(780px, calc(100vh - 220px)); /* Expanded and lengthened so significantly more records fit without excessive inner scrolling */
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-primary, #ffffff);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  position: relative;
 }
 
 .official-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.85rem;
   text-align: left;
-}
-
-.official-table th,
-.official-table td {
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border-color);
-  vertical-align: middle;
+  background-color: var(--bg-primary, #ffffff);
 }
 
 .official-table th {
-  background: var(--bg-tertiary);
+  padding: 0.55rem 0.75rem;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+  background-color: var(--bg-primary, #ffffff);
+}
+
+.official-table td {
+  padding: 0.45rem 0.7rem;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+  background-color: var(--bg-primary, #ffffff);
+}
+
+/* Sticky Headers */
+.official-table thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f1f5f9;
   color: var(--text-primary);
   font-weight: 700;
   font-size: 0.75rem;
@@ -382,16 +401,64 @@
   letter-spacing: 0.03em;
   text-align: center;
   vertical-align: middle;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.official-table thead th[rowspan="2"] {
+.official-table thead tr:nth-child(2) th {
+  position: sticky;
+  top: 38px;
+  z-index: 19;
+  background: #f1f5f9;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
   vertical-align: middle;
   border-bottom: 2px solid var(--border-color);
 }
 
+[data-theme='dark'] .official-table thead tr:first-child th,
+[data-theme='dark'] .official-table thead tr:nth-child(2) th {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+/* Columns - Checkbox */
+.official-table__th-checkbox,
+.official-table__td-checkbox {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  text-align: center;
+  position: static !important;
+  left: auto !important;
+}
+
+/* Columns - ITEM NO. */
+.official-table__th-itemno,
+.official-table__td-itemno {
+  min-width: 100px;
+  text-align: center;
+  position: static !important;
+  left: auto !important;
+}
+
+/* Row Hover effects */
+.official-table tr:hover:not(.official-table__category-row) td {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme='dark'] .official-table tr:hover:not(.official-table__category-row) td {
+  background-color: #1e293b !important;
+}
+
 /* Category Section Header Row */
 .official-table__category-row td {
-  background-color: var(--bg-secondary);
+  position: static !important;
+  left: auto !important;
+  background-color: #f8fafc;
   color: var(--text-primary);
   font-weight: 800;
   font-size: 0.85rem;
@@ -402,9 +469,15 @@
   border-bottom: 2px solid var(--border-color);
 }
 
+[data-theme='dark'] .official-table__category-row td {
+  background-color: #141f33;
+}
+
 /* Sub Category Subheader Row */
 .official-table__subcategory-row td {
-  background-color: rgba(241, 245, 249, 0.6);
+  position: static !important;
+  left: auto !important;
+  background-color: #f1f5f9;
   color: var(--text-primary);
   font-weight: 700;
   font-size: 0.82rem;
@@ -413,12 +486,62 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-.official-table tr:hover:not(.official-table__category-row) td {
-  background-color: rgba(59, 130, 246, 0.08) !important;
+[data-theme='dark'] .official-table__subcategory-row td {
+  background-color: #1e293b;
 }
 
-[data-theme='dark'] .official-table tr:hover:not(.official-table__category-row) td {
-  background-color: rgba(59, 130, 246, 0.18) !important;
+/* Pagination Bar Styles */
+.inventory-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  border-radius: 8px;
+}
+
+.inventory-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.inventory-select-compact {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+}
+
+.inventory-pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.inventory-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inventory-page-number {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0 0.4rem;
 }
 
 /* Table Pill Badges */

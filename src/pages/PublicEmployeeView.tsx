@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Employee } from '../types/employee';
 import api from '../services/api';
+import { getOfficeFullName } from '../data/provincialOffices';
 import './PublicEmployeeView.css';
 
 function PublicEmployeeView() {
@@ -104,7 +105,7 @@ function PublicEmployeeView() {
 
               <div className="public-employee__detail-item">
                 <span className="public-employee__detail-label">Office/Hospital</span>
-                <span className="public-employee__detail-value">{employee.officeHospitalName || 'N/A'}</span>
+                <span className="public-employee__detail-value">{getOfficeFullName(employee.officeHospitalName) || 'N/A'}</span>
               </div>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 export default async function generateTransferredFilesExcel(
   title: string,
@@ -54,7 +55,7 @@ export default async function generateTransferredFilesExcel(
     'Republic of the Philippines',
     'Province of Pangasinan',
     'Lingayen',
-    'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE'
+    'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE'
   ];
 
   const headerFonts = [
@@ -72,7 +73,7 @@ export default async function generateTransferredFilesExcel(
     const colDefs = [
       { key: 'colA', width: 6 },   // NO.
       { key: 'colB', width: 26 },  // EMPLOYEE NAME
-      { key: 'colC', width: 24 },  // OFFICE/HOSPITAL
+      { key: 'colC', width: 28 },  // OFFICE/HOSPITAL
       { key: 'colD', width: 22 },  // POSITION / DESIGNATION
       { key: 'colE', width: 16 },  // EMPLOYMENT STATUS
       { key: 'colF', width: 20 },  // RELEASED BY
@@ -157,7 +158,7 @@ export default async function generateTransferredFilesExcel(
 
       const emp = row.employee;
       const nameVal = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
-      const officeVal = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
+      const officeVal = getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—';
       const positionVal = row.employee?.position || '—';
       const statusVal = row.employee?.status || '—';
 
@@ -211,7 +212,7 @@ export default async function generateTransferredFilesExcel(
   const colDefs = [
     { key: 'colA', width: 5 },   // NO.
     { key: 'colB', width: 22 },  // EMPLOYEE NAME
-    { key: 'colC', width: 20 },  // OFFICE / HOSPITAL
+    { key: 'colC', width: 28 },  // OFFICE / HOSPITAL
     { key: 'colD', width: 18 },  // POSITION / DESIGNATION
     { key: 'colE', width: 14 },  // EMPLOYMENT STATUS
     { key: 'colF', width: 16 },  // RELEASED BY
@@ -348,7 +349,7 @@ export default async function generateTransferredFilesExcel(
 
     const emp = row.employee;
     const nameVal = emp ? `${emp.lastName}, ${emp.firstName}` : row.employeeId;
-    const officeVal = row.employee?.yellowBox?.office || row.employee?.officeName || '—';
+    const officeVal = getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—';
     const positionVal = row.employee?.position || '—';
     const statusVal = row.employee?.status || '—';
 

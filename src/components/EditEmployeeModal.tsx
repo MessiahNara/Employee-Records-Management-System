@@ -7,6 +7,7 @@ import Input from './ui/Input';
 import SearchableDropdown from './ui/SearchableDropdown';
 import { convertToDateInputFormat } from '../utils/dateUtils';
 import { MdLock } from 'react-icons/md';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../data/provincialOffices';
 
 import api from '../services/api';
 
@@ -486,9 +487,12 @@ function EditEmployeeModal({
             </label>
             <SearchableDropdown
               id="edit-office-hospital-name"
-              options={dropdownOptions.officeNames}
-              value={formData.officeHospitalName}
-              onChange={(val) => handleChange('officeHospitalName', val)}
+              options={cleanOfficeDropdownOptions(dropdownOptions.officeNames)}
+              value={getOfficeFullName(formData.officeHospitalName)}
+              onChange={(val) => {
+                const cleanVal = getOfficeFullName(val);
+                handleChange('officeHospitalName', cleanVal);
+              }}
               placeholder="Select or enter office or hospital name"
             />
             {formErrors.officeHospitalName && (

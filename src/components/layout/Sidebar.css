@@ -78,14 +78,50 @@
 
 .sidebar__nav {
   flex: 1;
+  min-height: 0;
   padding: var(--spacing-md);
   padding-bottom: var(--spacing-md);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  background-color: transparent;
+  overflow: hidden;
+}
+
+.sidebar__scrollable {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding-right: 2px;
+}
+
+/* Custom smooth scrollbar for sidebar */
+.sidebar__scrollable::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar__scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar__scrollable::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 4px;
+}
+
+.sidebar__scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+[data-theme='dark'] .sidebar__scrollable::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+[data-theme='dark'] .sidebar__scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
 }
 
 .sidebar__nav-group {

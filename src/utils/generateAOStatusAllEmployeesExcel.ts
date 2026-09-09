@@ -1,5 +1,6 @@
 // @ts-ignore
 import ExcelJS from 'exceljs';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 export interface AOStatusExportData {
   monthFrom?: string;
@@ -88,7 +89,7 @@ export default async function generateAOStatusAllEmployeesExcel(data: AOStatusEx
     'Republic of the Philippines',
     'Province of Pangasinan',
     'Lingayen',
-    'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE'
+    'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE'
   ];
 
   const headerFonts = [
@@ -204,11 +205,11 @@ export default async function generateAOStatusAllEmployeesExcel(data: AOStatusEx
         if (col.key === 'no') val = index + 1;
         else if (col.key === 'name') val = record.nameOfEmployee || '';
         else if (col.key === 'position') val = record.position || '';
-        else if (col.key === 'motherUnit') val = record.motherUnit || '';
-        else if (col.key === 'detailedOffice') val = record.detailedOffice || '';
+        else if (col.key === 'motherUnit') val = getOfficeFullName(record.motherUnit) || '';
+        else if (col.key === 'detailedOffice') val = getOfficeFullName(record.detailedOffice) || '';
         else if (col.key === 'designatedPosition') val = record.designatedPosition || '';
-        else if (col.key === 'recalledFrom') val = record.recalledFrom || '';
-        else if (col.key === 'recalledTo') val = record.recalledTo || '';
+        else if (col.key === 'recalledFrom') val = getOfficeFullName(record.recalledFrom) || '';
+        else if (col.key === 'recalledTo') val = getOfficeFullName(record.recalledTo) || '';
         else if (col.key === 'durationFrom') val = record.durationFrom || '';
         else if (col.key === 'durationTo') val = record.durationTo || '';
         else if (col.key === 'administrativeOrder') val = record.adminOrderNo || '';

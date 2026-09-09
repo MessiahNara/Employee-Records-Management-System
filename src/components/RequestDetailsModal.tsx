@@ -3,6 +3,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import SplitDocumentViewer, { DiffField } from './documents/SplitDocumentViewer';
 import { MdCheckCircle, MdCancel, MdCompareArrows, MdPictureAsPdf } from 'react-icons/md';
+import { getOfficeFullName } from '../data/provincialOffices';
 
 interface RequestDetailsModalProps {
   isOpen: boolean;
@@ -319,7 +320,7 @@ function RequestDetailsModal({
           employeeData={{
             name: target.payload?.employeeName || target.entityName,
             id: target.payload?.employeeId || target.entityId,
-            office: target.payload?.officeHospitalName || target.payload?.officeName,
+            office: getOfficeFullName(target.payload?.officeHospitalName || target.payload?.officeName),
             position: target.payload?.positionFunction || target.payload?.position,
           }}
           actions={

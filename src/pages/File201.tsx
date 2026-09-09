@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -6,6 +6,7 @@ import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import Badge from '../components/ui/Badge';
 import SearchableDropdown from '../components/ui/SearchableDropdown';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../data/provincialOffices';
 import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
 import {
@@ -288,7 +289,7 @@ function File201() {
       if (editingBox) {
         await api.yellowBoxes.update(editingBox.id, {
           boxLabel: boxLabel.trim(),
-          office: office.trim().toUpperCase(),
+          office: getOfficeFullName(office.trim()),
           type: boxType,
           color: boxColor,
         });
@@ -296,7 +297,7 @@ function File201() {
       } else {
         await api.yellowBoxes.create({
           boxLabel: boxLabel.trim(),
-          office: office.trim().toUpperCase(),
+          office: getOfficeFullName(office.trim()),
           type: boxType,
           color: boxColor,
         });
@@ -316,7 +317,7 @@ function File201() {
   const handleEditBoxClick = (box: YellowBox) => {
     setEditingBox(box);
     setBoxLabel(box.boxLabel);
-    setOffice(box.office);
+    setOffice(getOfficeFullName(box.office));
     setBoxType(box.type);
     setBoxColor(box.color || '#facc15');
     setIsBoxModalOpen(true);
@@ -395,7 +396,7 @@ function File201() {
       box.office.toLowerCase().includes(searchTerm.toLowerCase()) ||
       box.employees.some(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchOffice = officeFilter === 'All' || box.office === officeFilter;
+    const matchOffice = officeFilter === 'All' || getOfficeFullName(box.office).toLowerCase() === getOfficeFullName(officeFilter).toLowerCase();
     const matchType = typeFilter === 'All' || box.type === typeFilter;
 
     return matchSearch && matchOffice && matchType;
@@ -407,9 +408,9 @@ function File201() {
   const paginatedBoxes = filteredBoxes.slice(startIndex, startIndex + itemsPerPage);
 
   // Unique offices and classifications for filters
-  const uniqueOffices = Array.from(new Set(boxes.map(b => b.office)));
+  const uniqueOffices = useMemo(() => cleanOfficeDropdownOptions(boxes.map(b => b.office)), [boxes]);
   const uniqueTypes = Array.from(new Set(boxes.map(b => b.type)));
-  const uniqueEmployeeOffices = Array.from(new Set(allEmployees.map(e => e.officeName).filter(Boolean))).sort();
+  const uniqueEmployeeOffices = useMemo(() => cleanOfficeDropdownOptions(allEmployees.map(e => e.officeName)), [allEmployees]);
 
   return (
     <div className="file201-page">
@@ -603,7 +604,7 @@ function File201() {
                   {/* White Paper Inventory Label */}
                   <div className="yellow-box-card__label">
                     <div className="yellow-box-card__label-title">{box.boxLabel}</div>
-                    <div className="yellow-box-card__label-office">{box.office}</div>
+                    <div className="yellow-box-card__label-office">{getOfficeFullName(box.office)}</div>
                     <div className="yellow-box-card__label-type">{box.type}</div>
                   </div>
 
@@ -699,8 +700,8 @@ function File201() {
             required
           />
           <Input
-            label="Office Abbreviation (e.g. GSO, HR, COA)"
-            placeholder="Enter office shortcut"
+            label="Office / Hospital Name"
+            placeholder="Enter office / hospital name"
             value={office}
             onChange={(e) => setOffice(e.target.value)}
             required
@@ -760,7 +761,7 @@ function File201() {
       <Modal
         isOpen={!!assigningBox}
         onClose={() => setAssigningBox(null)}
-        title={`Manage Files in Box: ${assigningBox?.boxLabel} (${assigningBox?.office})`}
+        title={`Manage Files in Box: ${assigningBox?.boxLabel}${assigningBox?.office ? ` (${getOfficeFullName(assigningBox.office)})` : ''}`}
         size="lg"
       >
         {assigningBox && (
@@ -815,7 +816,7 @@ function File201() {
                         {emp.lastName}, {emp.firstName} {emp.middleName ? `${emp.middleName.charAt(0)}.` : ''}
                       </div>
                       <div className="assign-suggestion-meta">
-                        ID: {emp.id} • {emp.officeName} • {emp.position}
+                        ID: {emp.id} • {getOfficeFullName(emp.officeName)} • {emp.position}
                       </div>
                     </div>
                   ))}
@@ -899,7 +900,7 @@ function File201() {
                       />
                       <div style={{ flex: 1 }}>
                         <div className="assign-current-name">{emp.lastName}, {emp.firstName}</div>
-                        <div className="assign-current-meta">{emp.position} • {emp.officeName}</div>
+                        <div className="assign-current-meta">{emp.position} • {getOfficeFullName(emp.officeName)}</div>
                       </div>
                       <Button
                         variant="danger"
@@ -1017,7 +1018,7 @@ function File201() {
               </div>
               <div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Office</span>
-                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.office || 'N/A'}</span>
+                <span style={{ color: 'var(--text-primary)' }}>{getOfficeFullName(deleteBoxTarget.office) || 'N/A'}</span>
               </div>
               <div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Type</span>

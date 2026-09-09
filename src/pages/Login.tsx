@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -33,6 +33,7 @@ function Login() {
   const navigate = useNavigate();
   const { showWelcomeToast, showToast } = useToast();
   const { theme, toggleTheme } = useTheme();
+  console.log('[Login.tsx] Rendering Login component! Theme:', theme);
   const [formData, setFormData] = useState<LoginFormData>({
     username: '',
     password: '',
@@ -40,6 +41,7 @@ function Login() {
   const [errors, setErrors] = useState<Partial<Record<keyof LoginFormData, string>>>({});
   const [loginError, setLoginError] = useState('');
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const [lastRestoreTimestamp, setLastRestoreTimestamp] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isServerConfigOpen, setIsServerConfigOpen] = useState(false);
@@ -53,6 +55,26 @@ function Login() {
       .then((res) => {
         setServerVersion(res.version ? `v${res.version.replace(/^v/, '')}` : 'v1.6.1');
         setServerStatus('online');
+
+        // Check if server recently performed a restore
+        if (res.lastRestore?.timestamp) {
+          const restoreTime = new Date(res.lastRestore.timestamp).getTime();
+          const now = Date.now();
+          const isRecent = (now - restoreTime) < 2 * 60 * 60 * 1000; // 2 hours
+          const dismissedRestore = localStorage.getItem('dismissedRestoreTime');
+
+          if (isRecent && dismissedRestore !== res.lastRestore.timestamp) {
+            setLastRestoreTimestamp(res.lastRestore.timestamp);
+            const timeFormatted = new Date(res.lastRestore.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            const backupName = res.lastRestore.filename ? ` ("${res.lastRestore.filename}")` : '';
+            setRestoreNotice(
+              `All user accounts have been automatically logged out because a database restore was executed${backupName} at ${timeFormatted}. Live data has been restored from snapshot. Please sign in again with your credentials to continue.`
+            );
+          }
+        }
       })
       .catch(() => {
         setServerStatus('offline');
@@ -65,8 +87,6 @@ function Login() {
 
     const storedNotice = localStorage.getItem('restoreLogoutNotice') || sessionStorage.getItem('restoreLogoutNotice');
     if (storedNotice) {
-      localStorage.removeItem('restoreLogoutNotice');
-      sessionStorage.removeItem('restoreLogoutNotice');
       setRestoreNotice(storedNotice);
       if (showToast) {
         showToast(storedNotice, 'warning');
@@ -76,9 +96,27 @@ function Login() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleDismissNotice = () => {
+    setRestoreNotice(null);
+    localStorage.removeItem('restoreLogoutNotice');
+    sessionStorage.removeItem('restoreLogoutNotice');
+    if (lastRestoreTimestamp) {
+      localStorage.setItem('dismissedRestoreTime', lastRestoreTimestamp);
+    }
+  };
+
   // Pre-fill server URL input with current base URL or default
   const handleOpenServerConfig = () => {
-    setServerUrlInput(getApiBaseUrl ? getApiBaseUrl() : 'https://127.0.0.1:5000');
+    if (typeof window !== 'undefined' && (window as any).electron?.getServerUrl) {
+      (window as any).electron.getServerUrl().then((url: string) => {
+        setServerUrlInput(url || 'https://127.0.0.1:5000');
+      }).catch(() => {
+        setServerUrlInput('https://127.0.0.1:5000');
+      });
+    } else {
+      const base = localStorage.getItem('activeServerBaseUrl') || 'https://127.0.0.1:5000';
+      setServerUrlInput(base.replace(/\/api\/?$/, ''));
+    }
     setIsServerConfigOpen(true);
   };
 
@@ -144,6 +182,8 @@ function Login() {
       };
 
       localStorage.removeItem('authUser');
+      localStorage.removeItem('restoreLogoutNotice');
+      sessionStorage.removeItem('restoreLogoutNotice');
       saveAuthState(user, false);
       sessionStorage.setItem('justLoggedIn', 'true');
       navigate('/');
@@ -271,13 +311,16 @@ function Login() {
                   <MdWarning className="login__restore-banner-icon" />
                 </div>
                 <div className="login__restore-banner-content">
-                  <strong className="login__restore-banner-title">Database Restored</strong>
+                  <div className="login__restore-banner-header">
+                    <strong className="login__restore-banner-title">⚠️ All Accounts Logged Out</strong>
+                    <span className="login__restore-banner-tag">Backup Restored</span>
+                  </div>
                   <p className="login__restore-banner-text">{restoreNotice}</p>
                 </div>
                 <button
                   type="button"
                   className="login__restore-banner-dismiss"
-                  onClick={() => setRestoreNotice(null)}
+                  onClick={handleDismissNotice}
                   title="Dismiss notification"
                   aria-label="Dismiss notification"
                 >

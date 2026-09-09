@@ -60,20 +60,33 @@ function Modal({
 
   useEffect(() => {
     if (!isOpen || isMinimized) {
-      document.body.style.overflow = 'unset';
       return;
     }
 
     // Store the previously focused element
     previousActiveElement.current = document.activeElement as HTMLElement;
-    document.body.style.overflow = 'hidden';
+
+    // Capture scroll positions across potential scroll containers
+    const mainLayoutMain = document.querySelector('.main-layout__main');
+    const mainY = mainLayoutMain ? mainLayoutMain.scrollTop : 0;
+    const windowY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
 
     return () => {
-      document.body.style.overflow = 'unset';
+      // Restore focus to previously active element without triggering scroll
+      if (previousActiveElement.current && previousActiveElement.current.isConnected) {
+        try {
+          previousActiveElement.current.focus({ preventScroll: true });
+        } catch {
+          // ignore focus error
+        }
+      }
 
-      // Restore focus to the previously focused element
-      if (previousActiveElement.current) {
-        previousActiveElement.current.focus();
+      // Re-assert scroll positions
+      if (mainLayoutMain && mainY > 0) {
+        mainLayoutMain.scrollTop = mainY;
+      }
+      if (windowY > 0) {
+        window.scrollTo(0, windowY);
       }
     };
   }, [isOpen, isMinimized]);

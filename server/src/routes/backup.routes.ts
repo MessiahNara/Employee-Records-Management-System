@@ -16,6 +16,15 @@ import {
 
 const router = express.Router();
 
+let lastRestoreInfo: {
+  timestamp: string;
+  restoredBy: string;
+  filename: string;
+  message?: string;
+} | null = null;
+
+export const getLastRestoreInfo = () => lastRestoreInfo;
+
 // Multer storage for uploaded backup files
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -188,6 +197,8 @@ router.post('/create', async (req: Request, res: Response) => {
           sizeBytes: result.sizeBytes,
         },
       },
+    }).catch((auditErr: any) => {
+      console.warn('[BackupAPI] Non-critical audit log creation warning:', auditErr.message);
     });
 
     try {
@@ -341,9 +352,14 @@ router.post('/restore', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Selected backup file does not exist.' });
     }
 
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
     const emitRestoreProgress = (payload: { step: number; totalSteps: number; percent: number; stage: string; detail: string }) => {
       try {
-        getIO()?.emit('restoreProgress', payload);
+        getIO()?.emit('restoreProgress', {
+          ...payload,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        });
       } catch (_) {}
     };
 
@@ -352,10 +368,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 1,
       totalSteps: 7,
-      percent: 10,
+      percent: 12,
       stage: 'Creating Safety Rollback Snapshot',
       detail: 'Generating automatic safety rollback snapshot before restore...',
     });
+    await delay(120);
     const safetySnapshot = await executeDatabaseBackup('safety', `Auto-Safety (Pre-Restore ${safeFilename})`);
     console.log(`[BackupAPI] Safety snapshot created: ${safetySnapshot.filename}`);
 
@@ -363,10 +380,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 2,
       totalSteps: 7,
-      percent: 25,
+      percent: 28,
       stage: 'Validating Snapshot Archive',
       detail: `Reading and parsing ${safeFilename} (${(fs.statSync(filePath).size / 1024).toFixed(1)} KB)...`,
     });
+    await delay(120);
     const content = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(content);
     const data = parsed.data || {};
@@ -376,10 +394,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 3,
       totalSteps: 7,
-      percent: 40,
+      percent: 45,
       stage: 'Purging Current Records',
       detail: 'Safely clearing existing relational tables and records...',
     });
+    await delay(120);
 
     // A. Clear dependent child tables first
     await prisma.chatMessage.deleteMany({});
@@ -396,10 +415,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 4,
       totalSteps: 7,
-      percent: 65,
+      percent: 68,
       stage: 'Restoring Database Tables',
       detail: `Re-inserting ${data.employees?.length || 0} employees, ${data.documents?.length || 0} docs, ${data.users?.length || 0} users...`,
     });
+    await delay(120);
 
     // B. Re-insert Users (Bulk)
     if (Array.isArray(data.users) && data.users.length > 0) {
@@ -550,6 +570,7 @@ router.post('/restore', async (req: Request, res: Response) => {
       stage: 'Restoring Auxiliary App Storage',
       detail: 'Restoring inventory records, disposal history, and group chats...',
     });
+    await delay(120);
 
     if (Array.isArray(data.inventoryRecords)) {
       writeDataFile('inventory_records.json', data.inventoryRecords);
@@ -581,6 +602,7 @@ router.post('/restore', async (req: Request, res: Response) => {
       stage: 'Synchronizing Physical Files',
       detail: 'Restoring physical upload assets, document files, and profile images...',
     });
+    await delay(120);
 
     // 1. Restore from companion files directory if present on server
     const companionDir = path.join(getBackupDir(), `${path.parse(safeFilename).name}_files`);
@@ -641,15 +663,40 @@ router.post('/restore', async (req: Request, res: Response) => {
 
     console.log('[BackupAPI] Database and physical files restoration completed successfully.');
 
-    // Step 5: Broadcast real-time global logout & sync event to all open client systems
+    // Step 5: Invalidate all active session IDs in database so any stale or disconnected client is rejected upon reconnect
+    try {
+      await prisma.user.updateMany({
+        data: {
+          activeSessionId: `RESTORE_LOGOUT_${Date.now()}`,
+        },
+      });
+      console.log('[BackupAPI] All user activeSessionIds invalidated in database.');
+    } catch (sessionErr) {
+      console.warn('[BackupAPI] Could not invalidate activeSessionIds in database:', sessionErr);
+    }
+
+    // Step 6: Set lastRestoreInfo for login warning
+    lastRestoreInfo = {
+      timestamp: new Date().toISOString(),
+      restoredBy: authorizedUser?.username || 'Superadmin',
+      filename: safeFilename,
+      message: `The database has been restored from backup point "${safeFilename}". All accounts have been logged out to synchronize system state.`,
+    };
+
+    // Step 7: Broadcast real-time global logout & sync event to all open client systems
     try {
       const io = getIO();
       if (io) {
-        console.log('[BackupAPI] Broadcasting databaseRestored and sync events to all connected clients...');
-        io.emit('databaseRestored', {
+        console.log('[BackupAPI] Broadcasting databaseRestored and forceLogout events to all connected clients...');
+        const logoutPayload = {
           timestamp: new Date().toISOString(),
           restoredBy: authorizedUser?.username || 'Superadmin',
           message: 'The database and files have been restored from a snapshot point. All user sessions have been logged out to synchronize live data. Please log in again.',
+        };
+        io.emit('databaseRestored', logoutPayload);
+        io.emit('forceLogout', {
+          reason: 'DATABASE_RESTORE',
+          message: 'A database restore was executed. All user accounts have been logged out.',
         });
         io.emit('chatsUpdated');
         io.emit('employeesUpdated');

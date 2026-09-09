@@ -187,6 +187,567 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Get document by ID
+
+// Base provincial offices with their canonical abbreviations and defaults
+const BASE_OFFICES: { abbr: string; name: string; type: 'Department' | 'Hospital'; aliases?: string[] }[] = [
+  { abbr: 'Accounting', name: 'Provincial Accounting Office', type: 'Department' },
+  { abbr: 'Agriculture', name: 'Provincial Agriculture Office', type: 'Department' },
+  { abbr: 'Archives', name: 'Provincial Archives and Records Center', type: 'Department' },
+  { abbr: 'Assessor', name: 'Provincial Assessment Office', type: 'Department' },
+  { abbr: 'BAC', name: 'Bids and Awards Committee', type: 'Department' },
+  { abbr: 'BM Staff', name: 'Office of the Board Members Staff', type: 'Department' },
+  { abbr: 'Board Members', name: 'Office of the Sangguniang Panlalawigan Members', type: 'Department' },
+  { abbr: 'Board Secretary', name: 'Office of the Provincial Board Secretary', type: 'Department' },
+  { abbr: 'Budget', name: 'Provincial Budget Office', type: 'Department' },
+  { abbr: 'Capitol Resort', name: 'Capitol Resort Hotel', type: 'Department', aliases: ['CRH'] },
+  { abbr: 'CRHOD', name: 'Capitol Resort Hotel Operations Division', type: 'Department' },
+  { abbr: 'COA', name: 'Commission on Audit', type: 'Department' },
+  { abbr: 'CSC', name: 'Civil Service Commission', type: 'Department' },
+  { abbr: 'Engineering', name: 'Provincial Engineering Office', type: 'Department' },
+  {
+    abbr: 'GSO',
+    name: 'General Services Office',
+    type: 'Department',
+    aliases: [
+      'General Services Office - BPSSD Security Services',
+      'General Services Office - BPSSD Utility Services',
+      'General Services Office - Narciso Ramos Sports & Civic Center',
+    ],
+  },
+  { abbr: 'Housing', name: 'Provincial Human Settlements and Urban Development Authority', type: 'Department' },
+  { abbr: 'HRMDO', name: 'Human Resource Management and Development Office', type: 'Department' },
+  { abbr: 'IAD', name: 'Internal Audit Division', type: 'Department' },
+  { abbr: 'Jail', name: 'Pangasinan Provincial Jail', type: 'Department' },
+  { abbr: 'Legal', name: 'Provincial Legal Office', type: 'Department' },
+  { abbr: 'Library', name: 'Pangasinan Provincial Library', type: 'Department' },
+  { abbr: 'MISO', name: 'Management Information Service Office', type: 'Department' },
+  { abbr: 'PDRRMO', name: 'Provincial Disaster Risk Reduction and Management Office', type: 'Department' },
+  { abbr: 'PEDIPO', name: 'Provincial Economic Development and Investment Promotion Office', type: 'Department' },
+  { abbr: 'PENRO', name: 'Provincial Government - Environment and Natural Resources Office', type: 'Department' },
+  { abbr: 'PESO', name: 'Public Employment Services Office', type: 'Department' },
+  {
+    abbr: 'PGO',
+    name: 'Provincial Governor\'s Office',
+    type: 'Department',
+    aliases: [
+      'PGO Archive',
+      'Special Events',
+      'Task Force Kalikasan',
+      'Health and Wellness',
+      'Provincial Prosecutor Office',
+    ],
+  },
+  { abbr: 'PHMSO', name: 'Provincial Hospital Management Services Office', type: 'Department' },
+  { abbr: 'PHO', name: 'Provincial Health Office', type: 'Department' },
+  { abbr: 'PIMRO', name: 'Pangasinan Information and Media Relations Office', type: 'Department' },
+  { abbr: 'PPC', name: 'Pangasinan Polytechnic College', type: 'Department' },
+  { abbr: 'PPCLDO', name: 'Provincial Population Cooperative and Livelihood Development Office', type: 'Department' },
+  { abbr: 'PPDO', name: 'Provincial Planning and Development Office', type: 'Department' },
+  { abbr: 'PSWDO', name: 'Provincial Social Welfare and Development Office', type: 'Department' },
+  { abbr: 'PRC', name: 'Pangasinan Reformation Center', type: 'Department', aliases: ['Reformation'] },
+  { abbr: 'TESDA', name: 'Technical Education and Skills Development Authority', type: 'Department' },
+  { abbr: 'Tourism', name: 'Provincial Tourism and Cultural Affairs Office', type: 'Department' },
+  { abbr: 'Treasury', name: 'Provincial Treasury Office', type: 'Department' },
+  { abbr: 'Veterinary', name: 'Provincial Veterinary Office', type: 'Department' },
+  { abbr: 'Vice Gov', name: 'Provincial Vice Governor\'s Office', type: 'Department' },
+  { abbr: 'Alaminos', name: 'Western Pangasinan District Hospital', type: 'Hospital' },
+  { abbr: 'Asingan', name: 'Asingan Community Hospital', type: 'Hospital' },
+  { abbr: 'Bayambang', name: 'Bayambang District Hospital', type: 'Hospital' },
+  { abbr: 'Bolinao', name: 'Bolinao Community Hospital', type: 'Hospital' },
+  { abbr: 'Dasol', name: 'Dasol Community Hospital', type: 'Hospital' },
+  { abbr: 'Lingayen', name: 'Lingayen District Hospital', type: 'Hospital' },
+  { abbr: 'Manaoag', name: 'Manaoag Community Hospital', type: 'Hospital' },
+  { abbr: 'Mangatarem', name: 'Mangatarem District Hospital', type: 'Hospital' },
+  { abbr: 'Mapandan', name: 'Mapandan Community Hospital', type: 'Hospital' },
+  { abbr: 'Pozorrubio', name: 'Pozorrubio Community Hospital', type: 'Hospital', aliases: ['Pozzorrubio'] },
+  { abbr: 'PPH San Carlos', name: 'Pangasinan Provincial Hospital', type: 'Hospital' },
+  { abbr: 'Tayug', name: 'Eastern Pangasinan District Hospital', type: 'Hospital' },
+  { abbr: 'Umingan', name: 'Umingan Community Hospital', type: 'Hospital' },
+  { abbr: 'Urdaneta', name: 'Urdaneta District Hospital', type: 'Hospital' },
+];
+
+function parseOfficeEntry(entry: string): { abbreviation: string; fullName: string } {
+  if (entry.includes(' - ')) {
+    const parts = entry.split(' - ');
+    return {
+      abbreviation: parts[0].trim(),
+      fullName: parts.slice(1).join(' - ').trim(),
+    };
+  }
+  return {
+    abbreviation: '',
+    fullName: entry.trim(),
+  };
+}
+
+interface DynamicOfficeDef {
+  abbr: string;
+  name: string;
+  type: 'Department' | 'Hospital';
+  names: Set<string>;
+  pattern?: RegExp;
+}
+
+function buildDynamicOfficeMap(settingsOfficeNames: string[] = []): {
+  defs: DynamicOfficeDef[];
+  matchOffice: (name: string) => string | null;
+} {
+  const map = new Map<string, DynamicOfficeDef>();
+
+  // 1. Seed with BASE_OFFICES
+  for (const base of BASE_OFFICES) {
+    const def: DynamicOfficeDef = {
+      abbr: base.abbr,
+      name: base.name,
+      names: new Set([base.name, base.abbr]),
+      type: base.type,
+      pattern: base.abbr === 'BM Staff' ? /^Office of BM /i : undefined,
+    };
+    if (base.aliases) {
+      base.aliases.forEach((a) => def.names.add(a));
+    }
+    map.set(base.abbr.toLowerCase(), def);
+  }
+
+  // 2. Incorporate dynamic entries from Settings
+  for (const entry of settingsOfficeNames) {
+    const trimmed = (entry || '').trim();
+    if (!trimmed) continue;
+
+    const { abbreviation, fullName } = parseOfficeEntry(trimmed);
+
+    // Only process if it has an acronym/abbreviation OR matches an existing base office
+    if (abbreviation) {
+      const key = abbreviation.toLowerCase();
+      const isHospital =
+        fullName.toLowerCase().includes('hospital') ||
+        abbreviation.toLowerCase().includes('hospital');
+
+      let def = map.get(key);
+      if (!def) {
+        // Brand new dynamic office or hospital added by user with acronym!
+        def = {
+          abbr: abbreviation,
+          name: fullName,
+          names: new Set<string>(),
+          type: isHospital ? 'Hospital' : 'Department',
+        };
+        map.set(key, def);
+      }
+      def.names.add(fullName);
+      def.names.add(trimmed);
+      def.names.add(abbreviation);
+    } else {
+      // Entry has no acronym prefix. Check if it matches any base office name or alias
+      for (const def of map.values()) {
+        for (const existingName of def.names) {
+          if (existingName.toLowerCase() === trimmed.toLowerCase()) {
+            def.names.add(trimmed);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Sort definitions: Departments first (alphabetical by abbr), then Hospitals (alphabetical by abbr)
+  const defsList = Array.from(map.values()).sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type === 'Department' ? -1 : 1;
+    }
+    return a.abbr.localeCompare(b.abbr);
+  });
+
+  // Matcher function
+  const matchOffice = (officeName: string): string | null => {
+    if (!officeName) return null;
+    const clean = officeName.trim();
+    const lower = clean.toLowerCase();
+
+    // 1. Exact case-sensitive match against known names
+    for (const def of defsList) {
+      if (def.names.has(clean)) return def.abbr;
+    }
+
+    // 2. Pattern match (e.g. BM Staff)
+    for (const def of defsList) {
+      if (def.pattern && def.pattern.test(clean)) return def.abbr;
+    }
+
+    // 3. Case-insensitive match against known names
+    for (const def of defsList) {
+      for (const name of def.names) {
+        if (name.toLowerCase() === lower) return def.abbr;
+      }
+    }
+
+    // 4. If clean has " - ", parse and match abbreviation or fullName
+    if (clean.includes(' - ')) {
+      const parsed = parseOfficeEntry(clean);
+      if (parsed.abbreviation && map.has(parsed.abbreviation.toLowerCase())) {
+        return map.get(parsed.abbreviation.toLowerCase())!.abbr;
+      }
+      for (const def of defsList) {
+        for (const name of def.names) {
+          if (name.toLowerCase() === parsed.fullName.toLowerCase()) return def.abbr;
+        }
+      }
+    }
+
+    // 5. Check if clean itself matches any abbreviation directly
+    if (map.has(lower)) {
+      return map.get(lower)!.abbr;
+    }
+
+    return null;
+  };
+
+  return { defs: defsList, matchOffice };
+}
+
+function getAppointmentMatrixCategory(status: string): 'regular' | 'casual' | 'jobOrder' | 'consultant' {
+  const s = (status || '').trim().toLowerCase();
+  if (['permanent', 'elective', 'co-terminous', 'coterminous', 'temporary'].includes(s)) return 'regular';
+  if (s === 'casual') return 'casual';
+  if (s === 'job order' || s === 'joborder') return 'jobOrder';
+  return 'consultant';
+}
+
+// Get Office and Hospital Scanning Status Matrix
+router.get('/scanning-status/office-matrix', async (req: Request, res: Response) => {
+  try {
+    const { dateFrom, dateTo } = req.query;
+
+    // Optional date filter for documents
+    const docDateFilter: any = {};
+    if (dateFrom || dateTo) {
+      docDateFilter.createdAt = {};
+      if (dateFrom) docDateFilter.createdAt.gte = new Date(String(dateFrom));
+      if (dateTo) {
+        const to = new Date(String(dateTo));
+        to.setHours(23, 59, 59, 999);
+        docDateFilter.createdAt.lte = to;
+      }
+    }
+
+    // 1. Employee counts per office and appointment status (ACTIVE ONLY)
+    const empCounts = await prisma.employee.findMany({
+      where: {
+        status: 'Active',
+      },
+      select: {
+        id: true,
+        officeName: true,
+        appointmentStatus: true,
+      },
+    });
+
+    // Fetch system settings to dynamically resolve all offices & hospitals
+    const settings = await prisma.systemSetting.findFirst({
+      select: { officeNames: true },
+    });
+    const settingsOfficeNames = (settings?.officeNames as string[]) || [];
+    const { defs, matchOffice } = buildDynamicOfficeMap(settingsOfficeNames);
+
+    // Initialize rows for all offices dynamically
+    const rows = defs.map((def) => ({
+      abbreviation: def.abbr,
+      name: def.name,
+      type: def.type,
+      employees: { regular: 0, casual: 0, jobOrder: 0, consultant: 0, total: 0 },
+      pdf: { regular: 0, casual: 0, jobOrder: 0, consultant: 0, total: 0 },
+      file201: { regular: 0, casual: 0, jobOrder: 0, consultant: 0, total: 0 },
+      overall: '-',
+      remarks: '',
+    }));
+
+    const rowsMap = new Map(rows.map((r) => [r.abbreviation, r]));
+
+    // Populate employee counts
+    empCounts.forEach((item) => {
+      const abbr = matchOffice(item.officeName);
+      if (abbr && rowsMap.has(abbr)) {
+        const row = rowsMap.get(abbr)!;
+        const cat = getAppointmentMatrixCategory(item.appointmentStatus);
+        row.employees[cat]++;
+        row.employees.total++;
+      }
+    });
+
+    // Helper to query yearly counts for a category filter
+    const countYearly = async (categoryWhere: any, targetField: 'pdf' | 'file201') => {
+      const docs = await prisma.document.findMany({
+        where: {
+          ...categoryWhere,
+          ...docDateFilter,
+          employee: {
+            status: 'Active',
+          },
+        },
+        select: {
+          employeeId: true,
+          createdAt: true,
+          employee: {
+            select: {
+              officeName: true,
+              appointmentStatus: true,
+            },
+          },
+        },
+      });
+
+      // Group by unique (employeeId, year)
+      const seen = new Set<string>();
+
+      docs.forEach((doc) => {
+        const abbr = matchOffice(doc.employee.officeName);
+        if (!abbr || !rowsMap.has(abbr)) return;
+
+        const cat = getAppointmentMatrixCategory(doc.employee.appointmentStatus);
+        const year = new Date(doc.createdAt).getFullYear();
+        const key = `${doc.employeeId}_${year}`;
+
+        if (!seen.has(key)) {
+          seen.add(key);
+          const row = rowsMap.get(abbr)!;
+          row[targetField][cat]++;
+          row[targetField].total++;
+        }
+      });
+    };
+
+    // 2. PDF count: employees with 'Position / Job Description' documents (yearly)
+    await countYearly({ category: 'Position / Job Description' }, 'pdf');
+
+    // 3. 201 File count: employees with documents in any other category (yearly)
+    await countYearly({ category: { not: 'Position / Job Description' } }, 'file201');
+
+    // 4. Compute totals
+    const totals = {
+      employees: { regular: 0, casual: 0, jobOrder: 0, consultant: 0, total: 0 },
+      pdf: { regular: 0, casual: 0, jobOrder: 0, consultant: 0, total: 0 },
+      file201: { regular: 0, casual: 0, jobOrder: 0, consultant: 0, total: 0 },
+    };
+
+    rows.forEach((row) => {
+      totals.employees.regular += row.employees.regular;
+      totals.employees.casual += row.employees.casual;
+      totals.employees.jobOrder += row.employees.jobOrder;
+      totals.employees.consultant += row.employees.consultant;
+      totals.employees.total += row.employees.total;
+
+      totals.pdf.regular += row.pdf.regular;
+      totals.pdf.casual += row.pdf.casual;
+      totals.pdf.jobOrder += row.pdf.jobOrder;
+      totals.pdf.consultant += row.pdf.consultant;
+      totals.pdf.total += row.pdf.total;
+
+      totals.file201.regular += row.file201.regular;
+      totals.file201.casual += row.file201.casual;
+      totals.file201.jobOrder += row.file201.jobOrder;
+      totals.file201.consultant += row.file201.consultant;
+      totals.file201.total += row.file201.total;
+    });
+
+    // Filter to only offices that have at least 1 active employee
+    const activeRows = rows.filter((row) => row.employees.total > 0);
+
+    res.json({
+      success: true,
+      rows: activeRows,
+      totals,
+    });
+  } catch (error: any) {
+    console.error('Error fetching office scanning matrix:', error);
+    res.status(500).json({ error: 'Failed to fetch office scanning matrix', details: error.message });
+  }
+});
+
+// Get Scanning Status / Progress overview across all employees
+router.get('/scanning-status', async (req: Request, res: Response) => {
+  try {
+    const { search, office, employeeStatus, scanFilter, page = '1', limit = '10', sortBy = 'updatedAt' } = req.query;
+
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build filter for employees
+    const where: any = {};
+
+    if (search) {
+      where.OR = [
+        { firstName: { contains: search as string, mode: 'insensitive' } },
+        { lastName: { contains: search as string, mode: 'insensitive' } },
+        { id: { contains: search as string, mode: 'insensitive' } },
+      ];
+    }
+
+    if (office && office !== 'All') {
+      where.officeName = office as string;
+    }
+
+    if (employeeStatus && employeeStatus !== 'all') {
+      where.status = employeeStatus as string;
+    }
+
+    // Scanning status filter (All, Scanned / With Docs, Unscanned / Without Docs)
+    if (scanFilter === 'with_docs') {
+      where.documents = { some: {} };
+    } else if (scanFilter === 'without_docs') {
+      where.documents = { none: {} };
+    }
+
+    // Query employees with their document counts and latest document date
+    const [employees, total] = await Promise.all([
+      prisma.employee.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: sortBy === 'name' ? { lastName: 'asc' } : { updatedAt: 'desc' },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          position: true,
+          officeName: true,
+          appointmentStatus: true,
+          status: true,
+          profilePicture: true,
+          updatedAt: true,
+          documents: {
+            select: {
+              id: true,
+              fileName: true,
+              category: true,
+              fileSize: true,
+              createdAt: true,
+              mimeType: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      }),
+      prisma.employee.count({ where }),
+    ]);
+
+    // Format results with scanning summary per employee
+    const rows = (employees as any[]).map((emp) => {
+      const docs = emp.documents || [];
+      const totalDocs = docs.length;
+      const latestDoc = docs[0];
+      const categoriesScanned = Array.from(new Set(docs.map((d: any) => d.category)));
+
+      return {
+        id: emp.id,
+        employeeNumber: emp.id,
+        fullName: [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' '),
+        position: emp.position || '-',
+        officeName: emp.officeName || '-',
+        employmentType: emp.appointmentStatus || '-',
+        appointmentStatus: emp.appointmentStatus || '-',
+        status: emp.status,
+        profilePicture: emp.profilePicture,
+        scannedDocumentsCount: totalDocs,
+        hasScannedDocuments: totalDocs > 0,
+        categoriesCount: categoriesScanned.length,
+        categories: categoriesScanned,
+        lastScannedAt: latestDoc?.createdAt || null,
+        documents: docs,
+        _count: {
+          documents: totalDocs,
+        },
+      };
+    });
+
+    // KPI stats based on current office/search filter (ignoring scanFilter so KPIs show the full scope)
+    const filterScopeWhere: any = {};
+    if (search) {
+      filterScopeWhere.OR = [
+        { firstName: { contains: search as string, mode: 'insensitive' } },
+        { lastName: { contains: search as string, mode: 'insensitive' } },
+        { id: { contains: search as string, mode: 'insensitive' } },
+      ];
+    }
+    if (office && office !== 'All') {
+      filterScopeWhere.officeName = office as string;
+    }
+    if (employeeStatus && employeeStatus !== 'all') {
+      filterScopeWhere.status = employeeStatus as string;
+    }
+
+    const totalEmployeesInScope = await prisma.employee.count({ where: filterScopeWhere });
+
+    const employeesWithDocsCount = await prisma.employee.count({
+      where: {
+        ...filterScopeWhere,
+        documents: { some: {} },
+      },
+    });
+
+    const totalDocsInScope = await prisma.document.count({
+      where: {
+        employee: filterScopeWhere,
+      },
+    });
+
+    // Active & Inactive counts in this filtered scope
+    const activeEmployeesCount = await prisma.employee.count({
+      where: {
+        ...filterScopeWhere,
+        status: 'Active'
+      }
+    });
+
+    const inactiveEmployeesCount = await prisma.employee.count({
+      where: {
+        ...filterScopeWhere,
+        status: 'Inactive'
+      }
+    });
+
+    // Distinct offices among all employees for dropdown options
+    const distinctOffices = await prisma.employee.findMany({
+      select: { officeName: true },
+      distinct: ['officeName'],
+      orderBy: { officeName: 'asc' }
+    });
+    const offices = Array.from(new Set(distinctOffices.map((o: any) => {
+      const raw = String(o.officeName || '').trim();
+      if (raw.includes(' - ')) {
+        const parts = raw.split(' - ').map((p: string) => p.trim());
+        return parts.slice(1).join(' - ') || parts[0];
+      }
+      return raw;
+    }).filter(Boolean))).sort((a: string, b: string) => a.localeCompare(b));
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum) || 1,
+      },
+      stats: {
+        employeesWithScannedFiles: employeesWithDocsCount,
+        totalDocumentsScanned: totalDocsInScope,
+        averageFilesPerEmployee:
+          employeesWithDocsCount > 0 ? +(totalDocsInScope / employeesWithDocsCount).toFixed(1) : 0,
+        totalEmployeesInScope,
+        activeEmployeesCount,
+        inactiveEmployeesCount,
+      },
+      offices,
+    });
+  } catch (error: any) {
+    console.error('Error fetching scanning status:', error);
+    res.status(500).json({ error: 'Failed to fetch scanning status', details: error.message });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

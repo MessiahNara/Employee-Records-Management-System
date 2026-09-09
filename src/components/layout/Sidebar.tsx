@@ -5,7 +5,7 @@ import {
   MdDashboard, MdPeople, MdDescription, MdSettings, MdFolder,
   MdAssignmentTurnedIn, MdInsertChart, MdInbox, MdCalendarToday,
   MdExpandMore, MdChevronRight, MdChat, MdInventory, MdPieChart,
-  MdSecurity
+  MdSecurity, MdDocumentScanner
 } from 'react-icons/md';
 import api from '../../services/api';
 import './Sidebar.css';
@@ -54,6 +54,7 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
 
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
+  const [isScanningOpen, setIsScanningOpen] = useState(false);
 
   // Auto-expand menus based on current URL path
   useEffect(() => {
@@ -62,6 +63,9 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     }
     if (currentPath === '/reports' || currentPath === '/reports/pulled-out' || currentPath === '/reports/transferred' || currentPath === '/inventory') {
       setIsReportsOpen(true);
+    }
+    if (currentPath === '/scanning-status' || currentPath === '/scanning-status/office') {
+      setIsScanningOpen(true);
     }
   }, [currentPath]);
 
@@ -313,6 +317,26 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
     { path: '/analytics', label: 'Dashboard Analytics', icon: MdPieChart, iconColor: '#f43f5e', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/users', label: 'Users', icon: MdPeople, iconColor: '#8b5cf6', requiredRoles: ['developer'] },
     { path: '/file201', label: 'File Locator', icon: MdFolder, iconColor: '#3b82f6', requiredRoles: ['superadmin', 'admin', 'developer'] },
+    {
+      path: '#scanning-menu',
+      label: 'Scanning Status',
+      icon: MdDocumentScanner,
+      iconColor: '#10b981',
+      requiredRoles: ['superadmin', 'admin', 'developer'],
+      subItems: [
+        { path: '/scanning-status', label: 'Employee Scanning Status' },
+        { path: '/scanning-status/office', label: 'Office and Hospital Status' }
+      ],
+      isOpen: isScanningOpen,
+      onToggle: () => {
+        if (isCollapsed && onExpandSidebar) {
+          onExpandSidebar();
+          setIsScanningOpen(true);
+        } else {
+          setIsScanningOpen(!isScanningOpen);
+        }
+      }
+    },
     { path: '/audit-logs', label: 'Audit Logs', icon: MdDescription, iconColor: '#f59e0b', requiredRoles: ['superadmin', 'admin', 'developer'] },
     { path: '/backup-restore', label: 'Backup & Restore', icon: MdSecurity, iconColor: '#0ea5e9', requiredRoles: ['superadmin', 'developer'] },
     // If admin has role 'admin', they see Requests under Admin Tools
@@ -359,6 +383,10 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
   });
 
   const hasAccess = (item: NavItem): boolean => {
+    // Scanning Status is always accessible to any user in Admin Tools
+    if (item.label === 'Scanning Status') {
+      return true;
+    }
     // Superadmin and Developer always have full access to tools matching their role
     if (userRole === 'developer' || userRole === 'superadmin') {
       if (item.requiredRoles && item.requiredRoles.length > 0 && !item.requiredRoles.includes(userRole)) {
@@ -449,8 +477,8 @@ function Sidebar({ isCollapsed, isMobileOpen, onExpandSidebar }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="sidebar__nav" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+      <nav className="sidebar__nav">
+        <div className="sidebar__scrollable">
           {navGroups.slice(0, -1).map((group, groupIndex) => (
             <div key={groupIndex} className="sidebar__nav-group">
               {!isCollapsed && group.label && (

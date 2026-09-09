@@ -17,7 +17,7 @@ import activityRoutes from './routes/activity.routes';
 import chatRoutes from './routes/chat.routes';
 import yellowBoxRoutes from './routes/yellowBox.routes';
 import inventoryRoutes from './routes/inventory.routes';
-import backupRoutes from './routes/backup.routes';
+import backupRoutes, { getLastRestoreInfo } from './routes/backup.routes';
 import { initBackupScheduler } from './utils/backupScheduler';
 import { validateSession } from './middleware/session';
 import { syncExistingRecordsToDropdownOptions } from './utils/dropdownOptionsHelper';
@@ -225,7 +225,12 @@ initBackupScheduler();
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', message: 'Server is running', version: '1.6.1' });
+  res.json({
+    status: 'ok',
+    message: 'Server is running',
+    version: '1.6.1',
+    lastRestore: getLastRestoreInfo(),
+  });
 });
 
 // Global Express error handler middleware
@@ -282,6 +287,13 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     };
 
     const server = https.createServer(httpsOptions, app);
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[server] ✅ Port ${PORT} is already in use (ERMS Windows Service or another backend instance is active). Existing backend is ready!`);
+      } else {
+        console.error('[server] HTTPS Server error:', err);
+      }
+    });
     initSocket(server);
     server.listen(Number(PORT), HOST, () => {
       console.log(`🚀 Server is running on https://localhost:${PORT}`);
@@ -294,6 +306,13 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   } catch (err) {
     console.error('⚠️ Failed to start HTTPS server, falling back to HTTP:', err);
     const server = http.createServer(app);
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[server] ✅ Port ${PORT} is already in use (ERMS Windows Service is active).`);
+      } else {
+        console.error('[server] HTTP Server error:', err);
+      }
+    });
     initSocket(server);
     server.listen(Number(PORT), HOST, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
@@ -306,6 +325,13 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
 } else {
   console.log('ℹ️ SSL certificates not found or incomplete, starting HTTP server...');
   const server = http.createServer(app);
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`[server] ✅ Port ${PORT} is already in use (ERMS Windows Service is active).`);
+    } else {
+      console.error('[server] HTTP Server error:', err);
+    }
+  });
   initSocket(server);
   server.listen(Number(PORT), HOST, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);

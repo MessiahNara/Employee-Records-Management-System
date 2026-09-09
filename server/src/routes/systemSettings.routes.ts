@@ -402,11 +402,14 @@ router.get('/', async (req: Request, res: Response) => {
       }).catch(() => {});
     }
 
+    const rawOfficeNames = (settings.officeNames as string[] | null) ?? [];
+    const preservedOfficeNames = Array.from(new Set(rawOfficeNames.map((o: string) => String(o || '').trim()).filter(Boolean))).sort((a: string, b: string) => a.localeCompare(b));
+
     res.json({
       idleTimeout: settings.idleTimeout,
       autoRename: settings.autoRename,
       appointmentStatuses: (settings.appointmentStatuses as string[] | null) ?? DEFAULT_APPOINTMENT_STATUSES,
-      officeNames: (settings.officeNames as string[] | null) ?? [],
+      officeNames: preservedOfficeNames,
       positions: (settings.positions as string[] | null) ?? [],
       recordLocations,
       dispositionProvisions,
@@ -470,7 +473,9 @@ router.put('/dropdown-options', requireDeveloperRole, async (req: Request, res: 
     const { appointmentStatuses, officeNames, positions, recordLocations, dispositionProvisions, itemNumbers, prdsGrds, divisions, classificationCategories, subCategories, aoYears, reasonsForSeparation } = req.body;
     const updateData: any = {};
     if (Array.isArray(appointmentStatuses)) updateData.appointmentStatuses = appointmentStatuses;
-    if (Array.isArray(officeNames)) updateData.officeNames = officeNames;
+    if (Array.isArray(officeNames)) {
+      updateData.officeNames = Array.from(new Set(officeNames.map((o: string) => String(o || '').trim()).filter(Boolean))).sort((a: string, b: string) => a.localeCompare(b));
+    }
     if (Array.isArray(positions)) updateData.positions = positions;
     if (Array.isArray(aoYears)) updateData.aoYears = aoYears;
     if (Array.isArray(reasonsForSeparation)) updateData.reasonsForSeparation = reasonsForSeparation;

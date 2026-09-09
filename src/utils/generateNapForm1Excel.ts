@@ -58,7 +58,7 @@ export default async function generateNapForm1Excel(
   const headerValueFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 10, bold: true };
 
   // Dynamic values
-  const deptLabel = 'Human Resource Management and Development Office (HRMDO)';
+  const deptLabel = 'Human Resource Management and Development Office';
   const sectionLabel = napFormHeader.sectionUnit || (divName && divName !== 'ALL' ? divName : '');
   const datePrepared = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 

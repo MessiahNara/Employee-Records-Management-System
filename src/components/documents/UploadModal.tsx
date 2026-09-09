@@ -4,6 +4,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import SearchableDropdown from '../ui/SearchableDropdown';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../../data/provincialOffices';
 import api from '../../services/api';
 import { getAuthState } from '../../utils/mockAuth';
 import './UploadModal.css';
@@ -84,7 +85,11 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
           appointmentFrom: '', appointmentTo: ''
         };
       } else {
-        newList[index] = { ...newList[index], [field]: value };
+        const finalVal =
+          (field === 'detailedTo' || field === 'recalledFrom' || field === 'recalledTo') && typeof value === 'string'
+            ? getOfficeFullName(value)
+            : value;
+        newList[index] = { ...newList[index], [field]: finalVal };
       }
       return newList;
     });
@@ -118,7 +123,7 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
         try {
           const res = await api.systemSettings.get();
           setDropdownOptions({
-            officeNames: res.officeNames || [],
+            officeNames: cleanOfficeDropdownOptions(res.officeNames || []),
             positions: res.positions || [],
             aoYears: res.aoYears || [],
           });

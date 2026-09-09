@@ -4,6 +4,7 @@ import Input from './ui/Input';
 import SearchableDropdown from './ui/SearchableDropdown';
 import ProfilePictureUpload from './ProfilePictureUpload';
 import { MdPerson, MdWork, MdDescription, MdCheck, MdArrowForward, MdArrowBack, MdWarning } from 'react-icons/md';
+import { cleanOfficeDropdownOptions, getOfficeFullName } from '../data/provincialOffices';
 import './EmployeeFormWizard.css';
 
 export interface EmployeeWizardFormData {
@@ -452,10 +453,11 @@ export const EmployeeFormWizard: React.FC<EmployeeFormWizardProps> = ({
               </label>
               <SearchableDropdown
                 id="wizard-office-name"
-                options={dropdownOptions.officeNames}
-                value={localFormData.officeHospitalName}
+                options={cleanOfficeDropdownOptions(dropdownOptions.officeNames)}
+                value={getOfficeFullName(localFormData.officeHospitalName)}
                 onChange={(val) => {
-                  handleChange('officeHospitalName', val);
+                  const cleanVal = getOfficeFullName(val);
+                  handleChange('officeHospitalName', cleanVal);
                   if (stepErrors.officeHospitalName) setStepErrors(prev => ({ ...prev, officeHospitalName: '' }));
                 }}
                 placeholder="Select or type office/hospital"

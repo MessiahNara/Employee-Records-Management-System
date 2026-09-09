@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import api from '../services/api';
 import Card from '../components/ui/Card';
+import { getOfficeFullName } from '../data/provincialOffices';
 import './Analytics.css';
 import './Dashboard.css'; // Import to use the exact same dashboard KPI styles
 
@@ -76,7 +77,8 @@ function Analytics() {
   const hiringTimelineCounts: Record<string, number> = {};
   
   filteredEmployees.forEach(emp => {
-    const dept = emp.department || emp.officeName || 'Unassigned';
+    const rawOffice = emp.department || emp.officeName;
+    const dept = rawOffice ? getOfficeFullName(rawOffice) : 'Unassigned';
     departmentCounts[dept] = (departmentCounts[dept] || 0) + 1;
     
     const appt = emp.appointmentStatus || 'Unknown';
@@ -121,7 +123,10 @@ function Analytics() {
   });
 
   // Calculate total departments from filtered data, or global? Let's use global for the top card
-  const globalDepartmentCounts = new Set(employees.map(e => e.department || e.officeName || 'Unassigned'));
+  const globalDepartmentCounts = new Set(employees.map(e => {
+    const raw = e.department || e.officeName;
+    return raw ? getOfficeFullName(raw) : 'Unassigned';
+  }));
   const totalDepartments = globalDepartmentCounts.size;
 
   // Format data for Recharts (Show all departments)
