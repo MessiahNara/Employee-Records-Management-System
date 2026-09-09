@@ -25,11 +25,21 @@ try {
 }
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
+function removeCrossorigin() {
+  return {
+    name: 'remove-crossorigin',
+    enforce: 'post',
+    transformIndexHtml(html) {
+      return html.replace(/\bcrossorigin\b/g, '');
+    },
+  };
+}
+
 export default defineConfig(() => {
   const devPort = 5174;
 
   return {
-    plugins: [react(), basicSsl()],
+    plugins: [react(), basicSsl(), removeCrossorigin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

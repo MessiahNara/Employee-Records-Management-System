@@ -70,51 +70,14 @@ function readClientConfig() {
   return null;
 }
 
-// Poll the local server health endpoint until it responds, then invoke callback.
-function waitForServer(callback) {
-  const healthUrl = 'https://127.0.0.1:5000/api/health';
-  const maxAttempts = 120; // 60 seconds (500 ms × 120) - increased for database initialization
-  let attempts = 0;
-  let done = false;
-
-  console.log('[server] Waiting for backend server to start...');
-
-  function tryOnce() {
-    if (done) return;
-    attempts++;
-    const req = https.get(healthUrl, { rejectUnauthorized: false }, (res) => {
-      if (done) { res.resume(); return; }
-      res.resume();
-      done = true;
-      console.log(`[server] ✅ Ready after ${attempts} attempt(s) (${(attempts * 500) / 1000}s)`);
-      callback();
-    });
-    req.on('error', () => {
-      if (done) return;
-      if (attempts % 20 === 0) {
-        // Log progress every 10 seconds
-        console.log(`[server] Still waiting... (${(attempts * 500) / 1000}s elapsed)`);
-      }
-      if (attempts >= maxAttempts) {
-        done = true;
-        console.warn('[server] ⚠️ Server startup timeout after 60 seconds. Loading frontend anyway - you may see connection errors.');
-        callback();
-        return;
-      }
-      setTimeout(tryOnce, 500);
-    });
-    req.setTimeout(1000, () => { req.destroy(); });
-  }
-
-  tryOnce();
-}
-
 function loadFrontend() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const frontendIndexPath = resolveFrontendIndexPath();
   if (!fs.existsSync(frontendIndexPath)) {
     console.error('[ui] index.html not found at', frontendIndexPath);
+    return;
   }
+  console.log('[ui] Loading frontend from', frontendIndexPath);
   mainWindow.loadFile(frontendIndexPath);
 }
 
@@ -389,8 +352,12 @@ function createWindow() {
   mainWindow.on('maximize', applyZoom);
   mainWindow.on('unmaximize', applyZoom);
 
-  // Allow manual Ctrl + 0, Ctrl + +, Ctrl + -, and zoom adjustments
+  // Allow manual Ctrl + 0, Ctrl + +, Ctrl + -, zoom adjustments, and Ctrl+R / F5 reload
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    if ((input.control && (input.key === 'r' || input.key === 'R')) || input.key === 'F5') {
+      mainWindow.webContents.reload();
+      return;
+    }
     if (input.control && (input.key === '0' || input.code === 'Digit0' || input.code === 'Numpad0')) {
       event.preventDefault();
       currentZoom = TARGET_ZOOM;
@@ -415,52 +382,34 @@ function createWindow() {
     applyZoom();
   });
 
-
-  // Show window when ready to avoid flickering
-  mainWindow.once('ready-to-show', () => {
-    console.log('[ui] Window ready to show');
+  // Show window as soon as content is painted
+  let windowShown = false;
+  const showWindow = () => {
+    if (windowShown || !mainWindow || mainWindow.isDestroyed()) return;
+    windowShown = true;
+    console.log('[ui] Showing window');
     mainWindow.show();
-  });
+    mainWindow.focus();
+  };
+
+  mainWindow.once('ready-to-show', showWindow);
+  // Hard fallback: always show within 3 seconds no matter what
+  setTimeout(showWindow, 3000);
 
   // Intercept all target="_blank" links and window.open calls
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     const lowerUrl = url.toLowerCase();
-    
-    // For PDFs and DOCX, hand them over to the OS to open in native apps (Acrobat, Word)
-    // This is the most reliable way to "view" them since Electron lacks built-in document viewers.
     if (lowerUrl.endsWith('.pdf') || lowerUrl.endsWith('.docx') || lowerUrl.endsWith('.doc')) {
       require('electron').shell.openExternal(url);
       return { action: 'deny' };
     }
-    
-    // For XLSX, XLS, and others, force a direct download dialog instead of opening a browser!
     mainWindow.webContents.downloadURL(url);
     return { action: 'deny' };
   });
 
-
-  // Load the app
-  if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-    // Development mode - load from Vite dev server
-    const devUrl = `https://localhost:5174`;
-    // In dev mode, server runs on localhost on port 5000 with HTTPS
-    GLOBAL_SERVER_URL = `https://localhost:5000`;
-    console.log('[ui] Loading from Vite dev server at', devUrl);
-    console.log('[server-url] Set to', GLOBAL_SERVER_URL);
-    mainWindow.loadURL(devUrl);
-    // DevTools can be opened manually via Ctrl+Shift+I if needed
-  } else {
-    // Production mode
-    const clientConfig = readClientConfig();
-    if (clientConfig?.serverUrl) {
-      // Client build pointing at a remote server — load immediately.
-      loadFrontend();
-    } else {
-      // Load loading splash screen first so window opens instantly
-      console.log('[ui] Loading splash screen first...');
-      mainWindow.loadFile(path.join(__dirname, 'loading.html'));
-    }
-  }
+  // Always load frontend from built dist — works reliably on both file:// and http://
+  // The backend server runs independently (as a service or via npm run dev)
+  loadFrontend();
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -639,37 +588,10 @@ app.whenReady().then(() => {
   configureMediaPermissions();
   createWindow();
 
-  if (app.isPackaged) {
-    // Wait for the local backend to be ready before showing the login page.
-    // This prevents "Unable to reach the server" errors caused by the UI
-    // loading faster than the server process starts.
-    const hasClientConfig = readClientConfig() !== null;
-    const hasServerBundle = fs.existsSync(path.join(process.resourcesPath, 'server.bundle.cjs'));
-    const isClient = hasClientConfig || !hasServerBundle;
-    
-    if (isClient) {
-      // Client build pointing at a remote server — load immediately.
-      loadFrontend();
-    } else {
-      waitForServer(loadFrontend);
-    }
-  }
-
   app.on('activate', () => {
     // On macOS, re-create window when dock icon is clicked
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
-      if (app.isPackaged) {
-        const hasClientConfig = readClientConfig() !== null;
-        const hasServerBundle = fs.existsSync(path.join(process.resourcesPath, 'server.bundle.cjs'));
-        const isClient = hasClientConfig || !hasServerBundle;
-        
-        if (isClient) {
-          loadFrontend();
-        } else {
-          waitForServer(loadFrontend);
-        }
-      }
     }
   });
 });

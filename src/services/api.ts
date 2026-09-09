@@ -221,7 +221,7 @@ async function apiRequest<T>(
   const API_BASE_URL = getApiBaseUrl();
   const url = `${API_BASE_URL}${endpoint}`;
   
-  const timeoutMs = options.timeout || 15000; // default 15s timeout
+  const timeoutMs = options.timeout || 8000; // default 8s timeout
   
   const config: RequestInit = {
     ...options,
@@ -232,7 +232,7 @@ async function apiRequest<T>(
     },
   };
 
-  const maxRetries = (options.method && options.method !== 'GET') ? 0 : 2;
+  const maxRetries = (options.method && options.method !== 'GET') ? 0 : 1;
   let lastError: any = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -276,7 +276,7 @@ async function apiRequest<T>(
 
       // If it's a transient network/connection error and we have retries left, wait briefly and retry
       if (isTransientNetworkError && attempt < maxRetries) {
-        await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
+        await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
         continue;
       }
 
@@ -1088,7 +1088,7 @@ export const healthCheck = () =>
     message: string;
     version?: string;
     lastRestore?: { timestamp: string; restoredBy: string; filename: string; message?: string } | null;
-  }>('/health');
+  }>('/health', { timeout: 5000 });
 
 // 201 File Borrow/Return API
 export const file201Api = {

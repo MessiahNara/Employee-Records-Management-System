@@ -16,6 +16,7 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
+      user-select: none;
     }
     .loader-container {
       display: flex;
@@ -33,7 +34,7 @@
       margin-bottom: 24px;
     }
     .title {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
       color: #111827;
       margin-bottom: 8px;
@@ -42,6 +43,12 @@
     .subtitle {
       font-size: 14px;
       color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .status {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 12px;
     }
     @keyframes spin {
       0% { transform: rotate(0deg); }
@@ -53,7 +60,18 @@
   <div class="loader-container">
     <div class="spinner"></div>
     <div class="title">Employee Records Management System</div>
-    <div class="subtitle">Starting local database and services...</div>
+    <div class="subtitle">Initializing services...</div>
+    <div class="status" id="status">Starting application</div>
   </div>
+  <script>
+    var dots = 0;
+    var statusEl = document.getElementById('status');
+    setInterval(function() {
+      dots = (dots + 1) % 4;
+      var text = 'Starting application';
+      for (var i = 0; i < dots; i++) text += '.';
+      statusEl.textContent = text;
+    }, 800);
+  </script>
 </body>
 </html>

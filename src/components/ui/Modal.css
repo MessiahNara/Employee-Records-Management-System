@@ -70,9 +70,14 @@
 }
 
 .modal--xl {
+  width: 92vw;
+  max-width: 1180px;
+  max-height: 88vh;
+}
+
+.modal--2xl {
   width: 95vw;
   max-width: 1550px;
-  height: 88vh;
   max-height: 92vh;
 }
 

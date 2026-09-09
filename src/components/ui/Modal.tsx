@@ -15,12 +15,15 @@ interface ModalProps {
   title?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   hideCloseButton?: boolean;
   isMaximized?: boolean;
   noPadding?: boolean;
   allowMinimize?: boolean;
   allowFullscreen?: boolean;
+  maxWidth?: string | number;
+  maxHeight?: string | number;
+  style?: React.CSSProperties;
 }
 
 function Modal({
@@ -35,6 +38,9 @@ function Modal({
   noPadding = false,
   allowMinimize,
   allowFullscreen,
+  maxWidth,
+  maxHeight,
+  style,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -167,6 +173,11 @@ function Modal({
       <div
         ref={modalRef}
         className={`modal modal--${size} ${effectiveMaximized ? 'modal--maximized modal--fullscreen' : ''}`}
+        style={effectiveMaximized ? undefined : {
+          ...(maxWidth ? { maxWidth } : {}),
+          ...(maxHeight ? { maxHeight } : {}),
+          ...style,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (

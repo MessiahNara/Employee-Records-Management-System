@@ -58,6 +58,7 @@ function EmployeeDetails() {
     appointmentStatus: '',
     appointmentFrom: '',
     appointmentTo: '',
+    remarks: '',
   });
   const [renewalErrors, setRenewalErrors] = useState<Record<string, string>>({});
   const [isSubmittingRenewal, setIsSubmittingRenewal] = useState(false);
@@ -67,6 +68,7 @@ function EmployeeDetails() {
   const [declineForm, setDeclineForm] = useState({
     dateOfSeparation: new Date().toISOString().split('T')[0],
     reasonForSeparation: '',
+    remarks: '',
   });
   const [declineErrors, setDeclineErrors] = useState<Record<string, string>>({});
 
@@ -215,11 +217,15 @@ function EmployeeDetails() {
         status: { from: employee.status, to: 'Inactive' },
         dateOfSeparation: { 
           from: employee.dateOfSeparation ? new Date(employee.dateOfSeparation).toISOString().split('T')[0] : null, 
-          to: declineForm.dateOfSeparation 
+          to: declineForm.dateOfSeparation || null
         },
         reasonOfSeparation: { 
           from: employee.reasonForSeparation, 
-          to: declineForm.reasonForSeparation 
+          to: declineForm.reasonForSeparation || null
+        },
+        remarks: {
+          from: employee.remarks || null,
+          to: declineForm.remarks?.trim() || null
         },
       };
 
@@ -310,6 +316,10 @@ function EmployeeDetails() {
           to: renewalStatusRequiresDates ? renewalForm.appointmentTo : null,
         },
         status: { from: employee.status, to: 'Active' },
+        remarks: {
+          from: employee.remarks || null,
+          to: renewalForm.remarks?.trim() || null,
+        },
       };
 
       const empName = `${employee.lastName}, ${employee.firstName}`;
@@ -1126,28 +1136,42 @@ function EmployeeDetails() {
                 borderTop: '1px solid var(--border-color)',
                 width: '100%',
                 paddingTop: '1.25rem',
-                marginTop: '0.5rem'
+                marginTop: '0.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center'
               }}>
                 <p style={{
                   fontWeight: 600,
                   fontSize: '0.9375rem',
                   marginBottom: '1.25rem',
-                  color: 'var(--text-primary)'
+                  color: 'var(--text-primary)',
+                  textAlign: 'center',
+                  width: '100%'
                 }}>
                   Do you want to renew this employee's appointment?
                 </p>
-                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '1rem', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  width: '100%', 
+                  maxWidth: '360px', 
+                  margin: '0 auto' 
+                }}>
                   <Button 
                     variant="primary" 
                     onClick={() => setShowRenewalForm(true)}
-                    style={{ minWidth: '130px', padding: '0.625rem 1.25rem' }}
+                    style={{ flex: 1, minWidth: '140px', padding: '0.65rem 1.25rem', justifyContent: 'center' }}
                   >
                     Yes (Renew)
                   </Button>
                   <Button 
                     variant="danger" 
                     onClick={() => setShowDeclineForm(true)}
-                    style={{ minWidth: '150px', padding: '0.625rem 1.25rem' }}
+                    style={{ flex: 1, minWidth: '140px', padding: '0.65rem 1.25rem', justifyContent: 'center' }}
                   >
                     No (Set Inactive)
                   </Button>
@@ -1233,6 +1257,20 @@ function EmployeeDetails() {
                     </div>
                   </>
                 )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Remarks <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.8rem' }}>(Optional)</span>
+                  </label>
+                  <textarea
+                    className="dashboard__form-input"
+                    placeholder="Enter remarks for renewal (optional)"
+                    rows={3}
+                    value={renewalForm.remarks}
+                    onChange={(e) => handleRenewalFormChange('remarks', e.target.value)}
+                    style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: '0.9375rem', resize: 'vertical' }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
@@ -1288,7 +1326,7 @@ function EmployeeDetails() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Reason for Separation <span style={{ color: 'var(--color-danger)' }}>*</span>
+                    Reason for Separation <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.8rem' }}>(Optional)</span>
                   </label>
                   <select
                     className="dashboard__form-select"
@@ -1296,16 +1334,25 @@ function EmployeeDetails() {
                     onChange={(e) => handleDeclineFormChange('reasonForSeparation', e.target.value)}
                     style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9375rem' }}
                   >
-                    <option value="">Select reason for separation</option>
+                    <option value="">Select reason for separation (Optional)</option>
                     {dropdownOptions.reasonsForSeparation.map((reason) => (
                       <option key={reason} value={reason}>{reason}</option>
                     ))}
                   </select>
-                  {declineErrors.reasonForSeparation && (
-                    <span style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 500 }}>
-                      ⚠️ {declineErrors.reasonForSeparation}
-                    </span>
-                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Remarks for Separation <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.8rem' }}>(Optional)</span>
+                  </label>
+                  <textarea
+                    className="dashboard__form-input"
+                    placeholder="Enter remarks or notes for separation (optional)"
+                    rows={3}
+                    value={declineForm.remarks}
+                    onChange={(e) => handleDeclineFormChange('remarks', e.target.value)}
+                    style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--border-radius)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: '0.9375rem', resize: 'vertical' }}
+                  />
                 </div>
               </div>
 

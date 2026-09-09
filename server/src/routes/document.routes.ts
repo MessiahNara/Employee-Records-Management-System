@@ -598,68 +598,89 @@ router.get('/scanning-status', async (req: Request, res: Response) => {
       where.documents = { none: {} };
     }
 
-    // Query employees with their document counts and latest document date
-    const [employees, total] = await Promise.all([
-      prisma.employee.findMany({
-        where,
-        skip,
-        take: limitNum,
-        orderBy: sortBy === 'name' ? { lastName: 'asc' } : { updatedAt: 'desc' },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          position: true,
-          officeName: true,
-          appointmentStatus: true,
-          status: true,
-          profilePicture: true,
-          updatedAt: true,
-          documents: {
+    let orderByClause: any = [{ documents: { _count: 'desc' } }, { lastName: 'asc' }];
+    const orderDir = ((req.query.sortOrder as string) || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    if (sortBy === 'scannedCount') {
+      orderByClause = [{ documents: { _count: orderDir } }, { lastName: 'asc' }];
+    } else if (sortBy === 'name') {
+      orderByClause = [{ lastName: orderDir }, { firstName: orderDir }];
+    } else if (sortBy === 'id') {
+      orderByClause = { id: orderDir };
+    } else if (sortBy === 'office') {
+      orderByClause = [{ officeName: orderDir }, { lastName: 'asc' }];
+    } else if (sortBy === 'position') {
+      orderByClause = [{ position: orderDir }, { lastName: 'asc' }];
+    } else if (sortBy === 'status') {
+      orderByClause = [{ status: orderDir }, { lastName: 'asc' }];
+    } else if (sortBy === 'updatedAt' || sortBy === 'latest') {
+      orderByClause = { updatedAt: orderDir };
+    }
+
+        const [employees, total] = await Promise.all([
+          prisma.employee.findMany({
+            where,
+            skip,
+            take: limitNum,
+            orderBy: orderByClause,
             select: {
               id: true,
-              fileName: true,
-              category: true,
-              fileSize: true,
-              createdAt: true,
-              mimeType: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              position: true,
+              officeName: true,
+              appointmentStatus: true,
+              status: true,
+              profilePicture: true,
+              updatedAt: true,
+              documents: {
+                select: {
+                  id: true,
+                  fileName: true,
+                  category: true,
+                  fileSize: true,
+                  createdAt: true,
+                  mimeType: true,
+                },
+                orderBy: { createdAt: 'desc' },
+              },
             },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
-      }),
-      prisma.employee.count({ where }),
-    ]);
+          }),
+          prisma.employee.count({ where }),
+        ]);
 
-    // Format results with scanning summary per employee
-    const rows = (employees as any[]).map((emp) => {
-      const docs = emp.documents || [];
-      const totalDocs = docs.length;
-      const latestDoc = docs[0];
-      const categoriesScanned = Array.from(new Set(docs.map((d: any) => d.category)));
+        // Format results with scanning summary per employee
+        const rows = (employees as any[]).map((emp) => {
+          const docs = emp.documents || [];
+          const totalDocs = docs.length;
+          const latestDoc = docs[0];
+          const categoriesScanned = Array.from(new Set(docs.map((d: any) => d.category)));
 
-      return {
-        id: emp.id,
-        employeeNumber: emp.id,
-        fullName: [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' '),
-        position: emp.position || '-',
-        officeName: emp.officeName || '-',
-        employmentType: emp.appointmentStatus || '-',
-        appointmentStatus: emp.appointmentStatus || '-',
-        status: emp.status,
-        profilePicture: emp.profilePicture,
-        scannedDocumentsCount: totalDocs,
-        hasScannedDocuments: totalDocs > 0,
-        categoriesCount: categoriesScanned.length,
-        categories: categoriesScanned,
-        lastScannedAt: latestDoc?.createdAt || null,
-        documents: docs,
-        _count: {
-          documents: totalDocs,
-        },
-      };
-    });
+          return {
+            id: emp.id,
+            employeeNumber: emp.id,
+            firstName: emp.firstName,
+            lastName: emp.lastName,
+            middleName: emp.middleName,
+            fullName: [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' '),
+            position: emp.position || '-',
+            officeName: emp.officeName || '-',
+            employmentType: emp.appointmentStatus || '-',
+            appointmentStatus: emp.appointmentStatus || '-',
+            status: emp.status,
+            profilePicture: emp.profilePicture,
+            scannedDocumentsCount: totalDocs,
+            hasScannedDocuments: totalDocs > 0,
+            categoriesCount: categoriesScanned.length,
+            categories: categoriesScanned,
+            lastScannedAt: latestDoc?.createdAt || null,
+            documents: docs,
+            _count: {
+              documents: totalDocs,
+            },
+          };
+        });
 
     // KPI stats based on current office/search filter (ignoring scanFilter so KPIs show the full scope)
     const filterScopeWhere: any = {};

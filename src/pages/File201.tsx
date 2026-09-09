@@ -289,7 +289,7 @@ function File201() {
       if (editingBox) {
         await api.yellowBoxes.update(editingBox.id, {
           boxLabel: boxLabel.trim(),
-          office: getOfficeFullName(office.trim()),
+          office: office.trim(),
           type: boxType,
           color: boxColor,
         });
@@ -297,7 +297,7 @@ function File201() {
       } else {
         await api.yellowBoxes.create({
           boxLabel: boxLabel.trim(),
-          office: getOfficeFullName(office.trim()),
+          office: office.trim(),
           type: boxType,
           color: boxColor,
         });
@@ -317,7 +317,7 @@ function File201() {
   const handleEditBoxClick = (box: YellowBox) => {
     setEditingBox(box);
     setBoxLabel(box.boxLabel);
-    setOffice(getOfficeFullName(box.office));
+    setOffice(box.office);
     setBoxType(box.type);
     setBoxColor(box.color || '#facc15');
     setIsBoxModalOpen(true);
@@ -396,7 +396,7 @@ function File201() {
       box.office.toLowerCase().includes(searchTerm.toLowerCase()) ||
       box.employees.some(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchOffice = officeFilter === 'All' || getOfficeFullName(box.office).toLowerCase() === getOfficeFullName(officeFilter).toLowerCase();
+    const matchOffice = officeFilter === 'All' || (box.office || '').trim().toLowerCase() === officeFilter.trim().toLowerCase();
     const matchType = typeFilter === 'All' || box.type === typeFilter;
 
     return matchSearch && matchOffice && matchType;
@@ -407,8 +407,21 @@ function File201() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedBoxes = filteredBoxes.slice(startIndex, startIndex + itemsPerPage);
 
-  // Unique offices and classifications for filters
-  const uniqueOffices = useMemo(() => cleanOfficeDropdownOptions(boxes.map(b => b.office)), [boxes]);
+  // Unique offices strictly based on existing boxes (completely independent of provincial offices list)
+  const uniqueOffices = useMemo(() => {
+    const offices = boxes
+      .map(b => b.office?.trim())
+      .filter((off): off is string => Boolean(off));
+    return Array.from(new Set(offices)).sort((a, b) => a.localeCompare(b));
+  }, [boxes]);
+
+  // If the active filter was on a box office that was deleted, reset filter to 'All'
+  useEffect(() => {
+    if (officeFilter !== 'All' && !uniqueOffices.includes(officeFilter)) {
+      setOfficeFilter('All');
+    }
+  }, [uniqueOffices, officeFilter]);
+
   const uniqueTypes = Array.from(new Set(boxes.map(b => b.type)));
   const uniqueEmployeeOffices = useMemo(() => cleanOfficeDropdownOptions(allEmployees.map(e => e.officeName)), [allEmployees]);
 
@@ -496,6 +509,7 @@ function File201() {
               value={officeFilter}
               onChange={(val) => setOfficeFilter(val || 'All')}
               placeholder="All Offices/Hospitals"
+              autoSanitizeOffices={false}
             />
           </div>
           <div className="file201-filter-group">
@@ -604,7 +618,7 @@ function File201() {
                   {/* White Paper Inventory Label */}
                   <div className="yellow-box-card__label">
                     <div className="yellow-box-card__label-title">{box.boxLabel}</div>
-                    <div className="yellow-box-card__label-office">{getOfficeFullName(box.office)}</div>
+                    <div className="yellow-box-card__label-office">{box.office}</div>
                     <div className="yellow-box-card__label-type">{box.type}</div>
                   </div>
 
@@ -705,7 +719,13 @@ function File201() {
             value={office}
             onChange={(e) => setOffice(e.target.value)}
             required
+            list="file201-box-offices-list"
           />
+          <datalist id="file201-box-offices-list">
+            {uniqueOffices.map((off) => (
+              <option key={off} value={off} />
+            ))}
+          </datalist>
 
           <Input
             label="Classification / Type (e.g. Regular, Non-Regular, Co-terminus)"
@@ -761,7 +781,7 @@ function File201() {
       <Modal
         isOpen={!!assigningBox}
         onClose={() => setAssigningBox(null)}
-        title={`Manage Files in Box: ${assigningBox?.boxLabel}${assigningBox?.office ? ` (${getOfficeFullName(assigningBox.office)})` : ''}`}
+        title={`Manage Files in Box: ${assigningBox?.boxLabel}${assigningBox?.office ? ` (${assigningBox.office})` : ''}`}
         size="lg"
       >
         {assigningBox && (
@@ -1018,7 +1038,7 @@ function File201() {
               </div>
               <div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Office</span>
-                <span style={{ color: 'var(--text-primary)' }}>{getOfficeFullName(deleteBoxTarget.office) || 'N/A'}</span>
+                <span style={{ color: 'var(--text-primary)' }}>{deleteBoxTarget.office || 'N/A'}</span>
               </div>
               <div>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Type</span>

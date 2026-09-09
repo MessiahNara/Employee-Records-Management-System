@@ -11,6 +11,7 @@ interface SearchableDropdownProps {
   className?: string;
   id?: string;
   disabled?: boolean;
+  autoSanitizeOffices?: boolean;
 }
 
 export default function SearchableDropdown({
@@ -22,11 +23,15 @@ export default function SearchableDropdown({
   className = '',
   id,
   disabled = false,
+  autoSanitizeOffices = true,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   // Automatically sanitize options so abbreviations or combined "Abbr - Full Name" strings are never shown as options
   const sanitizedOptions = useMemo(() => {
+    if (!autoSanitizeOffices) {
+      return (options || []).filter((opt): opt is string => Boolean(opt && opt.trim()));
+    }
     const isOfficeList = options.some((opt) => {
       if (!opt) return false;
       const clean = opt.trim();
@@ -47,12 +52,12 @@ export default function SearchableDropdown({
       return cleanOfficeDropdownOptions(options);
     }
     return options;
-  }, [options]);
+  }, [options, autoSanitizeOffices]);
 
   const displayVal = useMemo(() => {
     if (!value || value === 'All') return '';
-    return getOfficeFullName(value);
-  }, [value]);
+    return autoSanitizeOffices ? getOfficeFullName(value) : value;
+  }, [value, autoSanitizeOffices]);
 
   const [searchTerm, setSearchTerm] = useState(displayVal);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -89,6 +94,9 @@ export default function SearchableDropdown({
   const filteredOptions = useMemo(() => {
     if (!searchTerm.trim()) return sanitizedOptions;
     const lower = searchTerm.toLowerCase();
+    if (!autoSanitizeOffices) {
+      return sanitizedOptions.filter((opt) => opt.toLowerCase().includes(lower));
+    }
     return sanitizedOptions.filter((option) => {
       const full = getOfficeFullName(option);
       if (full.toLowerCase().includes(lower)) return true;
@@ -101,7 +109,7 @@ export default function SearchableDropdown({
       }
       return false;
     });
-  }, [sanitizedOptions, searchTerm]);
+  }, [sanitizedOptions, searchTerm, autoSanitizeOffices]);
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,7 +123,7 @@ export default function SearchableDropdown({
 
   // Handle option select
   const selectOption = (opt: string) => {
-    const clean = getOfficeFullName(opt);
+    const clean = autoSanitizeOffices ? getOfficeFullName(opt) : opt;
     setSearchTerm(clean);
     searchTermRef.current = clean;
     onChange(clean);
@@ -244,7 +252,7 @@ export default function SearchableDropdown({
                   }}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                 >
-                  {getOfficeFullName(option)}
+                  {autoSanitizeOffices ? getOfficeFullName(option) : option}
                 </li>
               ))}
             </ul>

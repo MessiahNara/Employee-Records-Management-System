@@ -2939,57 +2939,6 @@ function InventoryAppraisal() {
             </button>
           </div>
         </div>
-
-        {/* Pagination Footer */}
-        {totalRecords > 0 && (
-          <div className="inventory-pagination-bar">
-            <div className="inventory-pagination-size">
-              <span>Show per page:</span>
-              <select
-                className="inventory-select-compact"
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(parseInt(e.target.value, 10));
-                  setCurrentPage(1);
-                }}
-              >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={20}>20</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-            </div>
-
-            <div className="inventory-pagination-info">
-              Showing {totalRecords === 0 ? 0 : startIndex + 1} to {endIndex} of {totalRecords.toLocaleString()}
-            </div>
-
-            <div className="inventory-pagination-controls">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={safeCurrentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="inventory-page-number">
-                Page {safeCurrentPage} of {totalPages}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safeCurrentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
       </Card>
 
       {/* Division Pill Tabs Bar */}
@@ -3053,7 +3002,32 @@ function InventoryAppraisal() {
               </Button>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {totalRecords > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
+                <span>Show:</span>
+                <select
+                  className="inventory-select-compact"
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(parseInt(e.target.value, 10));
+                    setCurrentPage(1);
+                  }}
+                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                </select>
+                <span style={{ marginLeft: '0.25rem' }}>
+                  ({totalRecords === 0 ? 0 : startIndex + 1}–{endIndex} of {totalRecords.toLocaleString()})
+                </span>
+              </div>
+            )}
             <Button variant="secondary" onClick={() => setShowNapFormPreview(true)}>
               <MdPrint style={{ marginRight: '0.35rem', fontSize: '1.05rem' }} /> View & Print NAP Form 1
             </Button>
@@ -3063,7 +3037,7 @@ function InventoryAppraisal() {
           <table className="official-table">
             <thead>
               <tr>
-                <th rowSpan={2} className="official-table__th-checkbox" style={{ position: 'static' }}>
+                <th rowSpan={2} className="official-table__th-checkbox">
                   <input
                     type="checkbox"
                     checked={paginatedRecords.length > 0 && paginatedRecords.every((r) => selectedIds.includes(r.id))}
@@ -3071,7 +3045,7 @@ function InventoryAppraisal() {
                     title="Select All on this page"
                   />
                 </th>
-                <th rowSpan={2} className="official-table__th-itemno" style={{ position: 'static' }}>ITEM NO.</th>
+                <th rowSpan={2} className="official-table__th-itemno">ITEM NO.</th>
                 <th rowSpan={2} style={{ minWidth: '220px' }}>9. Records Series Title and Description</th>
                 <th rowSpan={2} style={{ minWidth: '120px' }}>10. Period Covered / Inclusive Dates</th>
                 <th rowSpan={2} style={{ minWidth: '90px' }}>11. Volume</th>
@@ -3146,14 +3120,14 @@ function InventoryAppraisal() {
                               onClick={() => setViewingRecord(r)}
                               style={{ cursor: 'pointer', backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined }}
                             >
-                              <td className="official-table__td-checkbox" style={{ position: 'static' }} onClick={(e) => e.stopPropagation()}>
+                              <td className="official-table__td-checkbox" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={(e) => handleToggleSelect(r.id, e as any)}
                                 />
                               </td>
-                              <td className="official-table__td-itemno" style={{ position: 'static' }}>
+                              <td className="official-table__td-itemno">
                                 {r.prdsGrds && r.itemNo ? (
                                   <div>
                                     <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)' }}>{r.prdsGrds}</div>
@@ -3263,6 +3237,57 @@ function InventoryAppraisal() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {totalRecords > 0 && (
+          <div className="inventory-pagination-bar">
+            <div className="inventory-pagination-size">
+              <span>Show per page:</span>
+              <select
+                className="inventory-select-compact"
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(parseInt(e.target.value, 10));
+                  setCurrentPage(1);
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+
+            <div className="inventory-pagination-info">
+              Showing {totalRecords === 0 ? 0 : startIndex + 1} to {endIndex} of {totalRecords.toLocaleString()}
+            </div>
+
+            <div className="inventory-pagination-controls">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="inventory-page-number">
+                Page {safeCurrentPage} of {totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Evaluate Retention Disposal Prompt Modal */}
@@ -3478,18 +3503,19 @@ function InventoryAppraisal() {
           onClose={() => setShowEvaluateModal(false)}
           title={`Evaluate Disposal Records (${modalDisposalRecords.length} / ${allDisposalEligibleRecords.length} Total)`}
           size="xl"
+          maxWidth="1080px"
         >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
               <strong>Records Eligible for Evaluation & Disposal:</strong> The following record series have reached their designated retention schedule period. Click <strong>"Evaluate & Dispose ➔"</strong> to review expired years and update active periods.
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 0' }}>
-              <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Showing <strong>{modalDisposalRecords.length}</strong> eligible record{modalDisposalRecords.length === 1 ? '' : 's'} {modalDisposalDivisionFilter !== 'ALL' ? `in ${modalDisposalDivisionFilter}` : 'across all divisions'}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Division:</label>
+                <label style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Division:</label>
                 <select
                   className="search-filter-box__select"
                   value={modalDisposalDivisionFilter}
@@ -3508,21 +3534,21 @@ function InventoryAppraisal() {
             </div>
 
             {modalDisposalRecords.length === 0 ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+              <div style={{ padding: '2rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
                 No records currently eligible for disposal evaluation in this selection.
               </div>
             ) : (
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '380px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Item No.</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', width: '110px' }}>Item No.</th>
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Record Series</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Division</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Category</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Inclusive Dates</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Retention</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center' }}>Action</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', width: '130px' }}>Division</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', width: '130px' }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', width: '130px' }}>Inclusive Dates</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', width: '110px' }}>Total Retention</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'center', width: '160px' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3582,7 +3608,7 @@ function InventoryAppraisal() {
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
               <Button variant="secondary" onClick={() => setShowEvaluateModal(false)}>
                 Close
               </Button>
@@ -3603,8 +3629,9 @@ function InventoryAppraisal() {
             </div>
           }
           size="xl"
+          maxWidth="1100px"
         >
-          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1, minHeight: 0 }}>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {/* Navigation Tabs Bar */}
             <div style={{
               display: 'flex',
@@ -3708,10 +3735,14 @@ function InventoryAppraisal() {
 
             {/* TAB 1: Confirmation of Storage (Staging for request) */}
             {storageModalTab === 'confirmation' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {stagedStorageRecords.length === 0 ? (
-                  <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', margin: 'auto 0' }}>
-                    No record series currently staged for storage. Click <strong>"Move to Storage"</strong> on any record series in the table to add it here.
+                  <div style={{ padding: '2rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
+                    <MdInventory style={{ fontSize: '2rem', color: '#d97706', marginBottom: '0.35rem', opacity: 0.8 }} />
+                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>No record series currently staged for storage</div>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.825rem' }}>
+                      Click <strong>"Move to Storage"</strong> on any record series in the Inventory table to stage it here.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -3725,7 +3756,7 @@ function InventoryAppraisal() {
                         </Button>
                       </div>
                     </div>
-                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '250px' }}>
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '300px' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
                           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
@@ -4276,8 +4307,9 @@ function InventoryAppraisal() {
             </div>
           }
           size="xl"
+          maxWidth="1100px"
         >
-          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1, minHeight: 0 }}>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {/* Navigation Tabs Bar */}
             <div style={{
               display: 'flex',
@@ -4381,10 +4413,14 @@ function InventoryAppraisal() {
 
             {/* TAB 1: Confirmation of Disposal */}
             {disposalModalTab === 'confirmation' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {stagedDisposalRecords.length === 0 ? (
-                  <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', margin: 'auto 0' }}>
-                    No record series currently staged for disposal evaluation. Click <strong>"Evaluate & Dispose"</strong> on any eligible record to add it here.
+                  <div style={{ padding: '2rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
+                    <MdDeleteSweep style={{ fontSize: '2rem', color: '#dc2626', marginBottom: '0.35rem', opacity: 0.8 }} />
+                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>No record series currently staged for disposal evaluation</div>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.825rem' }}>
+                      Click <strong>"Evaluate & Dispose"</strong> on any eligible record in the Inventory table to stage it here.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -4398,7 +4434,7 @@ function InventoryAppraisal() {
                         </Button>
                       </div>
                     </div>
-                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '250px' }}>
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-color)', maxHeight: '300px' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                         <thead>
                           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
@@ -4715,7 +4751,7 @@ function InventoryAppraisal() {
 
             {/* TAB 3: History of Disposal */}
             {disposalModalTab === 'history' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: '420px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
                     <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
@@ -5229,18 +5265,19 @@ function InventoryAppraisal() {
           onClose={() => setShowActiveDeskModal(false)}
           title={`Evaluate Storage Records (${modalStorageRecords.length} / ${allActiveDeskEligibleRecords.length} Total)`}
           size="xl"
+          maxWidth="1080px"
         >
-          <div style={{ padding: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1rem', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+          <div style={{ padding: '0.25rem 0', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.75rem 1rem', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
               <strong>Active Period Reached:</strong> The following record series have completed their designated active desk period. Transitioning a record to <strong>Storage</strong> sets its stage to Storage and starts the storage retention countdown toward disposal eligibility.
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', padding: '0.5rem 0' }}>
-              <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Showing <strong>{modalStorageRecords.length}</strong> eligible record{modalStorageRecords.length === 1 ? '' : 's'} {modalStorageDivisionFilter !== 'ALL' ? `in ${modalStorageDivisionFilter}` : 'across all divisions'}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Division:</label>
+                <label style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Filter Division:</label>
                 <select
                   className="search-filter-box__select"
                   value={modalStorageDivisionFilter}
@@ -5259,21 +5296,21 @@ function InventoryAppraisal() {
             </div>
 
             {modalStorageRecords.length === 0 ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
+              <div style={{ padding: '2rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
                 No records currently eligible for storage evaluation in this selection.
               </div>
             ) : (
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '400px' }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '380px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Item No.</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, width: '110px' }}>Item No.</th>
                       <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Record Series</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Division</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Category</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>Inclusive Dates</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center' }}>Active Limit</th>
-                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right' }}>Actions / Transition Choice</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, width: '130px' }}>Division</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, width: '130px' }}>Category</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, width: '130px' }}>Inclusive Dates</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'center', width: '110px' }}>Active Limit</th>
+                      <th style={{ padding: '0.65rem 0.85rem', fontWeight: 700, textAlign: 'right', width: '190px' }}>Actions / Choice</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5321,7 +5358,7 @@ function InventoryAppraisal() {
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
               <Button variant="secondary" onClick={() => setShowActiveDeskModal(false)}>
                 Close
               </Button>

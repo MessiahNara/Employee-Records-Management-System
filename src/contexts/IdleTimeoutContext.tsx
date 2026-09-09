@@ -50,8 +50,8 @@ export const IdleTimeoutProvider: React.FC<IdleTimeoutProviderProps> = ({ childr
     // Check immediately
     checkAuthState();
 
-    // Check periodically (every second)
-    const interval = setInterval(checkAuthState, 1000);
+    // Check periodically (every 2 seconds to reduce overhead)
+    const interval = setInterval(checkAuthState, 2000);
 
     return () => clearInterval(interval);
   }, [isLoggedIn]);
@@ -62,7 +62,8 @@ export const IdleTimeoutProvider: React.FC<IdleTimeoutProviderProps> = ({ childr
       const settings = await api.systemSettings.get();
       setIdleTimeout(settings.idleTimeout);
     } catch (error) {
-      console.error('Failed to fetch idle timeout:', error);
+      console.warn('Failed to fetch idle timeout (server may be offline):', error);
+      setIdleTimeout(null);
     }
   }, []);
 

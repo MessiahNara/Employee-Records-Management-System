@@ -36,9 +36,10 @@ interface ScannedDocument {
 
 interface ScannedEmployee {
   id: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   middleName?: string | null;
+  fullName?: string;
   officeName: string;
   position: string;
   status: string;
@@ -52,6 +53,28 @@ interface ScannedEmployee {
   };
   documents: ScannedDocument[];
 }
+
+export const getEmployeeDisplayName = (emp?: {
+  firstName?: string;
+  lastName?: string;
+  middleName?: string | null;
+  fullName?: string;
+} | null): string => {
+  if (!emp) return '';
+  const last = (emp.lastName || '').trim();
+  const first = (emp.firstName || '').trim();
+  const middle = emp.middleName?.trim() ? ` ${emp.middleName.trim()[0]}.` : '';
+
+  if (last && first) {
+    return `${last}, ${first}${middle}`;
+  }
+  if (last) return `${last}${middle}`;
+  if (first) return `${first}${middle}`;
+  if (emp.fullName?.trim()) {
+    return emp.fullName.trim();
+  }
+  return 'Unnamed Employee';
+};
 
 interface ScanningStats {
   employeesWithScannedFiles: number;
@@ -83,8 +106,18 @@ export default function ScanningStatus() {
   const [officeFilter, setOfficeFilter] = useState('All');
   const [employeeStatus, setEmployeeStatus] = useState<'all' | 'Active' | 'Inactive'>('all');
   const [scanFilter, setScanFilter] = useState<'all' | 'with_docs' | 'without_docs'>('all');
-  const [sortBy, setSortBy] = useState<'scannedCount' | 'name' | 'id' | 'office'>('scannedCount');
+  const [sortBy, setSortBy] = useState<'scannedCount' | 'name' | 'id' | 'office' | 'position'>('scannedCount');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSortColumn = (column: 'scannedCount' | 'name' | 'id' | 'office' | 'position') => {
+    if (sortBy === column) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(column);
+      setSortOrder(column === 'scannedCount' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  };
 
   // Pagination (Server-Side)
   const [currentPage, setCurrentPage] = useState(1);
@@ -203,13 +236,13 @@ export default function ScanningStatus() {
       uploadedBy?: string | null;
       fileSize?: number;
     },
-    emp?: { id: string; firstName: string; lastName: string }
+    emp?: ScannedEmployee
   ) => {
     const empId = emp?.id || viewingEmployee?.id || '';
     const empName = emp
-      ? `${emp.lastName}, ${emp.firstName}`
+      ? getEmployeeDisplayName(emp)
       : viewingEmployee
-      ? `${viewingEmployee.lastName}, ${viewingEmployee.firstName}`
+      ? getEmployeeDisplayName(viewingEmployee)
       : '';
 
     const formattedDoc: EmployeeDocument = {
@@ -384,7 +417,9 @@ export default function ScanningStatus() {
               className="scanning-status__select"
               value={sortBy}
               onChange={(e) => {
-                setSortBy(e.target.value as any);
+                const newSort = e.target.value as any;
+                setSortBy(newSort);
+                setSortOrder(newSort === 'scannedCount' ? 'desc' : 'asc');
                 setCurrentPage(1);
               }}
             >
@@ -392,6 +427,7 @@ export default function ScanningStatus() {
               <option value="name">Employee Name (Last, First)</option>
               <option value="id">Employee ID</option>
               <option value="office">Office Name</option>
+              <option value="position">Position</option>
             </select>
             <button
               type="button"
@@ -441,11 +477,54 @@ export default function ScanningStatus() {
           <table className="scanning-status__table">
             <thead>
               <tr>
-                <th className="scanning-status__th-employee">Employee</th>
-                <th className="scanning-status__th-office">Office / Hospital</th>
-                <th className="scanning-status__th-position">Position</th>
-                <th className="scanning-status__th-total-scanned" style={{ textAlign: 'center' }}>
-                  TOTAL SCANNED 201 FILES
+                <th
+                  className="scanning-status__th-employee scanning-status__th--sortable"
+                  onClick={() => handleSortColumn('name')}
+                  title="Click to sort by Employee Name"
+                >
+                  <div className="scanning-status__th-content">
+                    <span>Employee</span>
+                    <span className="scanning-status__sort-arrow">
+                      {sortBy === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th
+                  className="scanning-status__th-office scanning-status__th--sortable"
+                  onClick={() => handleSortColumn('office')}
+                  title="Click to sort by Office / Hospital"
+                >
+                  <div className="scanning-status__th-content">
+                    <span>Office / Hospital</span>
+                    <span className="scanning-status__sort-arrow">
+                      {sortBy === 'office' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th
+                  className="scanning-status__th-position scanning-status__th--sortable"
+                  onClick={() => handleSortColumn('position')}
+                  title="Click to sort by Position"
+                >
+                  <div className="scanning-status__th-content">
+                    <span>Position</span>
+                    <span className="scanning-status__sort-arrow">
+                      {sortBy === 'position' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                    </span>
+                  </div>
+                </th>
+                <th
+                  className="scanning-status__th-total-scanned scanning-status__th--sortable"
+                  style={{ textAlign: 'center' }}
+                  onClick={() => handleSortColumn('scannedCount')}
+                  title="Click to sort by Total Scanned 201 Files"
+                >
+                  <div className="scanning-status__th-content" style={{ justifyContent: 'center' }}>
+                    <span>TOTAL SCANNED 201 FILES</span>
+                    <span className="scanning-status__sort-arrow">
+                      {sortBy === 'scannedCount' ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+                    </span>
+                  </div>
                 </th>
                 <th className="scanning-status__th-latest">Latest Document</th>
                 <th className="scanning-status__th-actions" style={{ textAlign: 'right' }}>Actions</th>
@@ -489,7 +568,7 @@ export default function ScanningStatus() {
                       <td className="scanning-status__td-employee">
                         <div className="scanning-status__employee-details">
                           <span className="scanning-status__employee-name">
-                            {emp.lastName}, {emp.firstName} {emp.middleName ? `${emp.middleName[0]}.` : ''}
+                            {getEmployeeDisplayName(emp)}
                           </span>
                           <span className="scanning-status__employee-id">{emp.id}</span>
                         </div>
@@ -668,7 +747,7 @@ export default function ScanningStatus() {
             <div className="scanning-status__modal-title">
               <MdFolderOpen style={{ color: '#2563eb', fontSize: '1.25rem' }} />
               <span>
-                201 Files: {viewingEmployee.lastName}, {viewingEmployee.firstName} ({viewingEmployee.id})
+                201 Files: {getEmployeeDisplayName(viewingEmployee)} ({viewingEmployee.id})
               </span>
             </div>
           ) : (

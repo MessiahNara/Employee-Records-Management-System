@@ -38,18 +38,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   useEffect(() => {
-    initSocketClient();
-    
-    // Only apply the zoom fix if we are NOT running inside the Electron app.
-    if (!(window as any).electron) {
-      document.documentElement.style.zoom = '0.65';
+    try {
+      initSocketClient();
+    } catch (err) {
+      console.warn('[App] Socket init failed:', err);
     }
 
     return () => {
-      const socket = getSocket();
-      if (socket) {
-        socket.disconnect();
-      }
+      try {
+        const socket = getSocket();
+        if (socket) {
+          socket.disconnect();
+        }
+      } catch (_) {}
     };
   }, []);
 
