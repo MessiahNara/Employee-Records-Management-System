@@ -511,14 +511,19 @@ function Approvals() {
     <div className="approvals">
       {/* Header */}
       <div className="approvals__header">
-        <div>
-          <h1 className="approvals__title">Request &amp; Approvals</h1>
-          <p className="approvals__subtitle">
-            Review and approve pending requests from other users
-            {pendingCount > 0 && filter === 'pending' && (
-              <span className="approvals__pending-badge">{pendingCount} pending</span>
-            )}
-          </p>
+        <div className="approvals__title-group">
+          <div className="approvals__title-icon-wrapper">
+            <MdCheckCircle className="approvals__title-icon" />
+          </div>
+          <div>
+            <h1 className="approvals__title">Request &amp; Approvals</h1>
+            <p className="approvals__subtitle">
+              Review and approve pending requests from other users
+              {pendingCount > 0 && filter === 'pending' && (
+                <span className="approvals__pending-badge">{pendingCount} pending</span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="approvals__header-actions">
           {selectedIds.size > 0 ? (

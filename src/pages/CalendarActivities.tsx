@@ -279,18 +279,23 @@ export default function CalendarActivities() {
   return (
     <div className="activities-page">
       <div className="activities-page__header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '16px' }}>
+        <div className="activities-page__title-group">
+          <div className="activities-page__title-icon-wrapper">
+            <MdEvent className="activities-page__title-icon" />
+          </div>
           <div>
             <h1 className="activities-page__title">Calendar of Activities</h1>
             <p className="activities-page__subtitle">View and monitor upcoming corporate events, training sessions, and holidays</p>
           </div>
-          {isAdmin && (
-            <Button variant="primary" onClick={handleOpenAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        </div>
+        {isAdmin && (
+          <div className="activities-page__header-actions">
+            <Button variant="primary" onClick={handleOpenAddModal}>
               <MdAdd size={20} />
               <span>Add Activity</span>
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="activities-page__split">

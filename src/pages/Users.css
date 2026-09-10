@@ -15,18 +15,43 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.users__title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.users__title-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.28);
+  flex-shrink: 0;
+}
+
+.users__title-icon {
+  font-size: 24px;
+}
+
 .users__title {
-  font-size: 1.85rem;
+  font-size: 1.6rem;
   font-weight: 800;
   color: var(--text-primary);
-  margin: 0 0 0.2rem 0;
+  margin: 0;
+  line-height: 1.2;
   letter-spacing: -0.02em;
 }
 
 .users__subtitle {
-  font-size: 1rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
-  margin: 0;
+  margin: 0.2rem 0 0 0;
+  line-height: 1.35;
 }
 
 .users__content {

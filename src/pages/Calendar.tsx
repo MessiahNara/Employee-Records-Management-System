@@ -14,7 +14,8 @@ import {
   MdList,
   MdWarning,
   MdError,
-  MdInfo
+  MdInfo,
+  MdEventNote
 } from 'react-icons/md';
 import api from '../services/api';
 import { useToast } from '../contexts/ToastContext';
@@ -429,9 +430,14 @@ export default function Calendar() {
     <div className="calendar-page">
       {/* Upper header */}
       <div className="calendar-page__header">
-        <div>
-          <h1 className="calendar-page__title">Expirations Calendar</h1>
-          <p className="calendar-page__subtitle">Track appointment and administrative order (AO) expiration states</p>
+        <div className="calendar-page__title-group">
+          <div className="calendar-page__title-icon-wrapper">
+            <MdEventNote className="calendar-page__title-icon" />
+          </div>
+          <div>
+            <h1 className="calendar-page__title">Expirations Calendar</h1>
+            <p className="calendar-page__subtitle">Track appointment and administrative order (AO) expiration states</p>
+          </div>
         </div>
       </div>
 

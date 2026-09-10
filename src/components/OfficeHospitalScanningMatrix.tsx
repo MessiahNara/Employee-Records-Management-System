@@ -134,8 +134,6 @@ export default function OfficeHospitalScanningMatrix() {
   // Filtered rows
   const filteredRows = useMemo(() => {
     return rows.filter((item) => {
-      // Exclude offices with no active employees
-      if ((item.employees?.total || 0) <= 0) return false;
       if (typeFilter !== 'All' && item.type !== typeFilter) return false;
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
@@ -187,6 +185,13 @@ export default function OfficeHospitalScanningMatrix() {
       remarks: officeRemarks[r.abbreviation] !== undefined ? officeRemarks[r.abbreviation] : (r.remarks || ''),
     }));
   }, [filteredRows, officeRemarks]);
+
+  const allReportRows = useMemo(() => {
+    return rows.map((r) => ({
+      ...r,
+      remarks: officeRemarks[r.abbreviation] !== undefined ? officeRemarks[r.abbreviation] : (r.remarks || ''),
+    }));
+  }, [rows, officeRemarks]);
 
   // Helper to render a count cell with coloring
   const renderCountCell = (value: number, className: string) => (
@@ -548,7 +553,9 @@ export default function OfficeHospitalScanningMatrix() {
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
         rows={reportRows}
+        allRows={allReportRows}
         totals={currentTotals}
+        allTotals={totals}
         asOfDate={asOfDate}
         dateFrom={dateFrom}
         dateTo={dateTo}

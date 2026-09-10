@@ -510,8 +510,10 @@ function Chats() {
   return (
     <div className="chats-page">
       <div className="chats-page__header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <MdForum className="chats-page__title-icon" />
+        <div className="chats-page__title-group">
+          <div className="chats-page__title-icon-wrapper">
+            <MdForum className="chats-page__title-icon" />
+          </div>
           <div>
             <h1 className="chats-page__title">Internal Messages</h1>
             <p className="chats-page__subtitle">Secure communication and group discussions</p>

@@ -9,7 +9,7 @@ import Input from '../components/ui/Input';
 import { User, UserStatus, UserPermissions, Role, PermissionAction } from '../types';
 import { getAuthState, saveAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
-import { MdEdit, MdAdd, MdLock, MdDelete, MdWarning, MdDeleteOutline, MdInfo } from 'react-icons/md';
+import { MdEdit, MdAdd, MdLock, MdDelete, MdWarning, MdDeleteOutline, MdInfo, MdPeople } from 'react-icons/md';
 import api from '../services/api';
 import './Users.css';
 
@@ -832,11 +832,16 @@ function Users() {
   return (
     <div className="users">
       <div className="users__header">
-        <div>
-          <h1 className="users__title">User Management</h1>
-          <p className="users__subtitle">
-            Manage users, roles, and permissions ({filteredUsers.length} users)
-          </p>
+        <div className="users__title-group">
+          <div className="users__title-icon-wrapper">
+            <MdPeople className="users__title-icon" />
+          </div>
+          <div>
+            <h1 className="users__title">User Management</h1>
+            <p className="users__subtitle">
+              Manage users, roles, and permissions ({filteredUsers.length} users)
+            </p>
+          </div>
         </div>
         <Button variant="primary" onClick={handleAddUser}>
           <MdAdd style={{ marginRight: '0.25rem' }} /> Add User

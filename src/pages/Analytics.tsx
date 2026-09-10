@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdPeople, MdDomain, MdCheckCircle, MdAssignment } from 'react-icons/md';
+import { MdPeople, MdDomain, MdCheckCircle, MdAssignment, MdBarChart } from 'react-icons/md';
 import {
   BarChart,
   Bar,
@@ -18,6 +18,7 @@ import {
 import api from '../services/api';
 import Card from '../components/ui/Card';
 import { getOfficeFullName } from '../data/provincialOffices';
+import { useTheme } from '../contexts/ThemeContext';
 import './Analytics.css';
 import './Dashboard.css'; // Import to use the exact same dashboard KPI styles
 
@@ -26,6 +27,7 @@ const GENDER_COLORS = ['#3b82f6', '#ec4899']; // Blue for Male, Pink for Female
 const FILE_STATUS_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#64748b']; // Green=Available, Orange=Borrowed, Red=Overdue, Gray=Lost
 
 function Analytics() {
+  const { theme } = useTheme();
   const [employees, setEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Active' | 'Inactive'>('All');
@@ -176,29 +178,24 @@ function Analytics() {
 
   return (
     <div className="analytics-container">
-      <div className="dashboard__header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="dashboard__header-content">
-          <h1 className="dashboard__title">Dashboard Analytics</h1>
-          <p className="dashboard__subtitle">Overview of employee statistics and organizational distribution.</p>
+      <div className="analytics-header">
+        <div className="analytics-header__title-group">
+          <div className="analytics-header__title-icon-wrapper">
+            <MdBarChart className="analytics-header__title-icon" />
+          </div>
+          <div>
+            <h1 className="analytics-header__title">Dashboard Analytics</h1>
+            <p className="analytics-header__subtitle">Overview of employee statistics and organizational distribution.</p>
+          </div>
         </div>
         
-        <div className="analytics-filters" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <label htmlFor="statusFilter" style={{ fontWeight: 600, color: '#475569' }}>Filter Charts:</label>
+        <div className="analytics-header__actions">
+          <label htmlFor="statusFilter" className="analytics-header__filter-label">Filter Charts:</label>
           <select 
             id="statusFilter"
+            className="analytics-header__filter-select"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as any)}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#fff',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: '#334155',
-              cursor: 'pointer',
-              outline: 'none'
-            }}
           >
             <option value="All">All Employees</option>
             <option value="Active">Active Only</option>
@@ -272,16 +269,16 @@ function Analytics() {
             <div style={{ height: `${Math.max(400, barData.length * 40)}px`, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme === 'dark' ? '#334155' : '#e5e7eb'} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151', fontSize: 12 }} />
                   <YAxis 
                     dataKey="name" 
                     type="category" 
                     width={250} 
-                    tick={{ fontSize: 12 }} 
+                    tick={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151', fontSize: 12 }} 
                     interval={0}
                   />
-                  <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  <Tooltip cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
                   <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Employees" />
                 </BarChart>
               </ResponsiveContainer>
@@ -310,7 +307,7 @@ function Analytics() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -322,12 +319,12 @@ function Analytics() {
               <div className="chart-container" style={{ height: '160px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-                    <Pie data={genderData} cx="50%" cy="50%" innerRadius={20} outerRadius={35} dataKey="value" label>
+                    <Pie data={genderData} cx="50%" cy="50%" innerRadius={20} outerRadius={35} dataKey="value" label={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151' }}>
                       {genderData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={GENDER_COLORS[index % GENDER_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -338,7 +335,7 @@ function Analytics() {
               <div className="chart-container" style={{ height: '160px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-                    <Pie data={fileStatusData} cx="50%" cy="50%" innerRadius={20} outerRadius={35} dataKey="value" label>
+                    <Pie data={fileStatusData} cx="50%" cy="50%" innerRadius={20} outerRadius={35} dataKey="value" label={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151' }}>
                       {fileStatusData.map((entry, index) => {
                         // Assign colors based on status name if possible
                         const name = entry.name.toLowerCase();
@@ -349,7 +346,7 @@ function Analytics() {
                         return <Cell key={`cell-${index}`} fill={color} />;
                       })}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -365,10 +362,10 @@ function Analytics() {
           <div className="chart-container" style={{ flex: 1, minHeight: '300px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ageData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} />
-                <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#334155' : '#e5e7eb'} />
+                <XAxis dataKey="name" tick={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151', fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151' }} />
+                <Tooltip cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
                 <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Employees" />
               </BarChart>
             </ResponsiveContainer>
@@ -394,8 +391,8 @@ function Analytics() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
-                  <Legend verticalAlign="bottom" height={36} />
+                  <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
+                  <Legend verticalAlign="bottom" height={36} wrapperStyle={{ color: theme === 'dark' ? '#cbd5e1' : '#374151' }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -413,10 +410,10 @@ function Analytics() {
           <div className="chart-container" style={{ flex: 1, minHeight: '350px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={hiringTimelineData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} />
-                <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === 'dark' ? '#334155' : '#e5e7eb'} />
+                <XAxis dataKey="year" tick={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151', fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fill: theme === 'dark' ? '#cbd5e1' : '#374151' }} />
+                <Tooltip cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', color: theme === 'dark' ? '#f1f5f9' : '#111827', border: `1px solid ${theme === 'dark' ? '#334155' : '#e5e7eb'}` }} />
                 <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} name="New Hires" />
               </LineChart>
             </ResponsiveContainer>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { MdHistory, MdFileDownload } from 'react-icons/md';
 import Table, { Column } from '../components/ui/Table';
 import SearchBar from '../components/ui/SearchBar';
 import Badge from '../components/ui/Badge';
@@ -537,14 +538,19 @@ function AuditLogs() {
   return (
     <div className="audit-logs">
       <div className="audit-logs__header">
-        <div>
-          <h1 className="audit-logs__title">Audit Logs</h1>
-          <p className="audit-logs__subtitle">
-            Track all system activities and changes ({filteredLogs.length} entries)
-          </p>
+        <div className="audit-logs__title-group">
+          <div className="audit-logs__title-icon-wrapper">
+            <MdHistory className="audit-logs__title-icon" />
+          </div>
+          <div>
+            <h1 className="audit-logs__title">Audit Logs</h1>
+            <p className="audit-logs__subtitle">
+              Track all system activities and changes ({filteredLogs.length} entries)
+            </p>
+          </div>
         </div>
         <Button variant="secondary" onClick={handleExport}>
-          📥 Export
+          <MdFileDownload style={{ marginRight: '0.25rem' }} /> Export
         </Button>
       </div>
 

@@ -7,19 +7,59 @@
 }
 
 .activities-page__header {
-  margin-bottom: var(--spacing-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.activities-page__title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.activities-page__title-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.28);
+  flex-shrink: 0;
+}
+
+.activities-page__title-icon {
+  font-size: 24px;
 }
 
 .activities-page__title {
-  font-size: var(--font-size-2xl);
+  font-size: 1.6rem;
   font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .activities-page__subtitle {
-  font-size: var(--font-size-base);
+  font-size: 0.875rem;
   color: var(--text-secondary);
+  margin: 0.2rem 0 0 0;
+  line-height: 1.35;
+}
+
+.activities-page__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
 .activities-page__split {

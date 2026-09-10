@@ -784,8 +784,15 @@ function Settings() {
   return (
     <div className="settings">
       <div className="settings__header">
-        <h1 className="settings__title">Settings</h1>
-        <p className="settings__subtitle">Manage your account and system preferences</p>
+        <div className="settings__title-group">
+          <div className="settings__title-icon-wrapper">
+            <MdSettings className="settings__title-icon" />
+          </div>
+          <div>
+            <h1 className="settings__title">Settings</h1>
+            <p className="settings__subtitle">Manage your account and system preferences</p>
+          </div>
+        </div>
       </div>
 
       <div className="settings__layout">
@@ -1137,7 +1144,7 @@ function Settings() {
                           Look for the line that says <strong>"🌐 LAN access URLs:"</strong> followed by IP addresses
                         </li>
                         <li style={{ marginBottom: '0.5rem' }}>
-                          Copy one of those IP addresses (e.g., <code style={{ fontFamily: 'monospace', backgroundColor: '#fff', padding: '0.125rem 0.25rem' }}>http://192.168.1.100:5000</code>)
+                          Copy one of those IP addresses (e.g., <code style={{ fontFamily: 'monospace', backgroundColor: 'var(--bg-tertiary)', padding: '0.125rem 0.25rem' }}>http://192.168.1.100:5000</code>)
                         </li>
                         <li>
                           Paste it in the <strong>Server URL</strong> field below, then click <strong>Save Server URL</strong>

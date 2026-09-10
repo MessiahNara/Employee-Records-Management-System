@@ -85,7 +85,7 @@ export default async function generateAOStatusDetailedExcel(data: AOStatusExport
     'Republic of the Philippines',
     'Province of Pangasinan',
     'Lingayen',
-    'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE'
+    'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE'
   ];
 
   const headerFonts = [
@@ -102,6 +102,7 @@ export default async function generateAOStatusDetailedExcel(data: AOStatusExport
     cell.value = text;
     cell.font = headerFonts[i];
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(rowNumber).height = 20;
   });
 
   // Empty row 5
@@ -171,22 +172,6 @@ export default async function generateAOStatusDetailedExcel(data: AOStatusExport
       cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     }
   });
-
-  // Dynamically load and place the logo
-  try {
-    const logoRes = await fetch('/template_logo.png');
-    if (logoRes.ok) {
-      const logoBuffer = await logoRes.arrayBuffer();
-      const imageId = workbook.addImage({ buffer: logoBuffer, extension: 'png' });
-      // Place the logo closer to the text
-      worksheet.addImage(imageId, {
-        tl: { col: 2.99, row: 0 },
-        ext: { width: 97, height: 78 } // width 2.57 cm, height 2.06 cm
-      });
-    }
-  } catch (e) {
-    console.warn('Logo could not be loaded', e);
-  }
 
   // Data starts at row 9 because rows 7 and 8 are headers
   let currentRowNumber = 9;

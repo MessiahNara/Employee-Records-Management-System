@@ -54,7 +54,7 @@ export default async function generatePulledOutFilesExcel(
     'Republic of the Philippines',
     'Province of Pangasinan',
     'Lingayen',
-    'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE'
+    'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE'
   ];
 
   const headerFonts = [

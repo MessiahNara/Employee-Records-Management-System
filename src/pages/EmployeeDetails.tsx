@@ -14,7 +14,7 @@ import EditEmployeeModal from '../components/EditEmployeeModal';
 import '../components/File201Modal.css';
 import '../components/File201HistoryModal.css';
 import { Employee } from '../types/employee';
-import { formatDateDDMMYYYY, formatDateLong, formatDateMDY } from '../utils/dateUtils';
+import { formatDateDDMMYYYY, formatDateLong, formatDateMDY, formatDateReadable } from '../utils/dateUtils';
 import { formatEmployeeNameForFolder } from '../utils/formatUtils';
 import api from '../services/api';
 import { getAuthState } from '../utils/mockAuth';
@@ -803,7 +803,7 @@ function EmployeeDetails() {
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Date of Birth</label>
-              <p className="employee-details__value">{formatDateLong(employee.dateOfBirth)}</p>
+              <p className="employee-details__value">{formatDateReadable(employee.dateOfBirth)}</p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Gender</label>
@@ -840,7 +840,7 @@ function EmployeeDetails() {
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Date Hired</label>
-              <p className="employee-details__value">{formatDateDDMMYYYY(employee.dateOfEmployment)}</p>
+              <p className="employee-details__value">{formatDateReadable(employee.dateOfEmployment)}</p>
             </div>
             <div className="employee-details__field">
               <label className="employee-details__label">Appointment Status</label>
@@ -850,7 +850,7 @@ function EmployeeDetails() {
               <label className="employee-details__label">Appointment Effectivity</label>
               <p className="employee-details__value">
                 {employee.appointmentFrom || employee.appointmentTo
-                  ? `${employee.appointmentFrom ? formatDateMDY(employee.appointmentFrom) : '—'} TO ${employee.appointmentTo ? (employee.appointmentTo === 'Until revoked' ? 'Until revoked' : formatDateMDY(employee.appointmentTo)) : '—'}`
+                  ? `${employee.appointmentFrom ? formatDateReadable(employee.appointmentFrom) : '—'} TO ${employee.appointmentTo ? (employee.appointmentTo === 'Until revoked' ? 'Until revoked' : formatDateReadable(employee.appointmentTo)) : '—'}`
                   : 'N/A'}
               </p>
             </div>
@@ -917,13 +917,13 @@ function EmployeeDetails() {
                       <div className="employee-details__detailed-field">
                         <label className="employee-details__detailed-label">Duration From</label>
                         <p className="employee-details__detailed-value">
-                          {detailedOrderFrom ? formatDateMDY(detailedOrderFrom) : '—'}
+                          {detailedOrderFrom ? formatDateReadable(detailedOrderFrom) : '—'}
                         </p>
                       </div>
                       <div className="employee-details__detailed-field">
                         <label className="employee-details__detailed-label">Duration To</label>
                         <p className="employee-details__detailed-value">
-                          {detailedOrderTo === 'Until revoked' ? 'Until revoked' : (detailedOrderTo ? formatDateMDY(detailedOrderTo) : '—')}
+                          {detailedOrderTo === 'Until revoked' ? 'Until revoked' : (detailedOrderTo ? formatDateReadable(detailedOrderTo) : '—')}
                         </p>
                       </div>
                     </div>
@@ -944,13 +944,13 @@ function EmployeeDetails() {
                       <div className="employee-details__detailed-field">
                         <label className="employee-details__detailed-label">Duration From</label>
                         <p className="employee-details__detailed-value">
-                          {designatedOrderFrom ? formatDateMDY(designatedOrderFrom) : '—'}
+                          {designatedOrderFrom ? formatDateReadable(designatedOrderFrom) : '—'}
                         </p>
                       </div>
                       <div className="employee-details__detailed-field">
                         <label className="employee-details__detailed-label">Duration To</label>
                         <p className="employee-details__detailed-value">
-                          {designatedOrderTo === 'Until revoked' ? 'Until revoked' : (designatedOrderTo ? formatDateMDY(designatedOrderTo) : '—')}
+                          {designatedOrderTo === 'Until revoked' ? 'Until revoked' : (designatedOrderTo ? formatDateReadable(designatedOrderTo) : '—')}
                         </p>
                       </div>
                     </div>
@@ -971,13 +971,13 @@ function EmployeeDetails() {
                       <div className="employee-details__detailed-field">
                         <label className="employee-details__detailed-label">Duration From</label>
                         <p className="employee-details__detailed-value">
-                          {recalledOrderFrom ? formatDateMDY(recalledOrderFrom) : '—'}
+                          {recalledOrderFrom ? formatDateReadable(recalledOrderFrom) : '—'}
                         </p>
                       </div>
                       <div className="employee-details__detailed-field">
                         <label className="employee-details__detailed-label">Duration To</label>
                         <p className="employee-details__detailed-value">
-                          {recalledOrderTo === 'Until revoked' ? 'Until revoked' : (recalledOrderTo ? formatDateMDY(recalledOrderTo) : '—')}
+                          {recalledOrderTo === 'Until revoked' ? 'Until revoked' : (recalledOrderTo ? formatDateReadable(recalledOrderTo) : '—')}
                         </p>
                       </div>
                     </div>
@@ -995,7 +995,7 @@ function EmployeeDetails() {
             <div className="employee-details__grid">
               <div className="employee-details__field">
                 <label className="employee-details__label">Date of Separation</label>
-                <p className="employee-details__value">{formatDateDDMMYYYY(employee.dateOfSeparation)}</p>
+                <p className="employee-details__value">{formatDateReadable(employee.dateOfSeparation)}</p>
               </div>
               <div className="employee-details__field">
                 <label className="employee-details__label">Reason for Separation</label>

@@ -19,6 +19,7 @@ import {
   MdZoomOut,
   MdRotateRight,
   MdRestartAlt,
+  MdAssignment,
 } from 'react-icons/md';
 import './Requests.css';
 
@@ -308,14 +309,19 @@ function Requests() {
   return (
     <div className="requests">
       <div className="requests__header">
-        <div>
-          <h1 className="requests__title">Request &amp; Approvals</h1>
-          <p className="requests__subtitle">
-            Review and approve pending requests from other users
-            {pendingCount > 0 && (
-              <span className="requests__pending-badge">{pendingCount} pending</span>
-            )}
-          </p>
+        <div className="requests__title-group">
+          <div className="requests__title-icon-wrapper">
+            <MdAssignment className="requests__title-icon" />
+          </div>
+          <div>
+            <h1 className="requests__title">Request &amp; Approvals</h1>
+            <p className="requests__subtitle">
+              Review and approve pending requests from other users
+              {pendingCount > 0 && (
+                <span className="requests__pending-badge">{pendingCount} pending</span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="requests__header-actions">
           <div className="requests__filter-tabs">
@@ -323,7 +329,7 @@ function Requests() {
               className={`requests__filter-tab ${filter === 'active' ? 'requests__filter-tab--active' : ''}`}
               onClick={() => setFilter('active')}
             >
-              {filter === 'active' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ffffff', display: 'inline-block' }} />}
+              {filter === 'active' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--text-primary)', display: 'inline-block' }} />}
               Pending
             </button>
             <button

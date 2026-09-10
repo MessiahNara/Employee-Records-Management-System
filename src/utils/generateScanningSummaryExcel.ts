@@ -74,31 +74,23 @@ export async function generateScanningSummaryExcel(options: ScanningSummaryExpor
   });
 
   const workbook = new ExcelJS.Workbook();
-  let loadedFromTemplate = false;
+  const ws = workbook.addWorksheet('Office Scanning Tracker', {
+    views: [{ showGridLines: true }]
+  });
 
-  // 1. Attempt to load the official template (via Electron IPC or browser fetch)
-  try {
-    if (typeof window !== 'undefined' && (window as any).electron?.getScanningTemplateFile) {
-      const arrayBuffer = await (window as any).electron.getScanningTemplateFile();
-      await workbook.xlsx.load(arrayBuffer);
-      loadedFromTemplate = true;
-    } else {
-      const res = await fetch('/SCANNING SUMMARY FORMAT.xlsx');
-      if (res.ok) {
-        const arrayBuffer = await res.arrayBuffer();
-        await workbook.xlsx.load(arrayBuffer);
-        loadedFromTemplate = true;
-      }
-    }
-  } catch (err) {
-    console.warn('Could not load template file directly, falling back to programmatic creation:', err);
-  }
+  applySheetStructureAndData(ws, rows, totals, formattedAsOf);
 
-  if (loadedFromTemplate && workbook.getWorksheet('Office Scanning Tracker')) {
-    populateWorkbook(workbook, rows, totals, formattedAsOf);
-  } else {
-    buildWorkbookFromScratch(workbook, rows, totals, formattedAsOf);
-  }
+  workbook.views = [
+    {
+      x: 0,
+      y: 0,
+      width: 10000,
+      height: 20000,
+      firstSheet: 0,
+      activeTab: 0,
+      visibility: 'visible',
+    },
+  ];
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
@@ -108,41 +100,6 @@ export async function generateScanningSummaryExcel(options: ScanningSummaryExpor
   const dateSlug = new Date().toISOString().slice(0, 10);
   const fileName = `Scanning_Summary_Report_${dateSlug}.xlsx`;
   saveAs(blob, fileName);
-}
-
-/**
- * Sets up and populates the Office Scanning Tracker worksheet
- * ensuring exact formatting, colors, alignments, and paper setup.
- */
-function populateWorkbook(
-  workbook: ExcelJS.Workbook,
-  rows: ReportOfficeRow[],
-  totals: ReportTotals,
-  asOfDate: string
-) {
-  // Guarantee NO other sheets exist in the workbook
-  const extraSheets = workbook.worksheets.filter((w) => w.name !== 'Office Scanning Tracker');
-  extraSheets.forEach((w) => workbook.removeWorksheet(w.id));
-
-  let ws = workbook.getWorksheet('Office Scanning Tracker');
-  if (!ws) {
-    ws = workbook.addWorksheet('Office Scanning Tracker');
-  }
-
-  applySheetStructureAndData(ws, rows, totals, asOfDate);
-}
-
-/**
- * Builds the complete workbook from scratch matching the template design
- */
-function buildWorkbookFromScratch(
-  workbook: ExcelJS.Workbook,
-  rows: ReportOfficeRow[],
-  totals: ReportTotals,
-  asOfDate: string
-) {
-  const ws = workbook.addWorksheet('Office Scanning Tracker');
-  applySheetStructureAndData(ws, rows, totals, asOfDate);
 }
 
 /**

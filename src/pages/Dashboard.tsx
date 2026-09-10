@@ -29,7 +29,7 @@ import { generateImportTemplate } from '../utils/exportUtils';
 import { getAuthState } from '../utils/mockAuth';
 import { useToast } from '../contexts/ToastContext';
 import { formatDateDDMMYYYY, convertToDateInputFormat, formatDateMDY } from '../utils/dateUtils';
-import { MdEdit, MdDelete, MdDeleteOutline, MdFileUpload, MdFileDownload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel, MdPrint } from 'react-icons/md';
+import { MdEdit, MdDelete, MdDeleteOutline, MdFileUpload, MdFileDownload, MdPeople, MdCheckCircle, MdPause, MdDescription, MdStorage, MdQrCode, MdLock, MdWarning, MdError, MdCancel, MdPrint, MdDashboard } from 'react-icons/md';
 import api, { getServerBaseUrl } from '../services/api';
 import PDFViewer from '../components/documents/PDFViewer';
 import { bulkDownloadCodes } from '../utils/bulkDownloadCodes';
@@ -89,6 +89,8 @@ const COLUMN_LABELS: Record<string, string> = {
   dateOfBirth: 'Date of Birth',
   administrativeOrder: 'Administrative Order No.',
 };
+
+const LOGO_BASE64 = 'data:image/png;base64,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';
 
 const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   employeeId: true,
@@ -289,7 +291,7 @@ const modifySheetXml = (xmlStr: string, title: string, rowsData: any[], aoStatus
       'Republic of the Philippines',
       'Province of Pangasinan',
       'Lingayen',
-      'HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE',
+      'HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE',
       ''
     ];
 
@@ -591,7 +593,7 @@ const modifyBorrowSheetXml = (xmlStr: string, title: string, rowsData: any[]) =>
       'Republic of the Philippines',
       'Province of Pangasinan',
       'Lingayen',
-      'HUMAN RESOURCE MANAGEMENT & DEVELOPMENT OFFICE',
+      'HUMAN RESOURCE MGT. & DEVELOPMENT OFFICE',
       ''
     ];
 
@@ -3423,16 +3425,16 @@ function Dashboard() {
         ? 'Duration of Detailed Order'
         : 'Duration';
 
-    const logoSrc = `${window.location.origin}/template_logo.png`;
+    const logoSrc = LOGO_BASE64;
 
     const headerHtml = `
-      <div style="position:relative;border:1px solid #000;border-bottom:2px solid #000;padding:10px 12px;text-align:center;">
-        <img src="${logoSrc}" alt="Logo" style="position:absolute;left:32%;top:50%;transform:translateY(-50%);height:65px;width:auto;" onerror="this.style.display='none';" />
-        <div style="display:inline-block;text-align:center;">
+      <div style="border:1px solid #000;border-bottom:2px solid #000;padding:10px 12px;display:flex;align-items:center;gap:12px;">
+        <img src="${logoSrc}" alt="Logo" style="height:42px;width:auto;flex-shrink:0;" onerror="this.style.display='none';" />
+        <div style="text-align:center;flex:1;">
           <div style="font-size:10.5pt;font-style:italic;font-weight:normal;">Republic of the Philippines</div>
           <div style="font-size:11pt;font-weight:bold;margin-top:2px;">Province of Pangasinan</div>
           <div style="font-size:10pt;font-weight:normal;margin-top:2px;">Lingayen</div>
-          <div style="font-size:11.5pt;font-weight:bold;margin-top:4px;font-family:Calibri,Arial,sans-serif;">HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
+          <div style="font-size:11.5pt;font-weight:bold;margin-top:4px;font-family:Calibri,Arial,sans-serif;">HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
         </div>
       </div>`;
 
@@ -4768,25 +4770,30 @@ function Dashboard() {
   return (
     <div className="dashboard">
       <div className="dashboard__header">
-        <div>
-          <h1 className="dashboard__title">
-            {viewMode === 'reports'
-              ? (reportsTab === 'pulled-out'
-                ? 'Pulled-Out Files Report'
-                : reportsTab === 'transferred'
-                ? 'Transferred Files Report'
-                : 'Administrative Reports')
-              : 'Employee Management'}
-          </h1>
-          <p className="dashboard__subtitle">
-            {viewMode === 'reports'
-              ? (reportsTab === 'pulled-out'
-                ? 'View and track all borrowed and returned physical 201 records'
-                : reportsTab === 'transferred'
-                ? 'View and track all 201 files transferred to RSP and returned back to Records'
-                : 'Generate administrative reports of employees')
-              : `Manage and track all employee records in the system (${employeeStats.total} employees)`}
-          </p>
+        <div className="dashboard__title-group">
+          <div className="dashboard__title-icon-wrapper">
+            <MdDashboard className="dashboard__title-icon" />
+          </div>
+          <div>
+            <h1 className="dashboard__title">
+              {viewMode === 'reports'
+                ? (reportsTab === 'pulled-out'
+                  ? 'Pulled-Out Files Report'
+                  : reportsTab === 'transferred'
+                  ? 'Transferred Files Report'
+                  : 'Administrative Reports')
+                : 'Employee Management'}
+            </h1>
+            <p className="dashboard__subtitle">
+              {viewMode === 'reports'
+                ? (reportsTab === 'pulled-out'
+                  ? 'View and track all borrowed and returned physical 201 records'
+                  : reportsTab === 'transferred'
+                  ? 'View and track all 201 files transferred to RSP and returned back to Records'
+                  : 'Generate administrative reports of employees')
+                : `Manage and track all employee records in the system (${employeeStats.total} employees)`}
+            </p>
+          </div>
         </div>
         {viewMode !== 'reports' && (
           <div className="dashboard__header-actions">
@@ -6331,8 +6338,8 @@ function Dashboard() {
       >
         <div className="printable-report" style={{
           fontFamily: "'Times New Roman', Times, serif",
-          color: '#000',
-          backgroundColor: '#fff',
+          color: 'var(--text-primary)',
+          backgroundColor: 'var(--bg-primary)',
           padding: '1rem',
           borderRadius: 'var(--border-radius)',
           border: '1px solid var(--border-color)',
@@ -6364,31 +6371,15 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                position: 'relative',
-                border: '1px solid #000',
-                borderBottom: '2px solid #000',
+                border: '1px solid var(--border-color)',
+                borderBottom: '2px solid var(--border-color)',
                 padding: '10px 12px',
                 textAlign: 'center'
               }}>
-                <img
-                  src="/template_logo.png"
-                  alt="Logo"
-                  style={{
-                    position: 'absolute',
-                    left: '28%',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    height: '65px',
-                    width: 'auto'
-                  }}
-                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                />
-                <div style={{ display: 'inline-block', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
-                  <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
-                  <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
-                </div>
+                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
+                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
+                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
+                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
               </div>
             );
 
@@ -6435,7 +6426,7 @@ function Dashboard() {
 
             let tableHeader = (
               <thead>
-                <tr style={{ backgroundColor: '#ffffff' }}>
+                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
                   {previewColDefs.map(col => {
                     const percentageWidth = `${(col.width / totalWidthWeight) * 100}%`;
                     return (
@@ -6467,7 +6458,7 @@ function Dashboard() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: "'Times New Roman', Times, serif" }}>
                     {tableHeader}
                     <tbody>
-                      <tr><td colSpan={previewColDefs.length} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
+                      <tr><td colSpan={previewColDefs.length} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
                     </tbody>
                   </table>
                 </>
@@ -6501,7 +6492,7 @@ function Dashboard() {
                   }}>
                     {getFormattedTitle()}
                     {pageCount > 1 && (
-                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: 'var(--text-secondary)' }}>
                         (Page {pageIdx + 1} of {pageCount})
                       </span>
                     )}
@@ -6513,7 +6504,7 @@ function Dashboard() {
                         const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
                         const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
                         return (
-                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                          <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
                             {previewColDefs.map(col => {
                               let val: React.ReactNode = '';
                               if (col.key === 'no') val = globalIdx + 1;
@@ -6567,8 +6558,8 @@ function Dashboard() {
       >
         <div className="printable-report" style={{
           fontFamily: "'Times New Roman', Times, serif",
-          color: '#000',
-          backgroundColor: '#fff',
+          color: 'var(--text-primary)',
+          backgroundColor: 'var(--bg-primary)',
           padding: '1rem',
           borderRadius: 'var(--border-radius)',
           border: '1px solid var(--border-color)',
@@ -6582,24 +6573,21 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                position: 'relative',
-                border: '1px solid #000',
-                borderBottom: '2px solid #000',
+                border: '1px solid var(--border-color)',
+                borderBottom: '2px solid var(--border-color)',
                 padding: '10px 12px',
                 textAlign: 'center'
               }}>
-                <div style={{ display: 'inline-block', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
-                  <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
-                  <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
-                </div>
+                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
+                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
+                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
+                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
               </div>
             );
 
             const tableHeader = (
               <thead>
-                <tr style={{ backgroundColor: '#ffffff' }}>
+                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%' }}>NO.</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>EMPLOYEE NAME</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>OFFICE/HOSPITAL</th>
@@ -6610,7 +6598,7 @@ function Dashboard() {
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>RECORDS CONFORMED</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>REMARK</th>
                 </tr>
-                <tr style={{ backgroundColor: '#ffffff' }}>
+                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
                   <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle' }}>NAME</th>
                   <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>DATE</th>
                   <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>TIME</th>
@@ -6641,7 +6629,7 @@ function Dashboard() {
                     {tableHeader}
                     <tbody>
                       <tr>
-                        <td colSpan={14} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>
+                        <td colSpan={14} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                           No records found.
                         </td>
                       </tr>
@@ -6678,7 +6666,7 @@ function Dashboard() {
                   }}>
                     PULLED-OUT FILES REPORT
                     {pageCount > 1 && (
-                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: 'var(--text-secondary)' }}>
                         (Page {pageIdx + 1} of {pageCount})
                       </span>
                     )}
@@ -6693,7 +6681,7 @@ function Dashboard() {
                         const isReturned = row.action === 'return' || !!row.dateReturned;
 
                         return (
-                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                          <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
                             <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
                               {globalIdx + 1}
                             </td>
@@ -7007,8 +6995,8 @@ function Dashboard() {
       >
         <div className="printable-report" style={{
           fontFamily: "'Times New Roman', Times, serif",
-          color: '#000',
-          backgroundColor: '#fff',
+          color: 'var(--text-primary)',
+          backgroundColor: 'var(--bg-primary)',
           padding: '1rem',
           borderRadius: 'var(--border-radius)',
           border: '1px solid var(--border-color)',
@@ -7022,18 +7010,15 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                position: 'relative',
-                border: '1px solid #000',
-                borderBottom: '2px solid #000',
+                border: '1px solid var(--border-color)',
+                borderBottom: '2px solid var(--border-color)',
                 padding: '10px 12px',
                 textAlign: 'center'
               }}>
-                <div style={{ display: 'inline-block', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
-                  <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
-                  <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                  <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MANAGEMENT &amp; DEVELOPMENT OFFICE</div>
-                </div>
+                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
+                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
+                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
+                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
               </div>
             );
 
@@ -7044,7 +7029,7 @@ function Dashboard() {
 
             const tableHeader = isTransferredMode ? (
               <thead>
-                <tr style={{ backgroundColor: '#ffffff' }}>
+                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
                   <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
                   <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>EMPLOYEE NAME</th>
                   <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>OFFICE/HOSPITAL</th>
@@ -7061,7 +7046,7 @@ function Dashboard() {
               </thead>
             ) : (
               <thead>
-                <tr style={{ backgroundColor: '#ffffff' }}>
+                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%' }}>NO.</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>EMPLOYEE NAME</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>OFFICE / HOSPITAL</th>
@@ -7079,7 +7064,7 @@ function Dashboard() {
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%' }}>RETURN CONDITION</th>
                   <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>RETURN REMARKS</th>
                 </tr>
-                <tr style={{ backgroundColor: '#ffffff' }}>
+                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
                   <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>RECEIVED BY</th>
                   <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>DATE</th>
                   <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>TIME</th>
@@ -7110,7 +7095,7 @@ function Dashboard() {
                     {tableHeader}
                     <tbody>
                       <tr>
-                        <td colSpan={isTransferredMode ? 12 : 20} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#555' }}>
+                        <td colSpan={isTransferredMode ? 12 : 20} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                           No records found.
                         </td>
                       </tr>
@@ -7147,7 +7132,7 @@ function Dashboard() {
                   }}>
                     {reportTitle}
                     {pageCount > 1 && (
-                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#444' }}>
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: 'var(--text-secondary)' }}>
                         (Page {pageIdx + 1} of {pageCount})
                       </span>
                     )}
@@ -7163,7 +7148,7 @@ function Dashboard() {
 
                         if (isTransferredMode) {
                           return (
-                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                            <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
                               <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
                                 {globalIdx + 1}
                               </td>
@@ -7205,7 +7190,7 @@ function Dashboard() {
                         }
 
                         return (
-                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                          <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
                             <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
                               {globalIdx + 1}
                             </td>

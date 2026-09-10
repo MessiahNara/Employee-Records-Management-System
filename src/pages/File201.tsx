@@ -427,17 +427,19 @@ function File201() {
 
   return (
     <div className="file201-page">
-      <div className="file201-page__header-row">
-        <div className="file201-page__header">
-          <h2 className="file201-page__title">
+      <div className="file201-page__header">
+        <div className="file201-page__title-group">
+          <div className="file201-page__title-icon-wrapper">
             <MdFolderOpen className="file201-page__title-icon" />
-            <span>File Locator</span>
-          </h2>
-          <p className="file201-page__subtitle">
-            Manage physical 201 records folders stored in Boxes.
-          </p>
+          </div>
+          <div>
+            <h1 className="file201-page__title">File Locator</h1>
+            <p className="file201-page__subtitle">
+              Manage physical 201 records folders stored in Boxes.
+            </p>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="file201-page__header-actions">
           {filteredBoxes.length > 0 && (
             <label style={{
               display: 'inline-flex',

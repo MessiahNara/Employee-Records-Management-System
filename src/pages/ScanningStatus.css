@@ -40,11 +40,12 @@
 }
 
 .scanning-status__title {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 1.6rem;
+  font-weight: 800;
   color: var(--text-primary);
   margin: 0;
   line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .scanning-status__subtitle {

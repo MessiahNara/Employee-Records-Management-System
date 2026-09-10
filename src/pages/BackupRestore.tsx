@@ -506,11 +506,16 @@ function BackupRestore() {
     <div className="backup-page">
       {/* Header */}
       <div className="backup-page__header">
-        <div>
-          <h1 className="backup-page__title">Database Backup &amp; Disaster Recovery</h1>
-          <p className="backup-page__subtitle">
-            Manage PostgreSQL database snapshots, restore points, automated cron schedules, and emergency disaster recovery
-          </p>
+        <div className="backup-page__title-group">
+          <div className="backup-page__title-icon-wrapper">
+            <MdBackup className="backup-page__title-icon" />
+          </div>
+          <div>
+            <h1 className="backup-page__title">Database Backup &amp; Disaster Recovery</h1>
+            <p className="backup-page__subtitle">
+              Manage PostgreSQL database snapshots, restore points, automated cron schedules, and emergency disaster recovery
+            </p>
+          </div>
         </div>
 
         <div className="backup-page__header-actions">

@@ -2480,14 +2480,19 @@ function InventoryAppraisal() {
     <div className="inventory-page">
       {/* Header & Buttons */}
       <div className="inventory-page__header">
-        <div>
-          <h1 className="inventory-page__title">Inventory & Records Appraisal</h1>
-          <p className="inventory-page__subtitle">
-            Manage record series inventory, retention schedules, and evaluate records safe for disposal.
-          </p>
+        <div className="inventory-page__title-group">
+          <div className="inventory-page__title-icon-wrapper">
+            <MdInventory className="inventory-page__title-icon" />
+          </div>
+          <div>
+            <h1 className="inventory-page__title">Inventory & Records Appraisal</h1>
+            <p className="inventory-page__subtitle">
+              Manage record series inventory, retention schedules, and evaluate records safe for disposal.
+            </p>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginLeft: 'auto' }}>
+        <div className="inventory-page__header-actions">
           {hasFullDivisionAccess && (
             <button
               className={`capsule-action-btn ${pendingRequests.length > 0 ? 'capsule-action-btn--primary' : 'capsule-action-btn--secondary'}`}
