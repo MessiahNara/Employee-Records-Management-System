@@ -991,11 +991,11 @@ router.post('/', (req: Request, res: Response, next: NextFunction) => {
     // Verify PDF magic header '%PDF'
     try {
       const fd = fs.openSync(uploadedFile.path, 'r');
-      const buffer = Buffer.alloc(5);
-      fs.readSync(fd, buffer, 0, 5, 0);
+      const buffer = Buffer.alloc(1024);
+      const bytesRead = fs.readSync(fd, buffer, 0, 1024, 0);
       fs.closeSync(fd);
-      const header = buffer.toString('ascii');
-      if (!header.startsWith('%PDF')) {
+      const header = buffer.toString('latin1', 0, bytesRead);
+      if (!header.includes('%PDF')) {
         try { fs.unlinkSync(uploadedFile.path); } catch (_) {}
         return res.status(400).json({ error: `File "${fileName}" is not a valid PDF or is corrupted.` });
       }

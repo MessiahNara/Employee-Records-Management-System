@@ -182,7 +182,19 @@ const documentStorage = multer.diskStorage({
 });
 
 const documentFileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  if (file.mimetype === 'application/pdf') {
+  const mimeType = (file.mimetype || '').toLowerCase();
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const isPdf =
+    mimeType === 'application/pdf' ||
+    mimeType === 'application/x-pdf' ||
+    mimeType === 'application/acrobat' ||
+    mimeType === 'applications/vnd.pdf' ||
+    mimeType === 'text/pdf' ||
+    mimeType === 'application/octet-stream' ||
+    mimeType === '' ||
+    ext === '.pdf';
+
+  if (isPdf) {
     cb(null, true);
   } else {
     cb(new Error('Only PDF files are allowed'));

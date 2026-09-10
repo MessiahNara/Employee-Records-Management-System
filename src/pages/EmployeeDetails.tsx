@@ -113,7 +113,7 @@ function EmployeeDetails() {
 
   useEffect(() => {
     const handleUpdate = () => {
-      if (id) fetchEmployee(id);
+      if (id) fetchEmployee(id, true);
     };
     window.addEventListener('employeeUpdated', handleUpdate);
     window.addEventListener('documentsUpdated', handleUpdate);
@@ -185,9 +185,9 @@ function EmployeeDetails() {
     }
   };
 
-  const fetchEmployee = async (employeeId: string) => {
+  const fetchEmployee = async (employeeId: string, silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const data = await api.employee.getById(employeeId);
       setEmployee(data);
       setProfilePicture(data.profilePicture);
@@ -195,9 +195,9 @@ function EmployeeDetails() {
       fetchActive201Status(employeeId);
     } catch (error) {
       console.error('Error fetching employee:', error);
-      setNotFound(true);
+      if (!silent) setNotFound(true);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 

@@ -161,7 +161,7 @@ function Requests() {
       showToast('Document URL not found.', 'error');
       return;
     }
-    setViewerSrc(`${docUrl}#toolbar=0&navpanes=0`);
+    setViewerSrc(`${docUrl}#toolbar=0&navpanes=0&view=Fit`);
     setViewerTitle(req.payload?.fileName || req.entityName || 'Document');
     setViewerOpen(true);
   };
@@ -504,10 +504,17 @@ function Requests() {
           setRotation(0);
         }}
         title={viewerTitle}
-        size="xl"
+        className="modal--pdf-viewer"
+        size="2xl"
         allowMinimize={true}
         allowFullscreen={true}
         noPadding
+        style={{
+          height: '96vh',
+          maxHeight: '98vh',
+          width: '97vw',
+          maxWidth: '1750px',
+        }}
       >
         <div className="requests__viewer">
           <div className="requests__viewer-toolbar">

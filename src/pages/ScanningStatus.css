@@ -135,14 +135,14 @@
 /* KPI Stats Grid (3 Cards) */
 .scanning-status__stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
 }
 
 .scanning-status__stat-card {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
+  gap: 1rem;
   padding: 1.25rem 1.4rem !important;
   border-radius: var(--border-radius, 12px);
   transition: transform 0.2s, box-shadow 0.2s;
@@ -154,13 +154,13 @@
 }
 
 .scanning-status__stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.65rem;
   flex-shrink: 0;
 }
 
@@ -182,11 +182,12 @@
 .scanning-status__stat-content {
   display: flex;
   flex-direction: column;
+  gap: 0.3rem;
   min-width: 0;
 }
 
 .scanning-status__stat-label {
-  font-size: 0.775rem;
+  font-size: 0.875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -194,12 +195,16 @@
 }
 
 .scanning-status__stat-value {
-  font-size: 1.85rem;
+  font-size: 2.1rem;
   font-weight: 800;
   color: var(--text-primary);
-  line-height: 1.15;
-  margin: 0.15rem 0;
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
+
+.scanning-status__stat-value--blue { color: #2563eb; }
+.scanning-status__stat-value--green { color: #10b981; }
+.scanning-status__stat-value--purple { color: #8b5cf6; }
 
 .scanning-status__stat-sub {
   font-size: 0.8rem;

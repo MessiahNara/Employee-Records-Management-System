@@ -83,3 +83,199 @@
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* ==========================================================================
+   Folder Live Upload Progress Modal
+   ========================================================================== */
+.folder-live-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0.25rem;
+}
+
+.folder-live-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--bg-surface-secondary, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+}
+
+.folder-live-file-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.folder-live-file-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.folder-live-file-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.folder-live-filename {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-live-category-tag {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #64748b);
+}
+
+.folder-live-category-tag strong {
+  color: var(--color-primary, #2563eb);
+}
+
+.folder-live-badge-percent {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-primary, #2563eb);
+  padding: 0.25rem 0.75rem;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.folder-live-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.folder-live-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.825rem;
+}
+
+.folder-live-label {
+  font-weight: 600;
+  color: var(--text-primary, #334155);
+}
+
+.folder-live-detail {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8rem;
+}
+
+.folder-live-bar-track {
+  width: 100%;
+  height: 12px;
+  background: var(--bg-surface-secondary, #e2e8f0);
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.folder-live-bar-track--sub {
+  height: 8px;
+  background: var(--bg-surface-secondary, #edf2f7);
+}
+
+.folder-live-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background-size: 30px 30px;
+}
+
+.folder-live-bar-fill--overall {
+  background-color: var(--color-primary, #2563eb);
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.25) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.25) 75%,
+    transparent 75%,
+    transparent
+  );
+  animation: folderProgressStripes 1s linear infinite;
+}
+
+.folder-live-bar-fill--current {
+  background-color: #10b981;
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.2) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.2) 75%,
+    transparent 75%,
+    transparent
+  );
+  animation: folderProgressStripes 1s linear infinite;
+}
+
+@keyframes folderProgressStripes {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 30px 0;
+  }
+}
+
+.folder-live-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border-color, #e2e8f0);
+}
+
+.folder-live-chip {
+  font-size: 0.775rem;
+  font-weight: 500;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.folder-live-chip--success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.folder-live-chip--skipped {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.folder-live-chip--error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.folder-live-chip--remaining {
+  background: var(--bg-surface-secondary, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+

@@ -70,15 +70,33 @@
 }
 
 .modal--xl {
-  width: 92vw;
-  max-width: 1180px;
-  max-height: 88vh;
+  width: 94vw;
+  max-width: 1440px;
+  max-height: 94vh;
 }
 
 .modal--2xl {
-  width: 95vw;
-  max-width: 1550px;
-  max-height: 92vh;
+  width: 97vw;
+  max-width: 1750px;
+  height: 96vh;
+  max-height: 98vh;
+}
+
+/* Dedicated PDF Viewer Modal styles */
+.modal--pdf-viewer-overlay,
+.modal-overlay:has(.modal--pdf-viewer) {
+  padding: 10px 14px;
+}
+
+.modal--pdf-viewer {
+  width: 97vw !important;
+  max-width: 1750px !important;
+  height: 96vh !important;
+  max-height: 98vh !important;
+}
+
+.modal--pdf-viewer .modal__header {
+  padding: 0.75rem 1.25rem;
 }
 
 .modal__header {
@@ -138,7 +156,7 @@
 }
 
 .modal__body {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
   padding: 1.5rem;
   min-height: 0;
@@ -149,6 +167,8 @@
 .modal__body--no-padding {
   padding: 0;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modal__footer {

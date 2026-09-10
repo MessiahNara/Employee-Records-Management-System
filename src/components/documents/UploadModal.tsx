@@ -9,10 +9,26 @@ import api from '../../services/api';
 import { getAuthState } from '../../utils/mockAuth';
 import './UploadModal.css';
 
+export interface UploadProgressData {
+  percent: number;
+  overallPercent: number;
+  currentFile: string;
+  currentIndex: number;
+  totalFiles: number;
+  loadedBytes?: number;
+  totalBytes?: number;
+}
+
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload: (files: File[], category: DocumentCategory, aoData?: any, compressionLevel?: string, onProgress?: (progressText: string) => void) => Promise<void>;
+  onUpload: (
+    files: File[],
+    category: DocumentCategory,
+    aoData?: any,
+    compressionLevel?: string,
+    onProgress?: (progress: UploadProgressData | string) => void
+  ) => Promise<void>;
   defaultCategory?: DocumentCategory;
 }
 
@@ -54,7 +70,8 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
   const [isUploading, setIsUploading] = useState(false);
   const [compressionLevel, setCompressionLevel] = useState<'extreme' | 'recommended' | 'less'>('recommended');
   const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressData | null>(null);
+  const [uploadProgressText, setUploadProgressText] = useState<string | null>(null);
 
   // Dropdown options from settings
   const [dropdownOptions, setDropdownOptions] = useState<{
@@ -227,15 +244,24 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
         autoRename: ao.autoRename,
       })) : undefined;
 
-      await onUpload(selectedFiles, selectedCategory, aoData, compressionLevel, (progressText) => {
-        setUploadProgress(progressText);
+      await onUpload(selectedFiles, selectedCategory, aoData, compressionLevel, (progress) => {
+        if (typeof progress === 'string') {
+          setUploadProgressText(progress);
+        } else {
+          setUploadProgress(progress);
+          setUploadProgressText(null);
+        }
       });
-      onClose();
+      // Brief pause so user sees 100% complete before modal closes
+      setTimeout(() => {
+        onClose();
+      }, 600);
     } catch (err: any) {
       setError(err.message || 'Failed to upload documents');
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
+      setUploadProgressText(null);
     }
   };
 
@@ -665,9 +691,54 @@ function UploadModal({ isOpen, onClose, onUpload, defaultCategory }: UploadModal
             ⚠️ {error}
           </div>
         )}
-        {uploadProgress && (
+        {/* Progress Bar shown immediately when uploading starts */}
+        {(isUploading || uploadProgress) && (
+          <div className="upload-modal__progress-box">
+            <div className="upload-modal__progress-top">
+              <div className="upload-modal__progress-file">
+                <span className="upload-modal__progress-icon">📄</span>
+                <span className="upload-modal__progress-name" title={uploadProgress?.currentFile || 'Processing file...'}>
+                  {uploadProgress?.currentFile || uploadProgressText || 'Uploading file...'}
+                </span>
+              </div>
+              <span className="upload-modal__progress-percent">
+                {uploadProgress
+                  ? (uploadProgress.totalFiles > 1 ? `${uploadProgress.overallPercent}%` : `${uploadProgress.percent}%`)
+                  : 'Starting...'}
+              </span>
+            </div>
+
+            <div className="upload-modal__bar-track">
+              <div
+                className={`upload-modal__bar-fill ${!uploadProgress ? 'upload-modal__bar-fill--indeterminate' : ''}`}
+                style={{
+                  width: uploadProgress
+                    ? `${uploadProgress.totalFiles > 1 ? uploadProgress.overallPercent : uploadProgress.percent}%`
+                    : '100%',
+                }}
+              />
+            </div>
+
+            <div className="upload-modal__progress-bottom">
+              <span>
+                {uploadProgress && uploadProgress.totalFiles > 1
+                  ? `Uploading file ${uploadProgress.currentIndex} of ${uploadProgress.totalFiles}...`
+                  : (uploadProgressText || 'Uploading document...')}
+              </span>
+              {uploadProgress?.totalBytes && uploadProgress.totalBytes > 0 ? (
+                <span>
+                  {((uploadProgress.loadedBytes || 0) / 1024 / 1024).toFixed(1)} / {(uploadProgress.totalBytes / 1024 / 1024).toFixed(1)} MB
+                </span>
+              ) : (
+                uploadProgress ? <span>{uploadProgress.percent}%</span> : null
+              )}
+            </div>
+          </div>
+        )}
+
+        {uploadProgressText && !uploadProgress && !isUploading && (
           <div className="upload-modal__progress">
-            ⏳ {uploadProgress}
+            ⏳ {uploadProgressText}
           </div>
         )}
 

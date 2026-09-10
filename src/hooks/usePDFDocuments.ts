@@ -19,11 +19,11 @@ const validatePDFFile = async (file: File): Promise<{ valid: boolean; error?: st
   if (!file.name.toLowerCase().endsWith('.pdf')) return { valid: false, error: `File "${file.name}" must have a .pdf extension` };
   if (file.size === 0) return { valid: false, error: `File "${file.name}" is empty (0 bytes)` };
   
-  // Verify PDF header %PDF in browser
+  // Verify PDF header %PDF anywhere in first 1024 bytes (per ISO 32000-1)
   try {
-    const slice = file.slice(0, 5);
+    const slice = file.slice(0, 1024);
     const text = await slice.text();
-    if (!text.startsWith('%PDF')) {
+    if (!text.includes('%PDF')) {
       return { valid: false, error: `File "${file.name}" is corrupted or not a valid PDF` };
     }
   } catch (e) {
@@ -111,7 +111,7 @@ export function usePDFDocuments(employeeId: string, employeeName: string): UsePD
           category,
           fileName: file.name,
           fileSize: file.size,
-          mimeType: file.type,
+          mimeType: file.type || 'application/pdf',
           autoRename: aoData?.autoRename,
           replace,
           compressionLevel,

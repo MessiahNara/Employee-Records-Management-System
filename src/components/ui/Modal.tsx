@@ -24,6 +24,8 @@ interface ModalProps {
   maxWidth?: string | number;
   maxHeight?: string | number;
   style?: React.CSSProperties;
+  className?: string;
+  overlayClassName?: string;
 }
 
 function Modal({
@@ -41,6 +43,8 @@ function Modal({
   maxWidth,
   maxHeight,
   style,
+  className,
+  overlayClassName,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -166,17 +170,26 @@ function Modal({
 
   return createPortal(
     <div
-      className={`modal-overlay ${effectiveMaximized ? 'modal-overlay--maximized' : ''}`}
+      className={`modal-overlay ${effectiveMaximized ? 'modal-overlay--maximized' : ''} ${className ? `${className}-overlay` : ''} ${overlayClassName || ''}`}
       role="dialog"
       aria-modal="true"
     >
       <div
         ref={modalRef}
-        className={`modal modal--${size} ${effectiveMaximized ? 'modal--maximized modal--fullscreen' : ''}`}
-        style={effectiveMaximized ? undefined : {
+        className={`modal modal--${size} ${className || ''} ${effectiveMaximized ? 'modal--maximized modal--fullscreen' : ''}`}
+        style={{
           ...(maxWidth ? { maxWidth } : {}),
           ...(maxHeight ? { maxHeight } : {}),
           ...style,
+          ...(effectiveMaximized ? {
+            width: '100vw',
+            maxWidth: '100vw',
+            height: '100vh',
+            maxHeight: '100vh',
+            borderRadius: 0,
+            margin: 0,
+            border: 'none',
+          } : {}),
         }}
         onClick={(e) => e.stopPropagation()}
       >

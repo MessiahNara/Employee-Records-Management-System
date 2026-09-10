@@ -1734,9 +1734,9 @@ function Dashboard() {
     } else if (reportActiveTab === 'inactive') {
       return sortedReportRows.filter((row) => row.status === 'Inactive');
     } else if (reportActiveTab === 'expiring') {
-      return sortedReportRows.filter((row) => isNearExpiration(row.durationTo));
+      return sortedReportRows.filter((row) => row.status === 'Active' && isNearExpiration(row.durationTo));
     } else {
-      return sortedReportRows.filter((row) => isExpired(row.durationTo));
+      return sortedReportRows.filter((row) => row.status === 'Active' && isExpired(row.durationTo));
     }
   }, [sortedReportRows, reportActiveTab]);
 
@@ -3199,8 +3199,8 @@ function Dashboard() {
         : reportActiveTab === 'inactive'
           ? sortedReportRows.filter((row) => row.status === 'Inactive')
           : reportActiveTab === 'expiring'
-            ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
-            : sortedReportRows.filter((row) => isExpired(row.durationTo));
+            ? sortedReportRows.filter((row) => row.status === 'Active' && isNearExpiration(row.durationTo))
+            : sortedReportRows.filter((row) => row.status === 'Active' && isExpired(row.durationTo));
 
     const title = getFormattedTitle();
     const fileName = `AO-Report-${reportAoStatus.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}`;
@@ -3406,8 +3406,8 @@ function Dashboard() {
         : reportActiveTab === 'inactive'
           ? sortedReportRows.filter((row) => row.status === 'Inactive')
           : reportActiveTab === 'expiring'
-            ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
-            : sortedReportRows.filter((row) => isExpired(row.durationTo));
+            ? sortedReportRows.filter((row) => row.status === 'Active' && isNearExpiration(row.durationTo))
+            : sortedReportRows.filter((row) => row.status === 'Active' && isExpired(row.durationTo));
 
     const title = getFormattedTitle();
     const ROWS_PER_PAGE = 13;
@@ -4820,80 +4820,62 @@ function Dashboard() {
       {/* KPI Summary Cards */}
       {viewMode !== 'reports' && (
         <div className="dashboard__kpi-grid">
-          <Card hoverable>
-            <div className="dashboard__kpi-card">
-              <div className="dashboard__kpi-header">
-                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)' }}>
-                  <MdPeople className="dashboard__kpi-icon" style={{ color: '#2563eb' }} />
-                </div>
+          <Card hoverable className="dashboard__kpi-card">
+            <div className="dashboard__kpi-inner">
+              <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--blue">
+                <MdPeople />
+              </div>
+              <div className="dashboard__kpi-info">
                 <span className="dashboard__kpi-label">Total Employees</span>
-              </div>
-              <div className="dashboard__kpi-body">
-                <div className="dashboard__kpi-value">{employeeStats.total}</div>
+                <span className="dashboard__kpi-value dashboard__kpi-value--blue">{employeeStats.total}</span>
               </div>
             </div>
           </Card>
 
-          <Card hoverable>
-            <div className="dashboard__kpi-card">
-              <div className="dashboard__kpi-header">
-                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
-                  <MdCheckCircle className="dashboard__kpi-icon" style={{ color: '#059669' }} />
-                </div>
+          <Card hoverable className="dashboard__kpi-card">
+            <div className="dashboard__kpi-inner">
+              <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--green">
+                <MdCheckCircle />
+              </div>
+              <div className="dashboard__kpi-info">
                 <span className="dashboard__kpi-label">Active Employees</span>
-              </div>
-              <div className="dashboard__kpi-body">
-                <div className="dashboard__kpi-value">
-                  {employeeStats.active}
-                </div>
+                <span className="dashboard__kpi-value dashboard__kpi-value--green">{employeeStats.active}</span>
               </div>
             </div>
           </Card>
 
-          <Card hoverable>
-            <div className="dashboard__kpi-card">
-              <div className="dashboard__kpi-header">
-                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>
-                  <MdPause className="dashboard__kpi-icon" style={{ color: '#d97706' }} />
-                </div>
+          <Card hoverable className="dashboard__kpi-card">
+            <div className="dashboard__kpi-inner">
+              <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--amber">
+                <MdPause />
+              </div>
+              <div className="dashboard__kpi-info">
                 <span className="dashboard__kpi-label">Inactive Employees</span>
-              </div>
-              <div className="dashboard__kpi-body">
-                <div className="dashboard__kpi-value">
-                  {employeeStats.inactive}
-                </div>
+                <span className="dashboard__kpi-value dashboard__kpi-value--amber">{employeeStats.inactive}</span>
               </div>
             </div>
           </Card>
 
-          <Card hoverable>
-            <div className="dashboard__kpi-card">
-              <div className="dashboard__kpi-header">
-                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
-                  <MdDescription className="dashboard__kpi-icon" style={{ color: '#7c3aed' }} />
-                </div>
+          <Card hoverable className="dashboard__kpi-card">
+            <div className="dashboard__kpi-inner">
+              <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--purple">
+                <MdDescription />
+              </div>
+              <div className="dashboard__kpi-info">
                 <span className="dashboard__kpi-label">Total Documents</span>
-              </div>
-              <div className="dashboard__kpi-body">
-                <div className="dashboard__kpi-value">
-                  {employeeStats.documents}
-                </div>
+                <span className="dashboard__kpi-value dashboard__kpi-value--purple">{employeeStats.documents}</span>
               </div>
             </div>
           </Card>
 
-          <Card hoverable>
-            <div className="dashboard__kpi-card">
-              <div className="dashboard__kpi-header">
-                <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(236, 72, 153, 0.12)' }}>
-                  <MdStorage className="dashboard__kpi-icon" style={{ color: '#db2777' }} />
-                </div>
-                <span className="dashboard__kpi-label">Storage Used</span>
+          <Card hoverable className="dashboard__kpi-card">
+            <div className="dashboard__kpi-inner">
+              <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--pink">
+                <MdStorage />
               </div>
-              <div className="dashboard__kpi-body">
-                <div className="dashboard__kpi-value">
-                  {(employeeStats.storageUsed / (1024 * 1024)).toFixed(1)} MB
-                </div>
+              <div className="dashboard__kpi-info">
+                <span className="dashboard__kpi-label">Storage Used</span>
+                <span className="dashboard__kpi-value dashboard__kpi-value--pink">{(employeeStats.storageUsed / (1024 * 1024)).toFixed(1)} MB</span>
               </div>
             </div>
           </Card>
@@ -5075,7 +5057,7 @@ function Dashboard() {
                   <div className="reports-view__metric-info">
                     <span className="reports-view__metric-label">Near Expiration (30 Days)</span>
                     <span className="reports-view__metric-value">
-                      {filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length}
+                      {filteredReportRows.filter((row) => row.status === 'Active' && isNearExpiration(row.durationTo)).length}
                     </span>
                   </div>
                 </div>
@@ -5087,7 +5069,7 @@ function Dashboard() {
                   <div className="reports-view__metric-info">
                     <span className="reports-view__metric-label">Reached Deadline (Expired)</span>
                     <span className="reports-view__metric-value">
-                      {filteredReportRows.filter((row) => isExpired(row.durationTo)).length}
+                      {filteredReportRows.filter((row) => row.status === 'Active' && isExpired(row.durationTo)).length}
                     </span>
                   </div>
                 </div>
@@ -5112,13 +5094,13 @@ function Dashboard() {
                     className={`reports-view__tab-btn${reportActiveTab === 'expiring' ? ' reports-view__tab-btn--active' : ''}`}
                     onClick={() => setReportActiveTab('expiring')}
                   >
-                    <MdWarning style={{ color: '#f59e0b' }} /> Near Expiration ({filteredReportRows.filter((row) => isNearExpiration(row.durationTo)).length})
+                    <MdWarning style={{ color: '#f59e0b' }} /> Near Expiration ({filteredReportRows.filter((row) => row.status === 'Active' && isNearExpiration(row.durationTo)).length})
                   </button>
                   <button
                     className={`reports-view__tab-btn${reportActiveTab === 'expired' ? ' reports-view__tab-btn--active' : ''}`}
                     onClick={() => setReportActiveTab('expired')}
                   >
-                    <MdError style={{ color: '#dc2626' }} /> Reached Deadline ({filteredReportRows.filter((row) => isExpired(row.durationTo)).length})
+                    <MdError style={{ color: '#dc2626' }} /> Reached Deadline ({filteredReportRows.filter((row) => row.status === 'Active' && isExpired(row.durationTo)).length})
                   </button>
                 </div>
 
@@ -6353,8 +6335,8 @@ function Dashboard() {
                 : reportActiveTab === 'inactive'
                   ? sortedReportRows.filter((row) => row.status === 'Inactive')
                   : reportActiveTab === 'expiring'
-                    ? sortedReportRows.filter((row) => isNearExpiration(row.durationTo))
-                    : sortedReportRows.filter((row) => isExpired(row.durationTo));
+                    ? sortedReportRows.filter((row) => row.status === 'Active' && isNearExpiration(row.durationTo))
+                    : sortedReportRows.filter((row) => row.status === 'Active' && isExpired(row.durationTo));
 
             const ROWS_PER_PAGE = 13;
             const pageCount = Math.max(1, Math.ceil(tabRows.length / ROWS_PER_PAGE));

@@ -5,6 +5,7 @@ import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
 import { getIO } from '../socket';
+import { setRestoringDatabase } from '../middleware/session';
 import {
   getBackupDir,
   getBaseUploadsDir,
@@ -304,6 +305,7 @@ const parseDates = (item: any, dateKeys: string[]): any => {
  * Restores database from a selected restore point
  */
 router.post('/restore', async (req: Request, res: Response) => {
+  setRestoringDatabase(true);
   try {
     const { filename, superadminPassword, username = 'admin' } = req.body;
 
@@ -345,6 +347,9 @@ router.post('/restore', async (req: Request, res: Response) => {
       });
     }
 
+    const currentRestoringUserId = authorizedUser.id;
+    const currentSessionId = ((req.headers['x-session-id'] || authorizedUser.activeSessionId) as string) || `session_${Date.now()}`;
+
     const safeFilename = path.basename(filename);
     const filePath = path.join(getBackupDir(), safeFilename);
 
@@ -363,16 +368,27 @@ router.post('/restore', async (req: Request, res: Response) => {
       } catch (_) {}
     };
 
+    // Helper to batch insert records to avoid PostgreSQL parameter limit
+    const batchInsert = async (
+      items: any[],
+      batchSize: number,
+      insertFn: (batch: any[]) => Promise<any>
+    ) => {
+      for (let i = 0; i < items.length; i += batchSize) {
+        await insertFn(items.slice(i, i + batchSize));
+      }
+    };
+
     // Step 1: Automatically create a pre-restore safety snapshot
     console.log('[BackupAPI] Creating pre-restore safety snapshot...');
     emitRestoreProgress({
       step: 1,
       totalSteps: 7,
-      percent: 12,
+      percent: 15,
       stage: 'Creating Safety Rollback Snapshot',
       detail: 'Generating automatic safety rollback snapshot before restore...',
     });
-    await delay(120);
+    await delay(180);
     const safetySnapshot = await executeDatabaseBackup('safety', `Auto-Safety (Pre-Restore ${safeFilename})`);
     console.log(`[BackupAPI] Safety snapshot created: ${safetySnapshot.filename}`);
 
@@ -380,11 +396,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 2,
       totalSteps: 7,
-      percent: 28,
+      percent: 30,
       stage: 'Validating Snapshot Archive',
       detail: `Reading and parsing ${safeFilename} (${(fs.statSync(filePath).size / 1024).toFixed(1)} KB)...`,
     });
-    await delay(120);
+    await delay(180);
     const content = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(content);
     const data = parsed.data || {};
@@ -398,7 +414,7 @@ router.post('/restore', async (req: Request, res: Response) => {
       stage: 'Purging Current Records',
       detail: 'Safely clearing existing relational tables and records...',
     });
-    await delay(120);
+    await delay(180);
 
     // A. Clear dependent child tables first
     await prisma.chatMessage.deleteMany({});
@@ -415,39 +431,68 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 4,
       totalSteps: 7,
-      percent: 68,
+      percent: 70,
       stage: 'Restoring Database Tables',
       detail: `Re-inserting ${data.employees?.length || 0} employees, ${data.documents?.length || 0} docs, ${data.users?.length || 0} users...`,
     });
-    await delay(120);
+    await delay(180);
 
-    // B. Re-insert Users (Bulk)
+    // B. Re-insert Users (Batched & session-preserved)
     if (Array.isArray(data.users) && data.users.length > 0) {
-      const formatted = data.users.map((u: any) =>
-        parseDates(u, ['createdAt', 'updatedAt', 'lastLogin', 'lastActive'])
+      const formatted: any[] = data.users.map((u: any) => {
+        const item = parseDates(u, ['createdAt', 'updatedAt', 'lastLogin', 'lastActive']);
+        // Crucial: preserve restoring admin activeSessionId so current session remains valid
+        if (item.id === currentRestoringUserId && currentSessionId) {
+          item.activeSessionId = currentSessionId;
+        }
+        return item;
+      });
+
+      // Ensure the restoring user exists in DB
+      const hasRestoringUser = formatted.some((u: any) => u.id === currentRestoringUserId || u.username === authorizedUser.username);
+      if (!hasRestoringUser) {
+        formatted.push({
+          ...authorizedUser,
+          activeSessionId: currentSessionId,
+        });
+      }
+
+      await batchInsert(formatted, 100, (batch) =>
+        prisma.user.createMany({ data: batch as any, skipDuplicates: true })
       );
-      await prisma.user.createMany({ data: formatted, skipDuplicates: true });
+    } else {
+      // Fallback: restore authorized user at minimum
+      await prisma.user.create({
+        data: {
+          ...authorizedUser,
+          activeSessionId: currentSessionId,
+        },
+      });
     }
 
-    // C. Re-insert System Settings (Bulk)
+    // C. Re-insert System Settings (Batched)
     if (Array.isArray(data.systemSettings) && data.systemSettings.length > 0) {
-      const formatted = data.systemSettings.map((s: any) =>
+      const formatted: any[] = data.systemSettings.map((s: any) =>
         parseDates(s, ['createdAt', 'updatedAt'])
       );
-      await prisma.systemSetting.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 100, (batch) =>
+        prisma.systemSetting.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // D. Re-insert Yellow Boxes (Bulk)
+    // D. Re-insert Yellow Boxes (Batched)
     if (Array.isArray(data.yellowBoxes) && data.yellowBoxes.length > 0) {
-      const formatted = data.yellowBoxes.map((y: any) =>
+      const formatted: any[] = data.yellowBoxes.map((y: any) =>
         parseDates(y, ['createdAt', 'updatedAt'])
       );
-      await prisma.yellowBox.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 200, (batch) =>
+        prisma.yellowBox.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // E. Re-insert Employees (Bulk)
+    // E. Re-insert Employees (Batched in chunks of 250 to avoid PostgreSQL parameter limit)
     if (Array.isArray(data.employees) && data.employees.length > 0) {
-      const formatted = data.employees.map((e: any) => {
+      const formatted: any[] = data.employees.map((e: any) => {
         const item = parseDates(e, [
           'dateOfBirth',
           'appointmentFrom',
@@ -470,12 +515,14 @@ router.post('/restore', async (req: Request, res: Response) => {
         delete item.yellowBox;
         return item;
       });
-      await prisma.employee.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 250, (batch) =>
+        prisma.employee.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // F. Re-insert Documents (Bulk)
+    // F. Re-insert Documents (Batched in chunks of 250)
     if (Array.isArray(data.documents) && data.documents.length > 0) {
-      const formatted = data.documents.map((d: any) => {
+      const formatted: any[] = data.documents.map((d: any) => {
         const item = parseDates(d, [
           'createdAt',
           'updatedAt',
@@ -492,53 +539,64 @@ router.post('/restore', async (req: Request, res: Response) => {
         delete item.employee;
         return item;
       });
-      await prisma.document.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 250, (batch) =>
+        prisma.document.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // G. Re-insert Borrow Logs (Bulk)
+    // G. Re-insert Borrow Logs (Batched)
     if (Array.isArray(data.file201BorrowLogs) && data.file201BorrowLogs.length > 0) {
-      const formatted = data.file201BorrowLogs.map((b: any) => {
+      const formatted: any[] = data.file201BorrowLogs.map((b: any) => {
         const item = parseDates(b, ['dateBorrowed', 'dateReturned', 'expectedReturnDate', 'createdAt']);
         delete item.employee;
         return item;
       });
-      await prisma.file201BorrowLog.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 250, (batch) =>
+        prisma.file201BorrowLog.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // H. Re-insert Approval Requests (Bulk)
+    // H. Re-insert Approval Requests (Batched)
     if (Array.isArray(data.approvalRequests) && data.approvalRequests.length > 0) {
-      const formatted = data.approvalRequests.map((a: any) =>
+      const formatted: any[] = data.approvalRequests.map((a: any) =>
         parseDates(a, ['createdAt', 'resolvedAt'])
       );
-      await prisma.approvalRequest.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 500, (batch) =>
+        prisma.approvalRequest.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // I. Re-insert Activities (Bulk)
+    // I. Re-insert Activities (Batched)
     if (Array.isArray(data.activities) && data.activities.length > 0) {
-      const formatted = data.activities.map((act: any) =>
+      const formatted: any[] = data.activities.map((act: any) =>
         parseDates(act, ['createdAt', 'updatedAt'])
       );
-      await prisma.activity.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 500, (batch) =>
+        prisma.activity.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // J. Re-insert Chat Messages (Bulk)
+    // J. Re-insert Chat Messages (Batched)
     if (Array.isArray(data.chatMessages) && data.chatMessages.length > 0) {
-      const formatted = data.chatMessages.map((c: any) => {
+      const formatted: any[] = data.chatMessages.map((c: any) => {
         const item = parseDates(c, ['createdAt']);
-        // Ensure deleted flags are reset upon restore so all chat history comes back!
         item.deletedBySender = false;
         item.deletedByRecipient = false;
         return item;
       });
-      await prisma.chatMessage.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 500, (batch) =>
+        prisma.chatMessage.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
-    // K. Re-insert Audit Logs (Bulk)
+    // K. Re-insert Audit Logs (Batched)
     if (Array.isArray(data.auditLogs) && data.auditLogs.length > 0) {
-      const formatted = data.auditLogs.map((log: any) =>
+      const formatted: any[] = data.auditLogs.map((log: any) =>
         parseDates(log, ['createdAt'])
       );
-      await prisma.auditLog.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(formatted, 500, (batch) =>
+        prisma.auditLog.createMany({ data: batch as any, skipDuplicates: true })
+      );
     }
 
     // L. Restore Inventory Appraisal & Disposal Data files across all active paths
@@ -566,11 +624,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 5,
       totalSteps: 7,
-      percent: 80,
+      percent: 85,
       stage: 'Restoring Auxiliary App Storage',
       detail: 'Restoring inventory records, disposal history, and group chats...',
     });
-    await delay(120);
+    await delay(180);
 
     if (Array.isArray(data.inventoryRecords)) {
       writeDataFile('inventory_records.json', data.inventoryRecords);
@@ -598,11 +656,11 @@ router.post('/restore', async (req: Request, res: Response) => {
     emitRestoreProgress({
       step: 6,
       totalSteps: 7,
-      percent: 92,
+      percent: 95,
       stage: 'Synchronizing Physical Files',
       detail: 'Restoring physical upload assets, document files, and profile images...',
     });
-    await delay(120);
+    await delay(180);
 
     // 1. Restore from companion files directory if present on server
     const companionDir = path.join(getBackupDir(), `${path.parse(safeFilename).name}_files`);
@@ -660,17 +718,21 @@ router.post('/restore', async (req: Request, res: Response) => {
       stage: 'Restoration Complete',
       detail: 'Database restore finished! Broadcasting session reset to connected clients...',
     });
+    await delay(180);
 
     console.log('[BackupAPI] Database and physical files restoration completed successfully.');
 
-    // Step 5: Invalidate all active session IDs in database so any stale or disconnected client is rejected upon reconnect
+    // Step 5: Invalidate other active session IDs in database (keep current restoring user active)
     try {
       await prisma.user.updateMany({
+        where: {
+          id: { not: currentRestoringUserId },
+        },
         data: {
           activeSessionId: `RESTORE_LOGOUT_${Date.now()}`,
         },
       });
-      console.log('[BackupAPI] All user activeSessionIds invalidated in database.');
+      console.log('[BackupAPI] Other user activeSessionIds invalidated in database.');
     } catch (sessionErr) {
       console.warn('[BackupAPI] Could not invalidate activeSessionIds in database:', sessionErr);
     }
@@ -683,7 +745,7 @@ router.post('/restore', async (req: Request, res: Response) => {
       message: `The database has been restored from backup point "${safeFilename}". All accounts have been logged out to synchronize system state.`,
     };
 
-    // Step 7: Broadcast real-time global logout & sync event to all open client systems
+    // Step 7: Broadcast real-time global logout & sync event to all open client systems (passing initiatorUserId so restoring client is not killed prematurely)
     try {
       const io = getIO();
       if (io) {
@@ -691,11 +753,13 @@ router.post('/restore', async (req: Request, res: Response) => {
         const logoutPayload = {
           timestamp: new Date().toISOString(),
           restoredBy: authorizedUser?.username || 'Superadmin',
+          initiatorUserId: currentRestoringUserId,
           message: 'The database and files have been restored from a snapshot point. All user sessions have been logged out to synchronize live data. Please log in again.',
         };
         io.emit('databaseRestored', logoutPayload);
         io.emit('forceLogout', {
           reason: 'DATABASE_RESTORE',
+          initiatorUserId: currentRestoringUserId,
           message: 'A database restore was executed. All user accounts have been logged out.',
         });
         io.emit('chatsUpdated');
@@ -715,6 +779,8 @@ router.post('/restore', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('[BackupAPI] Database restore failed:', error);
     res.status(500).json({ error: 'Database restore encountered an error', details: error.message });
+  } finally {
+    setRestoringDatabase(false);
   }
 });
 

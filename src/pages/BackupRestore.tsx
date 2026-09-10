@@ -247,12 +247,12 @@ function BackupRestore() {
       const elapsed = Date.now() - startTime;
       setProgressState((prev) => {
         if (!prev.isOpen) return prev;
-        // Subtle micro-pulse between server milestone packets capped by current server step
-        const stepCap = Math.min(94, (prev.step / prev.totalSteps) * 94);
-        const microInc = prev.percent < stepCap ? 0.05 : 0;
+        if (prev.percent >= 100) return { ...prev, elapsedMs: elapsed };
+        const stepTarget = Math.min(94, (prev.step / prev.totalSteps) * 94);
+        const increment = prev.percent < stepTarget ? 0.3 : (prev.percent < 94 ? 0.03 : 0);
         return {
           ...prev,
-          percent: Math.min(stepCap, prev.percent + microInc),
+          percent: Math.min(94, prev.percent + increment),
           elapsedMs: elapsed,
         };
       });
@@ -265,13 +265,11 @@ function BackupRestore() {
     setProgressState((prev) => ({
       ...prev,
       percent: 100,
+      step: prev.totalSteps,
       stage: successMessage,
       detail: 'All tasks completed successfully.',
       logs: [...prev.logs, `[${time}] ✓ ${successMessage}`],
     }));
-    setTimeout(() => {
-      setProgressState((prev) => ({ ...prev, isOpen: false }));
-    }, 1200);
   };
 
   const failProgress = () => {
@@ -383,6 +381,7 @@ function BackupRestore() {
     try {
       setIsRestoring(true);
       setRestoreError('');
+      sessionStorage.setItem('isRestoring', 'true');
       startProgress('restore');
       const res = await api.backup.restore({
         filename: selectedBackupForRestore.filename,
@@ -391,31 +390,35 @@ function BackupRestore() {
       });
 
       if (res.success) {
-        completeProgress('Database successfully restored! Logging out all accounts...');
-        showToast('Database restore complete. Logging out all active accounts...', 'info');
-        
-        try {
-          clearAuthState();
-          localStorage.removeItem('currentUserId');
-          localStorage.removeItem('sessionId');
-          sessionStorage.removeItem('currentUserId');
-          sessionStorage.removeItem('sessionId');
-          const notice = 'Database restoration completed successfully. All accounts have been logged out to synchronize live data. Please sign in again.';
-          localStorage.setItem('restoreLogoutNotice', notice);
-          sessionStorage.setItem('restoreLogoutNotice', notice);
-        } catch (_) {}
+        completeProgress('Database successfully restored (100%)! Preparing session sync...');
+        showToast('Database restore complete! All live data restored.', 'success');
 
         setSelectedBackupForRestore(null);
 
-        // Allow user to see 100% completion for 1.2s, then navigate and reload
+        // Allow user to clearly see 100% completion in the modal for 2.5 seconds
         setTimeout(() => {
+          try {
+            sessionStorage.removeItem('isRestoring');
+            clearAuthState();
+            localStorage.removeItem('currentUserId');
+            localStorage.removeItem('sessionId');
+            sessionStorage.removeItem('currentUserId');
+            sessionStorage.removeItem('sessionId');
+            const notice = 'Database restoration completed successfully (100%). All accounts have been synchronized. Please sign in again.';
+            localStorage.setItem('restoreLogoutNotice', notice);
+            sessionStorage.setItem('restoreLogoutNotice', notice);
+          } catch (_) {}
+
+          setProgressState((prev) => ({ ...prev, isOpen: false }));
           window.location.hash = '#/login';
           window.location.reload();
-        }, 1200);
+        }, 2500);
       } else {
+        sessionStorage.removeItem('isRestoring');
         failProgress();
       }
     } catch (error: any) {
+      sessionStorage.removeItem('isRestoring');
       failProgress();
       console.error('Restore failed:', error);
       setRestoreError(error.message || 'Database restoration failed.');
@@ -1247,10 +1250,14 @@ function BackupRestore() {
       {/* Real-time Percentage & Timer Progress Modal */}
       <Modal
         isOpen={progressState.isOpen}
-        onClose={() => {}}
+        onClose={() => {
+          if (progressState.percent >= 100) {
+            setProgressState((prev) => ({ ...prev, isOpen: false }));
+          }
+        }}
         title={progressState.title}
         size="md"
-        hideCloseButton={true}
+        hideCloseButton={progressState.percent < 100}
         allowMinimize={false}
         allowFullscreen={false}
       >
@@ -1322,6 +1329,17 @@ function BackupRestore() {
           {progressState.percent >= 85 && progressState.percent < 100 && (
             <div className="backup-progress-modal__note">
               Writing snapshot file and validating integrity. Please do not close this window.
+            </div>
+          )}
+
+          {progressState.percent >= 100 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <Button
+                variant="primary"
+                onClick={() => setProgressState((prev) => ({ ...prev, isOpen: false }))}
+              >
+                ✓ Done
+              </Button>
             </div>
           )}
         </div>

@@ -204,59 +204,51 @@ function Analytics() {
         </div>
       </div>
 
-      <div className="analytics-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)' }}>
-                <MdPeople className="dashboard__kpi-icon" style={{ color: '#2563eb' }} />
-              </div>
-              <span className="dashboard__kpi-label">TOTAL EMPLOYEES</span>
+      <div className="analytics-stats-grid">
+        <Card hoverable className="dashboard__kpi-card">
+          <div className="dashboard__kpi-inner">
+            <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--blue">
+              <MdPeople />
             </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">{totalEmployees}</div>
+            <div className="dashboard__kpi-info">
+              <span className="dashboard__kpi-label">TOTAL EMPLOYEES</span>
+              <span className="dashboard__kpi-value dashboard__kpi-value--blue">{totalEmployees}</span>
             </div>
           </div>
         </Card>
         
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
-                <MdDomain className="dashboard__kpi-icon" style={{ color: '#7c3aed' }} />
-              </div>
+        <Card hoverable className="dashboard__kpi-card">
+          <div className="dashboard__kpi-inner">
+            <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--purple">
+              <MdDomain />
+            </div>
+            <div className="dashboard__kpi-info">
               <span className="dashboard__kpi-label">ASSIGNED DEPARTMENTS</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">{totalDepartments}</div>
+              <span className="dashboard__kpi-value dashboard__kpi-value--purple">{totalDepartments}</span>
             </div>
           </div>
         </Card>
 
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
-                <MdCheckCircle className="dashboard__kpi-icon" style={{ color: '#059669' }} />
-              </div>
+        <Card hoverable className="dashboard__kpi-card">
+          <div className="dashboard__kpi-inner">
+            <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--green">
+              <MdCheckCircle />
+            </div>
+            <div className="dashboard__kpi-info">
               <span className="dashboard__kpi-label">ACTIVE EMPLOYEES</span>
-            </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">{activeCount}</div>
+              <span className="dashboard__kpi-value dashboard__kpi-value--green">{activeCount}</span>
             </div>
           </div>
         </Card>
 
-        <Card hoverable>
-          <div className="dashboard__kpi-card">
-            <div className="dashboard__kpi-header">
-              <div className="dashboard__kpi-icon-wrapper" style={{ backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>
-                <MdAssignment className="dashboard__kpi-icon" style={{ color: '#d97706' }} />
-              </div>
-              <span className="dashboard__kpi-label">INACTIVE EMPLOYEES</span>
+        <Card hoverable className="dashboard__kpi-card">
+          <div className="dashboard__kpi-inner">
+            <div className="dashboard__kpi-icon-wrapper dashboard__kpi-icon-wrapper--amber">
+              <MdAssignment />
             </div>
-            <div className="dashboard__kpi-body">
-              <div className="dashboard__kpi-value">{inactiveCount}</div>
+            <div className="dashboard__kpi-info">
+              <span className="dashboard__kpi-label">INACTIVE EMPLOYEES</span>
+              <span className="dashboard__kpi-value dashboard__kpi-value--amber">{inactiveCount}</span>
             </div>
           </div>
         </Card>
@@ -265,8 +257,8 @@ function Analytics() {
       <div className="analytics-charts-grid">
         <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <h3>Departments by Headcount</h3>
-          <div className="chart-scroll-container" style={{ width: '100%', height: '500px', overflowY: 'auto', overflowX: 'hidden' }}>
-            <div style={{ height: `${Math.max(400, barData.length * 40)}px`, width: '100%' }}>
+          <div className="chart-scroll-container" style={{ width: '100%', height: '380px', overflowY: 'auto', overflowX: 'hidden' }}>
+            <div style={{ height: `${Math.max(340, barData.length * 36)}px`, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme === 'dark' ? '#334155' : '#e5e7eb'} />
@@ -286,7 +278,7 @@ function Analytics() {
           </div>
         </div>
 
-        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
           <div style={{ flex: 1 }}>
             <h3>Appointment Status</h3>
@@ -356,7 +348,7 @@ function Analytics() {
         </div>
       </div>
 
-      <div className="analytics-charts-grid" style={{ marginTop: '2rem' }}>
+      <div className="analytics-charts-grid" style={{ marginTop: '1.15rem' }}>
         <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <h3>Age Demographics</h3>
           <div className="chart-container" style={{ flex: 1, minHeight: '300px' }}>
@@ -404,7 +396,7 @@ function Analytics() {
         </div>
       </div>
 
-      <div className="analytics-charts-grid" style={{ marginTop: '2rem' }}>
+      <div className="analytics-charts-grid" style={{ marginTop: '1.15rem' }}>
         <div className="chart-card" style={{ display: 'flex', flexDirection: 'column', gridColumn: '1 / -1' }}>
           <h3>New Hires per Year (Timeline)</h3>
           <div className="chart-container" style={{ flex: 1, minHeight: '350px' }}>

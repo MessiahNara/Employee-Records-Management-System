@@ -158,7 +158,15 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title=""
-      size="xl"
+      size="2xl"
+      className="modal--pdf-viewer"
+      noPadding
+      style={{
+        height: '96vh',
+        maxHeight: '98vh',
+        width: '97vw',
+        maxWidth: '1750px',
+      }}
     >
       <div className="split-viewer">
         {/* Top bar */}

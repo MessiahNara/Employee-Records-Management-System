@@ -286,21 +286,43 @@ function PDFViewer({
 
   if (!employeeDocument) return null;
 
-  // Only privileged users get a real src — everyone else sees the locked placeholder
-  const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#toolbar=0&zoom=${zoom}` : '';
-
-  const modalSize = 'xl';
+  // Fit whole page length-wise by default so the entire document is visible without vertical clipping
+  const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#toolbar=0&navpanes=0&view=Fit` : '';
 
   return (
     <>
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={employeeDocument.fileName}
-        size={modalSize}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontWeight: 700 }}>{employeeDocument.fileName}</span>
+            {employeeDocument.category && (
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                color: 'var(--color-primary, #2563eb)'
+              }}>
+                {employeeDocument.category}
+              </span>
+            )}
+          </div>
+        }
+        className="modal--pdf-viewer"
+        size="2xl"
         allowMinimize={true}
         allowFullscreen={true}
+        isMaximized={false}
         noPadding
+        style={{
+          height: '96vh',
+          maxHeight: '98vh',
+          width: '97vw',
+          maxWidth: '1750px',
+        }}
       >
         <div className={`pdf-viewer ${!canDownloadOrPrint ? 'pdf-viewer--no-print' : ''}`}>
           <div className="pdf-viewer__header">
@@ -416,7 +438,7 @@ function PDFViewer({
 
           <div className="pdf-viewer__content">
             <div className={`pdf-viewer__body--split`}>
-              <div ref={docPaneRef} className="pdf-viewer__split-doc-pane" style={{ overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div ref={docPaneRef} className="pdf-viewer__split-doc-pane pdf-canvas-container">
                 {isLoading && canDownloadOrPrint && (
                   <div className="pdf-viewer__loading">
                     <div className="pdf-viewer__spinner"></div>
@@ -426,18 +448,27 @@ function PDFViewer({
 
                 {/* Privileged users — render the iframe */}
                 {canDownloadOrPrint && iframeSrc && (
-                  <iframe
-                    key={`${zoom}-${rotation}`}
-                    src={iframeSrc}
-                    className="pdf-viewer__iframe"
-                    title={employeeDocument.fileName}
+                  <div
+                    className="pdf-viewer__doc-wrapper pdf-viewer__canvas-container"
                     style={{
-                      display: isLoading ? 'none' : 'block',
-                      transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
+                      width: zoom > 100 ? `${zoom}%` : '100%',
+                      height: zoom > 100 ? `${zoom}%` : '100%',
+                      minHeight: '100%',
+                      transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
                       transformOrigin: 'center center',
-                      transition: 'transform 0.2s ease-out',
+                      transition: 'width 0.15s ease-out, height 0.15s ease-out, transform 0.2s ease-out',
                     }}
-                  />
+                  >
+                    <iframe
+                      src={iframeSrc}
+                      className="pdf-viewer__iframe"
+                      title={employeeDocument.fileName}
+                      onLoad={() => setIsLoading(false)}
+                      style={{
+                        display: isLoading ? 'none' : 'block',
+                      }}
+                    />
+                  </div>
                 )}
 
                 {/* Non-privileged users — locked security placeholder with blurred document background */}

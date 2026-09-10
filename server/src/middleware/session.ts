@@ -1,17 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 
+let isRestoringDatabase = false;
+
+export const setRestoringDatabase = (val: boolean) => {
+  isRestoringDatabase = val;
+};
+
+export const getIsRestoringDatabase = () => isRestoringDatabase;
+
 export async function validateSession(req: Request, res: Response, next: NextFunction) {
-  // Allow login, health check, and password verification without session validation
+  // Allow login, health check, password verification, and backup routes without session validation
   const skipPaths = [
     '/api/users/login',
     '/api/health',
-    '/api/users/verify-password'
+    '/api/users/verify-password',
+    '/api/backup',
   ];
 
   const requestUrl = req.originalUrl || req.url || '';
 
-  if (skipPaths.some(p => requestUrl.startsWith(p))) {
+  if (isRestoringDatabase || skipPaths.some(p => requestUrl.startsWith(p))) {
     return next();
   }
 

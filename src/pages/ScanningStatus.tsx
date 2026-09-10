@@ -299,7 +299,7 @@ export default function ScanningStatus() {
           </div>
           <div className="scanning-status__stat-content">
             <span className="scanning-status__stat-label">EMPLOYEES WITH SCANNED FILES</span>
-            <div className="scanning-status__stat-value">{stats.employeesWithScannedFiles.toLocaleString()}</div>
+            <div className="scanning-status__stat-value scanning-status__stat-value--blue">{stats.employeesWithScannedFiles.toLocaleString()}</div>
             <span className="scanning-status__stat-sub">with documents in folder</span>
           </div>
         </Card>
@@ -310,7 +310,7 @@ export default function ScanningStatus() {
           </div>
           <div className="scanning-status__stat-content">
             <span className="scanning-status__stat-label">TOTAL DOCUMENTS SCANNED</span>
-            <div className="scanning-status__stat-value">{stats.totalDocumentsScanned.toLocaleString()}</div>
+            <div className="scanning-status__stat-value scanning-status__stat-value--green">{stats.totalDocumentsScanned.toLocaleString()}</div>
             <span className="scanning-status__stat-sub">scanned 201 files in system</span>
           </div>
         </Card>
@@ -321,7 +321,7 @@ export default function ScanningStatus() {
           </div>
           <div className="scanning-status__stat-content">
             <span className="scanning-status__stat-label">AVERAGE FILES PER EMPLOYEE</span>
-            <div className="scanning-status__stat-value">{stats.averageFilesPerEmployee}</div>
+            <div className="scanning-status__stat-value scanning-status__stat-value--purple">{stats.averageFilesPerEmployee}</div>
             <span className="scanning-status__stat-sub">documents per folder</span>
           </div>
         </Card>

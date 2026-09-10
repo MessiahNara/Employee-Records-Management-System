@@ -80,6 +80,13 @@ export const initSocketClient = (): Promise<Socket | null> => {
     });
 
     const handleRestoreLogout = (data: any) => {
+      // If this client window is currently executing the database restore, do not interrupt it!
+      // BackupRestore.tsx handles its own progress to 100% and smooth post-restore transition.
+      if (sessionStorage.getItem('isRestoring') === 'true') {
+        console.log('[socket] Bypassing forceLogout because this client is actively executing the database restore.');
+        return;
+      }
+
       console.warn('[socket] Database restore detected! Logging out active session...', data);
 
       const message = data?.message || 'A database restore was executed. All active accounts were logged out to synchronize live data. Please sign in again.';
@@ -101,7 +108,7 @@ export const initSocketClient = (): Promise<Socket | null> => {
       }
       setTimeout(() => {
         window.location.reload();
-      }, 150);
+      }, 300);
     };
 
     socket.on('databaseRestored', handleRestoreLogout);

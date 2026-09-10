@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { DocumentCategory, DOCUMENT_FOLDERS, EmployeeDocument } from '../../types/document';
 import { usePDFDocuments } from '../../hooks/usePDFDocuments';
 import { getAuthState } from '../../utils/mockAuth';
@@ -18,6 +18,20 @@ interface PDFDocumentsModuleProps {
   employeeName: string;
 }
 
+interface FolderUploadLiveProgress {
+  currentFileName: string;
+  currentCategory: string;
+  currentIndex: number;
+  totalFiles: number;
+  filePercent: number;
+  overallPercent: number;
+  loadedBytes: number;
+  totalBytes: number;
+  successCount: number;
+  failCount: number;
+  canceledCount: number;
+}
+
 function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProps) {
   const [activeCategory, setActiveCategory] = useState<DocumentCategory>('Personal Information');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -30,9 +44,21 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   const [pdfData, setPdfData] = useState<string | null>(null);
   const [isFolderUploading, setIsFolderUploading] = useState(false);
   const [folderUploadProgress, setFolderUploadProgress] = useState<string | null>(null);
+  const [folderLiveProgress, setFolderLiveProgress] = useState<FolderUploadLiveProgress | null>(null);
   const [folderUploadConfirm, setFolderUploadConfirm] = useState<{ files: File[] } | null>(null);
   const [folderUploadErrors, setFolderUploadErrors] = useState<{ name: string; error: string }[]>([]);
   const [folderCompressionLevel, setFolderCompressionLevel] = useState<'extreme' | 'recommended' | 'less'>('recommended');
+  const [folderSkippedAOCount, setFolderSkippedAOCount] = useState(0);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (folderInputRef.current) {
+      folderInputRef.current.setAttribute('webkitdirectory', '');
+      folderInputRef.current.setAttribute('directory', '');
+      (folderInputRef.current as any).webkitdirectory = true;
+      (folderInputRef.current as any).directory = true;
+    }
+  }, []);
   const [duplicateConfirm, setDuplicateConfirm] = useState<{
     fileName: string;
     onResolve: (action: 'replace' | 'skip', applyToAll: boolean) => void;
@@ -132,7 +158,13 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
   // Get selected documents info for bulk delete
   const selectedDocuments = documents.filter(doc => selectedDocumentIds.has(doc.id));
 
-  const handleUpload = async (files: File[], category: DocumentCategory, aoData?: any | any[], compressionLevel: string = 'recommended', onProgress?: (progressText: string) => void) => {
+  const handleUpload = async (
+    files: File[],
+    category: DocumentCategory,
+    aoData?: any | any[],
+    compressionLevel: string = 'recommended',
+    onProgress?: (progress: any) => void
+  ) => {
     try {
       let globalDuplicateAction: 'replace' | 'skip' | null = null;
       let uploadedCount = 0;
@@ -186,12 +218,29 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
         await uploadDocument(file, category, ao, true, replace, compressionLevel, (e: ProgressEvent) => {
           if (onProgress) {
             if (e.lengthComputable) {
-              const percent = Math.round((e.loaded / e.total) * 100);
-              const queueInfo = uploadQueue.length > 1 ? ` (${i + 1}/${uploadQueue.length})` : '';
-              onProgress(`Uploading ${file.name}${queueInfo}... ${percent}%`);
+              const filePercent = Math.round((e.loaded / e.total) * 100);
+              const overallPercent = Math.min(
+                100,
+                Math.round(((i + (e.loaded / e.total)) / uploadQueue.length) * 100)
+              );
+              onProgress({
+                percent: filePercent,
+                overallPercent,
+                currentFile: file.name,
+                currentIndex: i + 1,
+                totalFiles: uploadQueue.length,
+                loadedBytes: e.loaded,
+                totalBytes: e.total,
+              });
             } else {
-              const queueInfo = uploadQueue.length > 1 ? ` (${i + 1}/${uploadQueue.length})` : '';
-              onProgress(`Uploading ${file.name}${queueInfo}...`);
+              const overallPercent = Math.round(((i + 0.5) / uploadQueue.length) * 100);
+              onProgress({
+                percent: 50,
+                overallPercent,
+                currentFile: file.name,
+                currentIndex: i + 1,
+                totalFiles: uploadQueue.length,
+              });
             }
           }
         });
@@ -221,6 +270,56 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
     }
   };
 
+  // Define category mappings matching folder names from relative path
+  const getCategoryFromPath = (pathString: string): DocumentCategory => {
+    const normalizedPath = pathString.replace(/\\/g, '/');
+    const parts = normalizedPath.split('/').filter(Boolean);
+    
+    // If only filename or no parent folder, return active category
+    if (parts.length < 2) return activeCategory;
+    
+    // Check parent folder names from deepest to root (excluding the filename at the end)
+    const folderSegments = parts.slice(0, -1).reverse();
+
+    for (const segment of folderSegments) {
+      const clean = segment.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+
+      if (clean.includes('personal') || clean.includes('pds') || clean.includes('info')) {
+        return 'Personal Information';
+      }
+      if (clean.includes('appointment') || clean.includes('personnelaction') || clean.includes('plantilla')) {
+        return 'Personnel Action / Appointment';
+      }
+      if (clean.includes('position') || clean.includes('jobdesc') || clean.includes('jobdescription')) {
+        return 'Position / Job Description';
+      }
+      if (clean.includes('assumption') || clean.includes('oath') || clean.includes('duties')) {
+        return 'Assumptions of Duties / Oath of Office';
+      }
+      if (clean.includes('training') || clean.includes('seminar') || clean.includes('workshop') || clean.includes('certificate')) {
+        return 'Training';
+      }
+      if (clean.includes('performance') || clean.includes('award') || clean.includes('recognition') || clean.includes('ipcr') || clean.includes('spms') || clean.includes('opcr')) {
+        return 'Performance / Awards & Recognition';
+      }
+      if (clean.includes('discipline') || clean.includes('disciplinary') || clean.includes('administrativecase')) {
+        return 'Employee Discipline';
+      }
+      if (clean.includes('administrativeorder') || clean.includes('adminorder') || clean.includes('ao') || (clean.includes('order') && !clean.includes('disorder'))) {
+        return 'Administrative Order';
+      }
+    }
+
+    return activeCategory;
+  };
+
+  const handleTriggerFolderUpload = () => {
+    if (folderInputRef.current) {
+      folderInputRef.current.value = '';
+      folderInputRef.current.click();
+    }
+  };
+
   const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -229,13 +328,58 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
     const pdfFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.pdf'));
     if (pdfFiles.length === 0) {
       showToast('No PDF files found in the selected folder.', 'warning');
+      if (folderInputRef.current) {
+        folderInputRef.current.value = '';
+      }
       return;
     }
 
-    setFolderUploadConfirm({ files: pdfFiles });
-    // Reset input so the same folder can be picked again if needed
-    e.target.value = '';
+    // Exclude Administrative Order files — they require manual information input
+    const nonAOFiles: File[] = [];
+    let skippedAO = 0;
+    for (const file of pdfFiles) {
+      const relPath = file.webkitRelativePath || file.name;
+      const resolvedCategory = getCategoryFromPath(relPath);
+      if (resolvedCategory === 'Administrative Order') {
+        skippedAO++;
+      } else {
+        nonAOFiles.push(file);
+      }
+    }
+    setFolderSkippedAOCount(skippedAO);
+
+    if (nonAOFiles.length === 0) {
+      showToast(`All ${skippedAO} PDF file(s) are Administrative Orders, which must be uploaded individually with required information. No files to upload.`, 'warning');
+      if (folderInputRef.current) {
+        folderInputRef.current.value = '';
+      }
+      return;
+    }
+
+    setFolderUploadConfirm({ files: nonAOFiles });
+    // Note: Do NOT reset input.value here! In Chromium/WebKit, clearing the input value
+    // immediately revokes the sandbox file access token before files can be read/uploaded.
   };
+
+  const cancelFolderUpload = () => {
+    setFolderUploadConfirm(null);
+    setFolderSkippedAOCount(0);
+    if (folderInputRef.current) {
+      folderInputRef.current.value = '';
+    }
+  };
+
+  // Category breakdown for folder upload confirmation
+  const folderCategorySummary = useMemo(() => {
+    if (!folderUploadConfirm) return {};
+    const counts: Record<string, number> = {};
+    for (const file of folderUploadConfirm.files) {
+      const relPath = file.webkitRelativePath || file.name;
+      const cat = getCategoryFromPath(relPath);
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return counts;
+  }, [folderUploadConfirm, activeCategory]);
 
   const executeFolderUpload = async () => {
     if (!folderUploadConfirm) return;
@@ -249,27 +393,6 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
     let canceledCount = 0;
     const failedFiles: { name: string; error: string }[] = [];
 
-    // Define category mappings matching folder names
-    const getCategoryFromPath = (pathString: string): DocumentCategory => {
-      const normalizedPath = pathString.replace(/\\/g, '/');
-      const parts = normalizedPath.split('/');
-      
-      // The category folder is the immediate parent of the file, which is parts[parts.length - 2]
-      if (parts.length < 2) return activeCategory;
-      const parentDir = parts[parts.length - 2].toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-
-      if (parentDir.includes('personalinformation')) return 'Personal Information';
-      if (parentDir.includes('personnelaction') || parentDir.includes('appointment')) return 'Personnel Action / Appointment';
-      if (parentDir.includes('position') || parentDir.includes('jobdescription')) return 'Position / Job Description';
-      if (parentDir.includes('training')) return 'Training';
-      if (parentDir.includes('performance') || parentDir.includes('awards') || parentDir.includes('recognition')) return 'Performance / Awards & Recognition';
-      if (parentDir.includes('discipline')) return 'Employee Discipline';
-      if (parentDir.includes('administrative') || parentDir.includes('order')) return 'Administrative Order';
-      if (parentDir.includes('assumption') || parentDir.includes('oath')) return 'Assumptions of Duties / Oath of Office';
-
-      return activeCategory;
-    };
-
     try {
       let globalDuplicateAction: 'replace' | 'skip' | null = null;
       
@@ -277,14 +400,9 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
       let currentIndex = 0;
 
       for (const file of pdfFiles) {
+        currentIndex++;
         const relPath = file.webkitRelativePath || file.name;
         const resolvedCategory = getCategoryFromPath(relPath);
-
-        // Skip Administrative Order category in folder upload
-        if (resolvedCategory === 'Administrative Order') {
-          console.log(`Skipping Administrative Order document from folder scan: ${file.name}`);
-          continue;
-        }
 
         const isDuplicate = documents.some(
           (doc) => doc.fileName.toLowerCase() === file.name.toLowerCase() &&
@@ -312,14 +430,46 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
           }
         }
 
+        // Initialize live progress for this file
+        setFolderLiveProgress({
+          currentFileName: file.name,
+          currentCategory: resolvedCategory,
+          currentIndex,
+          totalFiles,
+          filePercent: 0,
+          overallPercent: Math.min(99, Math.round(((currentIndex - 1) / totalFiles) * 100)),
+          loadedBytes: 0,
+          totalBytes: file.size || 0,
+          successCount,
+          failCount,
+          canceledCount,
+        });
+
         try {
-          currentIndex++;
           await uploadDocument(file, resolvedCategory, undefined, true, replace, folderCompressionLevel, (e: ProgressEvent) => {
             if (e.lengthComputable) {
-              const percent = Math.round((e.loaded / e.total) * 100);
-              setFolderUploadProgress(`File ${currentIndex} of ${totalFiles} (${percent}%)`);
+              const filePercent = Math.round((e.loaded / e.total) * 100);
+              const overallPercent = Math.min(
+                100,
+                Math.round((((currentIndex - 1) + (e.loaded / e.total)) / totalFiles) * 100)
+              );
+              setFolderUploadProgress(`File ${currentIndex} of ${totalFiles} (${filePercent}%)`);
+              setFolderLiveProgress({
+                currentFileName: file.name,
+                currentCategory: resolvedCategory,
+                currentIndex,
+                totalFiles,
+                filePercent,
+                overallPercent,
+                loadedBytes: e.loaded,
+                totalBytes: e.total,
+                successCount,
+                failCount,
+                canceledCount,
+              });
             } else {
               setFolderUploadProgress(`File ${currentIndex} of ${totalFiles}`);
+              setFolderLiveProgress(prev => prev ? { ...prev, filePercent: 50 } : null);
             }
           });
           successCount++;
@@ -333,7 +483,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
 
       setFolderUploadErrors(failedFiles);
 
-      // We skipped refresh during the loop, now refresh once globally
+      // Refresh once after all files are processed
       refreshDocuments();
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('employeeUpdated'));
@@ -361,6 +511,10 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
     } finally {
       setIsFolderUploading(false);
       setFolderUploadProgress(null);
+      setFolderLiveProgress(null);
+      if (folderInputRef.current) {
+        folderInputRef.current.value = '';
+      }
     }
   };
 
@@ -436,12 +590,13 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => document.getElementById('folder-upload-input')?.click()}
+                onClick={handleTriggerFolderUpload}
                 disabled={isFolderUploading}
               >
                 {isFolderUploading ? (folderUploadProgress || '⏳ Uploading...') : '📁 Upload Folder'}
               </Button>
               <input
+                ref={folderInputRef}
                 id="folder-upload-input"
                 type="file"
                 /* @ts-ignore */
@@ -553,11 +708,55 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
         {folderUploadConfirm && (
           <Modal
             isOpen={true}
-            onClose={() => setFolderUploadConfirm(null)}
+            onClose={cancelFolderUpload}
             title="Confirm Folder Upload"
           >
-            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <p style={{ margin: 0 }}>Ready to upload <strong>{folderUploadConfirm.files.length}</strong> PDF documents from the selected folder.</p>
+            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+                Ready to upload <strong>{folderUploadConfirm.files.length}</strong> PDF document(s) from the selected folder.
+              </p>
+
+              {folderSkippedAOCount > 0 && (
+                <div style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: '8px',
+                  padding: '0.65rem 1rem',
+                  fontSize: '0.85rem',
+                  color: '#92400e',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.5rem',
+                }}
+                >
+                  <span style={{ fontSize: '1.1rem', lineHeight: 1.3 }}>⚠️</span>
+                  <span>
+                    <strong>{folderSkippedAOCount}</strong> Administrative Order file(s) were excluded.
+                    Administrative Orders require manual input of additional information and must be uploaded individually.
+                  </span>
+                </div>
+              )}
+
+              {Object.keys(folderCategorySummary).length > 0 && (
+                <div style={{
+                  backgroundColor: 'var(--color-background-subtle, #f8fafc)',
+                  border: '1px solid var(--color-border, #e2e8f0)',
+                  borderRadius: '8px',
+                  padding: '0.75rem 1rem',
+                  fontSize: '0.875rem'
+                }}>
+                  <strong style={{ display: 'block', marginBottom: '0.35rem', color: 'var(--text-primary)' }}>
+                    Destination Categories:
+                  </strong>
+                  <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-secondary)' }}>
+                    {Object.entries(folderCategorySummary).map(([cat, count]) => (
+                      <li key={cat} style={{ marginBottom: '2px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{cat}</span>: {count} file(s)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               
               <div className="upload-modal__field compression-field" style={{ marginTop: 0 }}>
                 <label className="upload-modal__label">Compression level</label>
@@ -598,7 +797,7 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
               </div>
 
               <div className="upload-modal__actions">
-                <Button variant="ghost" onClick={() => setFolderUploadConfirm(null)}>Cancel</Button>
+                <Button variant="ghost" onClick={cancelFolderUpload}>Cancel</Button>
                 <Button variant="primary" onClick={executeFolderUpload}>Start Upload</Button>
               </div>
             </div>
@@ -647,6 +846,88 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
                 >
                   Apply
                 </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {isFolderUploading && folderLiveProgress && (
+          <Modal
+            isOpen={true}
+            onClose={() => {}}
+            title="Uploading Folder in Progress"
+            size="md"
+          >
+            <div className="folder-live-progress-container">
+              <div className="folder-live-progress-header">
+                <div className="folder-live-file-badge">
+                  <span className="folder-live-file-icon">📄</span>
+                  <div className="folder-live-file-info">
+                    <span className="folder-live-filename" title={folderLiveProgress.currentFileName}>
+                      {folderLiveProgress.currentFileName}
+                    </span>
+                    <span className="folder-live-category-tag">
+                      Target Category: <strong>{folderLiveProgress.currentCategory}</strong>
+                    </span>
+                  </div>
+                </div>
+                <div className="folder-live-badge-percent">
+                  {folderLiveProgress.overallPercent}%
+                </div>
+              </div>
+
+              {/* Overall Progress */}
+              <div className="folder-live-section">
+                <div className="folder-live-label-row">
+                  <span className="folder-live-label">Overall Progress</span>
+                  <span className="folder-live-detail">
+                    {folderLiveProgress.currentIndex} of {folderLiveProgress.totalFiles} files
+                  </span>
+                </div>
+                <div className="folder-live-bar-track">
+                  <div
+                    className="folder-live-bar-fill folder-live-bar-fill--overall"
+                    style={{ width: `${folderLiveProgress.overallPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Current File Progress */}
+              <div className="folder-live-section">
+                <div className="folder-live-label-row">
+                  <span className="folder-live-label">Current File</span>
+                  <span className="folder-live-detail">
+                    {folderLiveProgress.totalBytes > 0
+                      ? `${((folderLiveProgress.loadedBytes || 0) / 1024 / 1024).toFixed(1)} / ${(folderLiveProgress.totalBytes / 1024 / 1024).toFixed(1)} MB (${folderLiveProgress.filePercent}%)`
+                      : `${folderLiveProgress.filePercent}%`}
+                  </span>
+                </div>
+                <div className="folder-live-bar-track folder-live-bar-track--sub">
+                  <div
+                    className="folder-live-bar-fill folder-live-bar-fill--current"
+                    style={{ width: `${folderLiveProgress.filePercent}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Upload Stats Chips */}
+              <div className="folder-live-stats-row">
+                <span className="folder-live-chip folder-live-chip--success">
+                  ✅ {folderLiveProgress.successCount} Uploaded
+                </span>
+                {folderLiveProgress.canceledCount > 0 && (
+                  <span className="folder-live-chip folder-live-chip--skipped">
+                    ⏭️ {folderLiveProgress.canceledCount} Skipped
+                  </span>
+                )}
+                {folderLiveProgress.failCount > 0 && (
+                  <span className="folder-live-chip folder-live-chip--error">
+                    ❌ {folderLiveProgress.failCount} Failed
+                  </span>
+                )}
+                <span className="folder-live-chip folder-live-chip--remaining">
+                  ⏳ {Math.max(0, folderLiveProgress.totalFiles - folderLiveProgress.currentIndex)} Remaining
+                </span>
               </div>
             </div>
           </Modal>
