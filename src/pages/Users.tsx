@@ -1094,11 +1094,6 @@ function Users() {
                   );
                 })}
               </select>
-              {selectedUser && selectedUser.roleId === 'role-1' && (
-                <p className="users__modal-hint" style={{ color: 'var(--color-warning)', marginTop: '0.5rem' }}>
-                  ⚠️ Super Admin role is protected and cannot be changed
-                </p>
-              )}
             </div>
           </div>
 
