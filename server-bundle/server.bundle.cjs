@@ -57465,16 +57465,20 @@ var documentStorage = import_multer.default.diskStorage({
     const category = (req.body?.category || "Uncategorized").replace(/[/\\?%*:|"<>]/g, "-").replace(/\.+$/, "");
     const targetPath = import_path.default.join(documentsDir, employeeFolder, category, originalName);
     if (import_fs.default.existsSync(targetPath)) {
-      const ext = import_path.default.extname(originalName);
-      const base = import_path.default.basename(originalName, ext);
-      cb(null, `${base}-${Date.now()}${ext}`);
-    } else {
-      cb(null, originalName);
+      try {
+        import_fs.default.unlinkSync(targetPath);
+      } catch (err) {
+        console.error("[upload] Failed to remove existing file for replacement:", err);
+      }
     }
+    cb(null, originalName);
   }
 });
 var documentFileFilter = (_req, file, cb) => {
-  if (file.mimetype === "application/pdf") {
+  const mimeType = (file.mimetype || "").toLowerCase();
+  const ext = import_path.default.extname(file.originalname || "").toLowerCase();
+  const isPdf = mimeType === "application/pdf" || mimeType === "application/x-pdf" || mimeType === "application/acrobat" || mimeType === "applications/vnd.pdf" || mimeType === "text/pdf" || mimeType === "application/octet-stream" || mimeType === "" || ext === ".pdf";
+  if (isPdf) {
     cb(null, true);
   } else {
     cb(new Error("Only PDF files are allowed"));
@@ -60431,7 +60435,11 @@ router3.get("/scanning-status", async (req, res) => {
               category: true,
               fileSize: true,
               createdAt: true,
-              mimeType: true
+              mimeType: true,
+              uploadedBy: true,
+              aoNumber: true,
+              aoYear: true,
+              aoType: true
             },
             orderBy: { createdAt: "desc" }
           }
@@ -60682,11 +60690,11 @@ router3.post("/", (req, res, next) => {
     }
     try {
       const fd = import_fs4.default.openSync(uploadedFile.path, "r");
-      const buffer = Buffer.alloc(5);
-      import_fs4.default.readSync(fd, buffer, 0, 5, 0);
+      const buffer = Buffer.alloc(1024);
+      const bytesRead = import_fs4.default.readSync(fd, buffer, 0, 1024, 0);
       import_fs4.default.closeSync(fd);
-      const header = buffer.toString("ascii");
-      if (!header.startsWith("%PDF")) {
+      const header = buffer.toString("latin1", 0, bytesRead);
+      if (!header.includes("%PDF")) {
         try {
           import_fs4.default.unlinkSync(uploadedFile.path);
         } catch (_) {
@@ -62955,6 +62963,7 @@ router9.get("/", async (req, res) => {
         return res.status(403).json({ error: "Forbidden: You are not an approved member of this group chat" });
       }
       const reads = readGroupChatReads();
+      const previousReadIso = reads[`${userId}_${recipientId}`] || group.createdAt;
       reads[`${userId}_${recipientId}`] = (/* @__PURE__ */ new Date()).toISOString();
       saveGroupChatReads(reads);
       const messages2 = await prisma4.chatMessage.findMany({
@@ -62965,6 +62974,12 @@ router9.get("/", async (req, res) => {
           createdAt: "asc"
         }
       });
+      const hadUnread = messages2.some(
+        (m) => m.senderId !== userId && new Date(m.createdAt) > new Date(previousReadIso)
+      );
+      if (hadUnread) {
+        getIO()?.emit("chatsUpdated");
+      }
       return res.json(messages2);
     }
     const messages = await prisma4.chatMessage.findMany({
@@ -64671,6 +64686,48 @@ var import_path9 = __toESM(require("path"));
 var import_fs9 = __toESM(require("fs"));
 var import_multer2 = __toESM(require_multer());
 
+// server/src/middleware/session.ts
+var isRestoringDatabase = false;
+var setRestoringDatabase = (val) => {
+  isRestoringDatabase = val;
+};
+async function validateSession(req, res, next) {
+  const skipPaths = [
+    "/api/users/login",
+    "/api/health",
+    "/api/users/verify-password",
+    "/api/backup"
+  ];
+  const requestUrl = req.originalUrl || req.url || "";
+  if (isRestoringDatabase || skipPaths.some((p) => requestUrl.startsWith(p))) {
+    return next();
+  }
+  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
+  const sessionId = req.headers["x-session-id"];
+  if (userId && userId !== "system") {
+    try {
+      prisma_default.user.update({
+        where: { id: userId },
+        data: { lastActive: /* @__PURE__ */ new Date() }
+      }).catch((err) => console.error("[session] Error updating lastActive:", err));
+      const user = await prisma_default.user.findUnique({
+        where: { id: userId },
+        select: { activeSessionId: true }
+      });
+      if (user && user.activeSessionId && user.activeSessionId !== sessionId) {
+        console.warn(`[session] Session mismatch for user ${userId}. Header: ${sessionId}, DB: ${user.activeSessionId}. Rejecting request.`);
+        return res.status(401).json({
+          code: "CONCURRENT_LOGIN",
+          error: "Session expired"
+        });
+      }
+    } catch (error) {
+      console.error("[session] Error validating session:", error);
+    }
+  }
+  next();
+}
+
 // server/src/utils/backupScheduler.ts
 var import_fs8 = __toESM(require("fs"));
 var import_path8 = __toESM(require("path"));
@@ -65226,6 +65283,7 @@ var parseDates = (item, dateKeys) => {
   return cloned;
 };
 router12.post("/restore", async (req, res) => {
+  setRestoringDatabase(true);
   try {
     const { filename, superadminPassword, username = "admin" } = req.body;
     if (!filename) {
@@ -65259,6 +65317,8 @@ router12.post("/restore", async (req, res) => {
         error: "Invalid password. Only Superadmin and Developer accounts are authorized to restore the database."
       });
     }
+    const currentRestoringUserId = authorizedUser.id;
+    const currentSessionId = req.headers["x-session-id"] || authorizedUser.activeSessionId || `session_${Date.now()}`;
     const safeFilename = import_path9.default.basename(filename);
     const filePath = import_path9.default.join(getBackupDir(), safeFilename);
     if (!import_fs9.default.existsSync(filePath)) {
@@ -65274,25 +65334,30 @@ router12.post("/restore", async (req, res) => {
       } catch (_) {
       }
     };
+    const batchInsert = async (items, batchSize, insertFn) => {
+      for (let i = 0; i < items.length; i += batchSize) {
+        await insertFn(items.slice(i, i + batchSize));
+      }
+    };
     console.log("[BackupAPI] Creating pre-restore safety snapshot...");
     emitRestoreProgress({
       step: 1,
       totalSteps: 7,
-      percent: 12,
+      percent: 15,
       stage: "Creating Safety Rollback Snapshot",
       detail: "Generating automatic safety rollback snapshot before restore..."
     });
-    await delay2(120);
+    await delay2(180);
     const safetySnapshot = await executeDatabaseBackup("safety", `Auto-Safety (Pre-Restore ${safeFilename})`);
     console.log(`[BackupAPI] Safety snapshot created: ${safetySnapshot.filename}`);
     emitRestoreProgress({
       step: 2,
       totalSteps: 7,
-      percent: 28,
+      percent: 30,
       stage: "Validating Snapshot Archive",
       detail: `Reading and parsing ${safeFilename} (${(import_fs9.default.statSync(filePath).size / 1024).toFixed(1)} KB)...`
     });
-    await delay2(120);
+    await delay2(180);
     const content = import_fs9.default.readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(content);
     const data = parsed.data || {};
@@ -65304,7 +65369,7 @@ router12.post("/restore", async (req, res) => {
       stage: "Purging Current Records",
       detail: "Safely clearing existing relational tables and records..."
     });
-    await delay2(120);
+    await delay2(180);
     await prisma_default.chatMessage.deleteMany({});
     await prisma_default.activity.deleteMany({});
     await prisma_default.approvalRequest.deleteMany({});
@@ -65318,28 +65383,58 @@ router12.post("/restore", async (req, res) => {
     emitRestoreProgress({
       step: 4,
       totalSteps: 7,
-      percent: 68,
+      percent: 70,
       stage: "Restoring Database Tables",
       detail: `Re-inserting ${data.employees?.length || 0} employees, ${data.documents?.length || 0} docs, ${data.users?.length || 0} users...`
     });
-    await delay2(120);
+    await delay2(180);
     if (Array.isArray(data.users) && data.users.length > 0) {
-      const formatted = data.users.map(
-        (u) => parseDates(u, ["createdAt", "updatedAt", "lastLogin", "lastActive"])
+      const formatted = data.users.map((u) => {
+        const item = parseDates(u, ["createdAt", "updatedAt", "lastLogin", "lastActive"]);
+        if (item.id === currentRestoringUserId && currentSessionId) {
+          item.activeSessionId = currentSessionId;
+        }
+        return item;
+      });
+      const hasRestoringUser = formatted.some((u) => u.id === currentRestoringUserId || u.username === authorizedUser.username);
+      if (!hasRestoringUser) {
+        formatted.push({
+          ...authorizedUser,
+          activeSessionId: currentSessionId
+        });
+      }
+      await batchInsert(
+        formatted,
+        100,
+        (batch) => prisma_default.user.createMany({ data: batch, skipDuplicates: true })
       );
-      await prisma_default.user.createMany({ data: formatted, skipDuplicates: true });
+    } else {
+      await prisma_default.user.create({
+        data: {
+          ...authorizedUser,
+          activeSessionId: currentSessionId
+        }
+      });
     }
     if (Array.isArray(data.systemSettings) && data.systemSettings.length > 0) {
       const formatted = data.systemSettings.map(
         (s) => parseDates(s, ["createdAt", "updatedAt"])
       );
-      await prisma_default.systemSetting.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        100,
+        (batch) => prisma_default.systemSetting.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.yellowBoxes) && data.yellowBoxes.length > 0) {
       const formatted = data.yellowBoxes.map(
         (y) => parseDates(y, ["createdAt", "updatedAt"])
       );
-      await prisma_default.yellowBox.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        200,
+        (batch) => prisma_default.yellowBox.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.employees) && data.employees.length > 0) {
       const formatted = data.employees.map((e) => {
@@ -65365,7 +65460,11 @@ router12.post("/restore", async (req, res) => {
         delete item.yellowBox;
         return item;
       });
-      await prisma_default.employee.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        250,
+        (batch) => prisma_default.employee.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.documents) && data.documents.length > 0) {
       const formatted = data.documents.map((d) => {
@@ -65385,7 +65484,11 @@ router12.post("/restore", async (req, res) => {
         delete item.employee;
         return item;
       });
-      await prisma_default.document.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        250,
+        (batch) => prisma_default.document.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.file201BorrowLogs) && data.file201BorrowLogs.length > 0) {
       const formatted = data.file201BorrowLogs.map((b) => {
@@ -65393,19 +65496,31 @@ router12.post("/restore", async (req, res) => {
         delete item.employee;
         return item;
       });
-      await prisma_default.file201BorrowLog.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        250,
+        (batch) => prisma_default.file201BorrowLog.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.approvalRequests) && data.approvalRequests.length > 0) {
       const formatted = data.approvalRequests.map(
         (a) => parseDates(a, ["createdAt", "resolvedAt"])
       );
-      await prisma_default.approvalRequest.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        500,
+        (batch) => prisma_default.approvalRequest.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.activities) && data.activities.length > 0) {
       const formatted = data.activities.map(
         (act) => parseDates(act, ["createdAt", "updatedAt"])
       );
-      await prisma_default.activity.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        500,
+        (batch) => prisma_default.activity.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.chatMessages) && data.chatMessages.length > 0) {
       const formatted = data.chatMessages.map((c) => {
@@ -65414,13 +65529,21 @@ router12.post("/restore", async (req, res) => {
         item.deletedByRecipient = false;
         return item;
       });
-      await prisma_default.chatMessage.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        500,
+        (batch) => prisma_default.chatMessage.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     if (Array.isArray(data.auditLogs) && data.auditLogs.length > 0) {
       const formatted = data.auditLogs.map(
         (log) => parseDates(log, ["createdAt"])
       );
-      await prisma_default.auditLog.createMany({ data: formatted, skipDuplicates: true });
+      await batchInsert(
+        formatted,
+        500,
+        (batch) => prisma_default.auditLog.createMany({ data: batch, skipDuplicates: true })
+      );
     }
     const writeDataFile = (fileName, items) => {
       const PROGRAM_DATA2 = process.env.PROGRAMDATA || "C:\\ProgramData";
@@ -65444,11 +65567,11 @@ router12.post("/restore", async (req, res) => {
     emitRestoreProgress({
       step: 5,
       totalSteps: 7,
-      percent: 80,
+      percent: 85,
       stage: "Restoring Auxiliary App Storage",
       detail: "Restoring inventory records, disposal history, and group chats..."
     });
-    await delay2(120);
+    await delay2(180);
     if (Array.isArray(data.inventoryRecords)) {
       writeDataFile("inventory_records.json", data.inventoryRecords);
     }
@@ -65472,11 +65595,11 @@ router12.post("/restore", async (req, res) => {
     emitRestoreProgress({
       step: 6,
       totalSteps: 7,
-      percent: 92,
+      percent: 95,
       stage: "Synchronizing Physical Files",
       detail: "Restoring physical upload assets, document files, and profile images..."
     });
-    await delay2(120);
+    await delay2(180);
     const companionDir = import_path9.default.join(getBackupDir(), `${import_path9.default.parse(safeFilename).name}_files`);
     if (import_fs9.default.existsSync(companionDir)) {
       try {
@@ -65527,14 +65650,18 @@ router12.post("/restore", async (req, res) => {
       stage: "Restoration Complete",
       detail: "Database restore finished! Broadcasting session reset to connected clients..."
     });
+    await delay2(180);
     console.log("[BackupAPI] Database and physical files restoration completed successfully.");
     try {
       await prisma_default.user.updateMany({
+        where: {
+          id: { not: currentRestoringUserId }
+        },
         data: {
           activeSessionId: `RESTORE_LOGOUT_${Date.now()}`
         }
       });
-      console.log("[BackupAPI] All user activeSessionIds invalidated in database.");
+      console.log("[BackupAPI] Other user activeSessionIds invalidated in database.");
     } catch (sessionErr) {
       console.warn("[BackupAPI] Could not invalidate activeSessionIds in database:", sessionErr);
     }
@@ -65551,11 +65678,13 @@ router12.post("/restore", async (req, res) => {
         const logoutPayload = {
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
           restoredBy: authorizedUser?.username || "Superadmin",
+          initiatorUserId: currentRestoringUserId,
           message: "The database and files have been restored from a snapshot point. All user sessions have been logged out to synchronize live data. Please log in again."
         };
         io3.emit("databaseRestored", logoutPayload);
         io3.emit("forceLogout", {
           reason: "DATABASE_RESTORE",
+          initiatorUserId: currentRestoringUserId,
           message: "A database restore was executed. All user accounts have been logged out."
         });
         io3.emit("chatsUpdated");
@@ -65574,6 +65703,8 @@ router12.post("/restore", async (req, res) => {
   } catch (error) {
     console.error("[BackupAPI] Database restore failed:", error);
     res.status(500).json({ error: "Database restore encountered an error", details: error.message });
+  } finally {
+    setRestoringDatabase(false);
   }
 });
 router12.delete("/:filename", async (req, res) => {
@@ -65625,43 +65756,6 @@ router12.post("/schedule", (req, res) => {
   }
 });
 var backup_routes_default = router12;
-
-// server/src/middleware/session.ts
-async function validateSession(req, res, next) {
-  const skipPaths = [
-    "/api/users/login",
-    "/api/health",
-    "/api/users/verify-password"
-  ];
-  const requestUrl = req.originalUrl || req.url || "";
-  if (skipPaths.some((p) => requestUrl.startsWith(p))) {
-    return next();
-  }
-  const userId = req.headers["x-logged-in-user-id"] || req.headers["x-user-id"];
-  const sessionId = req.headers["x-session-id"];
-  if (userId && userId !== "system") {
-    try {
-      prisma_default.user.update({
-        where: { id: userId },
-        data: { lastActive: /* @__PURE__ */ new Date() }
-      }).catch((err) => console.error("[session] Error updating lastActive:", err));
-      const user = await prisma_default.user.findUnique({
-        where: { id: userId },
-        select: { activeSessionId: true }
-      });
-      if (user && user.activeSessionId && user.activeSessionId !== sessionId) {
-        console.warn(`[session] Session mismatch for user ${userId}. Header: ${sessionId}, DB: ${user.activeSessionId}. Rejecting request.`);
-        return res.status(401).json({
-          code: "CONCURRENT_LOGIN",
-          error: "Session expired"
-        });
-      }
-    } catch (error) {
-      console.error("[session] Error validating session:", error);
-    }
-  }
-  next();
-}
 
 // server/src/index.ts
 import_dotenv.default.config();

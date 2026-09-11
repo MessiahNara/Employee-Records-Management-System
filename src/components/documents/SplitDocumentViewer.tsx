@@ -15,6 +15,7 @@ import {
   MdDownload,
   MdPrint,
 } from 'react-icons/md';
+import { PDFDocument, degrees } from 'pdf-lib';
 import './SplitDocumentViewer.css';
 
 export interface DiffField {
@@ -73,6 +74,9 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
   const [layoutMode, setLayoutMode] = useState<'50-50' | '65-35' | '35-65' | '100-0'>('50-50');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
+  const [originalBytes, setOriginalBytes] = useState<ArrayBuffer | null>(null);
+  const activeBlobRef = useRef<string | null>(null);
   const paneRef = useRef<HTMLDivElement>(null);
 
   const activeSrc = pdfUrl || pdfData;
@@ -86,11 +90,11 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
-        const step = 15;
+        const step = 20;
         if (e.deltaY < 0) {
           setZoom((prev) => Math.min(300, prev + step));
         } else {
-          setZoom((prev) => Math.max(40, prev - step));
+          setZoom((prev) => Math.max(50, prev - step));
         }
       }
     };
@@ -102,29 +106,125 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && activeSrc) {
+    let isCancelled = false;
+
+    const loadPdf = async () => {
+      if (!isOpen || !activeSrc) {
+        if (activeBlobRef.current) {
+          URL.revokeObjectURL(activeBlobRef.current);
+          activeBlobRef.current = null;
+        }
+        setActivePdfUrl(null);
+        setOriginalBytes(null);
+        setRotation(0);
+        setZoom(100);
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
-      const timer = setTimeout(() => setIsLoading(false), 400);
-      return () => clearTimeout(timer);
-    }
+      try {
+        const response = await fetch(activeSrc, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to fetch document');
+        const buffer = await response.arrayBuffer();
+
+        if (isCancelled) return;
+
+        setOriginalBytes(buffer);
+        const blob = new Blob([buffer], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        if (activeBlobRef.current) {
+          URL.revokeObjectURL(activeBlobRef.current);
+        }
+        activeBlobRef.current = blobUrl;
+        setActivePdfUrl(blobUrl);
+        setRotation(0);
+      } catch (err) {
+        console.error('Error loading PDF:', err);
+        if (!isCancelled) {
+          setActivePdfUrl(activeSrc);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadPdf();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [isOpen, activeSrc]);
 
   useEffect(() => {
     if (!isOpen) {
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+        activeBlobRef.current = null;
+      }
       setZoom(100);
       setRotation(0);
+      setActivePdfUrl(null);
+      setOriginalBytes(null);
       setIsFullscreen(false);
       setLayoutMode('50-50');
     }
   }, [isOpen]);
 
-  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 25, 250));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 25, 300));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 25, 50));
+
+  const handleRotate = async () => {
+    if (!originalBytes) return;
+
+    try {
+      setIsLoading(true);
+      const nextRotation = (rotation + 90) % 360;
+
+      let blob: Blob;
+      if (nextRotation === 0) {
+        blob = new Blob([originalBytes], { type: 'application/pdf' });
+      } else {
+        const pdfDoc = await PDFDocument.load(originalBytes);
+        const pages = pdfDoc.getPages();
+        pages.forEach((page) => {
+          const currentAngle = page.getRotation().angle;
+          page.setRotation(degrees((currentAngle + nextRotation) % 360));
+        });
+        const rotatedBytes = await pdfDoc.save();
+        blob = new Blob([rotatedBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      }
+
+      const newUrl = URL.createObjectURL(blob);
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+      }
+      activeBlobRef.current = newUrl;
+      setActivePdfUrl(newUrl);
+      setRotation(nextRotation);
+    } catch (err) {
+      console.error('Failed to rotate PDF:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResetZoom = () => {
     setZoom(100);
-    setRotation(0);
+    if (rotation !== 0 && originalBytes) {
+      const blob = new Blob([originalBytes], { type: 'application/pdf' });
+      const newUrl = URL.createObjectURL(blob);
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+      }
+      activeBlobRef.current = newUrl;
+      setActivePdfUrl(newUrl);
+      setRotation(0);
+    }
   };
-  const handleRotate = () => setRotation((prev) => (prev + 90) % 360);
 
   const handleOpenNewTab = () => {
     if (activeSrc) {
@@ -293,16 +393,20 @@ export const SplitDocumentViewer: React.FC<SplitDocumentViewerProps> = ({
               </div>
             )}
 
-            <div className="split-viewer__iframe-wrapper">
-              {activeSrc ? (
+            <div className="split-viewer__iframe-wrapper" style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+              {activePdfUrl ? (
                 <iframe
-                  key={`${zoom}-${rotation}`}
-                  src={`${activeSrc}#toolbar=0&navpanes=0&zoom=${zoom}`}
+                  key={`${activePdfUrl}-${zoom}`}
+                  src={`${activePdfUrl}#toolbar=0&navpanes=0&zoom=${zoom}`}
                   className="split-viewer__iframe"
                   title="Document Preview"
+                  onLoad={() => setIsLoading(false)}
                   style={{
-                    transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
-                    transformOrigin: 'center center',
+                    width: '100%',
+                    height: '100%',
+                    border: 'none',
+                    display: 'block',
+                    backgroundColor: '#ffffff',
                   }}
                 />
               ) : (

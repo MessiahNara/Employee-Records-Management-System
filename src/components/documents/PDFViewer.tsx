@@ -19,6 +19,7 @@ import {
   MdRestartAlt,
   MdViewSidebar,
 } from 'react-icons/md';
+import { PDFDocument, degrees } from 'pdf-lib';
 import './PDFViewer.css';
 
 interface PDFViewerProps {
@@ -46,7 +47,10 @@ function PDFViewer({
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [showSplitDetails, setShowSplitDetails] = useState(false);
+  const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
+  const [originalBytes, setOriginalBytes] = useState<ArrayBuffer | null>(null);
   const docPaneRef = useRef<HTMLDivElement>(null);
+  const activeBlobRef = useRef<string | null>(null);
 
   // Approval-request state
   const [pendingAction, setPendingAction] = useState<ApprovalAction>(null);
@@ -57,7 +61,62 @@ function PDFViewer({
   const { showToast } = useToast();
   const currentUser = getAuthState();
 
-  // Support Ctrl + Mouse Wheel zoom and trackpad pinch zoom
+  // Load PDF data into local blob and raw bytes
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadPdf = async () => {
+      if (!isOpen || !pdfData) {
+        if (activeBlobRef.current) {
+          URL.revokeObjectURL(activeBlobRef.current);
+          activeBlobRef.current = null;
+        }
+        setActivePdfUrl(null);
+        setOriginalBytes(null);
+        setRotation(0);
+        setZoom(100);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const response = await fetch(pdfData, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to fetch document');
+        const buffer = await response.arrayBuffer();
+
+        if (isCancelled) return;
+
+        setOriginalBytes(buffer);
+        const blob = new Blob([buffer], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        if (activeBlobRef.current) {
+          URL.revokeObjectURL(activeBlobRef.current);
+        }
+        activeBlobRef.current = blobUrl;
+        setActivePdfUrl(blobUrl);
+        setRotation(0);
+      } catch (err) {
+        console.error('Error loading PDF:', err);
+        if (!isCancelled) {
+          setActivePdfUrl(pdfData);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadPdf();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, pdfData]);
+
+  // Support Ctrl + Mouse Wheel zoom
   useEffect(() => {
     const pane = docPaneRef.current;
     if (!pane || !isOpen) return;
@@ -66,11 +125,11 @@ function PDFViewer({
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
-        const step = 15;
+        const step = 20;
         if (e.deltaY < 0) {
           setZoom((prev) => Math.min(300, prev + step));
         } else {
-          setZoom((prev) => Math.max(40, prev - step));
+          setZoom((prev) => Math.max(50, prev - step));
         }
       }
     };
@@ -91,28 +150,71 @@ function PDFViewer({
     });
   };
 
-  const handleZoomIn = () => setZoom(prev => Math.min(250, prev + 25));
-  const handleZoomOut = () => setZoom(prev => Math.max(50, prev - 25));
-  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
-  const handleResetZoom = () => {
-    setZoom(100);
-    setRotation(0);
+  const handleZoomIn = () => setZoom((prev) => Math.min(300, prev + 25));
+  const handleZoomOut = () => setZoom((prev) => Math.max(50, prev - 25));
+
+  const handleRotate = async () => {
+    if (!originalBytes) return;
+
+    try {
+      setIsLoading(true);
+      const nextRotation = (rotation + 90) % 360;
+
+      let blob: Blob;
+      if (nextRotation === 0) {
+        blob = new Blob([originalBytes], { type: 'application/pdf' });
+      } else {
+        const pdfDoc = await PDFDocument.load(originalBytes);
+        const pages = pdfDoc.getPages();
+        pages.forEach((page) => {
+          const currentAngle = page.getRotation().angle;
+          page.setRotation(degrees((currentAngle + nextRotation) % 360));
+        });
+        const rotatedBytes = await pdfDoc.save();
+        blob = new Blob([rotatedBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      }
+
+      const newUrl = URL.createObjectURL(blob);
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+      }
+      activeBlobRef.current = newUrl;
+      setActivePdfUrl(newUrl);
+      setRotation(nextRotation);
+    } catch (err) {
+      console.error('Failed to rotate PDF:', err);
+      showToast('Could not rotate PDF document.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  useEffect(() => {
-    if (isOpen && pdfData) {
-      setIsLoading(true);
-      const timer = setTimeout(() => setIsLoading(false), 500);
-      return () => clearTimeout(timer);
+  const handleResetZoom = () => {
+    setZoom(100);
+    if (rotation !== 0 && originalBytes) {
+      const blob = new Blob([originalBytes], { type: 'application/pdf' });
+      const newUrl = URL.createObjectURL(blob);
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+      }
+      activeBlobRef.current = newUrl;
+      setActivePdfUrl(newUrl);
+      setRotation(0);
     }
-  }, [isOpen, pdfData]);
+  };
 
   // Reset zoom state when modal closes
   useEffect(() => {
     if (!isOpen) {
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+        activeBlobRef.current = null;
+      }
       setShowSplitDetails(false);
       setZoom(100);
       setRotation(0);
+      setActivePdfUrl(null);
+      setOriginalBytes(null);
       setPendingAction(null);
       setApprovalPurpose('');
       setPurposeError('');
@@ -154,9 +256,10 @@ function PDFViewer({
   // ── Direct actions (for users who already have permission) ───────────────────
 
   const handleDownloadDirect = async () => {
-    if (!pdfData || !employeeDocument) return;
+    const downloadSrc = activePdfUrl || pdfData;
+    if (!downloadSrc || !employeeDocument) return;
     try {
-      const response = await fetch(pdfData);
+      const response = await fetch(downloadSrc);
       if (!response.ok) throw new Error('Failed to fetch file');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -174,25 +277,14 @@ function PDFViewer({
   };
 
   const handlePrintDirect = async () => {
-    if (!pdfData) return;
+    const printSrc = activePdfUrl || pdfData;
+    if (!printSrc) return;
     try {
-      // 1. Try printing the active rendered iframe directly
-      const activeIframe = document.querySelector('.pdf-viewer__iframe') as HTMLIFrameElement;
-      if (activeIframe && activeIframe.contentWindow) {
-        try {
-          activeIframe.contentWindow.focus();
-          activeIframe.contentWindow.print();
-          return;
-        } catch (e) {
-          console.warn('Direct iframe print failed, falling back to hidden blob frame:', e);
-        }
-      }
-
-      // 2. Fetch as PDF blob to prevent download headers and print through hidden iframe
-      let blobUrl = pdfData;
+      // Fetch as PDF blob to prevent download headers and print through hidden iframe
+      let blobUrl = printSrc;
       let isCreatedBlob = false;
-      if (!pdfData.startsWith('blob:') && !pdfData.startsWith('data:')) {
-        const response = await fetch(pdfData);
+      if (!printSrc.startsWith('blob:') && !printSrc.startsWith('data:')) {
+        const response = await fetch(printSrc, { credentials: 'include' });
         if (!response.ok) throw new Error('Failed to fetch file for printing');
         const blob = await response.blob();
         const pdfBlob = new Blob([blob], { type: 'application/pdf' });
@@ -285,9 +377,6 @@ function PDFViewer({
   };
 
   if (!employeeDocument) return null;
-
-  // Fit whole page length-wise by default so the entire document is visible without vertical clipping
-  const iframeSrc = pdfData && canDownloadOrPrint ? `${pdfData}#toolbar=0&navpanes=0&view=Fit` : '';
 
   return (
     <>
@@ -446,26 +535,31 @@ function PDFViewer({
                   </div>
                 )}
 
-                {/* Privileged users — render the iframe */}
-                {canDownloadOrPrint && iframeSrc && (
+                {/* Privileged users — render the clean, continuous native iframe */}
+                {canDownloadOrPrint && activePdfUrl && (
                   <div
-                    className="pdf-viewer__doc-wrapper pdf-viewer__canvas-container"
+                    className="pdf-viewer__doc-wrapper"
                     style={{
-                      width: zoom > 100 ? `${zoom}%` : '100%',
-                      height: zoom > 100 ? `${zoom}%` : '100%',
-                      minHeight: '100%',
-                      transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
-                      transformOrigin: 'center center',
-                      transition: 'width 0.15s ease-out, height 0.15s ease-out, transform 0.2s ease-out',
+                      width: '100%',
+                      height: '100%',
+                      overflow: 'hidden',
+                      position: 'relative',
+                      display: isLoading ? 'none' : 'flex',
+                      flex: '1 1 auto',
                     }}
                   >
                     <iframe
-                      src={iframeSrc}
+                      key={`${activePdfUrl}-${zoom}`}
+                      src={`${activePdfUrl}#toolbar=0&navpanes=0&zoom=${zoom}`}
                       className="pdf-viewer__iframe"
                       title={employeeDocument.fileName}
                       onLoad={() => setIsLoading(false)}
                       style={{
-                        display: isLoading ? 'none' : 'block',
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        display: 'block',
+                        backgroundColor: '#ffffff',
                       }}
                     />
                   </div>
@@ -573,7 +667,7 @@ function PDFViewer({
                   </div>
                 )}
 
-                {canDownloadOrPrint && !iframeSrc && !isLoading && (
+                {canDownloadOrPrint && !pdfData && !isLoading && (
                   <div className="pdf-viewer__error">
                     <p>Failed to load PDF document</p>
                   </div>

@@ -32,6 +32,9 @@ interface ScannedDocument {
   mimeType: string;
   createdAt: string;
   uploadedBy?: string | null;
+  aoNumber?: string | null;
+  aoYear?: string | null;
+  aoType?: string | null;
 }
 
 interface ScannedEmployee {
@@ -228,14 +231,7 @@ export default function ScanningStatus() {
 
   // Open document inside interactive PDF Viewer modal (does not trigger download)
   const handleOpenPdfViewer = (
-    doc: {
-      id: string;
-      fileName: string;
-      category: string;
-      createdAt?: string;
-      uploadedBy?: string | null;
-      fileSize?: number;
-    },
+    doc: ScannedDocument,
     emp?: ScannedEmployee
   ) => {
     const empId = emp?.id || viewingEmployee?.id || '';
@@ -252,6 +248,9 @@ export default function ScanningStatus() {
       uploadedAt: doc.createdAt || new Date().toISOString(),
       uploadedBy: doc.uploadedBy || 'System',
       fileSize: Math.round((doc.fileSize || 0) / 1024),
+      aoNumber: doc.aoNumber || undefined,
+      aoYear: doc.aoYear || undefined,
+      aoType: doc.aoType || undefined,
     };
 
     setSelectedDocForViewer(formattedDoc);

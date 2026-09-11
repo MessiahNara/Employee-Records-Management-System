@@ -171,13 +171,17 @@ const documentStorage = multer.diskStorage({
       .replace(/\.+$/, '');
 
     const targetPath = path.join(documentsDir, employeeFolder, category, originalName);
+
+    // If the file already exists, remove it so the new upload replaces it
     if (fs.existsSync(targetPath)) {
-      const ext = path.extname(originalName);
-      const base = path.basename(originalName, ext);
-      cb(null, `${base}-${Date.now()}${ext}`);
-    } else {
-      cb(null, originalName);
+      try {
+        fs.unlinkSync(targetPath);
+      } catch (err) {
+        console.error('[upload] Failed to remove existing file for replacement:', err);
+      }
     }
+
+    cb(null, originalName);
   },
 });
 

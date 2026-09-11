@@ -49,10 +49,15 @@
 }
 
 /* Dark mode support for dropdown options */
+[data-theme='dark'] .upload-modal__select option {
+  background-color: var(--bg-primary, #1e293b);
+  color: var(--text-primary, #ffffff);
+}
+
 @media (prefers-color-scheme: dark) {
   .upload-modal__select option {
-    background-color: #2a2a2a;
-    color: #ffffff;
+    background-color: var(--bg-primary, #1e293b);
+    color: var(--text-primary, #ffffff);
   }
 }
 
@@ -205,7 +210,7 @@
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
   background-color: var(--card-bg, #ffffff);
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .compression-option:last-child {
@@ -217,7 +222,7 @@
 }
 
 .compression-option.active {
-  background-color: #f0f2f5;
+  background-color: rgba(59, 130, 246, 0.08);
 }
 
 .compression-option-text {
@@ -228,15 +233,15 @@
 
 .compression-title {
   font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--primary-color, #3b82f6);
+  font-weight: 600;
+  color: var(--color-primary, #3b82f6);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .compression-desc {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-secondary, #6b7280);
 }
 
 .compression-check {
@@ -250,6 +255,33 @@
   color: white;
   font-weight: bold;
   font-size: 0.8rem;
+}
+
+/* Dark mode compression styling */
+[data-theme='dark'] .compression-options {
+  border-color: var(--border-color, #334155);
+}
+
+[data-theme='dark'] .compression-option {
+  background-color: var(--bg-primary, #1e293b);
+  border-bottom-color: var(--border-color, #334155);
+}
+
+[data-theme='dark'] .compression-option:hover {
+  background-color: var(--bg-tertiary, #334155);
+}
+
+[data-theme='dark'] .compression-option.active {
+  background-color: rgba(59, 130, 246, 0.18);
+  border-left: 3px solid var(--color-primary, #3b82f6);
+}
+
+[data-theme='dark'] .compression-title {
+  color: var(--color-primary-dark, #60a5fa);
+}
+
+[data-theme='dark'] .compression-desc {
+  color: var(--text-secondary, #cbd5e1);
 }
 
 /* Real-Time Upload Progress Box */

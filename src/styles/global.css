@@ -40,6 +40,13 @@
   --border-radius-sm: 4px;
   --border-radius-lg: 12px;
   
+  /* Semantic Aliases */
+  --card-bg: var(--bg-primary);
+  --input-bg: var(--bg-primary);
+  --hover-bg: var(--bg-tertiary);
+  --color-background-subtle: var(--bg-secondary);
+  --color-border: var(--border-color);
+  
   /* Shadow */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -109,6 +116,13 @@
   
   /* Border */
   --border-color: #334155;
+  
+  /* Semantic Aliases */
+  --card-bg: var(--bg-primary);
+  --input-bg: var(--bg-secondary);
+  --hover-bg: var(--bg-tertiary);
+  --color-background-subtle: var(--bg-secondary);
+  --color-border: var(--border-color);
   
   /* Shadow - darker shadows */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);

@@ -35,12 +35,12 @@
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
   flex-shrink: 0;
 }
 
@@ -1586,4 +1586,71 @@
   letter-spacing: 0.01em;
   text-transform: uppercase;
 }
+
+/* ==========================================================================
+   Report Preview Modals (AO Status, Pulled-Out Files, Transferred Files)
+   Maintains a crisp, pristine white document/spreadsheet view in all themes
+   ========================================================================== */
+
+.report-preview-modal .modal__body {
+  background-color: #f1f5f9;
+  padding: 1.25rem;
+  overflow: auto;
+}
+
+[data-theme='dark'] .report-preview-modal .modal__body,
+.dark .report-preview-modal .modal__body {
+  background-color: #0b1120 !important;
+  padding: 1.25rem;
+}
+
+.report-preview-modal .printable-report {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme='dark'] .report-preview-modal .printable-report,
+.dark .report-preview-modal .printable-report {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid #475569 !important;
+}
+
+/* Force pure black text on white sheet in all elements inside printable-report */
+.report-preview-modal .printable-report,
+.report-preview-modal .printable-report * {
+  color: #000000;
+}
+
+[data-theme='dark'] .report-preview-modal .printable-report,
+[data-theme='dark'] .report-preview-modal .printable-report *,
+.dark .report-preview-modal .printable-report,
+.dark .report-preview-modal .printable-report * {
+  color: #000000 !important;
+}
+
+.report-preview-modal .printable-report table {
+  background-color: #ffffff !important;
+  border-collapse: collapse !important;
+}
+
+.report-preview-modal .printable-report tr {
+  background-color: #ffffff !important;
+}
+
+.report-preview-modal .printable-report th {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #000000 !important;
+}
+
+.report-preview-modal .printable-report td {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #000000 !important;
+}
+
 

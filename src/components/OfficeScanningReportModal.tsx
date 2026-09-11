@@ -179,6 +179,7 @@ export default function OfficeScanningReportModal({
       size="xl"
       noPadding
       allowFullscreen
+      className="scanning-report-modal"
     >
       <div className="scanning-report">
         {/* Main Content Area */}
@@ -381,7 +382,7 @@ export default function OfficeScanningReportModal({
 
                 {displayRows.length === 0 && (
                   <tr>
-                    <td colSpan={18} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                    <td colSpan={18} className="scanning-report__empty-cell">
                       No offices or hospitals found matching your filter criteria.
                     </td>
                   </tr>
@@ -406,7 +407,7 @@ export default function OfficeScanningReportModal({
                   <td className="scanning-report__td-num scanning-report__td-foot-val">
                     {displayTotals.employees.consultant.toLocaleString()}
                   </td>
-                  <td className="scanning-report__td-num scanning-report__td-foot-grand">
+                  <td className="scanning-report__td-num scanning-report__td-foot-grand scanning-report__td-foot-grand-emp">
                     {displayTotals.employees.total.toLocaleString()}
                   </td>
 
@@ -423,7 +424,7 @@ export default function OfficeScanningReportModal({
                   <td className="scanning-report__td-num scanning-report__td-foot-val">
                     {displayTotals.pdf.consultant.toLocaleString()}
                   </td>
-                  <td className="scanning-report__td-num scanning-report__td-foot-grand">
+                  <td className="scanning-report__td-num scanning-report__td-foot-grand scanning-report__td-foot-grand-pdf">
                     {displayTotals.pdf.total.toLocaleString()}
                   </td>
 
@@ -440,7 +441,7 @@ export default function OfficeScanningReportModal({
                   <td className="scanning-report__td-num scanning-report__td-foot-val">
                     {displayTotals.file201.consultant.toLocaleString()}
                   </td>
-                  <td className="scanning-report__td-num scanning-report__td-foot-grand">
+                  <td className="scanning-report__td-num scanning-report__td-foot-grand scanning-report__td-foot-grand-201">
                     {displayTotals.file201.total.toLocaleString()}
                   </td>
 

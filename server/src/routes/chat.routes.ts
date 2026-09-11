@@ -610,6 +610,7 @@ router.get('/', async (req: Request, res: Response) => {
 
       // Mark this group as read for this user right now
       const reads = readGroupChatReads();
+      const previousReadIso = reads[`${userId}_${recipientId}`] || group.createdAt;
       reads[`${userId}_${recipientId}`] = new Date().toISOString();
       saveGroupChatReads(reads);
 
@@ -621,6 +622,14 @@ router.get('/', async (req: Request, res: Response) => {
           createdAt: 'asc',
         },
       });
+
+      // Emit chatsUpdated if there were unread messages so sidebar badge clears
+      const hadUnread = messages.some(
+        (m) => m.senderId !== userId && new Date(m.createdAt) > new Date(previousReadIso)
+      );
+      if (hadUnread) {
+        getIO()?.emit('chatsUpdated');
+      }
 
       return res.json(messages);
     }

@@ -611,29 +611,23 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
         </div>
 
         {folderUploadErrors.length > 0 && (
-          <div style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid var(--color-danger, #ef4444)',
-            borderRadius: '8px',
-            padding: '0.85rem 1rem',
-            marginBottom: '1rem',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <span style={{ fontWeight: 700, color: 'var(--color-danger, #ef4444)', fontSize: '0.9rem' }}>
+          <div className="folder-upload-errors-banner">
+            <div className="folder-upload-errors-banner__header">
+              <span className="folder-upload-errors-banner__title">
                 ⚠️ {folderUploadErrors.length} file(s) failed during folder upload:
               </span>
               <button
                 onClick={() => setFolderUploadErrors([])}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem' }}
+                className="folder-upload-errors-banner__close"
                 title="Dismiss"
               >
                 ✕
               </button>
             </div>
-            <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+            <ul className="folder-upload-errors-banner__list">
               {folderUploadErrors.map((item, idx) => (
-                <li key={idx} style={{ marginBottom: '3px' }}>
-                  <strong>{item.name}</strong>: <span style={{ color: 'var(--color-danger, #dc2626)' }}>{item.error}</span>
+                <li key={idx} className="folder-upload-errors-banner__item">
+                  <strong>{item.name}</strong>: <span className="folder-upload-errors-banner__msg">{item.error}</span>
                 </li>
               ))}
             </ul>
@@ -711,25 +705,14 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
             onClose={cancelFolderUpload}
             title="Confirm Folder Upload"
           >
-            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>
+            <div className="folder-upload-confirm-container">
+              <p className="folder-upload-confirm-intro">
                 Ready to upload <strong>{folderUploadConfirm.files.length}</strong> PDF document(s) from the selected folder.
               </p>
 
               {folderSkippedAOCount > 0 && (
-                <div style={{
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  borderRadius: '8px',
-                  padding: '0.65rem 1rem',
-                  fontSize: '0.85rem',
-                  color: '#92400e',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.5rem',
-                }}
-                >
-                  <span style={{ fontSize: '1.1rem', lineHeight: 1.3 }}>⚠️</span>
+                <div className="folder-upload-ao-warning">
+                  <span className="folder-upload-ao-warning__icon">⚠️</span>
                   <span>
                     <strong>{folderSkippedAOCount}</strong> Administrative Order file(s) were excluded.
                     Administrative Orders require manual input of additional information and must be uploaded individually.
@@ -738,20 +721,14 @@ function PDFDocumentsModule({ employeeId, employeeName }: PDFDocumentsModuleProp
               )}
 
               {Object.keys(folderCategorySummary).length > 0 && (
-                <div style={{
-                  backgroundColor: 'var(--color-background-subtle, #f8fafc)',
-                  border: '1px solid var(--color-border, #e2e8f0)',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.875rem'
-                }}>
-                  <strong style={{ display: 'block', marginBottom: '0.35rem', color: 'var(--text-primary)' }}>
+                <div className="folder-upload-category-summary">
+                  <strong className="folder-upload-category-summary__title">
                     Destination Categories:
                   </strong>
-                  <ul style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-secondary)' }}>
+                  <ul className="folder-upload-category-summary__list">
                     {Object.entries(folderCategorySummary).map(([cat, count]) => (
-                      <li key={cat} style={{ marginBottom: '2px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{cat}</span>: {count} file(s)
+                      <li key={cat} className="folder-upload-category-summary__item">
+                        <span className="folder-upload-category-summary__name">{cat}</span>: {count} file(s)
                       </li>
                     ))}
                   </ul>

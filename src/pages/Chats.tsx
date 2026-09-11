@@ -164,7 +164,12 @@ function Chats() {
             }
             return combined;
           });
-          setUnreadCounts(unread || {});
+          // Always clear the count for the currently active contact since user is viewing it
+          const serverUnread = unread || {};
+          if (activeContact?.id && serverUnread[activeContact.id]) {
+            delete serverUnread[activeContact.id];
+          }
+          setUnreadCounts(serverUnread);
         }
       } catch (err) {
         console.error('Failed to poll sidebar data:', err);
@@ -206,8 +211,18 @@ function Chats() {
 
           // Clear local unread count for this active contact
           setUnreadCounts((prev) => {
+            const hadUnread = (prev[currentTargetId] || 0) > 0;
             const updated = { ...prev };
             delete updated[currentTargetId];
+
+            // If we had unread messages, notify the Sidebar to re-fetch its badge count
+            // Use a small delay to ensure the server has committed the read status
+            if (hadUnread) {
+              setTimeout(() => {
+                window.dispatchEvent(new Event('chatsUpdated'));
+              }, 300);
+            }
+
             return updated;
           });
         }

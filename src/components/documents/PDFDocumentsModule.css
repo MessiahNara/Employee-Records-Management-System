@@ -85,6 +85,105 @@
 }
 
 /* ==========================================================================
+   Folder Upload Confirm Modal
+   ========================================================================== */
+.folder-upload-confirm-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0.25rem;
+}
+
+.folder-upload-confirm-intro {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.folder-upload-confirm-intro strong {
+  color: var(--color-primary, #3b82f6);
+  font-weight: 700;
+}
+
+[data-theme='dark'] .folder-upload-confirm-intro strong {
+  color: var(--color-primary-dark, #60a5fa);
+}
+
+.folder-upload-ao-warning {
+  background-color: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: #92400e;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  line-height: 1.45;
+}
+
+.folder-upload-ao-warning__icon {
+  font-size: 1.1rem;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .folder-upload-ao-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fef08a;
+}
+
+[data-theme='dark'] .folder-upload-ao-warning strong {
+  color: #fde047;
+}
+
+.folder-upload-category-summary {
+  background-color: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+[data-theme='dark'] .folder-upload-category-summary {
+  background-color: var(--bg-secondary, #0f172a);
+  border-color: var(--border-color, #334155);
+}
+
+.folder-upload-category-summary__title {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.folder-upload-category-summary__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+}
+
+.folder-upload-category-summary__item {
+  margin-bottom: 3px;
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .folder-upload-category-summary__item {
+  color: var(--text-secondary, #cbd5e1);
+}
+
+.folder-upload-category-summary__name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .folder-upload-category-summary__name {
+  color: var(--text-primary, #f8fafc);
+}
+
+/* ==========================================================================
    Folder Live Upload Progress Modal
    ========================================================================== */
 .folder-live-progress-container {
@@ -100,9 +199,14 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.875rem 1rem;
-  background: var(--bg-surface-secondary, #f8fafc);
+  background: var(--bg-tertiary, #f8fafc);
   border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 10px;
+}
+
+[data-theme='dark'] .folder-live-progress-header {
+  background: var(--bg-secondary, #0f172a);
+  border-color: var(--border-color, #334155);
 }
 
 .folder-live-file-badge {
@@ -134,13 +238,25 @@
   text-overflow: ellipsis;
 }
 
+[data-theme='dark'] .folder-live-filename {
+  color: var(--text-primary, #f8fafc);
+}
+
 .folder-live-category-tag {
   font-size: 0.8rem;
   color: var(--text-secondary, #64748b);
 }
 
+[data-theme='dark'] .folder-live-category-tag {
+  color: var(--text-secondary, #cbd5e1);
+}
+
 .folder-live-category-tag strong {
   color: var(--color-primary, #2563eb);
+}
+
+[data-theme='dark'] .folder-live-category-tag strong {
+  color: var(--color-primary-dark, #60a5fa);
 }
 
 .folder-live-badge-percent {
@@ -151,6 +267,12 @@
   background: rgba(37, 99, 235, 0.08);
   border-radius: 8px;
   flex-shrink: 0;
+}
+
+[data-theme='dark'] .folder-live-badge-percent {
+  color: var(--color-primary-dark, #60a5fa);
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .folder-live-section {
@@ -171,23 +293,40 @@
   color: var(--text-primary, #334155);
 }
 
+[data-theme='dark'] .folder-live-label {
+  color: var(--text-primary, #f8fafc);
+}
+
 .folder-live-detail {
   color: var(--text-secondary, #64748b);
   font-size: 0.8rem;
 }
 
+[data-theme='dark'] .folder-live-detail {
+  color: var(--text-secondary, #cbd5e1);
+}
+
 .folder-live-bar-track {
   width: 100%;
   height: 12px;
-  background: var(--bg-surface-secondary, #e2e8f0);
+  background: var(--bg-tertiary, #e2e8f0);
   border-radius: 9999px;
   overflow: hidden;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
+[data-theme='dark'] .folder-live-bar-track {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
 .folder-live-bar-track--sub {
   height: 8px;
-  background: var(--bg-surface-secondary, #edf2f7);
+  background: var(--bg-tertiary, #edf2f7);
+}
+
+[data-theme='dark'] .folder-live-bar-track--sub {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .folder-live-bar-fill {
@@ -245,6 +384,10 @@
   border-top: 1px dashed var(--border-color, #e2e8f0);
 }
 
+[data-theme='dark'] .folder-live-stats-row {
+  border-top-color: var(--border-color, #334155);
+}
+
 .folder-live-chip {
   font-size: 0.775rem;
   font-weight: 500;
@@ -261,10 +404,22 @@
   border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
+[data-theme='dark'] .folder-live-chip--success {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
 .folder-live-chip--skipped {
   background: rgba(245, 158, 11, 0.1);
   color: #d97706;
   border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+[data-theme='dark'] .folder-live-chip--skipped {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.4);
 }
 
 .folder-live-chip--error {
@@ -273,9 +428,88 @@
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
+[data-theme='dark'] .folder-live-chip--error {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
 .folder-live-chip--remaining {
-  background: var(--bg-surface-secondary, #f1f5f9);
+  background: var(--bg-tertiary, #f1f5f9);
   color: var(--text-secondary, #64748b);
   border: 1px solid var(--border-color, #e2e8f0);
+}
+
+[data-theme='dark'] .folder-live-chip--remaining {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary, #cbd5e1);
+  border-color: var(--border-color, #334155);
+}
+
+/* ==========================================================================
+   Folder Upload Errors Banner
+   ========================================================================== */
+.folder-upload-errors-banner {
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--color-danger, #ef4444);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+[data-theme='dark'] .folder-upload-errors-banner {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.folder-upload-errors-banner__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.folder-upload-errors-banner__title {
+  font-weight: 700;
+  color: var(--color-danger, #ef4444);
+  font-size: 0.9rem;
+}
+
+[data-theme='dark'] .folder-upload-errors-banner__title {
+  color: #f87171;
+}
+
+.folder-upload-errors-banner__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.folder-upload-errors-banner__close:hover {
+  color: var(--text-primary);
+}
+
+.folder-upload-errors-banner__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.folder-upload-errors-banner__item {
+  margin-bottom: 3px;
+  color: var(--text-primary);
+}
+
+.folder-upload-errors-banner__msg {
+  color: var(--color-danger, #dc2626);
+}
+
+[data-theme='dark'] .folder-upload-errors-banner__msg {
+  color: #fca5a5;
 }
 

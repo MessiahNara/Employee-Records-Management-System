@@ -21,6 +21,7 @@ import {
   MdRestartAlt,
   MdAssignment,
 } from 'react-icons/md';
+import { PDFDocument, degrees } from 'pdf-lib';
 import './Requests.css';
 
 const TTL_MINUTES = 30;
@@ -73,14 +74,116 @@ function Requests() {
   const [viewerTitle, setViewerTitle] = useState('');
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
+  const [originalBytes, setOriginalBytes] = useState<ArrayBuffer | null>(null);
+  const activeBlobRef = useRef<string | null>(null);
 
-  const handleZoomIn = () => setZoom((z) => Math.min(250, z + 25));
+  const handleZoomIn = () => setZoom((z) => Math.min(300, z + 25));
   const handleZoomOut = () => setZoom((z) => Math.max(50, z - 25));
-  const handleRotate = () => setRotation((r) => (r + 90) % 360);
+
+  const handleRotate = async () => {
+    if (!originalBytes) return;
+
+    try {
+      setViewerLoading(true);
+      const nextRotation = (rotation + 90) % 360;
+
+      let blob: Blob;
+      if (nextRotation === 0) {
+        blob = new Blob([originalBytes], { type: 'application/pdf' });
+      } else {
+        const pdfDoc = await PDFDocument.load(originalBytes);
+        const pages = pdfDoc.getPages();
+        pages.forEach((page) => {
+          const currentAngle = page.getRotation().angle;
+          page.setRotation(degrees((currentAngle + nextRotation) % 360));
+        });
+        const rotatedBytes = await pdfDoc.save();
+        blob = new Blob([rotatedBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      }
+
+      const newUrl = URL.createObjectURL(blob);
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+      }
+      activeBlobRef.current = newUrl;
+      setActivePdfUrl(newUrl);
+      setRotation(nextRotation);
+    } catch (err) {
+      console.error('Failed to rotate PDF:', err);
+    } finally {
+      setViewerLoading(false);
+    }
+  };
+
   const handleResetZoom = () => {
     setZoom(100);
-    setRotation(0);
+    if (rotation !== 0 && originalBytes) {
+      const blob = new Blob([originalBytes], { type: 'application/pdf' });
+      const newUrl = URL.createObjectURL(blob);
+      if (activeBlobRef.current) {
+        URL.revokeObjectURL(activeBlobRef.current);
+      }
+      activeBlobRef.current = newUrl;
+      setActivePdfUrl(newUrl);
+      setRotation(0);
+    }
   };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadPdf = async () => {
+      if (!viewerOpen || !viewerSrc) {
+        if (activeBlobRef.current) {
+          URL.revokeObjectURL(activeBlobRef.current);
+          activeBlobRef.current = null;
+        }
+        setActivePdfUrl(null);
+        setOriginalBytes(null);
+        setRotation(0);
+        setZoom(100);
+        setViewerLoading(false);
+        return;
+      }
+
+      setViewerLoading(true);
+      try {
+        const response = await fetch(viewerSrc, { credentials: 'include' });
+        if (!response.ok) throw new Error('Failed to fetch document');
+        const buffer = await response.arrayBuffer();
+
+        if (isCancelled) return;
+
+        setOriginalBytes(buffer);
+        const blob = new Blob([buffer], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        if (activeBlobRef.current) {
+          URL.revokeObjectURL(activeBlobRef.current);
+        }
+        activeBlobRef.current = blobUrl;
+        setActivePdfUrl(blobUrl);
+        setRotation(0);
+      } catch (err) {
+        console.error('Error loading PDF:', err);
+        if (!isCancelled) {
+          setActivePdfUrl(viewerSrc);
+        }
+      } finally {
+        if (!isCancelled) {
+          setViewerLoading(false);
+        }
+      }
+    };
+
+    loadPdf();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [viewerOpen, viewerSrc]);
 
   // Secondary-request (print/download needs new approval)
   const [secondaryAction, setSecondaryAction] = useState<{ req: any; action: 'print_document' | 'download_document' } | null>(null);
@@ -161,7 +264,7 @@ function Requests() {
       showToast('Document URL not found.', 'error');
       return;
     }
-    setViewerSrc(`${docUrl}#toolbar=0&navpanes=0&view=Fit`);
+    setViewerSrc(docUrl);
     setViewerTitle(req.payload?.fileName || req.entityName || 'Document');
     setViewerOpen(true);
   };
@@ -561,18 +664,27 @@ function Requests() {
               </button>
             </div>
           </div>
-          <div className="requests__viewer-doc-container">
-            <iframe
-              key={`${zoom}-${rotation}`}
-              src={viewerSrc}
-              className="requests__viewer-iframe"
-              title={viewerTitle}
-              style={{
-                transform: `rotate(${rotation}deg) scale(${zoom / 100})`,
-                transformOrigin: 'center center',
-                transition: 'transform 0.2s ease-out',
-              }}
-            />
+          <div className="requests__viewer-doc-container" style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+            {activePdfUrl ? (
+              <iframe
+                key={`${activePdfUrl}-${zoom}`}
+                src={`${activePdfUrl}#toolbar=0&navpanes=0&zoom=${zoom}`}
+                className="requests__viewer-iframe"
+                title={viewerTitle}
+                onLoad={() => setViewerLoading(false)}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  display: 'block',
+                  backgroundColor: '#ffffff',
+                }}
+              />
+            ) : (
+              <div style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>
+                <p>No preview available.</p>
+              </div>
+            )}
           </div>
         </div>
       </Modal>

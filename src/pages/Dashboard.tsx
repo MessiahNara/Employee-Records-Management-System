@@ -6259,6 +6259,7 @@ function Dashboard() {
         onClose={() => setIsReportPreviewOpen(false)}
         title="Report Preview & Export"
         size="xl"
+        className="report-preview-modal"
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
             <Button
@@ -6320,11 +6321,12 @@ function Dashboard() {
       >
         <div className="printable-report" style={{
           fontFamily: "'Times New Roman', Times, serif",
-          color: 'var(--text-primary)',
-          backgroundColor: 'var(--bg-primary)',
-          padding: '1rem',
+          color: '#000000',
+          backgroundColor: '#ffffff',
+          padding: '1.5rem',
           borderRadius: 'var(--border-radius)',
-          border: '1px solid var(--border-color)',
+          border: '1px solid #d1d5db',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
           overflowX: 'auto',
           lineHeight: '1.3'
         }}>
@@ -6353,15 +6355,17 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                border: '1px solid var(--border-color)',
-                borderBottom: '2px solid var(--border-color)',
+                border: '1px solid #000',
+                borderBottom: '2px solid #000',
                 padding: '10px 12px',
-                textAlign: 'center'
+                textAlign: 'center',
+                backgroundColor: '#ffffff',
+                color: '#000000'
               }}>
-                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
-                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
-                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal', color: '#000000' }}>Republic of the Philippines</div>
+                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px', color: '#000000' }}>Province of Pangasinan</div>
+                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px', color: '#000000' }}>Lingayen</div>
+                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif', color: '#000000' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
               </div>
             );
 
@@ -6408,11 +6412,11 @@ function Dashboard() {
 
             let tableHeader = (
               <thead>
-                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
+                <tr style={{ backgroundColor: '#ffffff' }}>
                   {previewColDefs.map(col => {
                     const percentageWidth = `${(col.width / totalWidthWeight) * 100}%`;
                     return (
-                      <th key={col.key} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: percentageWidth }}>
+                      <th key={col.key} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: percentageWidth, backgroundColor: '#ffffff', color: '#000000' }}>
                         {col.label}
                       </th>
                     );
@@ -6435,12 +6439,14 @@ function Dashboard() {
                     borderLeft: '1px solid #000',
                     borderRight: '1px solid #000',
                     borderBottom: '1px solid #000',
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000'
                   }}>{getFormattedTitle()}</div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontFamily: "'Times New Roman', Times, serif" }}>
                     {tableHeader}
                     <tbody>
-                      <tr><td colSpan={previewColDefs.length} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', verticalAlign: 'middle' }}>No records found matching current filters.</td></tr>
+                      <tr><td colSpan={previewColDefs.length} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#4b5563', verticalAlign: 'middle', backgroundColor: '#ffffff' }}>No records found matching current filters.</td></tr>
                     </tbody>
                   </table>
                 </>
@@ -6470,11 +6476,13 @@ function Dashboard() {
                     borderLeft: '1px solid #000',
                     borderRight: '1px solid #000',
                     borderBottom: '1px solid #000',
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000'
                   }}>
                     {getFormattedTitle()}
                     {pageCount > 1 && (
-                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: 'var(--text-secondary)' }}>
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#4b5563' }}>
                         (Page {pageIdx + 1} of {pageCount})
                       </span>
                     )}
@@ -6486,7 +6494,7 @@ function Dashboard() {
                         const globalIdx = pageIdx * ROWS_PER_PAGE + idx;
                         const ao = row.aoNumber ? `AO ${row.aoNumber}${row.seriesNumber ? `, S. ${row.seriesNumber}` : ''}` : '—';
                         return (
-                          <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
+                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
                             {previewColDefs.map(col => {
                               let val: React.ReactNode = '';
                               if (col.key === 'no') val = globalIdx + 1;
@@ -6504,7 +6512,7 @@ function Dashboard() {
                               const isNormalWhiteSpace = ['name', 'position', 'motherUnit', 'detailedOffice', 'designatedPositionFunction', 'recalledFrom', 'recalledTo'].includes(col.key);
 
                               return (
-                                <td key={col.key} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: isNormalWhiteSpace ? 'normal' : 'normal' }}>
+                                <td key={col.key} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: isNormalWhiteSpace ? 'normal' : 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                                   {val}
                                 </td>
                               );
@@ -6526,6 +6534,7 @@ function Dashboard() {
         onClose={() => setIsBorrowReportPreviewOpen(false)}
         title="Pulled-Out Files Report Preview & Export"
         size="xl"
+        className="report-preview-modal"
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
             <Button
@@ -6540,11 +6549,12 @@ function Dashboard() {
       >
         <div className="printable-report" style={{
           fontFamily: "'Times New Roman', Times, serif",
-          color: 'var(--text-primary)',
-          backgroundColor: 'var(--bg-primary)',
-          padding: '1rem',
+          color: '#000000',
+          backgroundColor: '#ffffff',
+          padding: '1.5rem',
           borderRadius: 'var(--border-radius)',
-          border: '1px solid var(--border-color)',
+          border: '1px solid #d1d5db',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
           overflowX: 'auto',
           lineHeight: '1.3'
         }}>
@@ -6555,38 +6565,40 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                border: '1px solid var(--border-color)',
-                borderBottom: '2px solid var(--border-color)',
+                border: '1px solid #000',
+                borderBottom: '2px solid #000',
                 padding: '10px 12px',
-                textAlign: 'center'
+                textAlign: 'center',
+                backgroundColor: '#ffffff',
+                color: '#000000'
               }}>
-                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
-                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
-                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal', color: '#000000' }}>Republic of the Philippines</div>
+                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px', color: '#000000' }}>Province of Pangasinan</div>
+                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px', color: '#000000' }}>Lingayen</div>
+                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif', color: '#000000' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
               </div>
             );
 
             const tableHeader = (
               <thead>
-                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%' }}>NO.</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>EMPLOYEE NAME</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%' }}>OFFICE/HOSPITAL</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>EMPLOYMENT STATUS</th>
-                  <th colSpan={3} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>BORROWER</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>NAME OF FILES</th>
-                  <th colSpan={3} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold' }}>RETURNED</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>RECORDS CONFORMED</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>REMARK</th>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%', backgroundColor: '#ffffff', color: '#000000' }}>NO.</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%', backgroundColor: '#ffffff', color: '#000000' }}>EMPLOYEE NAME</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '14%', backgroundColor: '#ffffff', color: '#000000' }}>OFFICE/HOSPITAL</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%', backgroundColor: '#ffffff', color: '#000000' }}>EMPLOYMENT STATUS</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#000000' }}>BORROWER</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%', backgroundColor: '#ffffff', color: '#000000' }}>NAME OF FILES</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', backgroundColor: '#ffffff', color: '#000000' }}>RETURNED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%', backgroundColor: '#ffffff', color: '#000000' }}>RECORDS CONFORMED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%', backgroundColor: '#ffffff', color: '#000000' }}>REMARK</th>
                 </tr>
-                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle' }}>NAME</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>DATE</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>TIME</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle' }}>NAME</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>DATE</th>
-                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>TIME</th>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>NAME</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>TIME</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '8%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>NAME</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '4px 6px', fontSize: '9pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>TIME</th>
                 </tr>
               </thead>
             );
@@ -6605,13 +6617,15 @@ function Dashboard() {
                     borderLeft: '1px solid #000',
                     borderRight: '1px solid #000',
                     borderBottom: '1px solid #000',
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000'
                   }}>PULLED-OUT FILES REPORT</div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
                     {tableHeader}
                     <tbody>
                       <tr>
-                        <td colSpan={14} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        <td colSpan={14} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#4b5563', backgroundColor: '#ffffff' }}>
                           No records found.
                         </td>
                       </tr>
@@ -6644,11 +6658,13 @@ function Dashboard() {
                     borderLeft: '1px solid #000',
                     borderRight: '1px solid #000',
                     borderBottom: '1px solid #000',
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000'
                   }}>
                     PULLED-OUT FILES REPORT
                     {pageCount > 1 && (
-                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: 'var(--text-secondary)' }}>
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#4b5563' }}>
                         (Page {pageIdx + 1} of {pageCount})
                       </span>
                     )}
@@ -6663,55 +6679,55 @@ function Dashboard() {
                         const isReturned = row.action === 'return' || !!row.dateReturned;
 
                         return (
-                          <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {globalIdx + 1}
                             </td>
                             {/* Employee Name */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {empName}
                             </td>
                             {/* Office/Hospital */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}
                             </td>
                             {/* Employment Status */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.employee?.status || '—'}
                             </td>
                             {/* Borrower Name */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.borrowerName || ''}
                             </td>
                             {/* Borrower Date */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
                             </td>
                             {/* Borrower Time */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
                             </td>
                             {/* Name of Files */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               201 File
                             </td>
                             {/* Returned Name */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned ? (row.returnedByName || '') : ''}
                             </td>
                             {/* Returned Date */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
                             </td>
                             {/* Returned Time */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
                             </td>
                             {/* Records Conformed */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                             </td>
                             {/* Remark */}
-                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                             </td>
                           </tr>
                         );
@@ -6963,6 +6979,7 @@ function Dashboard() {
         onClose={() => setIsTransferredReportPreviewOpen(false)}
         title="Transferred 201 Files Report Preview & Export"
         size="xl"
+        className="report-preview-modal"
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', width: '100%' }}>
             <Button
@@ -6977,11 +6994,12 @@ function Dashboard() {
       >
         <div className="printable-report" style={{
           fontFamily: "'Times New Roman', Times, serif",
-          color: 'var(--text-primary)',
-          backgroundColor: 'var(--bg-primary)',
-          padding: '1rem',
+          color: '#000000',
+          backgroundColor: '#ffffff',
+          padding: '1.5rem',
           borderRadius: 'var(--border-radius)',
-          border: '1px solid var(--border-color)',
+          border: '1px solid #d1d5db',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
           overflowX: 'auto',
           lineHeight: '1.3'
         }}>
@@ -6992,15 +7010,17 @@ function Dashboard() {
 
             const headerBlock = (
               <div style={{
-                border: '1px solid var(--border-color)',
-                borderBottom: '2px solid var(--border-color)',
+                border: '1px solid #000',
+                borderBottom: '2px solid #000',
                 padding: '10px 12px',
-                textAlign: 'center'
+                textAlign: 'center',
+                backgroundColor: '#ffffff',
+                color: '#000000'
               }}>
-                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal' }}>Republic of the Philippines</div>
-                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px' }}>Province of Pangasinan</div>
-                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px' }}>Lingayen</div>
-                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
+                <div style={{ fontSize: '10.5pt', fontStyle: 'italic', fontWeight: 'normal', color: '#000000' }}>Republic of the Philippines</div>
+                <div style={{ fontSize: '11pt', fontWeight: 'bold', marginTop: '2px', color: '#000000' }}>Province of Pangasinan</div>
+                <div style={{ fontSize: '10pt', fontWeight: 'normal', marginTop: '2px', color: '#000000' }}>Lingayen</div>
+                <div style={{ fontSize: '11.5pt', fontWeight: 'bold', marginTop: '4px', fontFamily: 'Calibri, Arial, sans-serif', color: '#000000' }}>HUMAN RESOURCE MGT. &amp; DEVELOPMENT OFFICE</div>
               </div>
             );
 
@@ -7011,48 +7031,48 @@ function Dashboard() {
 
             const tableHeader = isTransferredMode ? (
               <thead>
-                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>NO.</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>EMPLOYEE NAME</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%' }}>OFFICE/HOSPITAL</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '11%' }}>POSITION / DESIGNATION</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>EMPLOYMENT STATUS</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>RELEASED BY</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>RECEIVED BY</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '6%' }}>DATE</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>TIME</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>RECORDS CONFORMED</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%' }}>FILE CONDITION</th>
-                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>REMARKS</th>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%', backgroundColor: '#ffffff', color: '#000000' }}>NO.</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%', backgroundColor: '#ffffff', color: '#000000' }}>EMPLOYEE NAME</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '12%', backgroundColor: '#ffffff', color: '#000000' }}>OFFICE/HOSPITAL</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '11%', backgroundColor: '#ffffff', color: '#000000' }}>POSITION / DESIGNATION</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%', backgroundColor: '#ffffff', color: '#000000' }}>EMPLOYMENT STATUS</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%', backgroundColor: '#ffffff', color: '#000000' }}>RELEASED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%', backgroundColor: '#ffffff', color: '#000000' }}>RECEIVED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '6%', backgroundColor: '#ffffff', color: '#000000' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%', backgroundColor: '#ffffff', color: '#000000' }}>TIME</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%', backgroundColor: '#ffffff', color: '#000000' }}>RECORDS CONFORMED</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '7%', backgroundColor: '#ffffff', color: '#000000' }}>FILE CONDITION</th>
+                  <th style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%', backgroundColor: '#ffffff', color: '#000000' }}>REMARKS</th>
                 </tr>
               </thead>
             ) : (
               <thead>
-                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%' }}>NO.</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%' }}>EMPLOYEE NAME</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>OFFICE / HOSPITAL</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%' }}>POSITION / DESIGNATION</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>EMPLOYMENT STATUS</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>RELEASED BY</th>
-                  <th colSpan={3} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>TRANSFERRED TO (RSP)</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>RECORDS CONFORMED</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%' }}>FILE CONDITION</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>REMARKS</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%' }}>STATUS</th>
-                  <th colSpan={3} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%' }}>RETURNED BACK TO RECORDS</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>RECEIVED BY</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%' }}>RECORDS CONFORMED</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%' }}>RETURN CONDITION</th>
-                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%' }}>RETURN REMARKS</th>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '3%', backgroundColor: '#ffffff', color: '#000000' }}>NO.</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '9%', backgroundColor: '#ffffff', color: '#000000' }}>EMPLOYEE NAME</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%', backgroundColor: '#ffffff', color: '#000000' }}>OFFICE / HOSPITAL</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '8%', backgroundColor: '#ffffff', color: '#000000' }}>POSITION / DESIGNATION</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%', backgroundColor: '#ffffff', color: '#000000' }}>EMPLOYMENT STATUS</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%', backgroundColor: '#ffffff', color: '#000000' }}>RELEASED BY</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%', backgroundColor: '#ffffff', color: '#000000' }}>TRANSFERRED TO (RSP)</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%', backgroundColor: '#ffffff', color: '#000000' }}>RECORDS CONFORMED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%', backgroundColor: '#ffffff', color: '#000000' }}>FILE CONDITION</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%', backgroundColor: '#ffffff', color: '#000000' }}>REMARKS</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4%', backgroundColor: '#ffffff', color: '#000000' }}>STATUS</th>
+                  <th colSpan={3} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '13%', backgroundColor: '#ffffff', color: '#000000' }}>RETURNED BACK TO RECORDS</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%', backgroundColor: '#ffffff', color: '#000000' }}>RECEIVED BY</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5%', backgroundColor: '#ffffff', color: '#000000' }}>RECORDS CONFORMED</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '4.5%', backgroundColor: '#ffffff', color: '#000000' }}>RETURN CONDITION</th>
+                  <th rowSpan={2} style={{ border: '1px solid #000', padding: '4px 3px', fontSize: '8.5pt', textAlign: 'center', verticalAlign: 'middle', fontWeight: 'bold', width: '5.5%', backgroundColor: '#ffffff', color: '#000000' }}>RETURN REMARKS</th>
                 </tr>
-                <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
-                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>RECEIVED BY</th>
-                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>DATE</th>
-                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>TIME</th>
-                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle' }}>RETURNED BY</th>
-                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>DATE</th>
-                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle' }}>TIME</th>
+                <tr style={{ backgroundColor: '#ffffff' }}>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>RECEIVED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>TIME</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '5%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>RETURNED BY</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>DATE</th>
+                  <th style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', fontWeight: 'bold', width: '4%', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>TIME</th>
                 </tr>
               </thead>
             );
@@ -7071,13 +7091,15 @@ function Dashboard() {
                     borderLeft: '1px solid #000',
                     borderRight: '1px solid #000',
                     borderBottom: '1px solid #000',
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000'
                   }}>{reportTitle}</div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Times New Roman', Times, serif", tableLayout: 'fixed' }}>
                     {tableHeader}
                     <tbody>
                       <tr>
-                        <td colSpan={isTransferredMode ? 12 : 20} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        <td colSpan={isTransferredMode ? 12 : 20} style={{ border: '1px solid #000', padding: '20px', textAlign: 'center', color: '#4b5563', backgroundColor: '#ffffff' }}>
                           No records found.
                         </td>
                       </tr>
@@ -7110,11 +7132,13 @@ function Dashboard() {
                     borderLeft: '1px solid #000',
                     borderRight: '1px solid #000',
                     borderBottom: '1px solid #000',
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000'
                   }}>
                     {reportTitle}
                     {pageCount > 1 && (
-                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: 'var(--text-secondary)' }}>
+                      <span style={{ fontSize: '9pt', fontWeight: 'normal', marginLeft: '10px', color: '#4b5563' }}>
                         (Page {pageIdx + 1} of {pageCount})
                       </span>
                     )}
@@ -7130,41 +7154,41 @@ function Dashboard() {
 
                         if (isTransferredMode) {
                           return (
-                            <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {globalIdx + 1}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {empName}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.employee?.position || '—'}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.employee?.status || '—'}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.releasedBy || '—'}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.borrowerName || ''}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {/* Records Conformed signature */}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.transferCondition || row.fileCondition || 'Complete'}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                              <td style={{ border: '1px solid #000', padding: '5px 6px', fontSize: '9pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                                 {row.transferRemarks || row.purpose || (!row.dateReturned ? row.remarks : '') || '—'}
                               </td>
                             </tr>
@@ -7172,65 +7196,65 @@ function Dashboard() {
                         }
 
                         return (
-                          <tr key={globalIdx} style={{ backgroundColor: 'var(--bg-primary)' }}>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <tr key={globalIdx} style={{ backgroundColor: '#ffffff' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {globalIdx + 1}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {empName}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {getOfficeFullName(row.employee?.yellowBox?.office || row.employee?.officeName) || '—'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.employee?.position || '—'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.employee?.status || '—'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.releasedBy || '—'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.borrowerName || ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.dateBorrowed ? new Date(row.dateBorrowed).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {/* Records Conformed Transfer */}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.transferCondition || row.fileCondition || 'Complete'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {row.transferRemarks || row.purpose || (!row.dateReturned ? row.remarks : '') || '—'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned ? 'Returned' : 'Transferred'}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned ? (row.returnedByName || '') : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned && row.dateReturned ? new Date(row.dateReturned).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned ? (row.receivedBy || '') : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {/* Records Conformed Return */}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned ? (row.returnCondition || row.fileCondition || 'Complete') : ''}
                             </td>
-                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                            <td style={{ border: '1px solid #000', padding: '3px 2px', fontSize: '8pt', textAlign: 'center', verticalAlign: 'middle', wordBreak: 'break-word', whiteSpace: 'normal', backgroundColor: '#ffffff', color: '#000000' }}>
                               {isReturned ? (row.returnRemarks || (row.dateReturned ? row.remarks : '') || '—') : ''}
                             </td>
                           </tr>
